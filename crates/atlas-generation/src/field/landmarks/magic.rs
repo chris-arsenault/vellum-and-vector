@@ -1,4 +1,4 @@
-use super::{capture::with_record, measurement::distance, placement::Placed, roster::semantic_id};
+use super::{capture::with_record, measurement::distance, placement::Placed};
 use crate::{
     field::Field,
     magic::sources::placed::PlacedSource,
@@ -19,12 +19,12 @@ pub struct Position {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[ts(rename = "LocatedMagicSource")]
 pub struct Source {
-    pub id: String,
+    pub id: atlas_map::Id,
     pub name: String,
     pub system_id: Option<String>,
-    pub landmark_id: Option<String>,
-    pub area_id: Option<String>,
-    pub space_id: Option<String>,
+    pub landmark_id: Option<atlas_map::Id>,
+    pub area_id: Option<atlas_map::Id>,
+    pub space_id: Option<atlas_map::Id>,
     pub scope: Option<Geometry>,
     pub source: Position,
     pub radius: f64,
@@ -39,9 +39,9 @@ pub struct Source {
 impl Source {
     pub fn placed(&self) -> PlacedSource {
         PlacedSource {
-            id: self.id.clone(),
+            id: self.id,
             system_id: self.system_id.clone().unwrap_or_default(),
-            space_id: self.space_id.clone(),
+            space_id: self.space_id,
             starts_at_epoch: self.starts_at_epoch,
             strength: self.strength,
             radius: self.radius,
@@ -58,9 +58,9 @@ pub struct System {
 }
 #[derive(Clone)]
 pub struct Scene {
-    pub world: String,
-    pub area: String,
-    pub space: String,
+    pub world: atlas_map::Id,
+    pub area: atlas_map::Id,
+    pub space: atlas_map::Id,
     pub systems: Vec<System>,
 }
 impl Scene {
@@ -108,7 +108,9 @@ fn upsert(
     strength: f64,
     epoch: i32,
 ) -> io::Result<()> {
-    let id = semantic_id(&scene.world, "landmark-source", &placed.landmark.id)?;
+    let mut name = b"landmark-source".to_vec();
+    name.extend_from_slice(&placed.landmark.id.to_bytes());
+    let id = atlas_map::Id::v5(scene.world, &name);
     let previous = field.magic_sources.iter().position(|s| s.id == id);
     let origin = field.mesh.origin();
     let (label, effect) = description(system);
@@ -121,8 +123,8 @@ fn upsert(
         },
         system_id: Some(system.into()),
         landmark_id: Some(placed.landmark.id.clone()),
-        area_id: Some(scene.area.clone()),
-        space_id: Some(scene.space.clone()),
+        area_id: Some(scene.area),
+        space_id: Some(scene.space),
         scope: None,
         source: Position {
             x: placed.center[0] + origin[0],
@@ -157,7 +159,7 @@ pub fn apply(
     let Some(id) = placed.landmark.kind.system() else {
         return Ok(());
     };
-    with_record(field, &placed.landmark.id, |field, record| {
+    with_record(field, placed.landmark.id, |field, record| {
         let Some(system) = scene.system(id) else {
             if shortfall.is_none() {
                 record.note(&format!(

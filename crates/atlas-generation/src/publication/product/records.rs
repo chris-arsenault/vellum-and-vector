@@ -86,7 +86,7 @@ impl Product<'_> {
                         .insert("keyNumber".into(), (*number).into());
                 }
                 // A feature lives in its layer's located space (the surface or underground).
-                feature.space_id.clone_from(&layer.space_id);
+                feature.space_id = layer.space_id;
                 Ok(feature)
             });
             self.vector_layer(
@@ -231,7 +231,7 @@ impl Product<'_> {
             let samples = Samples {
                 resource: &resource,
                 footprint: footprint.clone(),
-                space: &map.primary_space_id,
+                space: map.primary_space_id,
                 chart: (map.primary_space_id == map.world_id)
                     .then(|| chart_copy(&self.descriptor.chart)),
                 ordinal,
@@ -261,7 +261,7 @@ impl Product<'_> {
         control: &impl GenerationControl,
     ) -> io::Result<()> {
         let mut batch = PublicationBatch::default();
-        for entry in history::records(self.history, &map.reference.revision) {
+        for entry in history::records(self.history, map.reference.revision) {
             batch.history.push(entry?);
             if batch.history.len() == BATCH_SIZE {
                 publisher.append(&map.reference, std::mem::take(&mut batch))?;

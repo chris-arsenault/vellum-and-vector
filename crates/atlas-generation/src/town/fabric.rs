@@ -17,10 +17,13 @@ use std::io;
 pub struct HoldingId(pub u32);
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub enum Endpoint {
-    Premises { town: String, holding: HoldingId },
+    Premises {
+        town: atlas_map::Id,
+        holding: HoldingId,
+    },
     Field(String),
     Catchment(String),
-    External(String),
+    External(atlas_map::Id),
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct OperatingTie {

@@ -323,7 +323,8 @@ fn settle(
     seat_index: usize,
 ) -> io::Result<Town> {
     let mesh = state.field().mesh();
-    let draw = crate::field::poi::true_sizes::roll(&seat.key, settings.seed as u64);
+    let draw =
+        crate::field::poi::true_sizes::roll_bytes(&seat.key.to_bytes(), settings.seed as u64);
     for centre in habitable_sites(state, ground, &seat) {
         let mut candidate = seat.clone();
         candidate.centre = centre;
@@ -360,8 +361,8 @@ fn settle(
                 return Ok(town);
             }
             excluded.push(template);
-            let retry = crate::field::poi::true_sizes::roll(
-                &seat.key,
+            let retry = crate::field::poi::true_sizes::roll_bytes(
+                &seat.key.to_bytes(),
                 (settings.seed as u64).wrapping_add(excluded.len() as u64),
             );
             next = selection.draw_remaining(retry, &excluded);

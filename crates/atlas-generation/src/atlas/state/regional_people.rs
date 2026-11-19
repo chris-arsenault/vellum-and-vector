@@ -125,7 +125,7 @@ impl State {
         people::adopt_captured(
             self.field(),
             self.records.features.as_ref(),
-            &self.scope.area,
+            self.scope.area,
             &regional.evidence.seats,
             regional.parent_span,
             &mut self.people.places.borrow_mut(),

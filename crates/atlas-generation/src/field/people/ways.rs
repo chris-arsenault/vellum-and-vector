@@ -132,7 +132,7 @@ fn way(
     known: &KnownWay,
     highway: bool,
     runs: &[Vec<usize>],
-    space: Option<&str>,
+    space: Option<atlas_map::Id>,
 ) -> io::Result<Feature> {
     let places = &state.known_places().known;
     let a = places
@@ -143,18 +143,18 @@ fn way(
         .iter()
         .find(|p| p.id == known.to)
         .ok_or_else(|| io::Error::other("A route has no ending place"))?;
-    let from = land_places::record_id(state, a)?;
-    let to = land_places::record_id(state, b)?;
+    let from = land_places::record_id(state, a);
+    let to = land_places::record_id(state, b);
     let label = format!(
         "{}–{}",
         state
             .features()
-            .get(&from)?
+            .get(from)?
             .map(|f| f.name)
             .unwrap_or_default(),
         state
             .features()
-            .get(&to)?
+            .get(to)?
             .map(|f| f.name)
             .unwrap_or_default()
     );
@@ -237,9 +237,9 @@ fn way(
         named: None,
     })
 }
-pub struct Options<'a> {
+pub struct Options {
     pub highways: usize,
-    pub space: Option<&'a str>,
+    pub space: Option<atlas_map::Id>,
     pub owns_map_geography: bool,
 }
 pub struct DrawnWay {
@@ -248,7 +248,7 @@ pub struct DrawnWay {
 }
 pub fn records(
     state: &impl WorkState,
-    options: &Options<'_>,
+    options: &Options,
     mut progress: impl FnMut(f64, &str),
 ) -> io::Result<Vec<DrawnWay>> {
     let recorded = |id: &str| -> io::Result<bool> {
@@ -258,7 +258,7 @@ pub fn records(
         };
         Ok(state
             .features()
-            .get(&land_places::record_id(state, place)?)?
+            .get(land_places::record_id(state, place))?
             .is_some())
     };
     let mut shown = Vec::new();
@@ -326,7 +326,7 @@ pub fn publish(
     state: &impl WorkState,
     features: &mut dyn FeatureWorkspace,
     networks: &mut dyn NetworkWorkspace,
-    options: &Options<'_>,
+    options: &Options,
     contracted: &impl Fn(&Feature) -> bool,
     progress: impl FnMut(f64, &str),
 ) -> io::Result<()> {

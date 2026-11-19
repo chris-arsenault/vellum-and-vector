@@ -19,6 +19,16 @@ pub struct Hex {
     pub q: i32,
     pub r: i32,
 }
+impl Hex {
+    /// The identity of this hex's feature among those `owner` publishes (a map area or a
+    /// level's hex layer).
+    pub fn id(self, owner: crate::Id) -> crate::Id {
+        let mut name = [0; 8];
+        name[..4].copy_from_slice(&self.q.to_be_bytes());
+        name[4..].copy_from_slice(&self.r.to_be_bytes());
+        crate::Id::v5(owner, &name)
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HexGrid {

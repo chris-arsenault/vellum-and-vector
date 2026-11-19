@@ -23,7 +23,7 @@ pub struct Captured {
 /// exists. This avoids inventing finer inherited information before regional generation.
 pub struct Source<'a> {
     pub records: &'a [Record],
-    pub ancestors: &'a [String],
+    pub ancestors: &'a [atlas_map::Id],
     pub owned_geography: bool,
     pub reopened: bool,
     pub surface_span: Option<f64>,

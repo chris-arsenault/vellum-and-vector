@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct GeographicObservation {
-    pub id: String,
+    pub id: atlas_map::Id,
     pub name: String,
     pub geometry: Geometry,
 }
@@ -64,14 +64,14 @@ pub enum Cause {
     },
     Magic {
         process: String,
-        source_id: String,
+        source_id: atlas_map::Id,
         activity: f64,
         forcing: FieldSummary,
         stored: FieldSummary,
     },
     Domain {
         process: String,
-        subjects: Vec<String>,
+        subjects: Vec<atlas_map::Id>,
         description: String,
     },
 }

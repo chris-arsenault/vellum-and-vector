@@ -100,7 +100,7 @@ impl State {
             .records
             .features
             .values(FeatureSelection {
-                area_id: Some(&self.scope.area),
+                area_id: Some(self.scope.area),
                 layer_id: Some("geology"),
                 ..Default::default()
             })?
@@ -124,7 +124,7 @@ impl State {
                 })
                 .count();
             if count * 2 >= points.len() {
-                self.records.features.remove(&feature.id)?;
+                self.records.features.remove(feature.id)?;
             }
         }
         Ok(())
@@ -165,7 +165,7 @@ impl State {
             };
             self.naming.geographic(
                 &self.scope,
-                &landmark.id,
+                &landmark.id.to_string(),
                 kind,
                 &landmark.geometry,
                 &Attributes::new(),
@@ -280,9 +280,9 @@ impl State {
     }
     pub(super) fn landmark_scene(&self) -> Scene {
         Scene {
-            world: self.scope.world.clone(),
-            area: self.scope.area.clone(),
-            space: self.scope.space.clone(),
+            world: self.scope.world,
+            area: self.scope.area,
+            space: self.scope.space,
             systems: self
                 .physical
                 .magic

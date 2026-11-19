@@ -136,11 +136,12 @@ pub fn observe(
             continue;
         }
         observed.push(Observation {
-            id: crate::identity::semantic_id(
+            id: crate::identity::area_record_id(
                 state.world_id(),
-                &format!("generated:{}", state.area_id()),
+                false,
+                state.area_id(),
                 &format!("wild-survey:{path}:{}", feature.id),
-            )?,
+            ),
             name: feature.name,
             geometry,
         });

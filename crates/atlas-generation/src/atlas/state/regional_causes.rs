@@ -22,7 +22,7 @@ fn river() -> Cause<State> {
             evidence.courses.extend(courses::captured_courses(
                 state.field().mesh(),
                 source,
-                &state.scope.area,
+                state.scope.area,
                 &regional.removed_products,
                 state.field().scale().cells(1.0),
                 regional.parent_span,
@@ -54,7 +54,7 @@ fn entry() -> Cause<State> {
 }
 struct FaultInput<'a> {
     source: Option<&'a dyn FeatureReader>,
-    area: &'a str,
+    area: atlas_map::Id,
     width: f64,
     spatial: &'a dyn SpatialKernel,
 }
@@ -83,7 +83,7 @@ fn fault() -> Cause<State> {
                 &operation,
                 &FaultInput {
                     source: state.records.source_features.as_deref(),
-                    area: &state.scope.area,
+                    area: state.scope.area,
                     width: state.physical.settings.relief.fracture_width,
                     spatial: state.spatial.as_ref(),
                 },
@@ -150,7 +150,7 @@ impl State {
         features::regional::clear_products(
             self.records.features.as_mut(),
             self.records.networks.as_mut(),
-            &self.scope.area,
+            self.scope.area,
             &regional.domains,
             &mut regional.removed_products,
         )
@@ -170,7 +170,7 @@ impl State {
         features::regional::tag_products(
             self.records.features.as_mut(),
             source,
-            &self.scope.area,
+            self.scope.area,
             &removed,
         )?;
         self.adopt_rivers()

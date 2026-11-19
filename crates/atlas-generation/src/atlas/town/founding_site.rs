@@ -113,7 +113,8 @@ impl<'a> Context<'a> {
             let owner = match feature
                 .attributes
                 .get("settlementId")
-                .and_then(|v| v.as_str())
+                .cloned()
+                .and_then(|v| serde_json::from_value::<atlas_map::Id>(v).ok())
             {
                 Some(id) => seats.iter().position(|s| s.key == id),
                 None => seat_index.nearest(point).map_err(io::Error::other)?,
@@ -128,7 +129,7 @@ impl<'a> Context<'a> {
                     .map_err(io::Error::other)?;
                 inherited[i].push(InheritedWork {
                     family,
-                    id: feature.id.clone(),
+                    id: feature.id,
                     anchor: [x, y],
                     design,
                 });

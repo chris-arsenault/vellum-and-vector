@@ -108,7 +108,7 @@ fn placed<S: CommunityState>(
     work: RememberedWork,
 ) -> io::Result<Place> {
     let mut place = Place::at(kind, work.cell, vec![work.cell]);
-    place.id = community_records::local_id(state, &work.key)?;
+    place.id = community_records::local_id(state, &work.key).to_string();
     place.feature = Some(work_feature(state, shape, work)?);
     Ok(place)
 }
@@ -205,7 +205,7 @@ pub fn positioned_record(state: &impl CommunityState, kind: Kind, feature: Featu
         anchor.unwrap_or(usize::MAX),
         anchor.into_iter().collect(),
     );
-    place.id = feature.id.clone();
+    place.id = feature.id.to_string();
     place.feature = Some(feature);
     place
 }

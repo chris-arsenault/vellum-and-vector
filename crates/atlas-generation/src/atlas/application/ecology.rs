@@ -9,7 +9,7 @@ use std::{collections::BTreeMap, io};
 
 pub(super) fn authority(
     state: &State,
-    areas: &BTreeMap<String, String>,
+    areas: &BTreeMap<atlas_map::Id, atlas_map::Id>,
     regional: bool,
 ) -> io::Result<Authority> {
     if regional {
@@ -27,7 +27,7 @@ pub(super) fn authority(
         let space = areas
             .get(&feature.area_id)
             .ok_or_else(|| io::Error::other("Authored ecology requires its located area"))?;
-        if space != &state.scope.space
+        if *space != state.scope.space
             || !state
                 .spatial
                 .relation(

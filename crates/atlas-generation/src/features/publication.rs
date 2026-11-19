@@ -5,7 +5,7 @@ use super::{
     Feature, State,
 };
 use crate::{identity::semantic_id, spatial::SpatialKernel};
-use atlas_map::Geometry;
+use atlas_map::{Geometry, Id};
 use std::io;
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -24,9 +24,9 @@ pub struct RegionalRecord {
     pub named: Option<Named>,
 }
 pub struct RegionalPublisher<'a> {
-    pub world: &'a str,
-    pub area: &'a str,
-    pub space: Option<&'a str>,
+    pub world: Id,
+    pub area: Id,
+    pub space: Option<Id>,
     pub chart: Chart<'a>,
     pub spatial: &'a dyn SpatialKernel,
 }
@@ -44,11 +44,12 @@ impl RegionalPublisher<'_> {
         };
         attributes.insert("developedBy".into(), "regional".into());
         Ok(Feature {
-            id: semantic_id(self.world, &format!("regional:{}", self.area), &record.key)?,
+            // Regional records are the area's own: its identity names them.
+            id: semantic_id(self.area, "regional", &record.key),
             place_id: None,
             map_only: None,
             footprint: None,
-            area_id: self.area.into(),
+            area_id: self.area,
             layer_id: record.layer_id,
             kind: record.kind,
             name,
@@ -90,25 +91,26 @@ impl RegionalPublisher<'_> {
         let mut nodes = Vec::with_capacity(2);
         for coordinate in [first, last] {
             let [x, y, _] = coordinate.coordinates();
-            let id = semantic_id(
-                self.world,
-                &format!("regional-node:{}", self.area),
-                &format!("{}:{x}:{y}", feature.layer_id),
-            )?;
+            // Lines of one layer that end at the same point of the area share its node.
+            let mut name = feature.layer_id.as_bytes().to_vec();
+            name.push(0);
+            name.extend_from_slice(&x.to_bits().to_be_bytes());
+            name.extend_from_slice(&y.to_bits().to_be_bytes());
+            let id = Id::v5(Id::v5(self.area, b"regional node"), &name);
             let [x, y, z] = self.chart.position(*coordinate).coordinates();
             nodes.push(Node {
                 id,
                 kind: format!("network:{}", feature.layer_id),
                 position: Position { x, y, z },
-                space_id: self.space.map(str::to_owned),
+                space_id: self.space.map(|space| space.to_string()),
                 water_level: None,
             });
         }
         let reach = Reach {
-            id: semantic_id(self.world, "regional-reach", &feature.id)?,
-            feature_id: feature.id.clone(),
-            start: nodes[0].id.clone(),
-            end: nodes[1].id.clone(),
+            id: Id::v5(feature.id, b"regional reach"),
+            feature_id: feature.id,
+            start: nodes[0].id,
+            end: nodes[1].id,
             geometry: Geometry::LineString {
                 coordinates: coordinates.to_vec(),
             },

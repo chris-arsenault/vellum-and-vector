@@ -57,7 +57,7 @@ fn thermal(sources: Rc<Vec<Source>>) -> Command<State, Activity> {
             let state: &mut State = scope.state_mut();
             let causes = state.physical.surface.thermal_sources(
                 &sources,
-                &state.scope.space,
+                state.scope.space,
                 input,
                 state.spatial.as_ref(),
             )?;
@@ -75,7 +75,7 @@ fn storage(sources: Rc<Vec<Source>>) -> Command<State, f64> {
             let state: &mut State = scope.state_mut();
             let causes = state.physical.surface.advance_local_storage(
                 &sources,
-                &state.scope.space,
+                state.scope.space,
                 *years,
                 &state.causes,
             )?;
@@ -98,7 +98,7 @@ fn material(sources: Rc<Vec<Source>>) -> Command<State, Material> {
             let physical = &mut state.physical;
             let (causes, altered) = physical.surface.local_material(
                 &sources,
-                &state.scope.space,
+                state.scope.space,
                 &input.activity,
                 state.spatial.as_ref(),
                 input.react,

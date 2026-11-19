@@ -133,7 +133,7 @@ impl Ownership {
         }
         for before in self.original.values(FeatureSelection::default())? {
             let before = before?;
-            let after = state.records.features.get(&before.id)?;
+            let after = state.records.features.get(before.id)?;
             protection(&before, after.as_ref())?;
             if Some(&before) != after.as_ref() {
                 self.changed(Some(&before), after.as_ref())?;
@@ -141,7 +141,7 @@ impl Ownership {
         }
         for after in state.records.features.values(FeatureSelection::default())? {
             let after = after?;
-            if self.original.get(&after.id)?.is_none() {
+            if self.original.get(after.id)?.is_none() {
                 self.changed(None, Some(&after))?;
             }
         }

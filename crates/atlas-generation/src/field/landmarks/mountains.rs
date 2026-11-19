@@ -20,7 +20,7 @@ pub struct Mountain {
     pub prominence_metres: f64,
 }
 pub struct MountainWork {
-    pub landmark_id: String,
+    pub landmark_id: atlas_map::Id,
     pub mountain: Mountain,
     pub epoch: i32,
     /// None emplaces; Some supplies the measured prominence shortfall for maintenance.
@@ -178,7 +178,7 @@ impl Field {
                     .apply(field, work)
                     .map_err(|e| ExecutionError::Failed(e.to_string()))?;
                 if work.prominence_shortfall.is_some() {
-                    super::changes::maintenance(field, &work.landmark_id, applied)
+                    super::changes::maintenance(field, work.landmark_id, applied)
                         .map_err(|e| ExecutionError::Failed(e.to_string()))?;
                 }
                 Ok(())

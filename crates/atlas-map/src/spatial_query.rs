@@ -43,7 +43,7 @@ pub enum GeometryResult {
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct CoverageRequest {
-    pub space_id: String,
+    pub space_id: crate::Id,
     pub polygons: Vec<Geometry>,
     pub points: Vec<Position>,
 }

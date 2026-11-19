@@ -24,7 +24,7 @@ pub struct Naming {
     config: Configuration,
     origins: Vec<Geometry>,
     // hpc-exempt: language entity attributes used to select a naming vocabulary.
-    entities: RefCell<BTreeMap<String, Entity>>,
+    entities: RefCell<BTreeMap<atlas_map::Id, Entity>>,
     spatial: Rc<dyn SpatialKernel>,
 }
 struct Request<'a> {
@@ -39,7 +39,7 @@ struct Request<'a> {
 impl Naming {
     pub fn new(
         config: Configuration,
-        entities: BTreeMap<String, Entity>,
+        entities: BTreeMap<atlas_map::Id, Entity>,
         spatial: Rc<dyn SpatialKernel>,
     ) -> Self {
         let mut random = Random::new(&format!(
@@ -72,7 +72,8 @@ impl Naming {
         let names = Names::atlas();
         let entities = self.entities.borrow();
         let configured = language
-            .and_then(|id| entities.get(id))
+            // A language is a people's entity or, before one exists, a naming culture.
+            .and_then(|id| entities.get(&id.parse().ok()?))
             .and_then(|entity| entity.attributes.get("namingCulture"))
             .and_then(|value| value.as_str())
             .or(language);

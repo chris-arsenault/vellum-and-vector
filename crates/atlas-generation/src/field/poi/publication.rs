@@ -11,15 +11,15 @@ use std::{io, rc::Rc};
 pub trait PublicationState<Schedule>: super::realized::RealizationState + Sized {
     fn features_mut(&mut self) -> &mut dyn FeatureWorkspace;
     fn link_on(&self, kind: AreaKind, cell: usize) -> io::Result<Option<HostLink>>;
-    fn retained_name(&self, feature: &str) -> bool;
+    fn retained_name(&self, feature: atlas_map::Id) -> bool;
     fn name_feature(&self, feature: &Feature) -> io::Result<Option<Named>>;
-    fn contracted(&self, feature: &str) -> bool;
+    fn contracted(&self, feature: atlas_map::Id) -> bool;
 }
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct Published {
     pub kind: Kind,
     pub place: Place,
-    pub feature_id: String,
+    pub feature_id: atlas_map::Id,
 }
 #[derive(Default, serde::Serialize, serde::Deserialize)]
 pub struct Publication {
@@ -54,7 +54,7 @@ pub fn put_generated<S: PublicationState<Schedule>, Schedule>(
     state: &mut S,
     feature: Feature,
 ) -> io::Result<bool> {
-    let contracted = state.contracted(&feature.id);
+    let contracted = state.contracted(feature.id);
     crate::features::generated::put(state.features_mut(), feature, contracted)
 }
 impl Publication {

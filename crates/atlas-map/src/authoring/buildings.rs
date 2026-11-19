@@ -28,11 +28,11 @@ struct Placement {
 impl Planner<'_> {
     pub(super) fn place_building(
         &self,
-        (building_id, plot_id): (String, String),
+        (building_id, plot_id): (crate::Id, crate::Id),
         use_: &str,
         [x, y]: [f64; 2],
         name: Option<&str>,
-        creator: Option<&str>,
+        creator: Option<crate::Id>,
     ) -> Result<Draft, String> {
         let use_ = Use::parse(use_).ok_or_else(|| format!("{use_} is not a building use"))?;
         let yard = self.empty_yard(Position::xy(x, y))?;
@@ -56,14 +56,15 @@ impl Planner<'_> {
             creator,
         )?;
         draft.after[0].relations.push(MapRelation {
-            target_id: street.id.clone(),
+            target_id: street.id,
+            target_map_id: None,
             target_name: street.name.clone().unwrap_or_default(),
             kind: FRONTS.into(),
         });
         if let Some(plot) = placed.plot {
             let mut values = BTreeMap::from([
                 ("nameStatus".to_string(), Value::from("label")),
-                ("streetId".into(), street.id.clone().into()),
+                ("streetId".into(), street.id.into()),
             ]);
             town_attributes(&mut values, &settlement, None);
             let ground = self.clear_plot(plot)?;

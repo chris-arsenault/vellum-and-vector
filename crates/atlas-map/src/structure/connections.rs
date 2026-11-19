@@ -2,8 +2,8 @@
 //! leads to its landing on another level of the same map (`leadsTo`, held by both ends);
 //! a connection to a feature on another map, such as a cellar trapdoor that opens into a
 //! cave passage on the parent ground map, is a `connectsTo` relation whose target names the
-//! other map and the feature as `<map id>#<feature id>`.
-use crate::{MapDescriptor, MapFeature};
+//! feature and, in `target_map_id`, the other map.
+use crate::{Id, MapDescriptor, MapFeature};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -16,8 +16,8 @@ pub const CONNECTS_TO: &str = "connectsTo";
 pub struct ConnectionTarget {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub map_id: Option<String>,
-    pub feature_id: String,
+    pub map_id: Option<Id>,
+    pub feature_id: Id,
 }
 
 /// Kinds that carry people from one level or map to another (`structure.json`).
@@ -45,12 +45,12 @@ pub fn lands(source: &MapFeature, other: &MapFeature) -> bool {
 pub struct ConnectionCandidate {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
-    pub map_id: Option<String>,
-    pub feature_id: String,
+    pub map_id: Option<Id>,
+    pub feature_id: Id,
     pub label: String,
 }
 /// Where a located space lies, in a creator's words: a building's level, the surface or caves.
-fn space_label(map: &MapDescriptor, space_id: &str) -> String {
+fn space_label(map: &MapDescriptor, space_id: Id) -> String {
     let space = map.spaces.iter().find(|space| space.id == space_id);
     if super::is_structure(map) {
         if let Some(number) = space.and_then(|space| super::level_of(map, space)) {
@@ -81,12 +81,8 @@ pub fn candidates(
         .filter(|feature| lands(source, feature))
         .map(|feature| ConnectionCandidate {
             map_id: None,
-            feature_id: feature.id.clone(),
-            label: format!(
-                "{} · {}",
-                name(feature),
-                space_label(map, &feature.space_id)
-            ),
+            feature_id: feature.id,
+            label: format!("{} · {}", name(feature), space_label(map, feature.space_id)),
         })
         .collect();
     // The building these floors belong to is where they already are.
@@ -94,31 +90,21 @@ pub fn candidates(
         .real_scale
         .as_ref()
         .and_then(|real| real.site.as_ref())
-        .map(|site| site.building_id.as_str());
+        .map(|site| site.building_id);
     if let Some((parent, features)) = other {
         let reachable = features
             .iter()
-            .filter(|feature| reaches(feature) && Some(feature.id.as_str()) != home);
+            .filter(|feature| reaches(feature) && Some(feature.id) != home);
         found.extend(reachable.map(|feature| ConnectionCandidate {
-            map_id: Some(parent.reference.map_id.clone()),
-            feature_id: feature.id.clone(),
+            map_id: Some(parent.reference.map_id),
+            feature_id: feature.id,
             label: format!(
                 "{} · {}, {}",
                 name(feature),
                 parent.name,
-                space_label(parent, &feature.space_id)
+                space_label(parent, feature.space_id)
             ),
         }));
     }
     found
-}
-/// The relation target that names a feature on another map.
-pub fn connection_target(map_id: &str, feature_id: &str) -> String {
-    format!("{map_id}#{feature_id}")
-}
-/// The map and feature a `connectsTo` target names.
-pub fn foreign_target(target_id: &str) -> Option<(&str, &str)> {
-    target_id
-        .split_once('#')
-        .filter(|(map, feature)| !map.is_empty() && !feature.is_empty())
 }

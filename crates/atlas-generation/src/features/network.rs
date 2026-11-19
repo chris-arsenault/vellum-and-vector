@@ -1,4 +1,4 @@
-use atlas_map::Geometry;
+use atlas_map::{Geometry, Id};
 use serde::{Deserialize, Serialize};
 use std::io;
 
@@ -11,7 +11,7 @@ pub struct Position {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Node {
-    pub id: String,
+    pub id: Id,
     pub kind: String,
     pub position: Position,
     pub space_id: Option<String>,
@@ -20,23 +20,23 @@ pub struct Node {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Reach {
-    pub id: String,
-    pub feature_id: String,
-    pub start: String,
-    pub end: String,
+    pub id: Id,
+    pub feature_id: Id,
+    pub start: Id,
+    pub end: Id,
     pub geometry: Geometry,
     pub flow: f64,
     pub end_flow: Option<f64>,
 }
 #[derive(Clone, Copy, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Selection<'a> {
+pub struct Selection {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub feature_id: Option<&'a str>,
+    pub feature_id: Option<Id>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub node_id: Option<&'a str>,
+    pub node_id: Option<Id>,
 }
-impl Selection<'_> {
+impl Selection {
     pub fn matches(&self, reach: &Reach) -> bool {
         self.feature_id.is_none_or(|id| reach.feature_id == id)
             && self
@@ -45,16 +45,16 @@ impl Selection<'_> {
     }
 }
 pub trait NetworkReader {
-    fn node(&self, id: &str) -> io::Result<Option<Node>>;
-    fn reach(&self, id: &str) -> io::Result<Option<Reach>>;
+    fn node(&self, id: Id) -> io::Result<Option<Node>>;
+    fn reach(&self, id: Id) -> io::Result<Option<Reach>>;
     fn nodes(&self) -> io::Result<Box<dyn Iterator<Item = io::Result<Node>> + '_>>;
-    fn reaches<'a>(
-        &'a self,
-        selection: Selection<'a>,
-    ) -> io::Result<Box<dyn Iterator<Item = io::Result<Reach>> + 'a>>;
+    fn reaches(
+        &self,
+        selection: Selection,
+    ) -> io::Result<Box<dyn Iterator<Item = io::Result<Reach>> + '_>>;
 }
 pub trait NetworkWorkspace: NetworkReader {
     fn put_node(&mut self, node: Node) -> io::Result<()>;
     fn put_reach(&mut self, reach: Reach) -> io::Result<()>;
-    fn remove_reach(&mut self, id: &str) -> io::Result<()>;
+    fn remove_reach(&mut self, id: Id) -> io::Result<()>;
 }

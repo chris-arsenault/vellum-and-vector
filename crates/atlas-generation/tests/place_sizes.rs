@@ -139,15 +139,16 @@ fn only_places_about_a_hex_across_stand_at_their_size() {
 #[test]
 fn the_key_numbers_places_from_the_northern_row_west_to_east() {
     let grid = HexGrid::from_across_flats(10.0, [0.0, 0.0]).unwrap();
+    let id = atlas_map::Id::from_name;
     let places = vec![
-        ("south".to_owned(), [0.0, -30.0]),
-        ("north-east".to_owned(), [40.0, 30.0]),
-        ("north-west".to_owned(), [-40.0, 30.0]),
-        ("middle".to_owned(), [5.0, 0.0]),
+        (id("south"), [0.0, -30.0]),
+        (id("north-east"), [40.0, 30.0]),
+        (id("north-west"), [-40.0, 30.0]),
+        (id("middle"), [5.0, 0.0]),
     ];
     let numbers = key_numbers(&places, &grid);
-    assert_eq!(numbers["north-west"], 1);
-    assert_eq!(numbers["north-east"], 2);
-    assert_eq!(numbers["middle"], 3);
-    assert_eq!(numbers["south"], 4);
+    assert_eq!(numbers[&id("north-west")], 1);
+    assert_eq!(numbers[&id("north-east")], 2);
+    assert_eq!(numbers[&id("middle")], 3);
+    assert_eq!(numbers[&id("south")], 4);
 }

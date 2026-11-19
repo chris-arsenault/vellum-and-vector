@@ -29,7 +29,7 @@ pub fn apply_term<S: PublicationState<Schedule>, Schedule>(
         "nameTerm".into(),
         serde_json::to_value(term(state, place)?)?,
     );
-    if state.retained_name(&feature.id) {
+    if state.retained_name(feature.id) {
         return Ok(());
     }
     if let Some(named) = state.name_feature(feature)? {
@@ -41,7 +41,7 @@ pub fn apply_term<S: PublicationState<Schedule>, Schedule>(
 fn can_rename<S: PublicationState<Schedule>, Schedule>(state: &S, feature: &Feature) -> bool {
     feature.state == FeatureState::Generated
         && !feature.protected
-        && !state.retained_name(&feature.id)
+        && !state.retained_name(feature.id)
         && (!state.regional()
             || feature
                 .attributes
@@ -55,7 +55,7 @@ fn lender_for<S: PublicationState<Schedule>, Schedule>(
     taker: &Published,
     all: &[Published],
     // hpc-exempt: named feature identities, never per-cell simulation state.
-    lent: &BTreeSet<String>,
+    lent: &BTreeSet<atlas_map::Id>,
 ) -> io::Result<Option<(Feature, String)>> {
     for lender in all {
         if lender.kind != relation.relation.kind
@@ -64,7 +64,7 @@ fn lender_for<S: PublicationState<Schedule>, Schedule>(
         {
             continue;
         }
-        let Some(feature) = state.features().get(&lender.feature_id)? else {
+        let Some(feature) = state.features().get(lender.feature_id)? else {
             continue;
         };
         let term = feature
@@ -85,9 +85,9 @@ fn take_one<S: PublicationState<Schedule>, Schedule>(
     taker: &Published,
     all: &[Published],
     // hpc-exempt: named feature identities, never per-cell simulation state.
-    lent: &mut BTreeSet<String>,
+    lent: &mut BTreeSet<atlas_map::Id>,
 ) -> io::Result<()> {
-    let Some(mut feature) = state.features().get(&taker.feature_id)? else {
+    let Some(mut feature) = state.features().get(taker.feature_id)? else {
         return Ok(());
     };
     if !can_rename(state, &feature) {
@@ -111,7 +111,7 @@ fn take_one<S: PublicationState<Schedule>, Schedule>(
         let Some((lender, stem)) = lender_for(state, relation, taker, all, lent)? else {
             continue;
         };
-        lent.insert(lender.id.clone());
+        lent.insert(lender.id);
         feature.name = stem;
         feature
             .attributes

@@ -159,7 +159,7 @@ pub(super) fn publish_course(
     paths: &Paths,
     basin_discharge: f64,
     river: &str,
-) -> io::Result<(Vec<String>, Option<String>)> {
+) -> io::Result<(Vec<atlas_map::Id>, Option<String>)> {
     let mut stretches = Vec::new();
     for members in parts.iter().filter(|members| members.len() >= 2) {
         let valley = paths.draw(state.field(), members, state.spatial.as_ref())?;
@@ -243,7 +243,7 @@ pub(super) fn publish_course(
         {
             feature.name = name.into();
         }
-        ids.push(feature.id.clone());
+        ids.push(feature.id);
         state.write_network(feature)?;
     }
     Ok((ids, first))

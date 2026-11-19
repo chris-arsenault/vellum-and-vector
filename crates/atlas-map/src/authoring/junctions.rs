@@ -35,12 +35,12 @@ fn is_wall(feature: &MapFeature) -> bool {
         && super::family(&feature.layer_id) == "structures"
 }
 /// A feature's junctions as (line, kind) pairs, in a stable order.
-pub fn junctions(feature: &MapFeature) -> Vec<(&str, &str)> {
+pub fn junctions(feature: &MapFeature) -> Vec<(crate::Id, &str)> {
     let mut pairs: Vec<_> = feature
         .relations
         .iter()
         .filter(|relation| is_junction(&relation.kind))
-        .map(|relation| (relation.target_id.as_str(), relation.kind.as_str()))
+        .map(|relation| (relation.target_id, relation.kind.as_str()))
         .collect();
     pairs.sort();
     pairs
@@ -105,7 +105,8 @@ pub fn attach(
 }
 fn relation(line: &MapFeature, kind: &str) -> MapRelation {
     MapRelation {
-        target_id: line.id.clone(),
+        target_id: line.id,
+        target_map_id: None,
         target_name: line.name.clone().unwrap_or_default(),
         kind: kind.into(),
     }
@@ -117,7 +118,7 @@ fn relation(line: &MapFeature, kind: &str) -> MapRelation {
 /// turn in its `rotation`.
 pub fn follow(
     dependent: &MapFeature,
-    host: &str,
+    host: crate::Id,
     old: &Geometry,
     new: &Geometry,
     partner: Option<&Geometry>,

@@ -4,6 +4,7 @@
 pub mod authoring;
 mod geometry;
 pub mod hexes;
+mod identity;
 mod layers;
 mod navigation;
 mod people;
@@ -19,6 +20,7 @@ pub mod underground;
 mod validation;
 
 pub use geometry::*;
+pub use identity::*;
 pub use layers::*;
 pub use navigation::*;
 pub use people::*;
@@ -34,17 +36,17 @@ use ts_rs::TS;
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MapRef {
-    pub map_id: String,
-    pub revision: String,
+    pub map_id: Id,
+    pub revision: Id,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MapDescriptor {
     pub reference: MapRef,
-    pub world_id: String,
+    pub world_id: Id,
     pub name: String,
-    pub primary_space_id: String,
+    pub primary_space_id: Id,
     pub profile: String,
     pub region_scale: RegionScale,
     /// Map-owned geography and its continuous opening window within the primary space.
@@ -104,11 +106,21 @@ impl RealScale {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CreatorLayer {
-    pub id: String,
+    pub id: Id,
     pub name: String,
     /// A locked layer refuses pointer edits to its features; locking is shared, hiding is not.
     #[serde(default)]
     pub locked: bool,
+}
+impl CreatorLayer {
+    /// The layer every real-scale map starts with.
+    pub fn base() -> Self {
+        Self {
+            id: Id::from_name("base layer"),
+            name: "Base layer".into(),
+            locked: false,
+        }
+    }
 }
 impl RealScale {
     pub fn authored(&self) -> bool {
@@ -128,9 +140,9 @@ pub enum PublicationState {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RegionSelection {
     pub parent: MapRef,
-    pub space_id: String,
+    pub space_id: Id,
     pub geometry: RegionGeometry,
-    pub feature_ids: Vec<String>,
+    pub feature_ids: Vec<Id>,
     pub region_path: Vec<MapRegion>,
 }
 

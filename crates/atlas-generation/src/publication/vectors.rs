@@ -16,7 +16,7 @@ use std::collections::BTreeMap;
 
 pub struct Vectors<'a> {
     pub registry: Registry<'a>,
-    pub area: &'a str,
+    pub area: atlas_map::Id,
     /// Canonical placed sources override any record of the same identity.
     pub placed: &'a [Feature],
 }
@@ -82,8 +82,9 @@ impl Vectors<'_> {
             .iter()
             .map(|r| {
                 Ok(MapRelation {
-                    target_id: r.target_id.clone(),
-                    target_name: self.registry.target_name(&r.target_id)?,
+                    target_id: r.target_id,
+                    target_map_id: None,
+                    target_name: self.registry.target_name(r.target_id)?,
                     kind: r.kind.clone(),
                 })
             })
@@ -100,9 +101,9 @@ impl Vectors<'_> {
             _ => None,
         });
         Ok(MapFeature {
-            entity_id: Some(feature.place_id.unwrap_or_else(|| feature.id.clone())),
+            entity_id: Some(feature.place_id.unwrap_or(feature.id)),
             id: feature.id,
-            space_id: self.registry.context.space(self.area)?.into(),
+            space_id: self.registry.context.space(self.area)?,
             layer_id: format!("vector:{}", feature.layer_id),
             name: Some(feature.name),
             kind: feature.kind,

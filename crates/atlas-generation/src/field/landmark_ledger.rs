@@ -11,7 +11,7 @@ pub struct Capture {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LandmarkRecord {
-    pub id: String,
+    pub id: atlas_map::Id,
     pub kind: String,
     pub realized: bool,
     pub emplaced_at_epoch: i32,

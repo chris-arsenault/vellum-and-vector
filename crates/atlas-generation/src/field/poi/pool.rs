@@ -287,11 +287,11 @@ mod tests {
             map_only: None,
             place_id: None,
             footprint: None,
-            id: "river".into(),
+            id: atlas_map::Id::from_name("river"),
             name: "River".into(),
             kind: "river".into(),
             layer_id: "rivers".into(),
-            area_id: "map".into(),
+            area_id: atlas_map::Id::from_name("map"),
             geometry: Geometry::MultiLineString {
                 coordinates: vec![piece(0.0), piece(300.0)],
             },

@@ -8,8 +8,8 @@ use atlas_map::Geometry;
 use std::{collections::BTreeMap, io, rc::Rc};
 
 pub struct Record {
-    pub area: String,
-    pub space: String,
+    pub area: atlas_map::Id,
+    pub space: atlas_map::Id,
     pub input: bool,
     pub resolution: Option<f64>,
     pub footprint: Geometry,
@@ -19,7 +19,7 @@ pub struct Selection<'a> {
     pub scope: &'a Scope,
     pub owned_geography: bool,
     pub reopened: bool,
-    pub ancestors: &'a [String],
+    pub ancestors: &'a [atlas_map::Id],
 }
 impl Selection<'_> {
     /// Pinned parent context seeds the child's added margin through the resource sampler's
@@ -49,12 +49,12 @@ impl Selection<'_> {
             .relation(footprint, &self.scope.footprint, Predicate::Covers)
             .map_err(io::Error::other)
     }
-    pub fn accepts(&self, area: &str, space: &str, input: bool) -> bool {
+    pub fn accepts(&self, area: atlas_map::Id, space: atlas_map::Id, input: bool) -> bool {
         space == self.scope.space
             && if self.owned_geography {
                 area == self.scope.area && (input || self.reopened)
             } else {
-                area != self.scope.area && self.ancestors.iter().any(|id| id == area)
+                area != self.scope.area && self.ancestors.contains(&area)
             }
     }
     fn prefer(&self, candidate: &Record, previous: &Record) -> bool {
@@ -84,7 +84,7 @@ impl Selection<'_> {
     ) -> io::Result<BTreeMap<String, Rc<Resource>>> {
         let mut chosen: BTreeMap<String, &Record> = BTreeMap::new();
         for record in records {
-            if !self.accepts(&record.area, &record.space, record.input)
+            if !self.accepts(record.area, record.space, record.input)
                 || !self.supports(record.input, &record.footprint, spatial)?
             {
                 continue;

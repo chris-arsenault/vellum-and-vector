@@ -3,14 +3,14 @@ use crate::{
     atlas::history::{Cause, EpochHistory},
     features::records::Entity,
 };
-use atlas_map::{HistoryEntry, MapEntity};
+use atlas_map::{HistoryEntry, Id, MapEntity};
 use serde_json::json;
 use std::io;
 
-pub fn records<'a>(
-    history: &'a [EpochHistory],
-    revision: &'a str,
-) -> impl Iterator<Item = io::Result<HistoryEntry>> + 'a {
+pub fn records(
+    history: &[EpochHistory],
+    revision: Id,
+) -> impl Iterator<Item = io::Result<HistoryEntry>> + '_ {
     history
         .iter()
         .enumerate()
@@ -21,8 +21,11 @@ pub fn records<'a>(
                 .enumerate()
                 .map(move |(cause_index, cause)| {
                     let (process, description, feature_ids) = describe(cause);
+                    // One entry per cause of each history entry of the revision.
+                    let mut place = (entry_index as u64).to_be_bytes().to_vec();
+                    place.extend_from_slice(&(cause_index as u64).to_be_bytes());
                     Ok(HistoryEntry {
-                        id: format!("{revision}:{entry_index:010}:{cause_index:010}"),
+                        id: Id::v5(revision, &place),
                         title: process.into(),
                         description: description.into(),
                         epoch: None,
@@ -34,7 +37,7 @@ pub fn records<'a>(
                 })
         })
 }
-fn describe(cause: &Cause) -> (&str, &str, Vec<String>) {
+fn describe(cause: &Cause) -> (&str, &str, Vec<Id>) {
     match cause {
         Cause::Geography {
             process,
@@ -43,7 +46,7 @@ fn describe(cause: &Cause) -> (&str, &str, Vec<String>) {
         } => (
             process,
             "geography",
-            observations.iter().map(|o| o.id.clone()).collect(),
+            observations.iter().map(|o| o.id).collect(),
         ),
         Cause::Domain {
             process,
@@ -61,7 +64,7 @@ pub fn entity(entity: &Entity) -> MapEntity {
     let character = entity.attributes.get("character");
     let count = |name| character.and_then(|c| c.get(name)).and_then(|v| v.as_f64());
     MapEntity {
-        id: entity.id.clone(),
+        id: entity.id,
         name: entity.name.clone(),
         kind: entity.kind.clone(),
         people: count("people"),

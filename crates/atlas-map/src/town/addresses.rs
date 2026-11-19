@@ -116,7 +116,7 @@ fn normal(name: &str) -> String {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AddressMatch {
-    pub feature_id: String,
+    pub feature_id: crate::Id,
     pub layer_id: String,
     pub kind: String,
     pub name: Option<String>,

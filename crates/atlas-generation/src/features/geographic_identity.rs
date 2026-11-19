@@ -4,7 +4,7 @@ use super::{
     Feature, FeatureReader, FeatureSelection, FeatureWorkspace, State,
 };
 use crate::spatial::SpatialKernel;
-use atlas_map::{Bounds, Geometry, Position};
+use atlas_map::{Bounds, Geometry, Id, Position};
 use serde_json::Value;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -15,7 +15,7 @@ use std::{
 pub struct Original<'a> {
     pub features: &'a dyn FeatureReader,
     pub networks: &'a dyn NetworkReader,
-    pub contracted: &'a dyn Fn(&str) -> bool,
+    pub contracted: &'a dyn Fn(Id) -> bool,
 }
 pub struct Working<'a> {
     pub features: &'a mut dyn FeatureWorkspace,
@@ -25,10 +25,10 @@ fn preserve(source: &Original<'_>, feature: &Feature) -> bool {
     feature.protected
         || feature.state == State::Authored
         || !feature.detail.is_empty()
-        || (source.contracted)(&feature.id)
+        || (source.contracted)(feature.id)
 }
 fn movable(source: &Original<'_>, feature: &Feature) -> io::Result<bool> {
-    Ok(source.features.get(&feature.id)?.is_none() || !preserve(source, feature))
+    Ok(source.features.get(feature.id)?.is_none() || !preserve(source, feature))
 }
 fn move_coordinate(shape: &mut Geometry, start: bool, end: bool, point: [f64; 3]) {
     if let Geometry::LineString { coordinates } = shape {
@@ -65,8 +65,8 @@ fn align_elevation(feature: &mut Feature, start: bool, end: bool, height: f64) {
 fn move_endpoint(
     work: &mut Working<'_>,
     source: &Original<'_>,
-    node: &str,
-    anchor: &str,
+    node: Id,
+    anchor: Id,
 ) -> io::Result<()> {
     if node == anchor {
         return Ok(());
@@ -87,7 +87,7 @@ fn move_endpoint(
         if !start && !end {
             continue;
         }
-        let Some(mut feature) = work.features.get(&reach.feature_id)? else {
+        let Some(mut feature) = work.features.get(reach.feature_id)? else {
             continue;
         };
         if !movable(source, &feature)? {
@@ -99,10 +99,10 @@ fn move_endpoint(
         align_elevation(&mut feature, start, end, p.z);
         work.features.put(feature)?;
         if start {
-            reach.start.clone_from(&anchor.id);
+            reach.start = anchor.id;
         }
         if end {
-            reach.end.clone_from(&anchor.id);
+            reach.end = anchor.id;
         }
         work.networks.put_reach(reach)?;
     }
@@ -117,7 +117,7 @@ fn anchor_junctions(
     let old = source
         .networks
         .reaches(Selection {
-            feature_id: Some(&previous.id),
+            feature_id: Some(previous.id),
             node_id: None,
         })?
         .collect::<io::Result<Vec<_>>>()?;
@@ -127,23 +127,23 @@ fn anchor_junctions(
     let reaches = work
         .networks
         .reaches(Selection {
-            feature_id: Some(&next.id),
+            feature_id: Some(next.id),
             node_id: None,
         })?
         .collect::<io::Result<Vec<_>>>()?;
     for reach in reaches {
-        move_endpoint(work, source, &reach.start, &first.start)?;
-        move_endpoint(work, source, &reach.end, &last.end)?;
+        move_endpoint(work, source, reach.start, first.start)?;
+        move_endpoint(work, source, reach.end, last.end)?;
     }
     Ok(())
 }
-fn restore_network(work: &mut Working<'_>, source: &Original<'_>, id: &str) -> io::Result<()> {
+fn restore_network(work: &mut Working<'_>, source: &Original<'_>, id: Id) -> io::Result<()> {
     for reach in source.networks.reaches(Selection {
         feature_id: Some(id),
         node_id: None,
     })? {
         let reach = reach?;
-        for node in [&reach.start, &reach.end] {
+        for node in [reach.start, reach.end] {
             if let Some(node) = source.networks.node(node)? {
                 work.networks.put_node(node)?;
             }
@@ -162,16 +162,16 @@ fn reuse(
     if held {
         anchor_junctions(work, source, &next, &previous)?;
     }
-    let next_id = next.id.clone();
-    let previous_id = previous.id.clone();
+    let next_id = next.id;
+    let previous_id = previous.id;
     if next_id != previous_id {
-        work.features.remove(&next_id)?;
+        work.features.remove(next_id)?;
     }
     if held {
         work.features.put(previous)?;
     } else {
-        next.id.clone_from(&previous_id);
-        if previous.place_id.as_ref().is_some_and(|id| !id.is_empty()) {
+        next.id = previous_id;
+        if previous.place_id.is_some() {
             next.place_id = previous.place_id;
         }
         next.name = previous.name;
@@ -187,20 +187,20 @@ fn reuse(
     let reaches = work
         .networks
         .reaches(Selection {
-            feature_id: Some(&next_id),
+            feature_id: Some(next_id),
             node_id: None,
         })?
         .collect::<io::Result<Vec<_>>>()?;
     for mut reach in reaches {
         if held {
-            work.networks.remove_reach(&reach.id)?;
+            work.networks.remove_reach(reach.id)?;
         } else {
-            reach.feature_id.clone_from(&previous_id);
+            reach.feature_id = previous_id;
             work.networks.put_reach(reach)?;
         }
     }
     if held {
-        restore_network(work, source, &previous_id)?;
+        restore_network(work, source, previous_id)?;
     }
     Ok(())
 }
@@ -311,13 +311,10 @@ fn similarity(
         + ((a.0 - b.0).abs() + (a.1 - b.1).abs() + (a.2 - b.2).abs() + (a.3 - b.3).abs()) / 4.0)
         / size)
 }
-pub fn revisions(features: &dyn FeatureWorkspace) -> io::Result<BTreeMap<String, u64>> {
+pub fn revisions(features: &dyn FeatureWorkspace) -> io::Result<BTreeMap<Id, u64>> {
     features.revisions()?.collect()
 }
-pub fn changed(
-    features: &dyn FeatureWorkspace,
-    before: &BTreeMap<String, u64>,
-) -> io::Result<Vec<String>> {
+pub fn changed(features: &dyn FeatureWorkspace, before: &BTreeMap<Id, u64>) -> io::Result<Vec<Id>> {
     features
         .revisions()?
         .filter_map(|result| match result {
@@ -329,7 +326,7 @@ pub fn changed(
 }
 fn previous_candidates(
     source: &Original<'_>,
-    area: &str,
+    area: Id,
     spatial: &dyn SpatialKernel,
 ) -> io::Result<Vec<Candidate>> {
     let mut candidates = Vec::new();
@@ -359,14 +356,14 @@ fn previous_candidates(
     }
     Ok(candidates)
 }
-fn ranked_features<'a>(
+fn ranked_features(
     work: &Working<'_>,
     source: &Original<'_>,
-    generated: &'a [String],
+    generated: &[Id],
     spatial: &dyn SpatialKernel,
-) -> io::Result<Vec<(&'a String, f64)>> {
+) -> io::Result<Vec<(Id, f64)>> {
     let mut ranked = Vec::new();
-    for id in generated {
+    for &id in generated {
         if let Some(feature) = work.features.get(id)? {
             if !truthy(feature.attributes.get("causeId")) && source.features.get(id)?.is_none() {
                 ranked.push((
@@ -384,16 +381,16 @@ fn ranked_features<'a>(
 pub fn retain(
     work: &mut Working<'_>,
     source: &Original<'_>,
-    area: &str,
+    area: Id,
     tolerance: f64,
-    generated: &[String],
+    generated: &[Id],
     spatial: &dyn SpatialKernel,
 ) -> io::Result<()> {
     let candidates = previous_candidates(source, area, spatial)?;
     let mut used = BTreeSet::new();
-    for id in generated {
+    for &id in generated {
         if let (Some(previous), Some(next)) = (source.features.get(id)?, work.features.get(id)?) {
-            used.insert(id.clone());
+            used.insert(id);
             reuse(work, source, next, previous)?;
         }
     }
@@ -436,7 +433,7 @@ pub fn retain(
         }
         if let Some(at) = best {
             let previous = candidates[at].feature.clone();
-            used.insert(previous.id.clone());
+            used.insert(previous.id);
             reuse(work, source, feature, previous)?;
         }
     }

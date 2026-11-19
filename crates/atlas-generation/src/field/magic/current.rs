@@ -21,7 +21,7 @@ pub struct Current<'a> {
     pub phase: Option<Phase>,
     pub activity: &'a [Activity],
     pub placed: &'a [PlacedSource],
-    pub space: &'a str,
+    pub space: atlas_map::Id,
     pub seats: &'a [Seat],
     pub ways: &'a [Way],
     pub spatial: &'a dyn SpatialKernel,

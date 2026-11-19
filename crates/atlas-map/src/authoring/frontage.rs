@@ -35,8 +35,12 @@ pub fn holds_address(feature: &MapFeature) -> bool {
     is_building(feature) || is_yard(feature)
 }
 /// The street a building or plot is numbered on.
-pub fn street_of(feature: &MapFeature) -> Option<&str> {
-    feature.attributes.get("streetId").and_then(Value::as_str)
+pub fn street_of(feature: &MapFeature) -> Option<crate::Id> {
+    feature
+        .attributes
+        .get("streetId")
+        .and_then(Value::as_str)
+        .and_then(|id| id.parse().ok())
 }
 
 /// A point's place against a street: metres along it from its first point, which side it is
@@ -151,13 +155,14 @@ pub fn readdress(holder: &MapFeature, street: Option<(&MapFeature, u32)>) -> Map
         ("address", Value::from(line.clone())),
         ("addressNumber", number.into()),
         ("street", name.clone().into()),
-        ("streetId", street.id.clone().into()),
+        ("streetId", street.id.into()),
     ] {
         next.attributes.insert(key.into(), value);
     }
     if is_building(holder) {
         next.relations.push(MapRelation {
-            target_id: street.id.clone(),
+            target_id: street.id,
+            target_map_id: None,
             target_name: name,
             kind: FRONTS.into(),
         });

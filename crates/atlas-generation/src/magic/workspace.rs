@@ -54,7 +54,7 @@ pub struct Evaluation<'a> {
     pub activity: &'a [Activity],
     pub phase: Option<Phase>,
     pub placed: &'a [PlacedSource],
-    pub space_id: &'a str,
+    pub space_id: atlas_map::Id,
     pub people: People<'a>,
     pub rivers: &'a RiverReader<'a>,
     pub kernel: &'a dyn SpatialKernel,

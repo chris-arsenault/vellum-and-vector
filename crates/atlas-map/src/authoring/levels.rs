@@ -6,8 +6,8 @@ use crate::{
     hexes::{mark_shape, marks, Hex, MarkSource},
     spatial::SpatialKernel,
     structure::{
-        connection_target, is_connection, is_structure, lands, level_hexes, level_layout, levels,
-        reaches, set_marks, ConnectionTarget, CONNECTS_TO, LEADS_TO,
+        is_connection, is_structure, lands, level_hexes, level_layout, levels, reaches, set_marks,
+        ConnectionTarget, CONNECTS_TO, LEADS_TO,
     },
     MapDescriptor, MapFeature, MapRelation,
 };
@@ -48,10 +48,10 @@ pub fn add_level(
         .iter()
         .filter(|f| f.space_id == next_to.1 && f.kind == "wall")
         .filter(|f| f.attributes.get("outer") == Some(&Value::Bool(true)))
-        .enumerate()
-        .map(|(index, wall)| {
+        .map(|wall| {
             let mut copy = wall.clone();
-            copy.id = format!("wall@{number}:{index}");
+            // The outer wall repeated on this level: one per wall and level.
+            copy.id = crate::Id::v5(wall.id, &number.to_be_bytes());
             copy.layer_id.clone_from(&structures.id);
             copy.space_id.clone_from(&space.id);
             copy.relations.clear();
@@ -108,7 +108,7 @@ fn mark_hexes(
 pub fn remove_level(
     map: &MapDescriptor,
     targets: &[MapFeature],
-    space_id: &str,
+    space_id: crate::Id,
 ) -> Result<Draft, String> {
     structure(map)?;
     let real = editable(map)?;
@@ -117,7 +117,7 @@ pub fn remove_level(
     }
     let (number, _) = levels(map)
         .into_iter()
-        .find(|(_, id)| id == space_id)
+        .find(|(_, id)| *id == space_id)
         .ok_or("That level is not on this map")?;
     if let Some(held) = targets.iter().find(|f| in_locked_layer(f, real)) {
         return Err(format!(
@@ -139,15 +139,20 @@ pub fn remove_level(
         ..Draft::default()
     })
 }
-fn relation(target_id: String, target: &MapFeature, kind: &str) -> MapRelation {
+fn relation(target: &MapFeature, target_map_id: Option<crate::Id>, kind: &str) -> MapRelation {
     MapRelation {
-        target_id,
+        target_id: target.id,
+        target_map_id,
         target_name: target.name.clone().unwrap_or_else(|| target.kind.clone()),
         kind: kind.into(),
     }
 }
 fn linked(feature: &mut MapFeature, relation: MapRelation, on: bool) {
-    let same = |r: &MapRelation| r.target_id == relation.target_id && r.kind == relation.kind;
+    let same = |r: &MapRelation| {
+        r.target_id == relation.target_id
+            && r.target_map_id == relation.target_map_id
+            && r.kind == relation.kind
+    };
     feature.relations.retain(|r| !same(r));
     if on {
         feature.relations.push(relation);
@@ -155,28 +160,24 @@ fn linked(feature: &mut MapFeature, relation: MapRelation, on: bool) {
 }
 /// Connect (or disconnect) a stair, ladder or trapdoor. On the same map both ends hold the
 /// link and must lie on different levels; a feature on another map is named by its map and
-/// id, and the store supplies it among the targets under that combined id.
+/// id, and the store supplies it among the targets.
 pub fn connect(
     map: &MapDescriptor,
     targets: &[MapFeature],
-    id: &str,
+    id: crate::Id,
     target: &ConnectionTarget,
     on: bool,
 ) -> Result<Draft, String> {
     let real = editable(map)?;
-    let find = |id: &str| targets.iter().find(|f| f.id == id);
+    let find = |id: crate::Id| targets.iter().find(|f| f.id == id);
     let source = find(id).ok_or_else(|| format!("Feature {id} is not on this map"))?;
     if !is_connection(&source.kind) {
         return Err("Only stairs, ladders, trapdoors and doors connect levels and maps".into());
     }
-    if target.map_id.as_deref() == Some(map.reference.map_id.as_str()) {
+    if target.map_id == Some(map.reference.map_id) {
         return Err("Connect to a feature on this map without naming the map".into());
     }
-    let target_id = match &target.map_id {
-        Some(map_id) => connection_target(map_id, &target.feature_id),
-        None => target.feature_id.clone(),
-    };
-    let other = find(&target_id);
+    let other = find(target.feature_id);
     if let Some(other) = other.filter(|_| on) {
         allowed(source, other, target.map_id.is_some())?;
     }
@@ -188,15 +189,15 @@ pub fn connect(
         LEADS_TO
     };
     let named = match other {
-        Some(other) => relation(target_id.clone(), other, kind),
+        Some(other) => relation(other, target.map_id, kind),
         // A target that is gone can still be let go of: its link names it.
-        None if !on => held(source, &target_id).ok_or("That connection is not held")?,
+        None if !on => held(source, target).ok_or("That connection is not held")?,
         None => return Err(format!("Feature {} is not there", target.feature_id)),
     };
     linked(&mut next, named.clone(), on);
     if let Some(other) = other.filter(|_| target.map_id.is_none()) {
         let mut back = other.clone();
-        linked(&mut back, relation(source.id.clone(), source, LEADS_TO), on);
+        linked(&mut back, relation(source, None, LEADS_TO), on);
         draft.before.push(other.clone());
         draft.after.push(back);
     }
@@ -232,30 +233,34 @@ fn allowed(source: &MapFeature, other: &MapFeature, foreign: bool) -> Result<(),
     }
     Ok(())
 }
-fn held(feature: &MapFeature, target_id: &str) -> Option<MapRelation> {
+fn held(feature: &MapFeature, target: &ConnectionTarget) -> Option<MapRelation> {
     feature
         .relations
         .iter()
-        .find(|r| r.target_id == target_id && [LEADS_TO, CONNECTS_TO].contains(&r.kind.as_str()))
+        .find(|r| {
+            r.target_id == target.feature_id
+                && r.target_map_id == target.map_id
+                && [LEADS_TO, CONNECTS_TO].contains(&r.kind.as_str())
+        })
         .cloned()
 }
 /// The features that held a `leadsTo` link to a removed feature, without it: deleting a
 /// stair or a level lets go of the landings that led to it, in the same undo step.
 pub fn unlinked(removed: &[&MapFeature], holders: &[MapFeature]) -> Vec<(MapFeature, MapFeature)> {
-    let gone = |id: &str| removed.iter().any(|f| f.id == id);
+    let gone = |id: crate::Id| removed.iter().any(|f| f.id == id);
     holders
         .iter()
-        .filter(|holder| !gone(&holder.id))
+        .filter(|holder| !gone(holder.id))
         .filter(|holder| {
             holder
                 .relations
                 .iter()
-                .any(|r| r.kind == LEADS_TO && gone(&r.target_id))
+                .any(|r| r.kind == LEADS_TO && gone(r.target_id))
         })
         .map(|holder| {
             let mut next = holder.clone();
             next.relations
-                .retain(|r| !(r.kind == LEADS_TO && gone(&r.target_id)));
+                .retain(|r| !(r.kind == LEADS_TO && gone(r.target_id)));
             (holder.clone(), next)
         })
         .collect()

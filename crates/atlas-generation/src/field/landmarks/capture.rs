@@ -228,7 +228,7 @@ pub(super) fn into(
 }
 pub(super) fn with_record<T>(
     field: &mut Field,
-    id: &str,
+    id: atlas_map::Id,
     work: impl FnOnce(&mut Field, &mut LandmarkRecord) -> io::Result<T>,
 ) -> io::Result<T> {
     let at = field

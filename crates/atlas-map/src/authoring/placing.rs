@@ -21,12 +21,12 @@ pub(super) struct Placing<'a> {
     pub layer_id: &'a str,
     pub kind: &'a str,
     pub name: Option<&'a str>,
-    pub creator: Option<&'a str>,
+    pub creator: Option<crate::Id>,
 }
 impl Planner<'_> {
     pub(super) fn place(
         &self,
-        id: String,
+        id: crate::Id,
         what: Placing<'_>,
         at: [f64; 2],
         rotation: f64,
@@ -41,7 +41,7 @@ impl Planner<'_> {
     }
     fn object(
         &self,
-        id: String,
+        id: crate::Id,
         what: &Placing<'_>,
         at: [f64; 2],
         rotation: f64,
@@ -67,7 +67,7 @@ impl Planner<'_> {
         outline: &Geometry,
         spacing: f64,
         seed: u32,
-        new_id: &mut dyn FnMut() -> String,
+        new_id: &mut dyn FnMut() -> crate::Id,
     ) -> Result<Draft, String> {
         if !spacing.is_finite() || spacing <= 0.0 {
             return Err("Scatter at a positive spacing".into());
@@ -118,19 +118,19 @@ impl Planner<'_> {
     fn check_kind(&self, what: &Placing<'_>) -> Result<(), String> {
         let Bounds(w, s, e, n) = self.map.bounds;
         let centre = [(w + e) / 2.0, (s + n) / 2.0];
-        self.object(String::new(), what, centre, 0.0, 1e-3)
+        self.object(crate::Id::NIL, what, centre, 0.0, 1e-3)
             .map(|_| ())
     }
     /// A hex takes only its ground or cover class; other attributes and its name stay derived.
     pub(super) fn hex_classes(
         &self,
-        ids: &[String],
+        ids: &[crate::Id],
         name: Option<&str>,
         attributes: &BTreeMap<String, Value>,
     ) -> Result<Option<Draft>, String> {
         let features = ids
             .iter()
-            .map(|id| self.find(id))
+            .map(|id| self.find(*id))
             .collect::<Result<Vec<_>, _>>()?;
         let hexes = features
             .iter()

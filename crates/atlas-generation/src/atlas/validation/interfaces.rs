@@ -18,7 +18,7 @@ use std::{
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Crossing {
-    pub feature_id: String,
+    pub feature_id: atlas_map::Id,
     pub point: network::Position,
     pub elevation: f64,
     pub flow: f64,
@@ -32,7 +32,7 @@ pub struct Crossing {
 pub struct Rules {
     pub context: Context,
     // hpc-exempt: sparse area contracts and layer identifiers, not numerical field state.
-    pub boundaries: BTreeMap<String, Vec<Crossing>>,
+    pub boundaries: BTreeMap<atlas_map::Id, Vec<Crossing>>,
     pub network_layers: BTreeSet<String>,
 }
 impl Rules {
@@ -48,7 +48,7 @@ impl Rules {
         }
         for current in after.values(FeatureSelection::default())? {
             let current = current?;
-            let previous = before.get(&current.id)?;
+            let previous = before.get(current.id)?;
             if previous.as_ref() != Some(&current) {
                 self.changed(
                     previous.as_ref(),
@@ -61,7 +61,7 @@ impl Rules {
         }
         for previous in before.values(FeatureSelection::default())? {
             let previous = previous?;
-            if after.get(&previous.id)?.is_none() {
+            if after.get(previous.id)?.is_none() {
                 self.changed(Some(&previous), None, [before, after], scope, spatial)?;
             }
         }
@@ -79,7 +79,7 @@ impl Rules {
             context: &self.context,
             features: readers[0],
             spatial,
-            area: &scope.area,
+            area: scope.area,
             profile: Profile::Interior,
         };
         let new = Composition {
@@ -110,8 +110,8 @@ impl Rules {
                 spatial,
             )?;
         }
-        let id = current.or(previous).expect("changed feature").id.as_str();
-        for (area_id, crossings) in &self.boundaries {
+        let id = current.or(previous).expect("changed feature").id;
+        for (&area_id, crossings) in &self.boundaries {
             let area = self.context.area(area_id).map_err(io::Error::other)?;
             if area.parent_id.is_some() && area.profile == Profile::Region {
                 continue;
@@ -131,7 +131,7 @@ impl Rules {
             if !self.network_layers.contains(&feature.layer_id)
                 || self
                     .context
-                    .space(&feature.area_id)
+                    .space(feature.area_id)
                     .map_err(io::Error::other)?
                     != self.context.space(area_id).map_err(io::Error::other)?
             {

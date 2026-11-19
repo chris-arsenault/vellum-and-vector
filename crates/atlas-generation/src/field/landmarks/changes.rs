@@ -8,7 +8,7 @@ use crate::{
     },
 };
 use std::io;
-pub(super) fn maintenance(field: &mut Field, id: &str, native: f64) -> io::Result<()> {
+pub(super) fn maintenance(field: &mut Field, id: atlas_map::Id, native: f64) -> io::Result<()> {
     let record = field
         .landmark_ledger
         .iter_mut()

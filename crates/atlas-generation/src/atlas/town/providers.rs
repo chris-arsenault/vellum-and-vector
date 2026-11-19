@@ -104,7 +104,7 @@ pub(super) fn contextual_features(state: &State) -> io::Result<Vec<crate::featur
         }
     }
     for feature in state.records.features.values(FeatureSelection {
-        area_id: Some(&state.scope.area),
+        area_id: Some(state.scope.area),
         ..Default::default()
     })? {
         let feature = feature?;
@@ -307,7 +307,7 @@ mod tests {
         fn provider(name: &'static str, multiplier: f64) -> Query<f64, Sources> {
             Query::new(name, vec![], move |state: &f64, _| {
                 Ok(Sources(vec![OpportunitySource {
-                    endpoint: Endpoint::External(name.into()),
+                    endpoint: Endpoint::External(atlas_map::Id::from_name(name)),
                     id: name.into(),
                     label: name.into(),
                     position: [0., 0.],

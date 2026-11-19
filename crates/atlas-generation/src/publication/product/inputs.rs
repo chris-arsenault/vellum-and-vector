@@ -3,17 +3,17 @@ use crate::{
     field::inheritance::resources::Resource,
     spatial::{Overlay, SpatialKernel},
 };
-use atlas_map::Geometry;
+use atlas_map::{Geometry, Id};
 // hpc-exempt: channel-to-resource publication bindings, not numerical field storage.
 use std::{collections::BTreeMap, io, rc::Rc};
 pub struct Lake {
-    pub id: String,
+    pub id: Id,
     pub geometry: Geometry,
     pub level: f64,
 }
 pub struct Field {
     pub id: String,
-    pub area: String,
+    pub area: Id,
     pub input: bool,
     pub footprint: Geometry,
     pub resource: Rc<Resource>,
@@ -27,19 +27,16 @@ pub struct Selected<'a> {
     pub channels: BTreeMap<String, &'a Field>,
 }
 impl<'a> Selected<'a> {
-    pub fn new(context: &Context, area: &str, fields: &'a [Field]) -> io::Result<Self> {
+    pub fn new(context: &Context, area: Id, fields: &'a [Field]) -> io::Result<Self> {
         let space = context.space(area).map_err(io::Error::other)?;
         let areas = context.geography_areas(area).map_err(io::Error::other)?;
         let mut selected = Vec::new();
         for field in fields {
-            if areas.contains(&field.area.as_str())
-                && context.space(&field.area).map_err(io::Error::other)? == space
+            if areas.contains(&field.area)
+                && context.space(field.area).map_err(io::Error::other)? == space
             {
                 selected.push((
-                    context
-                        .lineage(&field.area)
-                        .map_err(io::Error::other)?
-                        .len(),
+                    context.lineage(field.area).map_err(io::Error::other)?.len(),
                     field,
                 ));
             }
@@ -92,7 +89,7 @@ impl<'a> Selected<'a> {
 }
 pub fn footprint(
     context: &Context,
-    area: &str,
+    area: Id,
     field: &Field,
     spatial: &dyn SpatialKernel,
 ) -> io::Result<Option<Geometry>> {

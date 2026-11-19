@@ -7,7 +7,7 @@ use crate::{
         records::{Attributes, Relation},
         Feature, State as FeatureState,
     },
-    identity::semantic_id,
+    identity::area_record_id,
     rock::ground::GroundField,
     scale::{LengthUnit, MapScale},
 };
@@ -19,8 +19,8 @@ pub trait MapState: State {
     fn geometry_precision(&self) -> f64;
     fn chart(&self) -> Chart<'_>;
     fn footprint(&self) -> &Geometry;
-    fn world_id(&self) -> &str;
-    fn area_id(&self) -> &str;
+    fn world_id(&self) -> atlas_map::Id;
+    fn area_id(&self) -> atlas_map::Id;
     fn area_name(&self) -> &str;
     fn generation_domain(&self, layer: &str) -> Option<String>;
     fn geographic_name(
@@ -30,7 +30,7 @@ pub trait MapState: State {
         geometry: &Geometry,
         attributes: &Attributes,
     ) -> io::Result<Option<Named>>;
-    fn retained_feature_name(&self, id: &str) -> Option<&Named>;
+    fn retained_feature_name(&self, id: atlas_map::Id) -> Option<&Named>;
 }
 pub struct Record<'a> {
     pub key: &'a str,
@@ -52,13 +52,9 @@ pub fn generated(state: &impl MapState, record: Record<'_>) -> io::Result<Featur
             .geometry(&record.geometry, state.spatial())
             .map_err(io::Error::other)?
     };
-    let id = semantic_id(
-        state.world_id(),
-        &format!("generated:{}", state.area_id()),
-        record.key,
-    )?;
+    let id = area_record_id(state.world_id(), false, state.area_id(), record.key);
     let named = state.geographic_name(record.key, record.kind, &geometry, &record.attributes)?;
-    let previous = state.retained_feature_name(&id);
+    let previous = state.retained_feature_name(id);
     let name = previous
         .or(named.as_ref())
         .map_or(record.name, |named| &named.name)
@@ -85,7 +81,7 @@ pub fn generated(state: &impl MapState, record: Record<'_>) -> io::Result<Featur
         name,
         kind: record.kind.into(),
         layer_id: record.layer.into(),
-        area_id: state.area_id().into(),
+        area_id: state.area_id(),
         geometry,
         attributes,
         place_id: None,

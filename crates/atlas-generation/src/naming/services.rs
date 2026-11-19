@@ -62,7 +62,7 @@ impl MapNaming for Naming {
         Ok(self
             .geographic_name(
                 (
-                    &feature.id,
+                    &feature.id.to_string(),
                     &feature.kind,
                     &feature.geometry,
                     &feature.attributes,
@@ -80,7 +80,7 @@ impl MapNaming for Naming {
         position: [f64; 2],
     ) -> io::Result<Option<Named>> {
         self.name(Request {
-            key: &landmark.id,
+            key: &landmark.id.to_string(),
             kind: "magic",
             subkind: Some(landmark.kind.id()),
             term: Some(term),
@@ -103,7 +103,7 @@ impl MapNaming for Naming {
     fn feature(&self, scope: &Scope, feature: &Feature) -> io::Result<Option<Named>> {
         self.geographic(
             scope,
-            &feature.id,
+            &feature.id.to_string(),
             &feature.kind,
             &feature.geometry,
             &feature.attributes,
@@ -171,9 +171,7 @@ impl traditions::Naming for Naming {
             .into())
     }
     fn remember(&self, entity: &Entity) -> io::Result<()> {
-        self.entities
-            .borrow_mut()
-            .insert(entity.id.clone(), entity.clone());
+        self.entities.borrow_mut().insert(entity.id, entity.clone());
         Ok(())
     }
 }

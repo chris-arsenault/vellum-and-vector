@@ -158,11 +158,11 @@ impl Planner<'_> {
 
     pub(super) fn draw_street(
         &self,
-        new_id: &mut dyn FnMut() -> String,
+        new_id: &mut dyn FnMut() -> crate::Id,
         class: &str,
         drawn: &Geometry,
         name: Option<&str>,
-        creator: Option<&str>,
+        creator: Option<crate::Id>,
     ) -> Result<Draft, String> {
         let class = StreetClass::parse(class)
             .filter(|class| *class != StreetClass::Road)
@@ -207,7 +207,7 @@ impl Planner<'_> {
             .after
             .extend(self.bridges(&street, width, span, new_id, creator)?);
         for host in hosts {
-            draft.before.push(self.find(&host.id)?.clone());
+            draft.before.push(self.find(host.id)?.clone());
             draft.after.push(host);
         }
         draft.label = labelled(&format!("Draw {}", class.label()), name);
@@ -220,8 +220,8 @@ impl Planner<'_> {
         street: &Geometry,
         width: f64,
         span: f64,
-        new_id: &mut dyn FnMut() -> String,
-        creator: Option<&str>,
+        new_id: &mut dyn FnMut() -> crate::Id,
+        creator: Option<crate::Id>,
     ) -> Result<Vec<MapFeature>, String> {
         let structures = self.layer_of("structures")?;
         let mut bridges = Vec::new();

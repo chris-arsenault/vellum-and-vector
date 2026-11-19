@@ -2,18 +2,16 @@ use super::{attrs, line, Town, TownWriter};
 use crate::{
     features::records::Relation, field::poi::map_records::Record, town::major_works::Commission,
 };
-use atlas_map::{Geometry, Position};
+use atlas_map::{Geometry, Id, Position};
 use serde_json::json;
 use std::io;
 
 fn key(town: &Town, index: usize) -> String {
     format!("town:{}:work:{index}", town.seat.key)
 }
-fn id(state: &impl TownWriter, town: &Town, index: usize, work: &Commission) -> io::Result<String> {
-    match &work.inherited_id {
-        Some(id) => Ok(id.clone()),
-        None => state.feature_id(&key(town, index)),
-    }
+fn id(state: &impl TownWriter, town: &Town, index: usize, work: &Commission) -> Id {
+    work.inherited_id
+        .unwrap_or_else(|| state.feature_id(&key(town, index)))
 }
 pub(crate) fn work_name(
     state: &impl TownWriter,
@@ -21,7 +19,7 @@ pub(crate) fn work_name(
     index: usize,
     work: &Commission,
 ) -> io::Result<String> {
-    if let Some(parent) = work.inherited_id.as_deref() {
+    if let Some(parent) = work.inherited_id {
         if let Some(feature) = state.inherited(parent)? {
             return Ok(feature.name);
         }
@@ -74,7 +72,7 @@ pub(super) fn relate_component(
                 json!(work.design.component_label(i)),
             );
             yard.relations.push(Relation {
-                target_id: self::id(state, town, index, work)?,
+                target_id: self::id(state, town, index, work),
                 kind: "partOf".into(),
             });
         }
@@ -102,7 +100,7 @@ fn publish_work(
             .map_err(io::Error::other)?
     };
     let key = key(town, index);
-    let work_id = id(state, town, index, work)?;
+    let work_id = id(state, town, index, work);
     let name = work_name(state, town, index, work)?;
     let attributes = attrs([
         ("majorWorkFamily", json!(work.family.key())),
@@ -144,7 +142,7 @@ fn publish_work(
         for member in members {
             let relation = Relation {
                 target_id: state
-                    .feature_id(&format!("town:{}:holding:{}:yard", town.seat.key, member.0))?,
+                    .feature_id(&format!("town:{}:holding:{}:yard", town.seat.key, member.0)),
                 kind: kind.into(),
             };
             if !feature.relations.contains(&relation) {
@@ -159,7 +157,7 @@ fn retain_inherited(
     work: &Commission,
     feature: &mut crate::features::Feature,
 ) -> io::Result<()> {
-    let Some(id) = &work.inherited_id else {
+    let Some(id) = work.inherited_id else {
         return Ok(());
     };
     let Some(parent) = state.inherited(id)? else {

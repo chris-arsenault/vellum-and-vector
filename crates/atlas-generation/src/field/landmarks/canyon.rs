@@ -13,7 +13,7 @@ use crate::{
 };
 use std::{io, rc::Rc};
 pub struct Canyon {
-    pub id: String,
+    pub id: atlas_map::Id,
     pub path: Vec<[f64; 2]>,
     pub rim_width_km: f64,
     pub depth_metres: f64,
@@ -219,7 +219,7 @@ fn deepen(
     }
     Ok(applied)
 }
-fn corridor(field: &Field, id: &str) -> io::Result<Vec<u32>> {
+fn corridor(field: &Field, id: atlas_map::Id) -> io::Result<Vec<u32>> {
     field
         .landmark_ledger
         .iter()
@@ -237,7 +237,7 @@ impl Field {
             CommandKind::Event,
             vec![],
             move |scope, work: &CanyonCapture| {
-                super::capture::with_record(scope.state_mut(), &work.canyon.id, |field, record| {
+                super::capture::with_record(scope.state_mut(), work.canyon.id, |field, record| {
                     let geometry =
                         geometry(field, &work.canyon, &record.corridor, kernel.as_ref())?;
                     let target = super::capture::Target {
@@ -275,7 +275,7 @@ impl Field {
                     if work.depth_shortfall.is_some_and(|value| value <= 0.0) {
                         return Ok(());
                     }
-                    let corridor = corridor(field, &work.canyon.id)?;
+                    let corridor = corridor(field, work.canyon.id)?;
                     if work.depth_shortfall.is_none() {
                         let geometry = geometry(field, &work.canyon, &corridor, kernel.as_ref())?;
                         let mut ground = field.ground.try_borrow_mut().map_err(io::Error::other)?;
@@ -299,7 +299,7 @@ impl Field {
                         work.depth_shortfall.is_some(),
                     )?;
                     if work.depth_shortfall.is_some() {
-                        maintenance(field, &work.canyon.id, applied)?;
+                        maintenance(field, work.canyon.id, applied)?;
                     }
                     Ok(())
                 };
@@ -313,7 +313,7 @@ impl Field {
             vec![],
             move |field: &Field, scope| {
                 let input = scope.input::<Canyon>()?;
-                let corridor = corridor(field, &input.id).map_err(failure)?;
+                let corridor = corridor(field, input.id).map_err(failure)?;
                 let p = profile(field, &input, &corridor, kernel.as_ref()).map_err(failure)?;
                 let depths: Vec<_> = p
                     .rim

@@ -1,4 +1,4 @@
-use atlas_map::Geometry;
+use atlas_map::{Geometry, Id};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::BTreeMap;
@@ -7,7 +7,7 @@ pub type Attributes = Map<String, Value>;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Entity {
-    pub id: String,
+    pub id: Id,
     pub name: String,
     pub kind: String,
     pub attributes: Attributes,
@@ -31,7 +31,7 @@ pub enum State {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Relation {
-    pub target_id: String,
+    pub target_id: Id,
     pub kind: String,
 }
 
@@ -58,14 +58,14 @@ pub struct Representation {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub footprint: Option<Geometry>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub id: Option<String>,
+    pub id: Option<Id>,
     pub protected: bool,
     pub needs_reconciliation: bool,
     pub attributes: Option<Attributes>,
     pub geometry: Geometry,
     pub state: State,
     pub actor: String,
-    pub generation_id: Option<String>,
+    pub generation_id: Option<Id>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -74,22 +74,23 @@ pub struct Feature {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub map_only: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub place_id: Option<String>,
+    pub place_id: Option<Id>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub footprint: Option<Geometry>,
-    pub id: String,
+    pub id: Id,
     pub name: String,
     pub kind: String,
     pub layer_id: String,
-    pub area_id: String,
+    pub area_id: Id,
     pub geometry: Geometry,
-    pub detail: BTreeMap<String, Representation>,
+    /// The record's representation in each area that holds it, by area.
+    pub detail: BTreeMap<Id, Representation>,
     pub attributes: Attributes,
     pub relations: Vec<Relation>,
     pub state: State,
     pub protected: bool,
     pub actor: String,
-    pub generation_id: Option<String>,
+    pub generation_id: Option<Id>,
     pub causes: Vec<String>,
     pub generation_domain: Option<String>,
 }

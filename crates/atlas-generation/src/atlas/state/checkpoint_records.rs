@@ -19,7 +19,7 @@ impl Records {
                 .map(|item| item.map(|item| item.id))
                 .collect::<io::Result<Vec<_>>>()?;
             for id in ids {
-                self.features.remove(&id)?;
+                self.features.remove(id)?;
             }
             loop {
                 let mut item: Option<Feature> = None;
@@ -43,7 +43,7 @@ impl Records {
                 .map(|item| item.map(|item| item.id))
                 .collect::<io::Result<Vec<_>>>()?;
             for id in ids {
-                self.networks.remove_reach(&id)?;
+                self.networks.remove_reach(id)?;
             }
             loop {
                 let mut item: Option<Reach> = None;

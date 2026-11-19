@@ -33,7 +33,7 @@ impl State {
             ..Default::default()
         };
         for feature in self.records.features.values(FeatureSelection {
-            area_id: Some(&self.scope.area),
+            area_id: Some(self.scope.area),
             kind: Some("lake"),
             ..Default::default()
         })? {
@@ -79,7 +79,7 @@ impl State {
                 discharges.get(basin)?,
                 &river.river_id,
             )?;
-            for id in &ids {
+            for &id in &ids {
                 if let Some(mut feature) = self.records.features.get(id)? {
                     feature
                         .attributes
@@ -93,7 +93,7 @@ impl State {
             if let Some(key) = key {
                 if let Some(feature) = ids
                     .first()
-                    .map(|id| self.records.features.get(id))
+                    .map(|&id| self.records.features.get(id))
                     .transpose()?
                     .flatten()
                 {
@@ -116,12 +116,7 @@ impl State {
                 .flatten()
                 .map(|&i| &records[i].kept)
                 .collect::<Vec<_>>();
-            dry::former(
-                self,
-                &kept,
-                ids.first().map(String::as_str),
-                &river.river_id,
-            )?;
+            dry::former(self, &kept, ids.first().copied(), &river.river_id)?;
         }
         drop(paths);
         drop(discharges);
@@ -151,10 +146,10 @@ impl State {
         if let Some(regional) = &self.regional {
             let restored = river_lineage::adopt(
                 self.records.features.as_mut(),
-                &self.scope.area,
+                self.scope.area,
                 &regional.evidence.courses,
                 regional.continuing_rivers.as_deref().unwrap_or_default(),
-                &|id| self.scope.contracted.contains(id),
+                &|id| self.scope.contracted.contains(&id),
             )?;
             for feature in restored {
                 self.write_network(feature)?;
@@ -168,7 +163,7 @@ impl State {
                 &mut self.physical.executor,
                 &publication::associate(),
                 self.records.features.as_mut(),
-                &self.scope.area,
+                self.scope.area,
                 network,
             )?;
         }

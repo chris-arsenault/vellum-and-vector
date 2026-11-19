@@ -1,12 +1,12 @@
 //! Preserve an existing subject's identity when publishing a finer generated drawing.
 use super::{Feature, FeatureSelection, FeatureWorkspace, Representation, State};
-use crate::identity::semantic_id;
+use atlas_map::Id;
 use std::io;
 
 pub struct Scope<'a> {
-    pub world: &'a str,
+    pub world: Id,
     pub owns_map_geography: bool,
-    pub is_descendant: &'a dyn Fn(&str, &str) -> bool,
+    pub is_descendant: &'a dyn Fn(Id, Id) -> bool,
 }
 fn previous(
     workspace: &dyn FeatureWorkspace,
@@ -17,7 +17,7 @@ fn previous(
 ) -> io::Result<Option<Feature>> {
     let selection = if scope.owns_map_geography {
         FeatureSelection {
-            area_id: Some(&feature.area_id),
+            area_id: Some(feature.area_id),
             ..selection
         }
     } else {
@@ -28,7 +28,7 @@ fn previous(
         if matches(&candidate)
             && (scope.owns_map_geography
                 || (candidate.area_id != feature.area_id
-                    && (scope.is_descendant)(&feature.area_id, &candidate.area_id)))
+                    && (scope.is_descendant)(feature.area_id, candidate.area_id)))
         {
             return Ok(Some(candidate));
         }
@@ -50,7 +50,7 @@ pub fn put_generated_detail(
     }
     if scope.owns_map_geography {
         let mut feature = feature;
-        feature.id = previous.id.clone();
+        feature.id = previous.id;
         feature.place_id = Some(previous.place_id.unwrap_or(previous.id));
         feature.name = previous.name;
         workspace.put(feature)?;
@@ -63,11 +63,8 @@ pub fn put_generated_detail(
     {
         return Ok(true);
     }
-    let id = semantic_id(
-        scope.world,
-        "representation",
-        &serde_json::to_string(&[&previous.id, &feature.area_id])?,
-    )?;
+    // The record's representation in this area.
+    let id = Id::v5(previous.id, &feature.area_id.to_bytes());
     previous.detail.insert(
         feature.area_id,
         Representation {

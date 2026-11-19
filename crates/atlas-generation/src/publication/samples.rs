@@ -20,7 +20,7 @@ pub struct Binding<'a> {
 pub struct Samples<'a> {
     pub resource: &'a Resource,
     pub footprint: Geometry,
-    pub space: &'a str,
+    pub space: atlas_map::Id,
     pub chart: Option<Chart<'a>>,
     pub ordinal: usize,
     pub bindings: Vec<Binding<'a>>,
@@ -154,7 +154,7 @@ impl Samples<'_> {
         }
         Ok(Some(MapSample {
             id,
-            space_id: self.space.into(),
+            space_id: self.space,
             footprint,
             window: SampleWindow {
                 bounds,

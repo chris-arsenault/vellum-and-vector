@@ -30,7 +30,7 @@ impl ReachStore {
         &mut self,
         input: &DrainageNetwork,
         context: RiverInheritance<'_>,
-        feature: impl Fn(&str) -> Option<RiverIdentity>,
+        feature: impl Fn(atlas_map::Id) -> Option<RiverIdentity>,
     ) -> SpatialResult<()> {
         if self.reaches().next().is_some() || !self.entries.is_empty() || !input.input {
             return Ok(());

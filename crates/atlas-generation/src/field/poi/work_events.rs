@@ -36,7 +36,7 @@ fn event_feature(state: &impl WorkState, event: &Event) -> io::Result<Feature> {
             json!(community_records::local_id(
                 state,
                 state.known_places().standing_place(&event.place)
-            )?),
+            )),
         ),
         ("eventKind", json!(event.kind)),
         ("era", json!(event.era)),
@@ -106,7 +106,7 @@ pub fn places(
                     continue;
                 }
                 let mut place = Place::at(kind, event.cell, vec![event.cell]);
-                place.id = community_records::local_id(state, &event.id)?;
+                place.id = community_records::local_id(state, &event.id).to_string();
                 place.feature = Some(event_feature(state, event)?);
                 found.push(place);
             }
@@ -198,7 +198,7 @@ pub fn frontiers(state: &impl WorkState, kind: Kind, spacing: f64) -> io::Result
                 .unwrap_or("a realm")
         );
         let mut place = Place::at(kind, cell, vec![cell]);
-        place.id = community_records::local_id(state, &format!("event:{key}"))?;
+        place.id = community_records::local_id(state, &format!("event:{key}")).to_string();
         place.feature = Some(frontier_feature(state, &key, era, cell, &names)?);
         places.push(place);
     }

@@ -2,15 +2,16 @@ use super::{
     network::{NetworkWorkspace, Selection},
     FeatureReader, FeatureSelection, FeatureWorkspace, State,
 };
+use atlas_map::Id;
 use std::{collections::BTreeSet, io};
 
 /// Earlier products of selected domains leave; captured, protected and authored records stay.
 pub fn clear_products(
     features: &mut dyn FeatureWorkspace,
     networks: &mut dyn NetworkWorkspace,
-    area: &str,
+    area: Id,
     domains: &[String],
-    removed: &mut BTreeSet<String>,
+    removed: &mut BTreeSet<Id>,
 ) -> io::Result<()> {
     let products = features
         .values(FeatureSelection {
@@ -34,17 +35,17 @@ pub fn clear_products(
         })
         .collect::<io::Result<Vec<_>>>()?;
     for id in products {
-        removed.insert(id.clone());
-        features.remove(&id)?;
+        removed.insert(id);
+        features.remove(id)?;
         let reaches = networks
             .reaches(Selection {
-                feature_id: Some(&id),
+                feature_id: Some(id),
                 ..Default::default()
             })?
             .map(|r| r.map(|r| r.id))
             .collect::<io::Result<Vec<_>>>()?;
         for id in reaches {
-            networks.remove_reach(&id)?;
+            networks.remove_reach(id)?;
         }
     }
     Ok(())
@@ -53,8 +54,8 @@ pub fn clear_products(
 pub fn tag_products(
     features: &mut dyn FeatureWorkspace,
     source: &dyn FeatureReader,
-    area: &str,
-    removed: &BTreeSet<String>,
+    area: Id,
+    removed: &BTreeSet<Id>,
 ) -> io::Result<()> {
     let candidates = features
         .values(FeatureSelection {
@@ -73,7 +74,7 @@ pub fn tag_products(
         {
             continue;
         }
-        if !removed.contains(&feature.id) && source.get(&feature.id)?.is_some() {
+        if !removed.contains(&feature.id) && source.get(feature.id)?.is_some() {
             continue;
         }
         feature

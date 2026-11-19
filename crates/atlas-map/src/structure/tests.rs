@@ -14,7 +14,8 @@ fn building(storeys: Option<i64>) -> MapFeature {
         attributes.insert("storeys".into(), json!(storeys));
     }
     serde_json::from_value(json!({
-        "id":"inn","spaceId":"world","entityId":null,"layerId":"vector:structures","name":"The Rowan",
+        "id":crate::Id::from_name("inn"),"spaceId":crate::Id::from_name("world"),"entityId":null,
+        "layerId":"vector:structures","name":"The Rowan",
         "kind":"building","typeId":"building","catalog":{"values":{},"columns":[],"origin":"Generated","mapOnly":false},
         "geometry":{"type":"Polygon","coordinates":[[[0,0],[10,0],[10,6],[0,6],[0,0]]]},
         "footprint":null,"attributes":attributes,"relations":[],"causes":[]
@@ -42,8 +43,10 @@ fn the_front_wall_is_the_edge_nearest_the_street() {
 fn levels_come_from_storeys_with_a_cellar_beneath() {
     assert_eq!(shell_levels(&building(Some(2))), vec![-1, 0, 1]);
     assert_eq!(shell_levels(&building(None)), vec![-1, 0]);
-    assert_eq!(level_space_id("world", 0), "world");
-    assert_eq!(level_space_id("world", -1), "world:level:-1");
+    let world = crate::Id::from_name("world");
+    assert_eq!(level_space_id(world, 0), world);
+    assert_ne!(level_space_id(world, -1), world);
+    assert_ne!(level_space_id(world, -1), level_space_id(world, 1));
 }
 
 #[test]
@@ -69,10 +72,7 @@ fn level_layers_keep_their_family_and_walls_are_lines() {
 }
 
 #[test]
-fn a_connection_to_another_map_names_the_map_and_the_feature() {
-    let target = connection_target("glen", "cave:passage:1");
-    assert_eq!(foreign_target(&target), Some(("glen", "cave:passage:1")));
-    assert_eq!(foreign_target("wall@0:1"), None);
+fn connections_are_the_passage_kinds() {
     assert!(is_connection("trapdoor") && is_connection("stair") && !is_connection("wall"));
 }
 
@@ -82,7 +82,7 @@ fn sample(active: bool, values: &[(&str, f64)]) -> MapSample {
         .map(|(band, value)| json!({"layerId":"inspection","bandId":band,"value":value,"unit":"ratio",
             "label":format!("{band} label"),"display":{"unit":"ratio","factor":1.0},"category":null}))
         .collect();
-    serde_json::from_value(json!({"id":"s","spaceId":"world",
+    serde_json::from_value(json!({"id":"s","spaceId":crate::Id::from_name("world"),
         "footprint":{"type":"Polygon","coordinates":[[[0,0],[10,0],[10,10],[0,0]]]},
         "window":{"bounds":[0,0,10,10],"closedEast":true,"closedNorth":true},"cellSpan":10,"center":[5,5],
         "measure":100,"active":active,"attributes":attributes,"sections":[]}))
@@ -109,7 +109,7 @@ fn magic_prevalence_is_the_mean_published_coverage_under_the_site() {
         sample(false, &[("magic:aurora:coverage", 1.0)]),
     ];
     let site = StructureSite {
-        building_id: "inn".into(),
+        building_id: crate::Id::from_name("inn"),
         name: Some("The Rowan".into()),
         use_: Some("inn".into()),
         address: Some("3 Drovers' Way".into()),
@@ -138,7 +138,7 @@ fn a_raster_layer_of_its_own_names_its_system() {
     let mut raster = sample(true, &[("value", 0.6)]);
     raster.attributes[0].layer_id = "raster:magic:aurora:coverage".into();
     let site = StructureSite {
-        building_id: "inn".into(),
+        building_id: crate::Id::from_name("inn"),
         name: None,
         use_: None,
         address: None,
@@ -151,30 +151,28 @@ fn a_raster_layer_of_its_own_names_its_system() {
 
 #[test]
 fn nearby_magic_features_sort_by_distance_from_the_building() {
+    let (well, stone) = (crate::Id::from_name("well"), crate::Id::from_name("stone"));
     let mut near = building(None);
-    near.id = "well".into();
+    near.id = well;
     near.kind = "aurora:rime".into();
     near.geometry = Geometry::Point {
         coordinates: Position::xy(8.0, 7.0),
     };
     let mut far = near.clone();
-    far.id = "stone".into();
+    far.id = stone;
     far.geometry = Geometry::Point {
         coordinates: Position::xy(40.0, 3.0),
     };
     let site = StructureSite {
-        building_id: "inn".into(),
+        building_id: crate::Id::from_name("inn"),
         name: None,
         use_: None,
         address: None,
     };
-    let nearby = [("glen".to_owned(), far), ("glen".to_owned(), near)];
+    let glen = crate::Id::from_name("glen");
+    let nearby = [(glen, far), (glen, near)];
     let context = site_context(&site, None, [5.0, 3.0], &[], &nearby);
-    let ids: Vec<_> = context
-        .features
-        .iter()
-        .map(|f| f.feature_id.as_str())
-        .collect();
-    assert_eq!(ids, vec!["well", "stone"]);
+    let ids: Vec<_> = context.features.iter().map(|f| f.feature_id).collect();
+    assert_eq!(ids, vec![well, stone]);
     assert_eq!(context.features[0].distance, 5.0);
 }

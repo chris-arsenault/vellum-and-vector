@@ -3,13 +3,13 @@ use super::{
     Feature, FeatureReader, FeatureSelection, FeatureWorkspace, State,
 };
 use crate::lattice::TriangularLattice;
-use atlas_map::Geometry;
+use atlas_map::{Geometry, Id};
 use std::{collections::BTreeSet, io};
 
 pub fn drawn_dams(
     features: &dyn FeatureReader,
     mesh: &TriangularLattice,
-    area: &str,
+    area: Id,
 ) -> io::Result<Vec<usize>> {
     let mut cells = Vec::new();
     for feature in features.values(FeatureSelection {
@@ -36,16 +36,15 @@ fn generated(feature: &Feature) -> bool {
         && feature.kind != "landmark"
         && feature.state == State::Generated
         && !feature.protected
-        && !(feature.place_id.as_ref().is_some_and(|id| !id.is_empty())
-            && matches!(feature.geometry, Geometry::Point { .. }))
+        && !(feature.place_id.is_some() && matches!(feature.geometry, Geometry::Point { .. }))
         && feature.detail.is_empty()
 }
 /// Keep every water record referenced by another feature or a captured map crossing.
 pub fn drop_products(
     features: &mut dyn FeatureWorkspace,
     networks: &mut dyn NetworkWorkspace,
-    area: &str,
-    crossings: &BTreeSet<String>,
+    area: Id,
+    crossings: &BTreeSet<Id>,
 ) -> io::Result<()> {
     let mut referenced = BTreeSet::new();
     for feature in features.values(FeatureSelection::default())? {
@@ -67,16 +66,16 @@ pub fn drop_products(
         })
         .collect::<io::Result<Vec<_>>>()?;
     for id in dropped {
-        features.remove(&id)?;
+        features.remove(id)?;
         let reaches = networks
             .reaches(Selection {
-                feature_id: Some(&id),
+                feature_id: Some(id),
                 ..Default::default()
             })?
             .map(|r| r.map(|r| r.id))
             .collect::<io::Result<Vec<_>>>()?;
         for reach in reaches {
-            networks.remove_reach(&reach)?;
+            networks.remove_reach(reach)?;
         }
     }
     Ok(())

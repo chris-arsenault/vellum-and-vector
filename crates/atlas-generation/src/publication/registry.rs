@@ -14,7 +14,7 @@ pub struct Registry<'a> {
     pub context: &'a Context,
     pub catalogue: Catalogue<'a>,
     // hpc-exempt: named registry columns, entity identities and scalar descriptions, not numerical field storage.
-    pub entities: &'a BTreeMap<String, Entity>,
+    pub entities: &'a BTreeMap<atlas_map::Id, Entity>,
     pub reader: &'a dyn FeatureReader,
     pub spatial: &'a dyn SpatialKernel,
 }
@@ -68,8 +68,8 @@ impl Registry<'_> {
         {
             values.insert("magnitudeUnit".into(), unit.into());
         }
-        let area = self.context.area(&feature.area_id)?;
-        let space = self.context.space(&area.id)?;
+        let area = self.context.area(feature.area_id)?;
+        let space = self.context.space(area.id)?;
         for (key, value) in [
             ("name", Value::from(feature.name.clone())),
             (
@@ -89,7 +89,7 @@ impl Registry<'_> {
                 "spaceLabel",
                 self.context
                     .areas
-                    .get(space)
+                    .get(&space)
                     .map_or("World surface", |a| a.name.as_str())
                     .into(),
             ),
@@ -132,18 +132,20 @@ impl Registry<'_> {
             map_only: feature.map_only.unwrap_or(false),
         })
     }
-    pub fn target_name(&self, id: &str) -> SpatialResult<String> {
-        if let Some(entity) = self.entities.get(id) {
+    pub fn target_name(&self, id: atlas_map::Id) -> SpatialResult<String> {
+        if let Some(entity) = self.entities.get(&id) {
             return Ok(entity.name.clone());
         }
         Ok(self
             .reader
             .get(id)
             .map_err(|e| e.to_string())?
-            .map_or_else(|| id.into(), |f| f.name))
+            .map_or_else(|| id.to_string(), |f| f.name))
     }
-    fn entity_name(&self, id: &str) -> String {
-        self.entities.get(id).map_or(id, |e| &e.name).into()
+    fn entity_name(&self, id: atlas_map::Id) -> String {
+        self.entities
+            .get(&id)
+            .map_or_else(|| id.to_string(), |e| e.name.clone())
     }
     fn society(
         &self,
@@ -177,9 +179,14 @@ impl Registry<'_> {
                             "sovereign" | "claimedBy" | "controlledBy" | "administeredBy"
                         )
                     })
-                    .map(|r| r.target_id.clone().into())
+                    .map(|r| r.target_id.into())
             });
-        if let Some(id) = polity.as_ref().and_then(Value::as_str) {
+        let identity = |value: &Value| {
+            value
+                .as_str()
+                .and_then(|id| id.parse::<atlas_map::Id>().ok())
+        };
+        if let Some(id) = polity.as_ref().and_then(identity) {
             values.insert("polity".into(), self.entity_name(id).into());
         }
         for (key, attr) in [
@@ -187,12 +194,12 @@ impl Registry<'_> {
             ("to", "toPlace"),
             ("affectedPlaces", "atPlace"),
         ] {
-            if let Some(id) = attributes.get(attr).and_then(Value::as_str) {
+            if let Some(id) = attributes.get(attr).and_then(identity) {
                 let name = self
                     .reader
                     .get(id)
                     .map_err(|e| e.to_string())?
-                    .map_or_else(|| id.to_owned(), |f| f.name);
+                    .map_or_else(|| id.to_string(), |f| f.name);
                 values.insert(key.into(), name.into());
             }
         }
@@ -204,7 +211,7 @@ impl Registry<'_> {
                     let entries = value
                         .as_array()
                         .map_or_else(|| vec![value], |list| list.iter().collect());
-                    for id in entries.into_iter().filter_map(Value::as_str) {
+                    for id in entries.into_iter().filter_map(identity) {
                         if !ids.contains(&id) {
                             ids.push(id);
                         }
@@ -213,7 +220,7 @@ impl Registry<'_> {
                 values.insert(
                     key.into(),
                     ids.iter()
-                        .map(|id| self.entity_name(id))
+                        .map(|&id| self.entity_name(id))
                         .collect::<Vec<_>>()
                         .join(", ")
                         .into(),

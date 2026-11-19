@@ -12,7 +12,7 @@ use crate::{
 };
 use std::{io, rc::Rc};
 pub struct Escarpment {
-    pub id: String,
+    pub id: atlas_map::Id,
     pub path: Vec<[f64; 2]>,
     pub width_km: f64,
     pub throw_metres: f64,
@@ -75,7 +75,7 @@ impl Field {
                             return Ok(());
                         }
                         let applied = cells.apply(field, needed, true)?;
-                        return maintenance(field, &work.scarp.id, applied);
+                        return maintenance(field, work.scarp.id, applied);
                     }
                     cells.apply(field, MapScale::native(work.scarp.throw_metres), false)?;
                     for cell in 0..field.mesh.len() {

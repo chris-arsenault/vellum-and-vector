@@ -17,7 +17,7 @@ use std::collections::BTreeSet;
 pub struct Descriptor<'a> {
     pub context: &'a Context,
     pub chart: Chart<'a>,
-    pub area: &'a str,
+    pub area: atlas_map::Id,
     pub reference: MapRef,
     pub parent: Option<MapRef>,
     pub precision: f64,
@@ -51,9 +51,9 @@ impl Descriptor<'_> {
             .ok_or("Regional level exceeds representation")?;
         Ok(MapDescriptor {
             reference: self.reference.clone(),
-            world_id: self.context.id.clone(),
+            world_id: self.context.id,
             name: area.name.clone(),
-            primary_space_id: space.into(),
+            primary_space_id: space,
             profile: profile_name(area.profile).into(),
             region_scale: RegionScale {
                 level,
@@ -84,7 +84,7 @@ impl Descriptor<'_> {
         let mut seen = BTreeSet::new();
         let mut spaces = Vec::new();
         for area in self.context.lineage(self.area)?.into_iter().rev() {
-            let id = self.context.space(&area.id)?;
+            let id = self.context.space(area.id)?;
             if !seen.insert(id) {
                 continue;
             }
@@ -95,12 +95,11 @@ impl Descriptor<'_> {
                 &area.footprint
             })?;
             spaces.push(MapSpace {
-                id: id.into(),
+                id,
                 bounds,
                 parent_space_id: area
                     .parent_id
-                    .as_deref()
-                    .map(|parent| self.context.space(parent).map(String::from))
+                    .map(|parent| self.context.space(parent))
                     .transpose()?,
                 metres_per_unit: area.frame.metres_per_unit,
                 precision: self.precision,
@@ -132,11 +131,7 @@ pub fn real_scale(real: &RealScaleMap, frame: atlas_map::Bounds) -> RealScale {
         feet: real.hex_size.feet(),
         origin: [(frame.0 + frame.2) / 2.0, (frame.1 + frame.3) / 2.0],
         triangles_per_edge: real.triangles_per_edge,
-        creator_layers: vec![CreatorLayer {
-            id: "base".into(),
-            name: "Base layer".into(),
-            locked: false,
-        }],
+        creator_layers: vec![CreatorLayer::base()],
         edits: 0,
         site: None,
         authoring: Default::default(),
@@ -156,23 +151,25 @@ mod tests {
     use super::*;
     #[test]
     fn a_ground_maps_caves_lie_one_floor_under_its_surface_frame() {
-        let space = |id: &str, parent: Option<&str>| {
+        let id = atlas_map::Id::from_name;
+        let (world, glen) = (id("world"), id("glen"));
+        let space = |id: atlas_map::Id, parent: Option<atlas_map::Id>| {
             serde_json::json!({"id":id, "parentSpaceId":parent, "bounds":[0.0, 0.0, 300.0, 200.0],
                 "metresPerUnit":1.0, "precision":0.01, "periodicWidth":null,
                 "frame":{"origin":[0.0, 0.0, 0.0], "rotation":0.0, "floor":null}})
         };
         let mut map: MapDescriptor = serde_json::from_value(serde_json::json!({
-            "reference":{"mapId":"glen", "revision":"1"}, "worldId":"world", "name":"Glen",
-            "primarySpaceId":"glen", "profile":"local",
+            "reference":{"mapId":glen, "revision":id("1")}, "worldId":world, "name":"Glen",
+            "primarySpaceId":glen, "profile":"local",
             "regionScale":{"level":1, "nextArea":1.0, "subdivision":7.0, "minimumWidth":1.0, "enabled":false},
             "footprint":{"type":"Polygon", "coordinates":[[[0.0, 0.0], [300.0, 0.0], [300.0, 200.0], [0.0, 0.0]]]},
-            "bounds":[0.0, 0.0, 300.0, 200.0], "spaces":[space("world", None), space("glen", Some("world"))],
+            "bounds":[0.0, 0.0, 300.0, 200.0], "spaces":[space(world, None), space(glen, Some(world))],
             "parent":null, "state":"incomplete", "layers":[]
         }))
         .unwrap();
         let caves = underground_space(&map).unwrap();
-        assert_eq!(caves.id, "glen:underground");
-        assert_eq!(caves.parent_space_id.as_deref(), Some("glen"));
+        assert_ne!(caves.id, glen);
+        assert_eq!(caves.parent_space_id, Some(glen));
         assert_eq!(caves.frame.floor.as_deref(), Some(UNDERGROUND_FLOOR));
         assert_eq!(caves.bounds, map.bounds);
         map.spaces.push(caves);

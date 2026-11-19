@@ -11,7 +11,7 @@ impl Field {
     pub fn known_seats(
         &self,
         features: &dyn FeatureReader,
-        area: &str,
+        area: atlas_map::Id,
         parent_span: f64,
     ) -> io::Result<Vec<Seat>> {
         let mut seats = Vec::new();
@@ -49,7 +49,7 @@ impl Field {
             if seat.situation != Situation::River {
                 continue;
             }
-            let Some(feature) = features.get(&seat.feature_id)? else {
+            let Some(feature) = features.get(seat.feature_id)? else {
                 continue;
             };
             let hosted = feature.attributes.get("hostedBy");
@@ -58,10 +58,7 @@ impl Field {
                 .and_then(|v| v.get("hostId"))
                 .and_then(|v| v.as_str());
             let identity = river.map(str::to_owned).unwrap_or_else(|| {
-                format!(
-                    "seat-stream:{}",
-                    feature.place_id.as_ref().unwrap_or(&feature.id)
-                )
+                format!("seat-stream:{}", feature.place_id.unwrap_or(feature.id))
             });
             self.retain_seat_stream(seat, river, &identity, receiver)?;
         }
@@ -76,7 +73,7 @@ impl Field {
         basin: &[u8],
     ) -> io::Result<()> {
         for seat in seats {
-            let Some(mut feature) = features.get(&seat.feature_id)? else {
+            let Some(mut feature) = features.get(seat.feature_id)? else {
                 continue;
             };
             let Geometry::Point { coordinates } = feature.geometry else {

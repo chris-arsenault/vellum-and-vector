@@ -119,7 +119,7 @@ pub fn record_places(
             }
             if let Some(anchor) = feature_cell(field, &feature) {
                 let mut place = Place::at(kind, anchor, vec![anchor]);
-                place.id = feature.id.clone();
+                place.id = feature.id.to_string();
                 place.feature = Some(feature);
                 places.push(place);
             }

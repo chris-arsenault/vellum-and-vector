@@ -25,8 +25,9 @@ const CARRIED: &str = "carriedOnto";
 /// Bends one captured record onto the map `area`: its geometry, its footprint and the
 /// representative point a place is located from. A record already bent onto this map is left
 /// as it is; one bent onto another map (its parent's) bends again here. Returns whether it bent.
-pub(crate) fn bend_record(feature: &mut Feature, bend: &Bend, area: &str) -> bool {
-    if feature.attributes.get(CARRIED).and_then(|v| v.as_str()) == Some(area) {
+pub(crate) fn bend_record(feature: &mut Feature, bend: &Bend, area: atlas_map::Id) -> bool {
+    let carried = feature.attributes.get(CARRIED).cloned();
+    if carried.and_then(|v| serde_json::from_value(v).ok()) == Some(area) {
         return false;
     }
     feature.geometry = bend.geometry(&feature.geometry);
@@ -96,12 +97,12 @@ impl State {
             .records
             .features
             .values(FeatureSelection {
-                area_id: Some(&self.scope.area),
+                area_id: Some(self.scope.area),
                 ..Default::default()
             })?
             .collect::<std::io::Result<Vec<_>>>()?;
         for mut feature in records {
-            if !bend_record(&mut feature, &bend, &self.scope.area) {
+            if !bend_record(&mut feature, &bend, self.scope.area) {
                 continue;
             }
             // A feature contracted across the map's boundary keeps its whole shape.
@@ -110,7 +111,7 @@ impl State {
                 continue;
             }
             let Some(shape) = self.clip_to_frame(&feature.geometry)? else {
-                self.records.features.remove(&feature.id)?;
+                self.records.features.remove(feature.id)?;
                 continue;
             };
             feature.geometry = shape;
@@ -140,7 +141,7 @@ impl State {
             .into_iter()
             .flat_map(|network| &network.reaches)
         {
-            for id in &reach.feature_ids {
+            for &id in &reach.feature_ids {
                 let captured = self
                     .records
                     .source_features
@@ -149,18 +150,13 @@ impl State {
                     .transpose()?
                     .flatten();
                 if let Some(feature) = captured.or(self.records.features.get(id)?) {
-                    let river = feature
-                        .attributes
-                        .get("riverId")
-                        .and_then(|value| value.as_str())
-                        .unwrap_or(id)
-                        .to_owned();
-                    identities.insert(id.clone(), (river, feature.name));
+                    let river = crate::field::refinement::river_lineage::river_id(&feature);
+                    identities.insert(id, (river, feature.name));
                 }
             }
         }
-        let identity = |id: &str| {
-            identities.get(id).map(|(river, name)| RiverIdentity {
+        let identity = |id: atlas_map::Id| {
+            identities.get(&id).map(|(river, name)| RiverIdentity {
                 river: Some(river.clone()),
                 name: Some(name.clone()),
             })
@@ -199,7 +195,7 @@ mod tests {
             .build(bounds, 20_000.0, 120.0, |_, _| true)
             .unwrap()
     }
-    fn place(point: [f64; 2], area: &str) -> Feature {
+    fn place(point: [f64; 2], area: atlas_map::Id) -> Feature {
         let mut attributes = crate::features::records::Attributes::new();
         attributes.insert(
             "representative".into(),
@@ -210,11 +206,11 @@ mod tests {
             map_only: None,
             place_id: None,
             footprint: None,
-            id: "place".into(),
+            id: atlas_map::Id::from_name("place"),
             name: "Place".into(),
             kind: "settlement".into(),
             layer_id: "settlements".into(),
-            area_id: "child".into(),
+            area_id: atlas_map::Id::from_name("child"),
             geometry: Geometry::Point {
                 coordinates: Position::xy(point[0], point[1]),
             },
@@ -263,9 +259,13 @@ mod tests {
                 };
                 assert_eq!(course_cells(&mesh, &course, 2.0, SPAN).first(), Some(&cell));
                 // The captured record, carried from the region the child was opened from.
-                let source = place(p, "region");
+                let source = place(p, atlas_map::Id::from_name("region"));
                 let mut working = source.clone();
-                assert!(bend_record(&mut working, &bend, "child"));
+                assert!(bend_record(
+                    &mut working,
+                    &bend,
+                    atlas_map::Id::from_name("child")
+                ));
                 assert_eq!(content_cell(&mesh, point_of(&working.geometry)), Some(cell));
                 // The carried place is located from the bent record, geometry and representative.
                 let carried = located(source, &working);
@@ -280,14 +280,18 @@ mod tests {
         let mesh = lattice();
         let bend = Bend::new(SPAN, &mesh);
         let p = [599_000.0, 129_000.0];
-        let mut onto_child = place(p, "child");
-        assert!(!bend_record(&mut onto_child, &bend, "child"));
+        let (child, region) = (
+            atlas_map::Id::from_name("child"),
+            atlas_map::Id::from_name("region"),
+        );
+        let mut onto_child = place(p, child);
+        assert!(!bend_record(&mut onto_child, &bend, child));
         assert_eq!(point_of(&onto_child.geometry), p);
-        let mut from_region = place(p, "region");
-        assert!(bend_record(&mut from_region, &bend, "child"));
+        let mut from_region = place(p, region);
+        assert!(bend_record(&mut from_region, &bend, child));
         assert_ne!(point_of(&from_region.geometry), p);
         assert_eq!(representative(&from_region), bend.at(p));
-        assert_eq!(from_region.attributes[CARRIED], json!("child"));
+        assert_eq!(from_region.attributes[CARRIED], json!(child));
     }
     #[test]
     fn a_course_that_bends_out_of_the_frame_is_clipped_not_held_at_the_edge() {

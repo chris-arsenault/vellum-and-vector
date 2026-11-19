@@ -9,7 +9,7 @@ use crate::{
         geometry::Point,
     },
 };
-use atlas_map::{Geometry, Position};
+use atlas_map::{Geometry, Id, Position};
 use serde_json::{json, Value};
 use std::io;
 mod landmarks;
@@ -51,11 +51,11 @@ pub trait TownWriter {
     fn record(&mut self, record: Record<'_>) -> io::Result<Feature>;
     fn save(&mut self, feature: Feature) -> io::Result<()>;
     fn network(&mut self, feature: Feature) -> io::Result<()>;
-    fn feature(&self, id: &str) -> io::Result<Option<Feature>>;
-    fn inherited(&self, id: &str) -> io::Result<Option<Feature>> {
+    fn feature(&self, id: Id) -> io::Result<Option<Feature>>;
+    fn inherited(&self, id: Id) -> io::Result<Option<Feature>> {
         self.feature(id)
     }
-    fn feature_id(&self, key: &str) -> io::Result<String>;
+    fn feature_id(&self, key: &str) -> Id;
     fn part_name(&self, key: &str, work: &str, position: Point, town: &Town) -> io::Result<String>;
     fn spatial(&self) -> &dyn crate::spatial::SpatialKernel;
 }
@@ -80,7 +80,7 @@ pub fn publish(state: &mut impl TownWriter, fabric: &Fabric) -> io::Result<()> {
                 target_id: state.feature_id(&format!(
                     "town:{}:holding:{}:yard",
                     worker.town, worker.holding.0
-                ))?,
+                )),
                 kind: "workedBy".into(),
             });
             state.save(feature)?;
@@ -126,12 +126,13 @@ pub fn publish(state: &mut impl TownWriter, fabric: &Fabric) -> io::Result<()> {
 }
 
 fn publish_settlement(state: &mut impl TownWriter, town: &Town) -> io::Result<()> {
-    let mut settlement = match state.feature(&town.seat.key)? {
+    let mut settlement = match state.feature(town.seat.key)? {
         Some(feature) => feature,
         None => {
             let [x, y] = town.seat.centre;
+            let key = town.seat.key.to_string();
             let mut feature = state.record(Record {
-                key: &town.seat.key,
+                key: &key,
                 name: &town.seat.name,
                 kind: "settlement",
                 layer: "settlements",
@@ -140,7 +141,7 @@ fn publish_settlement(state: &mut impl TownWriter, town: &Town) -> io::Result<()
                 },
                 attributes: attrs([("population", json!(town.seat.story.people))]),
             })?;
-            feature.id.clone_from(&town.seat.key);
+            feature.id = town.seat.key;
             feature
         }
     };
@@ -218,7 +219,7 @@ pub(crate) fn street_name(state: &impl TownWriter, town: &Town, i: usize) -> io:
         ),
     }
 }
-fn publish_streets(state: &mut impl TownWriter, town: &Town) -> io::Result<Vec<(String, String)>> {
+fn publish_streets(state: &mut impl TownWriter, town: &Town) -> io::Result<Vec<(Id, String)>> {
     let mut streets = Vec::new();
     for (i, street) in town.streets().iter().enumerate() {
         let key = format!("town:{}:street:{i}", town.seat.key);
@@ -308,7 +309,7 @@ struct Neighbourhood<'a> {
     ward: Option<&'a str>,
 }
 struct HouseAddress<'a> {
-    street_id: &'a str,
+    street_id: Id,
     street: &'a str,
     resolved: crate::town::addresses::Address,
     label: String,
@@ -325,7 +326,7 @@ impl HouseAddress<'_> {
     }
     fn fronts(&self) -> crate::features::records::Relation {
         crate::features::records::Relation {
-            target_id: self.street_id.into(),
+            target_id: self.street_id,
             kind: if self.resolved.indirect {
                 "accessFrom"
             } else {
@@ -338,19 +339,19 @@ impl HouseAddress<'_> {
 fn operating_partner(
     state: &impl TownWriter,
     endpoint: &crate::town::fabric::Endpoint,
-) -> io::Result<Option<String>> {
+) -> io::Result<Option<Id>> {
     use crate::town::fabric::Endpoint;
     let id = match endpoint {
         Endpoint::Premises { town, holding } => {
             return Ok(Some(
-                state.feature_id(&format!("town:{town}:holding:{}:yard", holding.0))?,
+                state.feature_id(&format!("town:{town}:holding:{}:yard", holding.0)),
             ))
         }
-        Endpoint::Field(id) => state.feature_id(&format!("town:field:{id}"))?,
-        Endpoint::External(id) => id.clone(),
+        Endpoint::Field(id) => state.feature_id(&format!("town:field:{id}")),
+        Endpoint::External(id) => *id,
         Endpoint::Catchment(_) => return Ok(None),
     };
-    Ok(state.feature(&id)?.map(|feature| feature.id))
+    Ok(state.feature(id)?.map(|feature| feature.id))
 }
 
 fn operating_relations(
@@ -374,8 +375,7 @@ fn operating_relations(
             .map(|id| (id, "sponsoredBy")),
     ) {
         yard.relations.push(crate::features::records::Relation {
-            target_id: state
-                .feature_id(&format!("town:{}:holding:{}:yard", town.seat.key, id.0))?,
+            target_id: state.feature_id(&format!("town:{}:holding:{}:yard", town.seat.key, id.0)),
             kind: relation.into(),
         });
     }
@@ -394,7 +394,7 @@ fn holding_records(
     state: &mut impl TownWriter,
     town: &Town,
     holding: &Holding,
-    streets: &[(String, String)],
+    streets: &[(Id, String)],
     resolved: Option<crate::town::addresses::Address>,
     neighbourhood: Neighbourhood<'_>,
 ) -> io::Result<()> {
@@ -403,7 +403,7 @@ fn holding_records(
     let address = resolved
         .and_then(|a| Some((streets.get(a.street)?, a)))
         .map(|((street_id, street), resolved)| HouseAddress {
-            street_id,
+            street_id: *street_id,
             street,
             resolved,
             label: crate::town::addresses::address(resolved.number, street),
@@ -533,9 +533,9 @@ fn network(state: &mut State, feature: Feature) -> io::Result<()> {
     let contracted = state.scope.contracted.contains(&feature.id);
     let scope = &state.scope;
     let publisher = Publisher {
-        world: &scope.world,
-        area: &scope.area,
-        space: Some(&scope.space),
+        world: scope.world,
+        area: scope.area,
+        space: Some(scope.space),
         owns_map_geography: scope.owns_map_geography,
         chart: Chart {
             domain: &scope.domain,
@@ -562,21 +562,17 @@ impl TownWriter for State {
     fn network(&mut self, feature: Feature) -> io::Result<()> {
         network(self, feature)
     }
-    fn feature(&self, id: &str) -> io::Result<Option<Feature>> {
+    fn feature(&self, id: Id) -> io::Result<Option<Feature>> {
         self.records.features.get(id)
     }
-    fn inherited(&self, id: &str) -> io::Result<Option<Feature>> {
+    fn inherited(&self, id: Id) -> io::Result<Option<Feature>> {
         match self.records.source_features.as_deref() {
             Some(reader) => reader.get(id),
             None => self.feature(id),
         }
     }
-    fn feature_id(&self, key: &str) -> io::Result<String> {
-        crate::identity::semantic_id(
-            &self.scope.world,
-            &format!("generated:{}", self.scope.area),
-            key,
-        )
+    fn feature_id(&self, key: &str) -> Id {
+        crate::identity::generated_id(self.scope.area, key)
     }
     fn part_name(&self, key: &str, work: &str, position: Point, town: &Town) -> io::Result<String> {
         Ok(self

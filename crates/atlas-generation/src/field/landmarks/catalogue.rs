@@ -28,15 +28,15 @@ pub enum Kind {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[ts(optional_fields = nullable)]
 pub struct Landmark {
-    pub id: String,
+    pub id: atlas_map::Id,
     pub name: String,
     pub kind: Kind,
     pub geometry: Geometry,
     pub parameters: Measures,
     pub emplaced_at_epoch: i32,
     pub origin: Option<String>,
-    pub area_id: Option<String>,
-    pub space_id: Option<String>,
+    pub area_id: Option<atlas_map::Id>,
+    pub space_id: Option<atlas_map::Id>,
 }
 #[derive(Clone, Copy, PartialEq)]
 pub enum Unit {

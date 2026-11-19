@@ -80,7 +80,7 @@ fn crossing(
         },
     )?;
     let mut place = Place::at(kind, cell, vec![cell]);
-    place.id = community_records::local_id(state, &key)?;
+    place.id = community_records::local_id(state, &key).to_string();
     place.feature = Some(feature);
     Ok(place)
 }

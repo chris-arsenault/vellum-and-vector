@@ -6,7 +6,7 @@ use ts_rs::TS;
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MapLayer {
     pub id: String,
-    pub space_id: String,
+    pub space_id: crate::Id,
     pub name: String,
     pub bounds: Bounds,
     pub source: LayerSource,

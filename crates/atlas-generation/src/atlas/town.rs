@@ -73,7 +73,7 @@ pub fn cultivation() -> Command<State> {
                 state.town.fields = crate::town::land::establish(
                     site.bounds,
                     &ways,
-                    &state.scope.area,
+                    &state.scope.area.to_string(),
                     |p| site::shares(state.field(), p),
                     state.spatial.as_ref(),
                 )?;

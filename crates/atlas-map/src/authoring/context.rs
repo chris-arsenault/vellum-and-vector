@@ -144,6 +144,9 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    fn glen() -> crate::Id {
+        crate::Id::from_name("glen")
+    }
     fn map() -> MapDescriptor {
         let band = |id: &str| {
             json!({"id":id,"name":"Rock","unit":"category","display":{"unit":"","factor":1},
@@ -152,12 +155,14 @@ mod tests {
                 {"value":10,"label":"Granite","color":null,"surface":null,"present":true,"soluble":false}]})
         };
         let band = [band(ROCK_BAND), band("RockLayerKind1")];
+        let (glen, revision, world) =
+            (glen(), crate::Id::from_name("1"), crate::Id::from_name("w"));
         serde_json::from_value(json!({
-            "reference":{"mapId":"glen","revision":"1"},"worldId":"w","name":"Glen","primarySpaceId":"glen",
+            "reference":{"mapId":glen,"revision":revision},"worldId":world,"name":"Glen","primarySpaceId":glen,
             "profile":"local","regionScale":{"level":0,"nextArea":1,"subdivision":7,"minimumWidth":1,"enabled":false},
             "footprint":{"type":"Polygon","coordinates":[[[0,0],[10,0],[10,10],[0,0]]]},"bounds":[0,0,10,10],
             "spaces":[],"parent":null,"state":"complete",
-            "layers":[{"id":"inspection","name":"Facts","spaceId":"glen","bounds":[0,0,10,10],"attribution":[],
+            "layers":[{"id":"inspection","name":"Facts","spaceId":glen,"bounds":[0,0,10,10],"attribution":[],
                 "source":{"kind":"attributes","data":{"bands":band}},
                 "catalog":{"path":[],"common":false,"featureTypes":[],"defaultStyle":null,"presets":[],"properties":{},"examples":[],"geometries":[]}}]
         }))
@@ -171,7 +176,7 @@ mod tests {
                 "display":{"unit":"","factor":1},"category":null})
             })
             .collect();
-        serde_json::from_value(json!({"id":"s","spaceId":"glen",
+        serde_json::from_value(json!({"id":"s","spaceId":glen(),
             "footprint":{"type":"Polygon","coordinates":[[[0,0],[10,0],[10,10],[0,0]]]},
             "window":{"bounds":[0,0,10,10],"closedEast":true,"closedNorth":true},"cellSpan":10,"center":[5,5],
             "measure":100,"active":true,"attributes":attributes,"sections":[]}))

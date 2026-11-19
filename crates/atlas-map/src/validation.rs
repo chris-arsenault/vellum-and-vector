@@ -1,4 +1,4 @@
-use crate::{Bounds, MapDescriptor, MapRef, PublicationState};
+use crate::{Bounds, Id, MapDescriptor, MapRef, PublicationState};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use ts_rs::TS;
@@ -76,7 +76,7 @@ impl Bounds {
 
 impl MapRef {
     pub fn validate(&self) -> Result<(), MapError> {
-        if self.map_id.is_empty() || self.revision.is_empty() {
+        if self.map_id == Id::NIL || self.revision == Id::NIL {
             return Err(MapError::new(
                 MapErrorCode::InvalidMap,
                 "A map needs identity and revision",
@@ -114,7 +114,7 @@ impl MapDescriptor {
                 "Region selection needs finite scale rules",
             ));
         }
-        if self.world_id.is_empty() || self.name.is_empty() || self.primary_space_id.is_empty() {
+        if self.world_id == Id::NIL || self.name.is_empty() || self.primary_space_id == Id::NIL {
             return Err(MapError::new(
                 MapErrorCode::InvalidMap,
                 "Maps need an identity, name and primary coordinate space",
@@ -147,8 +147,8 @@ impl MapDescriptor {
         let mut ids = std::collections::BTreeSet::new();
         for space in &self.spaces {
             space.bounds.validate()?;
-            if space.id.is_empty()
-                || !ids.insert(&space.id)
+            if space.id == Id::NIL
+                || !ids.insert(space.id)
                 || !space.metres_per_unit.is_finite()
                 || space.metres_per_unit <= 0.0
                 || !space.precision.is_finite()

@@ -60,13 +60,13 @@ pub struct DrainageReach {
     pub coordinates: Vec<Position>,
     pub discharges: Vec<f64>,
     pub catchment_areas: Vec<f64>,
-    pub feature_ids: Vec<String>,
+    pub feature_ids: Vec<atlas_map::Id>,
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct DrainageNetwork {
-    pub area_id: String,
-    pub space_id: String,
+    pub area_id: atlas_map::Id,
+    pub space_id: atlas_map::Id,
     pub reaches: Vec<DrainageReach>,
     pub kept: Option<RetainedNetwork>,
     pub input: bool,
@@ -78,7 +78,7 @@ pub struct RiverIdentity {
 impl DrainageNetwork {
     pub(super) fn inputs(
         &self,
-        feature: &impl Fn(&str) -> Option<RiverIdentity>,
+        feature: &impl Fn(atlas_map::Id) -> Option<RiverIdentity>,
     ) -> Vec<RetainedRiver> {
         if let Some(kept) = &self.kept {
             return kept.reaches.clone();
@@ -101,7 +101,7 @@ impl DrainageNetwork {
                 let count = reach.coordinates.len() - usize::from(junction.is_some());
                 let discharges = &reach.discharges[..count.min(reach.discharges.len())];
                 let flow = discharges.last().copied().unwrap_or(0.0);
-                let identity = reach.feature_ids.first().and_then(|id| feature(id));
+                let identity = reach.feature_ids.first().and_then(|&id| feature(id));
                 RetainedRiver {
                     id: at + 1,
                     course: reach.coordinates[..count].to_vec(),
@@ -125,7 +125,7 @@ impl DrainageNetwork {
                     river: identity
                         .as_ref()
                         .and_then(|i| i.river.clone())
-                        .or_else(|| reach.feature_ids.first().cloned()),
+                        .or_else(|| reach.feature_ids.first().map(ToString::to_string)),
                     name: identity.and_then(|i| i.name),
                     record: None,
                 }

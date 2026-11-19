@@ -137,7 +137,7 @@ fn text(value: Option<&Value>, otherwise: &str) -> String {
 pub fn adopt_captured(
     field: &Field,
     features: &dyn FeatureReader,
-    area: &str,
+    area: atlas_map::Id,
     seats: &[Seat],
     parent_span: f64,
     places: &mut Places,
@@ -179,7 +179,7 @@ pub fn adopt_captured(
             None => Vec::new(),
         };
         places.adopt(Adopted {
-            id: feature.id.clone(),
+            id: feature.id,
             anchor,
             cells: within(&field.mesh, anchor, parent_span / 2.0),
             founded: text(attributes.get("founded"), "an earlier age"),

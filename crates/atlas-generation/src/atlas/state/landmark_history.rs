@@ -19,9 +19,9 @@ use std::io;
 fn extent<'a>(scope: &'a Scope, input: &Inputs) -> generation::Scope<'a> {
     generation::Scope {
         identity: Identity {
-            world: &scope.world,
-            area: &scope.area,
-            space: &scope.space,
+            world: scope.world,
+            area: scope.area,
+            space: scope.space,
         },
         footprint: &scope.footprint,
         epochs: input.epochs.len(),
@@ -72,7 +72,11 @@ impl State {
             })
             .collect()
     }
-    pub fn site_landmarks(&mut self, input: &Inputs, epoch: usize) -> io::Result<Vec<String>> {
+    pub fn site_landmarks(
+        &mut self,
+        input: &Inputs,
+        epoch: usize,
+    ) -> io::Result<Vec<atlas_map::Id>> {
         if input.has_parent {
             return Ok(Vec::new());
         }

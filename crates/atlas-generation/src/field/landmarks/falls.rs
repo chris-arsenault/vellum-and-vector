@@ -12,7 +12,7 @@ use crate::{
 };
 use std::{io, rc::Rc};
 pub struct Falls {
-    pub id: String,
+    pub id: atlas_map::Id,
     pub center: [f64; 2],
     pub drop_metres: f64,
     pub capture_distance_km: f64,
@@ -109,7 +109,7 @@ fn hold_step(
     }
     Ok(done.max(lifted))
 }
-fn corridor(field: &Field, id: &str) -> io::Result<Vec<u32>> {
+fn corridor(field: &Field, id: atlas_map::Id) -> io::Result<Vec<u32>> {
     field
         .landmark_ledger
         .iter()
@@ -129,13 +129,13 @@ impl Field {
             |scope, work: &FallsWork| {
                 let field = scope.state_mut();
                 let mut run = || -> io::Result<()> {
-                    let corridor = corridor(field, &work.falls.id)?;
+                    let corridor = corridor(field, work.falls.id)?;
                     let lip = lip(field, &work.falls, &corridor)?;
                     if let Some(shortfall) = work.drop_shortfall {
                         let foot = lip.map(|cell| foot(field, cell)).transpose()?.flatten();
                         let applied =
                             hold_step(field, lip, foot, MapScale::native(shortfall), true)?;
-                        return maintenance(field, &work.falls.id, applied);
+                        return maintenance(field, work.falls.id, applied);
                     }
                     let Some(lip) = lip else {
                         return Ok(());
@@ -173,7 +173,7 @@ impl Field {
         Query::new("landmark-falls-measures", vec![], |field: &Field, scope| {
             let input = scope.input::<Falls>()?;
             let read = || -> io::Result<f64> {
-                let corridor = corridor(field, &input.id)?;
+                let corridor = corridor(field, input.id)?;
                 let Some(lip) = lip(field, &input, &corridor)? else {
                     return Ok(f64::NAN);
                 };
@@ -195,7 +195,7 @@ impl Field {
             CommandKind::Event,
             vec![],
             move |scope, work: &FallsCapture| {
-                capture::with_record(scope.state_mut(), &work.falls.id, |field, record| {
+                capture::with_record(scope.state_mut(), work.falls.id, |field, record| {
                     let head = lip(field, &work.falls, &record.corridor)?;
                     let mut floor: Vec<_> = head.into_iter().map(|i| i as u32).collect();
                     floor.extend(&record.corridor);

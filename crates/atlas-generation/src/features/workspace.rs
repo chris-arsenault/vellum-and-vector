@@ -1,11 +1,12 @@
 use super::Feature;
+use atlas_map::Id;
 use std::{collections::BTreeSet, io};
 
 #[derive(Default, Clone, Copy, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FeatureSelection<'a> {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub area_id: Option<&'a str>,
+    pub area_id: Option<Id>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub layer_id: Option<&'a str>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -21,35 +22,35 @@ impl FeatureSelection<'_> {
 
 /// Reads are detached values; only workspace writes change authoritative records.
 pub trait FeatureReader {
-    fn get(&self, id: &str) -> io::Result<Option<Feature>>;
+    fn get(&self, id: Id) -> io::Result<Option<Feature>>;
     fn values<'a>(
         &'a self,
         selection: FeatureSelection<'a>,
     ) -> io::Result<Box<dyn Iterator<Item = io::Result<Feature>> + 'a>>;
 }
-pub type Revisions<'a> = Box<dyn Iterator<Item = io::Result<(String, u64)>> + 'a>;
+pub type Revisions<'a> = Box<dyn Iterator<Item = io::Result<(Id, u64)>> + 'a>;
 pub trait FeatureWorkspace: FeatureReader {
     fn put(&mut self, feature: Feature) -> io::Result<()>;
-    fn remove(&mut self, id: &str) -> io::Result<()>;
+    fn remove(&mut self, id: Id) -> io::Result<()>;
     fn revisions(&self) -> io::Result<Revisions<'_>>;
 }
 
 /// Only following relationships contribute to composed feature presentation.
 pub fn following_records(
     workspace: &dyn FeatureReader,
-    ids: impl IntoIterator<Item = String>,
+    ids: impl IntoIterator<Item = Id>,
 ) -> io::Result<Vec<Feature>> {
     let mut pending = ids.into_iter().collect::<Vec<_>>();
     let mut visited = BTreeSet::new();
     let mut features = Vec::new();
     let mut index = 0;
     while index < pending.len() {
-        let id = pending[index].clone();
+        let id = pending[index];
         index += 1;
-        if !visited.insert(id.clone()) {
+        if !visited.insert(id) {
             continue;
         }
-        let Some(feature) = workspace.get(&id)? else {
+        let Some(feature) = workspace.get(id)? else {
             continue;
         };
         pending.extend(
@@ -57,7 +58,7 @@ pub fn following_records(
                 .relations
                 .iter()
                 .filter(|r| r.kind == "follows")
-                .map(|r| r.target_id.clone()),
+                .map(|r| r.target_id),
         );
         features.push(feature);
     }

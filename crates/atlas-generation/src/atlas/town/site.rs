@@ -15,7 +15,7 @@ use crate::{
     rock::ground::GroundField,
     spatial::SpatialKernel,
 };
-use atlas_map::{Geometry, Position};
+use atlas_map::{Geometry, Id, Position};
 use serde_json::Value;
 use std::io;
 
@@ -39,7 +39,7 @@ pub fn read(state: &State) -> io::Result<Site> {
     read_from(
         state,
         state.records.features.as_ref(),
-        Some(&state.scope.area),
+        Some(state.scope.area),
     )
 }
 /// Captured context is available before refinement republishes the working GIS records.
@@ -49,7 +49,7 @@ pub fn starting(state: &State) -> io::Result<Site> {
         None => read(state),
     }
 }
-fn read_from(state: &State, features: &dyn FeatureReader, area: Option<&str>) -> io::Result<Site> {
+fn read_from(state: &State, features: &dyn FeatureReader, area: Option<Id>) -> io::Result<Site> {
     let bounds = bounds(state)?;
     let ground = terrain(state, bounds)?;
     let roads = roads(features, area)?;
@@ -64,7 +64,7 @@ fn read_from(state: &State, features: &dyn FeatureReader, area: Option<&str>) ->
 fn terrain(state: &State, bounds: [f64; 4]) -> io::Result<Ground> {
     let mut ground = ground(state.field(), bounds)?;
     let current = state.records.features.as_ref();
-    let area = Some(state.scope.area.as_str());
+    let area = Some(state.scope.area);
     let water = drawn_water(current, area, state.spatial.as_ref())?;
     ground.mark_shapes(&water, WATER, state.spatial.as_ref())?;
     fortifications(current, area, &mut ground, state.spatial.as_ref())?;
@@ -97,7 +97,7 @@ pub(super) fn walking_ground(state: &State) -> io::Result<Ground> {
 /// Built walls reserve land. Only a recorded gate opens the wall to a new way.
 fn fortifications(
     features: &dyn FeatureReader,
-    area: Option<&str>,
+    area: Option<Id>,
     ground: &mut Ground,
     spatial: &dyn SpatialKernel,
 ) -> io::Result<()> {
@@ -138,7 +138,7 @@ fn fortifications(
 /// (written by `real-scale.channels`), and lakes and pools by their outlines.
 fn drawn_water(
     features: &dyn FeatureReader,
-    area: Option<&str>,
+    area: Option<Id>,
     spatial: &dyn SpatialKernel,
 ) -> io::Result<Vec<Geometry>> {
     let mut found = Vec::new();
@@ -178,7 +178,7 @@ pub fn water_shapes(
     Ok(shapes)
 }
 /// Every line in the roads layer except sea lanes, with its widest stated width.
-fn ways(features: &dyn FeatureReader, area: Option<&str>) -> io::Result<Vec<(Vec<Point>, f64)>> {
+fn ways(features: &dyn FeatureReader, area: Option<Id>) -> io::Result<Vec<(Vec<Point>, f64)>> {
     let mut result = Vec::new();
     for feature in features.values(FeatureSelection {
         area_id: area,
@@ -281,7 +281,7 @@ fn lines(geometry: &Geometry) -> Vec<Vec<Point>> {
         _ => Vec::new(),
     }
 }
-fn roads(features: &dyn FeatureReader, area: Option<&str>) -> io::Result<Vec<Road>> {
+fn roads(features: &dyn FeatureReader, area: Option<Id>) -> io::Result<Vec<Road>> {
     let mut result = Vec::new();
     for kind in ["road", "trail"] {
         for feature in features.values(FeatureSelection {
@@ -353,7 +353,7 @@ pub fn town_centre(
 fn seats(
     state: &State,
     features: &dyn FeatureReader,
-    area: Option<&str>,
+    area: Option<Id>,
     bounds: [f64; 4],
     roads: &[Road],
     ground: &Ground,

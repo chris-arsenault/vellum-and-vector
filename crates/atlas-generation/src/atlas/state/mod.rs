@@ -72,14 +72,14 @@ use std::{
 #[derive(Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Scope {
-    pub world: String,
-    pub area: String,
+    pub world: atlas_map::Id,
+    pub area: atlas_map::Id,
     pub area_name: String,
-    pub space: String,
+    pub space: atlas_map::Id,
     pub world_geography: bool,
     pub owns_map_geography: bool,
     // hpc-exempt: captured area ancestry, not cell membership.
-    pub area_parents: BTreeMap<String, Option<String>>,
+    pub area_parents: BTreeMap<atlas_map::Id, Option<atlas_map::Id>>,
     pub domain: Geometry,
     pub domain_bounds: Bounds,
     pub footprint: Geometry,
@@ -89,38 +89,32 @@ pub struct Scope {
     // hpc-exempt: generation domains keyed by layer identity.
     pub generation_domains: BTreeMap<String, String>,
     // hpc-exempt: captured feature contracts, not cell membership.
-    pub contracted: BTreeSet<String>,
+    pub contracted: BTreeSet<atlas_map::Id>,
     /// A real-scale map's captured choices (ADR 0016); none on world and regional maps.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub real_scale: Option<crate::features::context::RealScaleMap>,
 }
 impl Scope {
     pub fn validate_ancestry(&self) -> io::Result<()> {
-        for area in self.area_parents.keys() {
+        for &area in self.area_parents.keys() {
             let mut seen = BTreeSet::new();
-            let mut next = Some(area.as_str());
+            let mut next = Some(area);
             while let Some(id) = next {
                 if !seen.insert(id) {
                     return Err(io::Error::other("Geographic ancestry contains a cycle"));
                 }
-                next = self
-                    .area_parents
-                    .get(id)
-                    .and_then(|parent| parent.as_deref());
+                next = self.area_parents.get(&id).copied().flatten();
             }
         }
         Ok(())
     }
-    pub fn is_descendant(&self, child: &str, ancestor: &str) -> bool {
+    pub fn is_descendant(&self, child: atlas_map::Id, ancestor: atlas_map::Id) -> bool {
         let mut next = Some(child);
         while let Some(id) = next {
             if id == ancestor {
                 return true;
             }
-            next = self
-                .area_parents
-                .get(id)
-                .and_then(|parent| parent.as_deref());
+            next = self.area_parents.get(&id).copied().flatten();
         }
         false
     }
@@ -130,7 +124,7 @@ pub struct Records {
     pub source_features: Option<Box<dyn FeatureReader>>,
     pub networks: Box<dyn NetworkWorkspace>,
     // hpc-exempt: retained feature-name metadata keyed by stable identity.
-    pub retained_names: BTreeMap<String, Named>,
+    pub retained_names: BTreeMap<atlas_map::Id, Named>,
 }
 pub struct PeopleRecords {
     pub places: Rc<RefCell<Places>>,
@@ -205,7 +199,7 @@ pub struct Physical {
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct LakeSurface {
-    pub id: String,
+    pub id: atlas_map::Id,
     pub geometry: Geometry,
     pub level: f64,
 }
@@ -226,7 +220,7 @@ pub struct Regional {
     pub media: RefCell<Option<field::refinement::media::Media>>,
     pub contributions: field::contributions::Contributions,
     // hpc-exempt: identities of earlier generated records removed from this map.
-    pub removed_products: BTreeSet<String>,
+    pub removed_products: BTreeSet<atlas_map::Id>,
 }
 impl Regional {
     pub fn new(field: &Field, domains: Vec<String>, parent_span: f64) -> io::Result<Self> {

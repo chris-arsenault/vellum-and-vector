@@ -122,9 +122,9 @@ impl State {
             None
         };
         RegionalPublisher {
-            world: &self.scope.world,
-            area: &self.scope.area,
-            space: Some(&self.scope.space),
+            world: self.scope.world,
+            area: self.scope.area,
+            space: Some(self.scope.space),
             chart: Chart {
                 domain: &self.scope.domain,
                 bounds: self.scope.domain_bounds,
@@ -170,19 +170,19 @@ impl State {
                 },
                 attributes,
             )?;
-            relate(&mut feature, &passages[chamber.passage].id, "opensFrom");
+            relate(&mut feature, passages[chamber.passage].id, "opensFrom");
             parts.push(feature);
         }
         for (at, entrance) in cave.entrances.iter().enumerate() {
             let (opening, shaft) = self.entrance_features(&key, at, entrance, cave)?;
             let passage = &mut passages[entrance.passage];
-            relate(passage, &opening.id, "entrance");
+            relate(passage, opening.id, "entrance");
             parts.push(opening);
             parts.extend(shaft);
         }
         let whole = self.whole_cave(&key, cave, &passages)?;
         for feature in passages.iter_mut().chain(parts.iter_mut()) {
-            relate(feature, &whole.id, "partOf");
+            relate(feature, whole.id, "partOf");
         }
         Ok(std::iter::once(whole)
             .chain(passages)
@@ -248,8 +248,8 @@ impl State {
             point,
             attributes,
         )?;
-        relate(&mut shaft, &feature.id, "opensAt");
-        relate(&mut feature, &shaft.id, "shaft");
+        relate(&mut shaft, feature.id, "opensAt");
+        relate(&mut feature, shaft.id, "shaft");
         Ok((feature, Some(shaft)))
     }
     fn whole_cave(&self, key: &str, cave: &Cave, passages: &[Feature]) -> io::Result<Feature> {
@@ -303,9 +303,9 @@ fn part(depth: f64, cave: &Cave) -> Attributes {
     attributes.insert("level".into(), level(depth).into());
     attributes
 }
-fn relate(feature: &mut Feature, target: &str, kind: &str) {
+fn relate(feature: &mut Feature, target: atlas_map::Id, kind: &str) {
     feature.relations.push(Relation {
-        target_id: target.into(),
+        target_id: target,
         kind: kind.into(),
     });
 }

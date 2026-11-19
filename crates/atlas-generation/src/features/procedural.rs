@@ -32,7 +32,7 @@ pub fn feature(mut source: Feature) -> Option<Feature> {
 }
 pub struct Features(pub Rc<dyn FeatureReader>);
 impl FeatureReader for Features {
-    fn get(&self, id: &str) -> io::Result<Option<Feature>> {
+    fn get(&self, id: atlas_map::Id) -> io::Result<Option<Feature>> {
         Ok(self.0.get(id)?.and_then(feature))
     }
     fn values<'a>(
@@ -54,29 +54,29 @@ impl Networks {
     fn visible(&self, reach: Reach) -> io::Result<Option<Reach>> {
         Ok((self
             .features
-            .get(&reach.feature_id)?
+            .get(reach.feature_id)?
             .is_none_or(|feature| feature.map_only != Some(true)))
         .then_some(reach))
     }
 }
 impl NetworkReader for Networks {
-    fn node(&self, id: &str) -> io::Result<Option<Node>> {
+    fn node(&self, id: atlas_map::Id) -> io::Result<Option<Node>> {
         self.records.node(id)
     }
     fn nodes(&self) -> io::Result<Box<dyn Iterator<Item = io::Result<Node>> + '_>> {
         self.records.nodes()
     }
-    fn reach(&self, id: &str) -> io::Result<Option<Reach>> {
+    fn reach(&self, id: atlas_map::Id) -> io::Result<Option<Reach>> {
         self.records
             .reach(id)?
             .map(|reach| self.visible(reach))
             .transpose()
             .map(Option::flatten)
     }
-    fn reaches<'a>(
-        &'a self,
-        selection: Selection<'a>,
-    ) -> io::Result<Box<dyn Iterator<Item = io::Result<Reach>> + 'a>> {
+    fn reaches(
+        &self,
+        selection: Selection,
+    ) -> io::Result<Box<dyn Iterator<Item = io::Result<Reach>> + '_>> {
         Ok(Box::new(self.records.reaches(selection)?.filter_map(
             |reach| reach.and_then(|reach| self.visible(reach)).transpose(),
         )))

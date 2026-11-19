@@ -24,7 +24,7 @@ pub struct Field {
 }
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Worker {
-    pub town: String,
+    pub town: atlas_map::Id,
     pub holding: super::fabric::HoldingId,
 }
 pub fn establish(
@@ -241,7 +241,7 @@ fn assign(fabric: &mut Fabric, ground: &Ground, spatial: &dyn SpatialKernel) -> 
         let routes = access.travel_costs(&origins, &targets, spatial)?;
         for (farm, costs) in farms.into_iter().zip(routes) {
             let worker = Worker {
-                town: town.seat.key.clone(),
+                town: town.seat.key,
                 holding: farm.id,
             };
             for ((best, field), cost) in best.iter_mut().zip(&fabric.fields).zip(costs) {

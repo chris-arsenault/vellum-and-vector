@@ -25,7 +25,7 @@ pub struct Place {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub absorbed_by: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub adopted: Option<String>,
+    pub adopted: Option<atlas_map::Id>,
     pub town_people: f64,
     pub peak: f64,
     pub people: f64,
@@ -36,7 +36,7 @@ pub struct Place {
     pub history: Vec<History>,
 }
 pub struct Adopted {
-    pub id: String,
+    pub id: atlas_map::Id,
     pub anchor: usize,
     pub cells: Vec<usize>,
     pub founded: String,
@@ -127,7 +127,7 @@ impl Places {
         if self
             .known
             .iter()
-            .any(|place| place.adopted.as_ref() == Some(&record.id))
+            .any(|place| place.adopted == Some(record.id))
         {
             return;
         }

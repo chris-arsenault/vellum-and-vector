@@ -55,7 +55,7 @@ fn is_plot(feature: &MapFeature) -> bool {
 pub fn building_clear(
     building: &MapFeature,
     around: &[MapFeature],
-    own_plot: Option<&str>,
+    own_plot: Option<crate::Id>,
     spatial: &dyn SpatialKernel,
 ) -> Result<(), String> {
     for other in around.iter().filter(|other| other.id != building.id) {
@@ -63,7 +63,7 @@ pub fn building_clear(
             "water"
         } else if is_way(other) {
             "the way"
-        } else if is_building(other) || (is_plot(other) && Some(other.id.as_str()) != own_plot) {
+        } else if is_building(other) || (is_plot(other) && Some(other.id) != own_plot) {
             "the ground"
         } else {
             continue;

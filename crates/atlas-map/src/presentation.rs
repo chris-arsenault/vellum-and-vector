@@ -23,7 +23,7 @@ pub struct LayerCatalog {
     pub presets: Vec<String>,
     pub properties: BTreeMap<String, MapProperty>,
     /// One published feature identity per geometry kind for the symbol editor.
-    pub examples: Vec<String>,
+    pub examples: Vec<crate::Id>,
     /// Geometry kinds for default symbols, including an empty network's line representation.
     pub geometries: Vec<GeometryType>,
 }

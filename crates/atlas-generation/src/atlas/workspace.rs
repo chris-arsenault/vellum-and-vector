@@ -209,14 +209,14 @@ pub fn construct(input: Construction<'_>) -> ExecutionResult<Prepared> {
     }
     let protection = Rc::new(field::protection::Protection::capture(
         executor.state(),
-        &input.frame.scope.space,
+        input.frame.scope.space,
         input.authored,
         input.spatial,
         input.cache.clone(),
     )?);
     let mut surface =
         Surface::captured(input.inputs.surface.clone(), executor.state(), input.cache)?;
-    surface.compose_authored(input.authored, &input.frame.scope.space, input.spatial)?;
+    surface.compose_authored(input.authored, input.frame.scope.space, input.spatial)?;
     Ok(Prepared {
         inherited,
         physical: Physical {

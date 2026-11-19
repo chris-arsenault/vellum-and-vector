@@ -18,7 +18,7 @@ use std::{io, rc::Rc};
 #[derive(Clone)]
 pub struct Input {
     pub source: Rc<Resource>,
-    pub space: Option<String>,
+    pub space: Option<atlas_map::Id>,
     pub footprint: Geometry,
     pub source_footprint: Geometry,
     pub channels: Vec<String>,
@@ -50,7 +50,7 @@ impl Protection {
     }
     pub fn capture(
         field: &Field,
-        space: &str,
+        space: atlas_map::Id,
         inputs: &[Input],
         spatial: &dyn SpatialKernel,
         cache: SharedCache,
@@ -74,7 +74,7 @@ impl Protection {
         let bindings = channels::physical();
         let mut fixed = Vec::new();
         for input in inputs {
-            if input.space.as_ref().is_some_and(|s| s != space) {
+            if input.space.is_some_and(|s| s != space) {
                 continue;
             }
             let covers = spatial

@@ -29,8 +29,8 @@ pub struct Bounds(pub f64, pub f64, pub f64, pub f64);
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MapSpace {
-    pub id: String,
-    pub parent_space_id: Option<String>,
+    pub id: crate::Id,
+    pub parent_space_id: Option<crate::Id>,
     pub bounds: Bounds,
     pub metres_per_unit: f64,
     pub precision: f64,

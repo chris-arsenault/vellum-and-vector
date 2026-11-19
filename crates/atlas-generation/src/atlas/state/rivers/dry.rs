@@ -57,7 +57,7 @@ fn clear_members(state: &mut State) -> io::Result<()> {
         .records
         .features
         .values(FeatureSelection {
-            area_id: Some(&state.scope.area),
+            area_id: Some(state.scope.area),
             kind: Some("river"),
             ..Default::default()
         })?
@@ -73,17 +73,17 @@ fn clear_members(state: &mut State) -> io::Result<()> {
         {
             continue;
         }
-        state.records.features.remove(&feature.id)?;
+        state.records.features.remove(feature.id)?;
         let reaches = state
             .records
             .networks
             .reaches(Selection {
-                feature_id: Some(&feature.id),
+                feature_id: Some(feature.id),
                 node_id: None,
             })?
             .collect::<io::Result<Vec<_>>>()?;
         for reach in reaches {
-            state.records.networks.remove_reach(&reach.id)?;
+            state.records.networks.remove_reach(reach.id)?;
         }
     }
     Ok(())
@@ -141,16 +141,16 @@ pub(super) fn publish(state: &mut State) -> io::Result<()> {
         if let Some(name) = end.name().filter(|n| !n.is_empty()) {
             feature.name = name.into();
         }
-        let id = feature.id.clone();
+        let id = feature.id;
         state.write_network(feature)?;
-        former(state, &courses, Some(&id), river)?;
+        former(state, &courses, Some(id), river)?;
     }
     Ok(())
 }
 pub(super) fn former(
     state: &mut State,
     reaches: &[&Reach],
-    drawn_as: Option<&str>,
+    drawn_as: Option<atlas_map::Id>,
     river: &str,
 ) -> io::Result<()> {
     let Some(feature) = drawn_as

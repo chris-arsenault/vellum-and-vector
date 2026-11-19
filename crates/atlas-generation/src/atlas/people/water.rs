@@ -18,14 +18,14 @@ pub struct Publication {
     pub lakes: bool,
     pub places: Rc<RefCell<publication::Publication>>,
     pub landmarks: Rc<lifecycle::Operations>,
-    pub crossed_features: BTreeSet<String>,
+    pub crossed_features: BTreeSet<atlas_map::Id>,
 }
 fn drawn(state: &State) -> io::Result<Vec<usize>> {
     let mesh = state.field().mesh();
     let [ox, oy] = mesh.origin();
     let mut cells = Vec::new();
     for feature in state.records.features.values(FeatureSelection {
-        area_id: Some(&state.scope.area),
+        area_id: Some(state.scope.area),
         kind: Some("dam"),
         ..Default::default()
     })? {
@@ -82,7 +82,7 @@ pub(super) fn advance(
         },
     )
 }
-fn drop_water(state: &mut State, crossed: &BTreeSet<String>) -> io::Result<()> {
+fn drop_water(state: &mut State, crossed: &BTreeSet<atlas_map::Id>) -> io::Result<()> {
     let mut referenced = BTreeSet::new();
     for feature in state.records.features.values(FeatureSelection::default())? {
         referenced.extend(feature?.relations.into_iter().map(|r| r.target_id));
@@ -91,7 +91,7 @@ fn drop_water(state: &mut State, crossed: &BTreeSet<String>) -> io::Result<()> {
         .records
         .features
         .values(FeatureSelection {
-            area_id: Some(&state.scope.area),
+            area_id: Some(state.scope.area),
             ..Default::default()
         })?
         .collect::<io::Result<Vec<_>>>()?;
@@ -107,17 +107,17 @@ fn drop_water(state: &mut State, crossed: &BTreeSet<String>) -> io::Result<()> {
         {
             continue;
         }
-        state.records.features.remove(&feature.id)?;
+        state.records.features.remove(feature.id)?;
         let reaches = state
             .records
             .networks
             .reaches(network::Selection {
-                feature_id: Some(&feature.id),
+                feature_id: Some(feature.id),
                 ..Default::default()
             })?
             .collect::<io::Result<Vec<_>>>()?;
         for reach in reaches {
-            state.records.networks.remove_reach(&reach.id)?;
+            state.records.networks.remove_reach(reach.id)?;
         }
     }
     Ok(())

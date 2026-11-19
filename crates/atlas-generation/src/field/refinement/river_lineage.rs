@@ -4,6 +4,7 @@ use crate::{
     features::{Feature, FeatureSelection, FeatureWorkspace, State},
     field::Field,
 };
+use atlas_map::Id;
 use serde_json::Value;
 use std::io;
 
@@ -13,11 +14,12 @@ pub struct ContinuingRiver {
     pub course: usize,
     pub head: usize,
 }
+/// The river a course belongs to: its drainage course key, else the course feature itself.
 pub fn river_id(feature: &Feature) -> String {
     match feature.attributes.get("riverId").filter(|v| !v.is_null()) {
         Some(Value::String(id)) => id.clone(),
         Some(value) => value.to_string(),
-        None => feature.id.clone(),
+        None => feature.id.to_string(),
     }
 }
 /// Capture once when regional evidence is established; later coastline changes do not recapture it.
@@ -45,35 +47,29 @@ pub fn continuing(field: &Field, courses: &[CapturedCourse]) -> io::Result<Vec<C
     });
     Ok(result)
 }
-fn replaceable(feature: &Feature, contracted: &impl Fn(&str) -> bool) -> bool {
+fn replaceable(feature: &Feature, contracted: &impl Fn(Id) -> bool) -> bool {
     feature.state == State::Generated
         && !feature.protected
         && feature.detail.is_empty()
-        && !contracted(&feature.id)
+        && !contracted(feature.id)
 }
 fn take_identity(
     features: &mut dyn FeatureWorkspace,
-    id: &str,
+    id: Id,
     course: &CapturedCourse,
-    contracted: &impl Fn(&str) -> bool,
+    contracted: &impl Fn(Id) -> bool,
 ) -> io::Result<()> {
     let Some(mut feature) = features.get(id)? else {
         return Ok(());
     };
     let carried = course.carried.clone().unwrap_or_else(|| CarriedCourse {
-        source_id: course.feature.id.clone(),
+        source_id: course.feature.id,
         geometry: course.feature.geometry.clone(),
         discharge: course.discharge,
         order: course.order,
     });
     feature.name.clone_from(&course.feature.name);
-    feature.place_id = Some(
-        course
-            .feature
-            .place_id
-            .clone()
-            .unwrap_or_else(|| carried.source_id.clone()),
-    );
+    feature.place_id = Some(course.feature.place_id.unwrap_or(carried.source_id));
     for (key, default) in [("nameStatus", "proper"), ("namedInEra", "captured")] {
         feature.attributes.insert(
             key.into(),
@@ -100,19 +96,19 @@ fn take_identity(
         .insert("developedBy".into(), "regional".into());
     features.put(feature)?;
     if features
-        .get(&course.feature.id)?
+        .get(course.feature.id)?
         .is_some_and(|f| replaceable(&f, contracted))
     {
-        features.remove(&course.feature.id)?;
+        features.remove(course.feature.id)?;
     }
     Ok(())
 }
 pub fn adopt(
     features: &mut dyn FeatureWorkspace,
-    area: &str,
+    area: Id,
     courses: &[CapturedCourse],
     continuing: &[ContinuingRiver],
-    contracted: &impl Fn(&str) -> bool,
+    contracted: &impl Fn(Id) -> bool,
 ) -> io::Result<Vec<Feature>> {
     let rivers = features
         .values(FeatureSelection {
@@ -138,11 +134,11 @@ pub fn adopt(
                         == Some(river.id.as_str())
             })
             .collect();
-        if drawn.is_empty() && features.get(&course.feature.id)?.is_none() {
+        if drawn.is_empty() && features.get(course.feature.id)?.is_none() {
             restored.push(course.feature.clone());
         }
         for feature in drawn {
-            take_identity(features, &feature.id, course, contracted)?;
+            take_identity(features, feature.id, course, contracted)?;
         }
     }
     Ok(restored)

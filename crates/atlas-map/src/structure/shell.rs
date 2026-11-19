@@ -291,14 +291,10 @@ fn descriptor(request: &ShellRequest<'_>, ring: &[Point]) -> Result<MapDescripto
                 .real_scale
                 .as_ref()
                 .map_or(1, |r| r.triangles_per_edge),
-            creator_layers: vec![CreatorLayer {
-                id: "base".into(),
-                name: "Base layer".into(),
-                locked: false,
-            }],
+            creator_layers: vec![CreatorLayer::base()],
             edits: 0,
             site: Some(StructureSite {
-                building_id: building.id.clone(),
+                building_id: building.id,
                 name: building.name.clone(),
                 use_: text("use"),
                 address: text("address"),
@@ -309,7 +305,7 @@ fn descriptor(request: &ShellRequest<'_>, ring: &[Point]) -> Result<MapDescripto
 }
 fn shell_feature(
     layer: &crate::MapLayer,
-    id: String,
+    id: crate::Id,
     kind: &str,
     name: &str,
 ) -> Result<MapFeature, String> {
@@ -359,7 +355,11 @@ fn walls(
             } else {
                 format!("{} wall", side(edge))
             };
-            let mut wall = shell_feature(layer, format!("wall@{number}:{i}"), "wall", &name)?;
+            // One outer wall per edge of the ring on each level.
+            let mut place = number.to_be_bytes().to_vec();
+            place.extend_from_slice(&(i as u32).to_be_bytes());
+            let id = crate::Id::v5(crate::Id::from_name(&layer.id), &place);
+            let mut wall = shell_feature(layer, id, "wall", &name)?;
             wall.geometry = Geometry::LineString {
                 coordinates: vec![
                     Position::xy(edge.0[0], edge.0[1]),
@@ -401,7 +401,8 @@ fn door(
         corner(-half_along, half_across),
         corner(-half_along, -half_across),
     ];
-    let mut door = shell_feature(layer, "door@0:front".into(), "door", "Front door")?;
+    let id = crate::Id::v5(crate::Id::from_name(&layer.id), b"front door");
+    let mut door = shell_feature(layer, id, "door", "Front door")?;
     door.geometry = Geometry::Polygon {
         coordinates: vec![ring],
     };
@@ -416,7 +417,8 @@ fn door(
         door.attributes.insert("street".into(), street.into());
     }
     door.relations.push(MapRelation {
-        target_id: wall.id.clone(),
+        target_id: wall.id,
+        target_map_id: None,
         target_name: wall.name.clone().unwrap_or_default(),
         kind: "in".into(),
     });

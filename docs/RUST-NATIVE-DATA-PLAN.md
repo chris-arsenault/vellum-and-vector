@@ -143,6 +143,35 @@ Acceptance: no identity or catalogue member is formatted and parsed as text betw
 generation and storage; names and labels are still text.
 Evidence: source review; unit tests of id derivation and catalogue lookup.
 
+#### M1 expansion
+
+1. `atlas_map::Id`: a 128-bit identity, compared and hashed as a number, written as UUID
+   text only at the serde/TypeScript edge and as 16 bytes in storage. `MapRef` and every
+   map, revision, area and entity id use it.
+2. Semantic ids: `identity::semantic_id(world, kind, key)` hashes typed parts (no JSON
+   encoding) into an `Id`; feature ids, place ids, relation targets and history feature ids
+   are `Id`.
+3. Catalogue kinds move to M5. Their only consumer is the generator record, and M5 changes
+   that record's representation. Magic kinds (`system:rule`) come from configuration, so the
+   record kind is a catalogue ordinal or a configured magic rule, not one closed enum. The
+   feature-type id (`json!([layer, kind, subtype])` text in `publication/catalogue.rs`)
+   moves to M2, where feature types become rows.
+4. atlas-map and atlas-generation build on every target. atlas-gis and atlas-host stay
+   broken until M2 and M7 rewrite them; fixing their stores for `Id` first would be done
+   twice.
+
+Result (2026-11-19): ids are `Id` from the generator's records to `atlas-map`. Semantic ids
+hash fixed-width typed parts (`identity::area_record_id`, `roster::landmark_id`, history
+entry ids). These text keys remain, each a key rather than an identity:
+- POI place keys (`Place.id`), from which feature ids are hashed; a place standing for an
+  existing feature keys on that feature id's text.
+- River lineage keys (`riverId`), which mix drainage course keys with feature ids.
+- Magic point keys and fault keys.
+- Naming seeds and languages, which the naming library takes as text.
+Open attributes that hold ids (`fromPlace`, `toPlace`, `atPlace`, `polityId`,
+`settlementId`, `carriedOnto`, people groups) still serialise as UUID text inside
+`attributes` until M2 and M5 make them relations and typed columns.
+
 ### M2 — GIS-native map storage [depends on M1]
 Scope: F1, F2, F3 in both PostGIS and the browser SQLite store. Layer and feature-type
 tables replace the descriptor document; features carry typed declared-attribute columns,

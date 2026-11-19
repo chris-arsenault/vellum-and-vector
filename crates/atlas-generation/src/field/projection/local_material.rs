@@ -15,7 +15,7 @@ impl Surface {
     pub fn local_material(
         &mut self,
         definitions: &[Source],
-        space: &str,
+        space: atlas_map::Id,
         activity: &Activity,
         spatial: &dyn SpatialKernel,
         react: bool,
@@ -38,7 +38,7 @@ impl Surface {
             let summary = self.summarize_channel(&key)?;
             causes.push(Cause::Magic {
                 process: "magic.material".into(),
-                source_id: source.id.clone(),
+                source_id: source.id,
                 activity: 1.0,
                 forcing: summary.clone(),
                 stored: summary,

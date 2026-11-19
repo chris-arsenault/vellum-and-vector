@@ -31,9 +31,9 @@ pub struct MagicShare {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct NearbyFeature {
-    pub map_id: String,
-    pub feature_id: String,
-    pub space_id: String,
+    pub map_id: crate::Id,
+    pub feature_id: crate::Id,
+    pub space_id: crate::Id,
     pub name: String,
     pub kind: String,
     /// Metres from the building's centre to the feature.
@@ -88,7 +88,7 @@ pub fn site_context(
     building: Option<&MapFeature>,
     centre: [f64; 2],
     samples: &[MapSample],
-    nearby: &[(String, MapFeature)],
+    nearby: &[(crate::Id, MapFeature)],
 ) -> SiteContext {
     SiteContext {
         magic: magic(samples),
@@ -125,12 +125,12 @@ fn magic(samples: &[MapSample]) -> Vec<MagicShare> {
     shares.sort_by(|a, b| b.share.total_cmp(&a.share).then(a.system.cmp(&b.system)));
     shares
 }
-fn features(centre: [f64; 2], nearby: &[(String, MapFeature)]) -> Vec<NearbyFeature> {
+fn features(centre: [f64; 2], nearby: &[(crate::Id, MapFeature)]) -> Vec<NearbyFeature> {
     let mut found: Vec<NearbyFeature> = nearby
         .iter()
         .map(|(map_id, feature)| NearbyFeature {
-            map_id: map_id.clone(),
-            feature_id: feature.id.clone(),
+            map_id: *map_id,
+            feature_id: feature.id,
             space_id: feature.space_id.clone(),
             name: feature.name.clone().unwrap_or_else(|| feature.kind.clone()),
             kind: feature.kind.clone(),

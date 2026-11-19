@@ -29,7 +29,7 @@ pub use plan::{plan, Draft, EditTargets};
 pub use shapes::{carry_widths, footprint, transform_geometry, widths_at};
 pub use town::{Settlement, NAMING_WORK, PLACING_REACH};
 
-use crate::{CreatorLayer, Geometry, MapDescriptor, MapFeature, RealScale};
+use crate::{CreatorLayer, Geometry, Id, MapDescriptor, MapFeature, RealScale};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -51,58 +51,58 @@ pub enum EditCommand {
         name: Option<String>,
         geometry: Geometry,
         attributes: BTreeMap<String, Value>,
-        creator_layer: Option<String>,
+        creator_layer: Option<Id>,
     },
     /// New vertices for one feature; its identity and attributes stay, widths follow the line.
     Reshape {
-        id: String,
+        id: Id,
         geometry: Geometry,
     },
     /// Move, rotate and scale features about a point.
     Transform {
-        ids: Vec<String>,
+        ids: Vec<Id>,
         transform: Transform,
     },
     Duplicate {
-        ids: Vec<String>,
+        ids: Vec<Id>,
         offset: [f64; 2],
     },
     Delete {
-        ids: Vec<String>,
+        ids: Vec<Id>,
     },
     /// Set the name and attributes; a null attribute value removes the attribute.
     SetAttributes {
-        ids: Vec<String>,
+        ids: Vec<Id>,
         name: Option<String>,
         attributes: BTreeMap<String, Value>,
     },
     /// Copy the source's kind attributes (not its shape, place or layer) onto the targets.
     PasteStyle {
-        source: String,
-        ids: Vec<String>,
+        source: Id,
+        ids: Vec<Id>,
     },
     AddLayer {
         name: String,
     },
     RenameLayer {
-        id: String,
+        id: Id,
         name: String,
     },
     LockLayer {
-        id: String,
+        id: Id,
         locked: bool,
     },
     MoveToLayer {
-        ids: Vec<String>,
-        layer: String,
+        ids: Vec<Id>,
+        layer: Id,
     },
     /// Move a layer's features into the layer beneath it and remove the layer.
     MergeDown {
-        id: String,
+        id: Id,
     },
     /// Remove a layer and its features.
     DeleteLayer {
-        id: String,
+        id: Id,
     },
     /// One object of a catalogue kind at its real size, centred on `at`, turned `rotation`
     /// degrees counter-clockwise and scaled by `scale`.
@@ -113,7 +113,7 @@ pub enum EditCommand {
         at: [f64; 2],
         rotation: f64,
         scale: f64,
-        creator_layer: Option<String>,
+        creator_layer: Option<Id>,
     },
     /// Fill an outline with objects of one kind, no two closer than `spacing` metres. Each
     /// object is its own feature and the whole scatter is one undo step; the same seed lays
@@ -124,7 +124,7 @@ pub enum EditCommand {
         outline: Geometry,
         spacing: f64,
         seed: u32,
-        creator_layer: Option<String>,
+        creator_layer: Option<Id>,
     },
     /// A street of a class (`mainStreet`, `street`, `lane`, `alley`) with the class's width;
     /// its ends join the ways they meet. Unnamed, it is named from the settlement's culture.
@@ -132,7 +132,7 @@ pub enum EditCommand {
         road_class: String,
         geometry: Geometry,
         name: Option<String>,
-        creator_layer: Option<String>,
+        creator_layer: Option<Id>,
     },
     /// A building of a use placed at a point, fronting the nearest street on a plot of its
     /// own, or on the empty plot the point falls in. Unnamed, its keeper is named.
@@ -140,7 +140,7 @@ pub enum EditCommand {
         building_use: String,
         at: [f64; 2],
         name: Option<String>,
-        creator_layer: Option<String>,
+        creator_layer: Option<Id>,
     },
     /// On a structure map: a new floor above the top level, or a cellar below the lowest,
     /// with the outer walls of the level next to it.
@@ -149,16 +149,16 @@ pub enum EditCommand {
     },
     /// On a structure map: remove a level (never the ground floor) and all drawn on it.
     RemoveLevel {
-        space_id: String,
+        space_id: Id,
     },
     /// Link a stair, ladder or trapdoor to its landing on another level, or to a feature on
     /// another map.
     Connect {
-        id: String,
+        id: Id,
         target: crate::structure::ConnectionTarget,
     },
     Disconnect {
-        id: String,
+        id: Id,
         target: crate::structure::ConnectionTarget,
     },
 }
@@ -274,16 +274,17 @@ pub fn shape_of(layer_id: &str) -> Option<Shape> {
 /// The creator layer a feature belongs to; features that name none belong to the first.
 /// A hex grid is derived from the map, not drawn into a creator layer, so a hex belongs to
 /// none and no creator-layer lock holds it.
-pub fn creator_layer<'a>(feature: &'a MapFeature, real: &'a RealScale) -> &'a str {
+/// The creator layer a feature belongs to; hexes belong to none.
+pub fn creator_layer(feature: &MapFeature, real: &RealScale) -> Option<Id> {
     if is_hex_layer(&feature.layer_id) {
-        return "";
+        return None;
     }
     feature
         .attributes
         .get("creatorLayer")
         .and_then(Value::as_str)
-        .or_else(|| real.creator_layers.first().map(|layer| layer.id.as_str()))
-        .unwrap_or_default()
+        .and_then(|id| id.parse().ok())
+        .or_else(|| real.creator_layers.first().map(|layer| layer.id))
 }
 /// A feature locked on its own or through its creator layer refuses pointer edits.
 pub fn locked(feature: &MapFeature, real: &RealScale) -> bool {
@@ -294,7 +295,7 @@ pub fn in_locked_layer(feature: &MapFeature, real: &RealScale) -> bool {
     let layer = creator_layer(feature, real);
     real.creator_layers
         .iter()
-        .any(|entry| entry.id == layer && entry.locked)
+        .any(|entry| Some(entry.id) == layer && entry.locked)
 }
 
 pub fn declarations(cfg: &ts_rs::Config) -> Vec<String> {

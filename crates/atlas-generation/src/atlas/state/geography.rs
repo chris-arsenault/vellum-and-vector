@@ -13,7 +13,7 @@ use crate::{
         significance::measure,
     },
     hpc::BitSet,
-    identity::semantic_id,
+    identity::area_record_id,
     scale::{LengthUnit, MapScale},
     spatial::Overlay,
     water::{routing::LakeMembership, visibility::unwrap},
@@ -45,11 +45,7 @@ impl State {
             let b = self.spatial.bounds(&shape).map_err(io::Error::other)?;
             let key = format!("lake:{:.3}:{:.3}:{:.3}:{:.3}", b.0, b.1, b.2, b.3);
             self.physical.lakes.push(LakeSurface {
-                id: semantic_id(
-                    &self.scope.world,
-                    &format!("generated:{}", self.scope.area),
-                    &key,
-                )?,
+                id: area_record_id(self.scope.world, false, self.scope.area, &key),
                 geometry: shape.clone(),
                 level: MapScale::metres(level, LengthUnit::Native),
             });

@@ -20,8 +20,8 @@ pub fn underground_space(map: &MapDescriptor) -> Option<MapSpace> {
         .iter()
         .find(|space| space.id == map.primary_space_id)?;
     Some(MapSpace {
-        id: format!("{}:underground", surface.id),
-        parent_space_id: Some(surface.id.clone()),
+        id: crate::Id::v5(surface.id, b"underground"),
+        parent_space_id: Some(surface.id),
         bounds: map.bounds,
         metres_per_unit: surface.metres_per_unit,
         precision: surface.precision,
@@ -34,8 +34,9 @@ pub fn underground_space(map: &MapDescriptor) -> Option<MapSpace> {
     })
 }
 /// A surface hex's underground twin: the same cell of the grid under its own identity.
-pub fn cave_hex_id(surface_hex: &str) -> String {
-    format!("cave-{surface_hex}")
+/// The cave hex beneath a surface hex.
+pub fn cave_hex_id(surface_hex: crate::Id) -> crate::Id {
+    crate::Id::v5(surface_hex, b"cave")
 }
 
 /// One feature type as publication names it: `[layer, kind, subtype]` and its catalogue path.
@@ -122,7 +123,7 @@ pub fn opened(
 ) -> Result<(MapDescriptor, Vec<MapFeature>), String> {
     let mut next = map.clone();
     let space = match map.spaces.iter().find(|space| {
-        space.parent_space_id.as_deref() == Some(map.primary_space_id.as_str())
+        space.parent_space_id == Some(map.primary_space_id)
             && space.frame.floor.as_deref() == Some(UNDERGROUND_FLOOR)
     }) {
         Some(space) => space.clone(),
@@ -170,7 +171,7 @@ pub fn opened(
         .iter()
         .map(|hex| {
             let mut cave = hex.clone();
-            cave.id = cave_hex_id(&hex.id);
+            cave.id = cave_hex_id(hex.id);
             cave.space_id.clone_from(&space.id);
             cave.layer_id = CAVE_HEXES.into();
             cave.type_id = cave_hex_type().id;

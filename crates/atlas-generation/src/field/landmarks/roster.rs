@@ -6,9 +6,8 @@ use super::{
     siting::{self, Site},
     terrain::Terrain,
 };
-pub use crate::identity::semantic_id;
 use crate::{field::Field, hpc::TopK, noise::hash_unit, scale::MapScale};
-use atlas_map::{Geometry, Position};
+use atlas_map::{Geometry, Id, Position};
 use std::io;
 pub const LANDSCAPE_MIX: [Kind; 7] = [
     Kind::VolcanicMountain,
@@ -37,29 +36,28 @@ pub struct Taken {
     pub point: [f64; 2],
     pub reach: f64,
 }
-pub fn landmark_id(world: &str, area: &str, ordinal: usize) -> io::Result<String> {
-    semantic_id(world, "landmark", &format!("{area}:{ordinal}"))
+/// The landmark an area's roster places at `ordinal`: the area and ordinal are fixed-width.
+pub fn landmark_id(world: Id, area: Id, ordinal: usize) -> Id {
+    let mut name = b"landmark".to_vec();
+    name.extend_from_slice(&area.to_bytes());
+    name.extend_from_slice(&(ordinal as u64).to_be_bytes());
+    Id::v5(world, &name)
 }
-pub fn free_ordinals(
-    world: &str,
-    area: &str,
-    held: &[Landmark],
-    count: usize,
-) -> io::Result<Vec<usize>> {
+pub fn free_ordinals(world: Id, area: Id, held: &[Landmark], count: usize) -> Vec<usize> {
     let held = held
         .iter()
-        .map(|l| l.id.as_str())
+        .map(|l| l.id)
         // hpc-exempt: identity lookup among sparse named landmarks, never cell storage.
         .collect::<std::collections::HashSet<_>>();
     let mut free = Vec::new();
     let mut ordinal = 0;
     while free.len() < count {
-        if !held.contains(landmark_id(world, area, ordinal)?.as_str()) {
+        if !held.contains(&landmark_id(world, area, ordinal)) {
             free.push(ordinal);
         }
         ordinal += 1;
     }
-    Ok(free)
+    free
 }
 fn forming_epoch(kind: Kind, u: f64, epochs: usize) -> usize {
     let last = epochs.saturating_sub(1);
@@ -171,14 +169,15 @@ pub fn site(
         .clamp(&siting::fit(t, entry.kind, cell, &p)?, t.field.scale)?;
     Ok(Some((siting::shape(t, entry.kind, cell, &p)?, p)))
 }
-pub struct Identity<'a> {
-    pub world: &'a str,
-    pub area: &'a str,
-    pub space: &'a str,
+#[derive(Clone, Copy)]
+pub struct Identity {
+    pub world: Id,
+    pub area: Id,
+    pub space: Id,
 }
 pub fn generated(
     field: &Field,
-    identity: &Identity<'_>,
+    identity: &Identity,
     entry: &Entry,
     site: Site,
     parameters: Measures,
@@ -204,14 +203,14 @@ pub fn generated(
         }
     };
     Ok(Landmark {
-        id: landmark_id(identity.world, identity.area, entry.ordinal)?,
+        id: landmark_id(identity.world, identity.area, entry.ordinal),
         name: String::new(),
         kind: entry.kind,
         geometry,
         parameters,
         emplaced_at_epoch: entry.epoch as i32,
         origin: Some("generated".into()),
-        area_id: Some(identity.area.into()),
-        space_id: Some(identity.space.into()),
+        area_id: Some(identity.area),
+        space_id: Some(identity.space),
     })
 }

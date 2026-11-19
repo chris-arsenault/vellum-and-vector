@@ -16,7 +16,7 @@ pub struct Capture<'a> {
     pub parent_span: f64,
     pub rivers: Option<&'a DrainageNetwork>,
     pub spatial: &'a dyn SpatialKernel,
-    pub identity: &'a dyn Fn(&str) -> Option<RiverIdentity>,
+    pub identity: &'a dyn Fn(atlas_map::Id) -> Option<RiverIdentity>,
 }
 pub fn initialize<'a>() -> Command<Field, Capture<'a>> {
     Command::with_inputs(

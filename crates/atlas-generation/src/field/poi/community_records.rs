@@ -16,7 +16,7 @@ use crate::{
         places::{Place as KnownPlace, Places},
         traditions::Traditions,
     },
-    identity::semantic_id,
+    identity::area_record_id,
 };
 use atlas_map::Geometry;
 use std::{cell::Ref, io, rc::Rc};
@@ -31,25 +31,13 @@ pub trait CommunityState: MapState {
         language: Option<&str>,
     ) -> io::Result<Named>;
     fn regional_round(&self) -> usize;
-    fn seat_cell(&self, feature: &str) -> Option<usize>;
+    fn seat_cell(&self, feature: atlas_map::Id) -> Option<usize>;
 }
 pub fn developed(state: &impl CommunityState) -> bool {
     !state.regional() || state.regional_round() > 0
 }
-pub fn local_id(state: &impl MapState, key: &str) -> io::Result<String> {
-    semantic_id(
-        state.world_id(),
-        &format!(
-            "{}:{}",
-            if state.regional() {
-                "regional"
-            } else {
-                "generated"
-            },
-            state.area_id()
-        ),
-        key,
-    )
+pub fn local_id(state: &impl MapState, key: &str) -> atlas_map::Id {
+    area_record_id(state.world_id(), state.regional(), state.area_id(), key)
 }
 pub fn local_record(state: &impl MapState, record: Record<'_>) -> io::Result<Feature> {
     if !state.regional() {
@@ -88,7 +76,7 @@ pub fn once_written(state: &impl MapState, place: &Place) -> io::Result<Option<F
         return Ok(None);
     };
     Ok(
-        if state.regional() && state.features().get(&feature.id)?.is_some() {
+        if state.regional() && state.features().get(feature.id)?.is_some() {
             None
         } else {
             Some(feature.clone())
@@ -106,7 +94,7 @@ pub fn community_record(
         return Ok(None);
     };
     if regional {
-        return Ok(if workspace.get(&feature.id)?.is_some() {
+        return Ok(if workspace.get(feature.id)?.is_some() {
             None
         } else {
             Some(feature.clone())
@@ -172,7 +160,7 @@ fn captured(state: &impl CommunityState, kind: Kind) -> io::Result<Vec<Place>> {
         if !wanted {
             continue;
         }
-        let Some(anchor) = state.seat_cell(&feature.id).or_else(|| {
+        let Some(anchor) = state.seat_cell(feature.id).or_else(|| {
             state
                 .physical()
                 .and_then(|field| reads::feature_cell(field, &feature))
@@ -180,7 +168,7 @@ fn captured(state: &impl CommunityState, kind: Kind) -> io::Result<Vec<Place>> {
             continue;
         };
         let mut place = Place::at(kind, anchor, vec![anchor]);
-        place.id = feature.id.clone();
+        place.id = feature.id.to_string();
         place.feature = Some(feature);
         places.push(place);
     }

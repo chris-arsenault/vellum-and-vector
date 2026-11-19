@@ -109,7 +109,7 @@ fn station(
         return Line::new(geometry, spatial)?.value(&feature.attributes, channel, point);
     }
     let mut details = Vec::new();
-    for (id, detail) in &feature.detail {
+    for (&id, detail) in &feature.detail {
         if detail.needs_reconciliation
             || detail.state == State::Stale
             || detail.attributes.is_none()

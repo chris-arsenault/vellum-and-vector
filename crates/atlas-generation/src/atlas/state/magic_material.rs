@@ -84,7 +84,7 @@ impl State {
             .records
             .features
             .values(crate::features::FeatureSelection {
-                area_id: Some(&self.scope.area),
+                area_id: Some(self.scope.area),
                 ..Default::default()
             })?
             .collect::<std::io::Result<Vec<_>>>()?;

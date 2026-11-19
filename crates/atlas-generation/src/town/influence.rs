@@ -303,7 +303,7 @@ mod tests {
     fn lost_access_redirects_operating_work_to_a_reachable_counterparty() {
         use super::super::{catalogue::AccessUse, fabric::Endpoint};
         let first = OpportunitySource {
-            endpoint: Endpoint::External("port".into()),
+            endpoint: Endpoint::External(atlas_map::Id::from_name("port")),
             id: "port".into(),
             label: "Port".into(),
             position: [0., 0.],
@@ -363,7 +363,7 @@ mod tests {
             capability: 0.,
         };
         let healer = OpportunitySource {
-            endpoint: Endpoint::External("physic".into()),
+            endpoint: Endpoint::External(atlas_map::Id::from_name("physic")),
             id: "healer".into(),
             activity: Activity::Service,
             ..fields.clone()
@@ -389,7 +389,9 @@ mod tests {
     #[test]
     fn alternative_paths_do_not_duplicate_a_sources_demand() {
         let source = OpportunitySource {
-            endpoint: super::super::fabric::Endpoint::External("pilgrims".into()),
+            endpoint: super::super::fabric::Endpoint::External(atlas_map::Id::from_name(
+                "pilgrims",
+            )),
             id: "pilgrims".into(),
             label: "Pilgrims".into(),
             position: [0., 0.],
@@ -414,7 +416,7 @@ mod tests {
     #[test]
     fn blocked_access_and_competition_have_distinct_effects() {
         let source = OpportunitySource {
-            endpoint: super::super::fabric::Endpoint::External("road".into()),
+            endpoint: super::super::fabric::Endpoint::External(atlas_map::Id::from_name("road")),
             id: "road".into(),
             label: "Road traffic".into(),
             position: [0., 0.],
@@ -470,7 +472,7 @@ mod tests {
     #[test]
     fn customers_and_livelihoods_are_different_activity_requests() {
         let home = OpportunitySource {
-            endpoint: super::super::fabric::Endpoint::External("home".into()),
+            endpoint: super::super::fabric::Endpoint::External(atlas_map::Id::from_name("home")),
             id: "home".into(),
             label: "Households".into(),
             position: [0., 0.],
@@ -479,7 +481,7 @@ mod tests {
             capability: 0.,
         };
         let shop = OpportunitySource {
-            endpoint: super::super::fabric::Endpoint::External("shop".into()),
+            endpoint: super::super::fabric::Endpoint::External(atlas_map::Id::from_name("shop")),
             id: "shop".into(),
             label: "Trading workplaces".into(),
             position: [0., 0.],

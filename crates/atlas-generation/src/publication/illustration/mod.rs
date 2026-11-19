@@ -24,7 +24,7 @@ pub fn records(
     // hpc-exempt: published feature identities and derived GIS shapes, not numerical field storage.
     let mut shapes: BTreeMap<_, _> = features
         .iter()
-        .map(|f| (f.id.clone(), Some(f.geometry.clone())))
+        .map(|f| (f.id, Some(f.geometry.clone())))
         .collect();
     for layer in POLITICAL {
         let selected = features
@@ -69,7 +69,7 @@ pub fn records(
             (shape, _) => shape,
         };
         result.push(IllustrationGeometry {
-            feature_id: Some(feature.id.clone()),
+            feature_id: Some(feature.id),
             geometry: shape,
         });
     }

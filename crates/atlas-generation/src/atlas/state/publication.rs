@@ -22,7 +22,7 @@ pub(super) fn catalogue(
                 place,
                 state.records.features.as_mut(),
                 &Scope {
-                    world: &state.scope.world,
+                    world: state.scope.world,
                     owns_map_geography: state.scope.owns_map_geography,
                     is_descendant: &|child, ancestor| state.scope.is_descendant(child, ancestor),
                 },
@@ -40,14 +40,14 @@ impl poi::publication::PublicationState<Schedule<Self>> for State {
     fn link_on(&self, kind: AreaKind, cell: usize) -> io::Result<Option<HostLink>> {
         poi::area_hosting::link_on(self, kind, cell)
     }
-    fn retained_name(&self, feature: &str) -> bool {
-        self.records.retained_names.contains_key(feature)
+    fn retained_name(&self, feature: atlas_map::Id) -> bool {
+        self.records.retained_names.contains_key(&feature)
     }
     fn name_feature(&self, feature: &Feature) -> io::Result<Option<Named>> {
         self.naming.feature(&self.scope, feature)
     }
-    fn contracted(&self, feature: &str) -> bool {
-        self.scope.contracted.contains(feature)
+    fn contracted(&self, feature: atlas_map::Id) -> bool {
+        self.scope.contracted.contains(&feature)
     }
 }
 impl poi::wild_history::WildHistory for State {
@@ -60,9 +60,9 @@ impl State {
         use crate::features::{chart::Chart, generated::Publisher};
         let contracted = self.scope.contracted.contains(&feature.id);
         Publisher {
-            world: &self.scope.world,
-            area: &self.scope.area,
-            space: Some(&self.scope.space),
+            world: self.scope.world,
+            area: self.scope.area,
+            space: Some(self.scope.space),
             owns_map_geography: self.scope.owns_map_geography,
             chart: Chart {
                 domain: &self.scope.domain,
@@ -91,15 +91,15 @@ impl State {
             self,
             &ways::Options {
                 highways,
-                space: Some(&self.scope.space),
+                space: Some(self.scope.space),
                 owns_map_geography: self.scope.owns_map_geography,
             },
             progress,
         )?;
         let publisher = Publisher {
-            world: &self.scope.world,
-            area: &self.scope.area,
-            space: Some(&self.scope.space),
+            world: self.scope.world,
+            area: self.scope.area,
+            space: Some(self.scope.space),
             owns_map_geography: self.scope.owns_map_geography,
             chart: Chart {
                 domain: &self.scope.domain,

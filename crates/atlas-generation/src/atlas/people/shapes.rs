@@ -78,7 +78,7 @@ fn clip_water(state: &State, union: Option<Geometry>) -> io::Result<Option<Geome
             .map_err(io::Error::other)?;
     }
     for lake in state.records.features.values(FeatureSelection {
-        area_id: Some(&state.scope.area),
+        area_id: Some(state.scope.area),
         kind: Some("lake"),
         ..Default::default()
     })? {

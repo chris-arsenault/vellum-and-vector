@@ -24,7 +24,7 @@ impl Situation {
 }
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct Seat {
-    pub feature_id: String,
+    pub feature_id: atlas_map::Id,
     pub cell: usize,
     pub situation: Situation,
     pub radius: f64,
@@ -55,7 +55,7 @@ pub fn radius(parent_span: f64, span: f64) -> f64 {
 impl Field {
     pub fn known_seat(
         &self,
-        feature_id: String,
+        feature_id: atlas_map::Id,
         position: [f64; 2],
         river_side: bool,
         parent_span: f64,

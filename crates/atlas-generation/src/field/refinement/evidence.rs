@@ -40,7 +40,7 @@ pub fn river_entries(field: &Field) -> Vec<Entry> {
 pub fn faults(
     field: &mut Field,
     source: Option<&dyn FeatureReader>,
-    area: &str,
+    area: atlas_map::Id,
     width: f64,
     spatial: &dyn SpatialKernel,
 ) -> io::Result<()> {
@@ -85,7 +85,7 @@ pub fn faults(
             }
             for line in line_parts(&clipped) {
                 faults.push(Fault {
-                    id: feature.id.clone(),
+                    id: feature.id.to_string(),
                     width,
                     coordinates: line
                         .iter()

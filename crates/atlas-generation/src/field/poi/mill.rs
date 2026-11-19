@@ -69,9 +69,9 @@ fn found(state: &impl WorkState) -> io::Result<Vec<Place>> {
                     "flow".into(),
                     reads::discharge(state.field()?, cell)?.into(),
                 );
-                attributes.insert("seat".into(), land_places::record_id(state, seat)?.into());
+                attributes.insert("seat".into(), land_places::record_id(state, seat).into());
                 let mut place = Place::at(Kind::Mill, cell, vec![cell]);
-                place.id = community_records::local_id(state, &key)?;
+                place.id = community_records::local_id(state, &key).to_string();
                 place.feature = Some(community_records::local_record(
                     state,
                     Record {

@@ -3,8 +3,7 @@ use super::{
     network::{NetworkWorkspace, Node, Position, Reach},
     network_parts, Feature, FeatureWorkspace, State,
 };
-use crate::identity::semantic_id;
-use atlas_map::Geometry;
+use atlas_map::{Geometry, Id};
 use std::io;
 
 pub fn put(
@@ -12,7 +11,7 @@ pub fn put(
     feature: Feature,
     contracted: bool,
 ) -> io::Result<bool> {
-    let previous = workspace.get(&feature.id)?;
+    let previous = workspace.get(feature.id)?;
     if contracted
         || previous
             .is_some_and(|p| p.protected || p.state == State::Authored || !p.detail.is_empty())
@@ -23,9 +22,9 @@ pub fn put(
     Ok(true)
 }
 pub struct Publisher<'a> {
-    pub world: &'a str,
-    pub area: &'a str,
-    pub space: Option<&'a str>,
+    pub world: Id,
+    pub area: Id,
+    pub space: Option<Id>,
     pub owns_map_geography: bool,
     pub chart: Chart<'a>,
     pub precision: f64,
@@ -43,6 +42,19 @@ fn number(value: Option<&serde_json::Value>, otherwise: f64) -> io::Result<f64> 
     }
 }
 impl Publisher<'_> {
+    /// The junction at a point of a space: lines that meet there share it. A map that owns
+    /// its geography keeps its own junctions.
+    fn junction(&self, x: f64, y: f64) -> Id {
+        let owner = if self.owns_map_geography {
+            self.area
+        } else {
+            self.world
+        };
+        let mut name = self.space.unwrap_or(Id::NIL).to_bytes().to_vec();
+        name.extend_from_slice(&x.to_bits().to_be_bytes());
+        name.extend_from_slice(&y.to_bits().to_be_bytes());
+        Id::v5(Id::v5(owner, b"generated junction"), &name)
+    }
     pub fn network(
         &self,
         features: &mut dyn FeatureWorkspace,
@@ -54,14 +66,10 @@ impl Publisher<'_> {
             return Ok(());
         }
         let parts = network_parts::parts(&feature, &self.chart, self.precision)?;
-        let count = parts.len();
         for (at, part) in parts.into_iter().enumerate() {
-            let key = if count == 1 {
-                feature.id.clone()
-            } else {
-                format!("{}:{at}", feature.id)
-            };
-            self.part(networks, &feature, part, &key)?;
+            // One reach per part of the feature's line.
+            let reach = Id::v5(feature.id, &(at as u32).to_be_bytes());
+            self.part(networks, &feature, part, reach)?;
         }
         Ok(())
     }
@@ -70,7 +78,7 @@ impl Publisher<'_> {
         networks: &mut dyn NetworkWorkspace,
         feature: &Feature,
         part: network_parts::Part,
-        key: &str,
+        reach_id: Id,
     ) -> io::Result<()> {
         let (Some(first), Some(last)) = (part.coordinates.first(), part.coordinates.last()) else {
             return Err(io::Error::other("A network part has no endpoints"));
@@ -90,28 +98,19 @@ impl Publisher<'_> {
                 )?,
                 None => z,
             };
-            let scope = if self.owns_map_geography {
-                format!("generated-junction:{}", self.area)
-            } else {
-                "generated-junction".into()
-            };
             nodes.push(Node {
-                id: semantic_id(
-                    self.world,
-                    &scope,
-                    &serde_json::to_string(&(self.space, x, y))?,
-                )?,
+                id: self.junction(x, y),
                 kind: feature.kind.clone(),
                 position: Position { x, y, z: height },
-                space_id: self.space.map(str::to_owned),
+                space_id: self.space.map(|space| space.to_string()),
                 water_level: None,
             });
         }
         let reach = Reach {
-            id: semantic_id(self.world, "generated-reach", key)?,
-            feature_id: feature.id.clone(),
-            start: nodes[0].id.clone(),
-            end: nodes[1].id.clone(),
+            id: reach_id,
+            feature_id: feature.id,
+            start: nodes[0].id,
+            end: nodes[1].id,
             geometry: Geometry::LineString {
                 coordinates: part.coordinates,
             },

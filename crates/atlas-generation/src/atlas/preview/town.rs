@@ -52,7 +52,7 @@ pub struct Overview {
 }
 #[derive(Serialize)]
 pub struct Settlement {
-    key: String,
+    key: atlas_map::Id,
     name: String,
     centre: Point,
     template: &'static str,
@@ -75,7 +75,7 @@ pub fn capture(fabric: &Fabric, stage: Stage, site: &impl TownWriter) -> io::Res
                 .map(|i| street_name(site, town, i))
                 .collect::<io::Result<Vec<_>>>()?;
             Ok(Settlement {
-                key: town.seat.key.clone(),
+                key: town.seat.key,
                 name: town.seat.name.clone(),
                 centre: town.seat.centre,
                 template: town.template.selected.name(),

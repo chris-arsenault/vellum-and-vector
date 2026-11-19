@@ -35,7 +35,7 @@ impl Product<'_> {
 }
 /// A surface hex becomes its underground twin: same cell of the grid, its own identity.
 pub fn underground_hex(mut hex: Feature) -> Feature {
-    hex.id = underground_hex_id(&hex.id);
+    hex.id = underground_hex_id(hex.id);
     hex.layer_id = "caveHexes".into();
     hex
 }
@@ -78,11 +78,11 @@ mod tests {
             map_only: None,
             place_id: None,
             footprint: None,
-            id: "hex:area:1:2".into(),
+            id: atlas_map::Id::from_name("hex"),
             name: "Hex 1, 2".into(),
             kind: "hex".into(),
             layer_id: "hexes".into(),
-            area_id: "area".into(),
+            area_id: atlas_map::Id::from_name("area"),
             geometry: Geometry::Point {
                 coordinates: atlas_map::Position::xy(0.0, 0.0),
             },
@@ -98,9 +98,10 @@ mod tests {
         };
         let cave = underground_hex(hex.clone());
         assert_eq!(
-            (cave.id.as_str(), cave.layer_id.as_str()),
-            ("cave-hex:area:1:2", "caveHexes")
+            (cave.id, cave.layer_id.as_str()),
+            (atlas_map::underground::cave_hex_id(hex.id), "caveHexes")
         );
+        assert_ne!(cave.id, hex.id);
         assert_eq!(cave.geometry, hex.geometry);
         assert!(crate::publication::layers::underground(CAVE_HEXES));
         assert!(crate::publication::layers::underground(
@@ -139,9 +140,10 @@ mod tests {
             catalogue.describe("caveHexes", "hex", &none),
             atlas_map::underground::cave_hex_type()
         );
+        let hex = atlas_map::Id::from_name("hex");
         assert_eq!(
-            underground_hex_id("hex:a:1:2"),
-            atlas_map::underground::cave_hex_id("hex:a:1:2")
+            underground_hex_id(hex),
+            atlas_map::underground::cave_hex_id(hex)
         );
     }
 }

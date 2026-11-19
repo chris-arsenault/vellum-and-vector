@@ -33,7 +33,7 @@ impl State {
         let chart = self.chart();
         let mut woodland = Vec::new();
         for feature in self.records.features.values(FeatureSelection {
-            area_id: Some(&self.scope.area),
+            area_id: Some(self.scope.area),
             kind: Some("forest"),
             ..Default::default()
         })? {

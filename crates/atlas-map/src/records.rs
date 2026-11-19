@@ -1,4 +1,4 @@
-use crate::{Bounds, DisplayUnit, Geometry, MapRef, Position, RegionGeometry};
+use crate::{Bounds, DisplayUnit, Geometry, Id, MapRef, Position, RegionGeometry};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{collections::BTreeMap, sync::Arc};
@@ -7,9 +7,9 @@ use ts_rs::TS;
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MapFeature {
-    pub id: String,
-    pub space_id: String,
-    pub entity_id: Option<String>,
+    pub id: Id,
+    pub space_id: Id,
+    pub entity_id: Option<Id>,
     pub layer_id: String,
     pub name: Option<String>,
     pub kind: String,
@@ -25,7 +25,11 @@ pub struct MapFeature {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MapRelation {
-    pub target_id: String,
+    pub target_id: Id,
+    /// The map the target lies on, when it is not this map (a `connectsTo` to a parent map).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub target_map_id: Option<Id>,
     pub target_name: String,
     pub kind: String,
 }
@@ -52,7 +56,7 @@ pub struct MapColumn {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MapEntity {
-    pub id: String,
+    pub id: Id,
     pub name: String,
     pub kind: String,
     pub people: Option<f64>,
@@ -64,7 +68,7 @@ pub struct MapEntity {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct IllustrationGeometry {
-    pub feature_id: Option<String>,
+    pub feature_id: Option<Id>,
     pub geometry: Option<Geometry>,
 }
 
@@ -107,7 +111,7 @@ pub struct SampleAttribute {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct MapSample {
     pub id: String,
-    pub space_id: String,
+    pub space_id: Id,
     pub footprint: RegionGeometry,
     pub window: SampleWindow,
     pub cell_span: f64,
@@ -142,7 +146,7 @@ pub struct InspectionSection {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Inspection {
     pub reference: MapRef,
-    pub space_id: String,
+    pub space_id: Id,
     pub position: Position,
     pub samples: Vec<SampleValue>,
     pub features: Vec<MapFeature>,
@@ -153,10 +157,10 @@ pub struct Inspection {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct HistoryEntry {
-    pub id: String,
+    pub id: Id,
     pub title: String,
     pub description: String,
     pub epoch: Option<f64>,
-    pub feature_ids: Vec<String>,
+    pub feature_ids: Vec<Id>,
     pub attributes: BTreeMap<String, Value>,
 }

@@ -1,6 +1,6 @@
 //! Captured geographic ownership and coordinate frames used when publishing a map.
 use crate::atlas::resolution::Profile;
-use atlas_map::Geometry;
+use atlas_map::{Geometry, Id};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -46,13 +46,13 @@ impl RealScaleMap {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Area {
-    pub id: String,
+    pub id: Id,
     pub name: String,
-    pub parent_id: Option<String>,
-    pub space_id: Option<String>,
+    pub parent_id: Option<Id>,
+    pub space_id: Option<Id>,
     pub profile: Profile,
     pub context: Option<String>,
-    pub region_id: Option<String>,
+    pub region_id: Option<Id>,
     pub footprint: Geometry,
     pub frame: Frame,
     pub map: Option<MapOwnership>,
@@ -64,51 +64,51 @@ impl Area {
 }
 #[derive(Clone, Serialize, Deserialize)]
 pub struct Context {
-    pub id: String,
-    // hpc-exempt: named area ancestry, not cell-indexed data.
-    pub areas: BTreeMap<String, Area>,
+    pub id: Id,
+    // hpc-exempt: area ancestry by identity, not cell-indexed data.
+    pub areas: BTreeMap<Id, Area>,
 }
 impl Context {
-    pub fn area(&self, id: &str) -> Result<&Area, String> {
+    pub fn area(&self, id: Id) -> Result<&Area, String> {
         self.areas
-            .get(id)
+            .get(&id)
             .ok_or_else(|| format!("Missing area context: {id}"))
     }
-    pub fn lineage<'a>(&'a self, id: &str) -> Result<Vec<&'a Area>, String> {
+    pub fn lineage(&self, id: Id) -> Result<Vec<&Area>, String> {
         let mut seen = BTreeSet::new();
         let mut result = Vec::new();
         let mut next = Some(id);
         while let Some(id) = next {
-            if !seen.insert(id.to_owned()) {
+            if !seen.insert(id) {
                 return Err("Geographic ancestry contains a cycle".into());
             }
             let area = self.area(id)?;
             result.push(area);
-            next = area.parent_id.as_deref();
+            next = area.parent_id;
         }
         Ok(result)
     }
-    pub fn space(&self, id: &str) -> Result<&str, String> {
+    pub fn space(&self, id: Id) -> Result<Id, String> {
         for area in self.lineage(id)? {
-            if let Some(id) = &area.space_id {
+            if let Some(id) = area.space_id {
                 return Ok(id);
             }
             if area.profile == Profile::Interior
                 || area.context.as_deref() == Some("cave")
                 || area.frame.floor.is_some()
             {
-                return Ok(&area.id);
+                return Ok(area.id);
             }
         }
-        Ok(&self.id)
+        Ok(self.id)
     }
-    pub fn descendant(&self, child: &str, ancestor: &str) -> Result<bool, String> {
+    pub fn descendant(&self, child: Id, ancestor: Id) -> Result<bool, String> {
         Ok(self.lineage(child)?.iter().any(|area| area.id == ancestor))
     }
-    pub fn geography_areas(&self, id: &str) -> Result<Vec<&str>, String> {
+    pub fn geography_areas(&self, id: Id) -> Result<Vec<Id>, String> {
         let mut areas = Vec::new();
         for area in self.lineage(id)? {
-            areas.push(area.id.as_str());
+            areas.push(area.id);
             if area.owns_geography() {
                 break;
             }

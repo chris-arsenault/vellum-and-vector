@@ -13,7 +13,7 @@ use crate::{
 use atlas_map::Geometry;
 use std::io;
 pub struct Scope<'a> {
-    pub identity: Identity<'a>,
+    pub identity: Identity,
     pub footprint: &'a Geometry,
     pub epochs: usize,
     pub regional: bool,
@@ -44,9 +44,7 @@ pub fn selected(
 ) -> io::Result<Vec<usize>> {
     let mut selected = Vec::new();
     for (index, l) in landmarks.iter().enumerate() {
-        if l.space_id
-            .as_deref()
-            .is_some_and(|id| id != scope.identity.space)
+        if l.space_id.is_some_and(|id| id != scope.identity.space)
             || l.emplaced_at_epoch >= scope.epochs as i32
         {
             continue;
@@ -92,7 +90,7 @@ pub fn roster(
         scope.identity.area,
         landmarks,
         landscape + magic,
-    )?;
+    );
     let mut entries = roster::roster(seed, &ordinals[..landscape], scope.epochs, &LANDSCAPE_MIX);
     entries.extend(roster::roster(
         seed ^ 0x5a5a,
@@ -112,7 +110,7 @@ pub fn site_forming(
     landmarks: &mut Vec<Landmark>,
     entries: &mut [Entry],
     input: &Forming<'_>,
-) -> io::Result<Vec<String>> {
+) -> io::Result<Vec<atlas_map::Id>> {
     let epoch = input.tracking.epoch;
     if input.scope.regional || !entries.iter().any(|e| !e.sited && e.epoch <= epoch) {
         return Ok(vec![]);
@@ -153,7 +151,7 @@ pub fn site_forming(
             continue;
         }
         entry.sited = true;
-        sited.push(landmark.id.clone());
+        sited.push(landmark.id);
         landmarks.push(landmark);
         standing.push(Taken { point, reach });
     }

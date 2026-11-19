@@ -34,7 +34,7 @@ pub struct Domain {
     pub services: Services,
     pub original: world::Sources,
     // hpc-exempt: located area identities, not cell storage.
-    pub area_spaces: BTreeMap<String, String>,
+    pub area_spaces: BTreeMap<atlas_map::Id, atlas_map::Id>,
     pub magic_sources: Vec<Source>,
     pub drainage: Option<crate::water::captured::DrainageNetwork>,
 }
@@ -42,7 +42,7 @@ pub struct Domain {
 pub struct Products {
     // hpc-exempt: published channel and layer identities.
     pub fields: BTreeSet<String>,
-    pub crossed_features: BTreeSet<String>,
+    pub crossed_features: BTreeSet<atlas_map::Id>,
 }
 pub struct Run {
     pub configuration: Configuration,

@@ -22,7 +22,7 @@ pub struct Locate<'a> {
     pub epoch: i32,
     pub activity: f64,
     pub placed: &'a [placed::PlacedSource],
-    pub space_id: &'a str,
+    pub space_id: atlas_map::Id,
     pub people: People<'a>,
     pub other_systems: &'a [ReadBand<f64>],
     pub meetings: &'a [ReadBand<f64>],

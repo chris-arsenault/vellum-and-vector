@@ -58,17 +58,20 @@ pub fn sized_footprint(
 /// Key numbers in reading order: hex rows from the north, west to east along each row, so a
 /// reader finds number 1 at the top left.
 // hpc-exempt: published place identities keyed to their key numbers, not cell data.
-pub fn key_numbers(places: &[(String, [f64; 2])], grid: &HexGrid) -> BTreeMap<String, u32> {
-    let mut order: Vec<(i32, f64, &str)> = places
+pub fn key_numbers(
+    places: &[(atlas_map::Id, [f64; 2])],
+    grid: &HexGrid,
+) -> BTreeMap<atlas_map::Id, u32> {
+    let mut order: Vec<(i32, f64, atlas_map::Id)> = places
         .iter()
-        .map(|(id, point)| (-grid.hex_at(*point).r, point[0], id.as_str()))
+        .map(|&(id, point)| (-grid.hex_at(point).r, point[0], id))
         .collect();
     // hpc-exempt: reading order over a few hundred published places, not a cell ordering.
-    order.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)).then(a.2.cmp(b.2)));
+    order.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)).then(a.2.cmp(&b.2)));
     order
         .into_iter()
         .zip(1u32..)
-        .map(|((_, _, id), number)| (id.to_owned(), number))
+        .map(|((_, _, id), number)| (id, number))
         .collect()
 }
 /// Where a published place stands for its key: its representative point, else its first
@@ -85,7 +88,10 @@ pub fn place_point(feature: &Feature) -> Option<[f64; 2]> {
 }
 /// Every catalogue place on a real-scale map, numbered for its key. Other maps carry no key.
 // hpc-exempt: published place identities keyed to their key numbers, not cell data.
-pub fn map_key(vectors: &Vectors<'_>, map: &MapDescriptor) -> io::Result<BTreeMap<String, u32>> {
+pub fn map_key(
+    vectors: &Vectors<'_>,
+    map: &MapDescriptor,
+) -> io::Result<BTreeMap<atlas_map::Id, u32>> {
     let Some(real) = &map.real_scale else {
         // hpc-exempt: an empty key for a map with no real scale.
         return Ok(BTreeMap::new());

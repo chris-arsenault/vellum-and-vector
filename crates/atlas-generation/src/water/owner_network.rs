@@ -31,7 +31,7 @@ impl Water {
         &mut self,
         input: &super::captured::DrainageNetwork,
         context: super::inherit::RiverInheritance<'_>,
-        feature: impl Fn(&str) -> Option<super::captured::RiverIdentity>,
+        feature: impl Fn(atlas_map::Id) -> Option<super::captured::RiverIdentity>,
     ) -> crate::spatial::SpatialResult<()> {
         if self.rivers.reaches().next().is_some() || !self.rivers.entries.is_empty() || !input.input
         {

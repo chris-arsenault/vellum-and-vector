@@ -713,7 +713,9 @@ mod tests {
         let land = Conditions::default();
         let frontage = |activity, travel_cost| {
             let source = OpportunitySource {
-                endpoint: crate::town::fabric::Endpoint::External("source".into()),
+                endpoint: crate::town::fabric::Endpoint::External(atlas_map::Id::from_name(
+                    "source",
+                )),
                 id: "source".into(),
                 label: "Occupied premises".into(),
                 position: [0., 0.],

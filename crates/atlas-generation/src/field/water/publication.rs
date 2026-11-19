@@ -44,7 +44,7 @@ pub fn retain_names(
     executor: &mut Executor<Field>,
     command: &Command<Field, Vec<RiverPublication>>,
     features: &mut dyn FeatureWorkspace,
-    area: &str,
+    area: atlas_map::Id,
     network: &mut DrainageNetwork,
 ) -> io::Result<()> {
     if network.input {

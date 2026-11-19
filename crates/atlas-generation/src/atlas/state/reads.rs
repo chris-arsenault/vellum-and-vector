@@ -66,11 +66,11 @@ impl poi::map_records::MapState for State {
     fn footprint(&self) -> &Geometry {
         &self.scope.footprint
     }
-    fn world_id(&self) -> &str {
-        &self.scope.world
+    fn world_id(&self) -> atlas_map::Id {
+        self.scope.world
     }
-    fn area_id(&self) -> &str {
-        &self.scope.area
+    fn area_id(&self) -> atlas_map::Id {
+        self.scope.area
     }
     fn area_name(&self) -> &str {
         &self.scope.area_name
@@ -88,8 +88,8 @@ impl poi::map_records::MapState for State {
         self.naming
             .geographic(&self.scope, key, kind, geometry, attributes)
     }
-    fn retained_feature_name(&self, id: &str) -> Option<&Named> {
-        self.records.retained_names.get(id)
+    fn retained_feature_name(&self, id: atlas_map::Id) -> Option<&Named> {
+        self.records.retained_names.get(&id)
     }
 }
 impl poi::river_courses::RiverState for State {
@@ -115,7 +115,7 @@ impl poi::community_records::CommunityState for State {
     fn regional_round(&self) -> usize {
         self.regional.as_ref().map_or(0, |r| r.round)
     }
-    fn seat_cell(&self, feature: &str) -> Option<usize> {
+    fn seat_cell(&self, feature: atlas_map::Id) -> Option<usize> {
         self.regional
             .as_ref()?
             .evidence

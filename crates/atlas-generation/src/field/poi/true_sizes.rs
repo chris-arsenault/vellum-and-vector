@@ -205,8 +205,12 @@ pub fn crossing_size(river_width: f64, breadth: f64, bridged: bool) -> Size {
 /// A stable roll in [0, 1) from a place's identity, so a place keeps its size wherever it
 /// is published.
 pub fn roll(id: &str, salt: u64) -> f64 {
+    roll_bytes(id.as_bytes(), salt)
+}
+/// The same roll from an identity's bytes.
+pub fn roll_bytes(id: &[u8], salt: u64) -> f64 {
     let mut hash = 0xcbf2_9ce4_8422_2325u64 ^ salt.wrapping_mul(0x9e37_79b9_7f4a_7c15);
-    for byte in id.bytes() {
+    for &byte in id {
         hash ^= u64::from(byte);
         hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
     }

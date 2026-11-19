@@ -6,13 +6,11 @@ use crate::{
 
 pub fn present(composition: &Composition<'_>, feature: &Feature) -> SpatialResult<Option<Feature>> {
     let context = composition.context;
-    let owner = context.area(&feature.area_id)?;
+    let owner = context.area(feature.area_id)?;
     let area = context.area(composition.area)?;
-    if context.space(&owner.id)? != context.space(&area.id)?
+    if context.space(owner.id)? != context.space(area.id)?
         || owner.profile > area.profile
-        || !context
-            .geography_areas(&area.id)?
-            .contains(&owner.id.as_str())
+        || !context.geography_areas(area.id)?.contains(&owner.id)
     {
         return Ok(None);
     }
@@ -47,7 +45,7 @@ pub fn present(composition: &Composition<'_>, feature: &Feature) -> SpatialResul
     let mut result = feature.clone();
     result.geometry = geometry;
     result.footprint = footprint;
-    for area in context.lineage(&area.id)? {
+    for area in context.lineage(area.id)? {
         let Some(detail) = feature.detail.get(&area.id) else {
             continue;
         };

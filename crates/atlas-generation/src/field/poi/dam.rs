@@ -65,7 +65,7 @@ fn raised(state: &impl DamState) -> io::Result<Vec<RememberedWork>> {
         attributes.insert("resolved".into(), true.into());
         attributes.insert(
             "atPlace".into(),
-            community_records::local_id(state, state.known_places().standing_place(&work.place))?
+            community_records::local_id(state, state.known_places().standing_place(&work.place))
                 .into(),
         );
         records.push(RememberedWork { key: work.id.clone(), cell: work.cell, attributes, causes: Some(vec![format!("{}: the people of the place beside it dammed the river here, and the water behind it spread over {} of this map's cells.", work.built, work.holds)]) });

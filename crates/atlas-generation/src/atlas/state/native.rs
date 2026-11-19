@@ -13,7 +13,7 @@ impl State {
     pub fn compose_authored_surface(&mut self) -> ExecutionResult<()> {
         self.physical.surface.compose_authored(
             &self.physical.protection.inputs,
-            &self.scope.space,
+            self.scope.space,
             self.spatial.as_ref(),
         )?;
         Ok(())

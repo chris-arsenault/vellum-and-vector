@@ -66,7 +66,7 @@ impl<S, Schedule> Catalogue<S, Schedule> {
         let offers = entry.roles.people.offers.value()?;
         Some(move |state: &S, cell: usize| {
             let mut place = super::values::Place::at(entry.id, cell, vec![cell]);
-            place.id = feature.id.clone();
+            place.id = feature.id.to_string();
             place.feature = Some(feature.clone());
             offers(state, &place)
         })

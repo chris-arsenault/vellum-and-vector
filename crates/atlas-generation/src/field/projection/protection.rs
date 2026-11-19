@@ -8,7 +8,7 @@ impl Surface {
     pub fn compose_authored(
         &mut self,
         inputs: &[Input],
-        space: &str,
+        space: atlas_map::Id,
         spatial: &dyn SpatialKernel,
     ) -> io::Result<()> {
         if inputs.is_empty() {
@@ -18,7 +18,7 @@ impl Surface {
             .map(|cell| self.grid.position(cell).map(|[x, y]| Position::xy(x, y)))
             .collect::<io::Result<Vec<_>>>()?;
         for input in inputs {
-            if input.space.as_ref().is_some_and(|s| s != space) {
+            if input.space.is_some_and(|s| s != space) {
                 continue;
             }
             let covers = spatial

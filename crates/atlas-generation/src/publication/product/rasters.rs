@@ -282,9 +282,8 @@ impl Product<'_> {
                 space_id: self
                     .descriptor
                     .context
-                    .space(&field.area)
-                    .map_err(io::Error::other)?
-                    .into(),
+                    .space(field.area)
+                    .map_err(io::Error::other)?,
                 bounds: grid.bounds,
                 attribution: Vec::new(),
                 catalog: self.fields.catalog(channel),

@@ -119,7 +119,7 @@ pub(super) fn schedule() -> Schedule<State> {
         })?;
         evidence.seats.extend(state.field().known_seats(
             state.records.features.as_ref(),
-            &state.scope.area,
+            state.scope.area,
             regional.parent_span,
         )?);
         Ok(())

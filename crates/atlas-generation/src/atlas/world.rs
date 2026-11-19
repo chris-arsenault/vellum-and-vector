@@ -19,10 +19,10 @@ use std::{collections::BTreeSet, rc::Rc};
 pub struct Sources {
     pub features: Rc<dyn FeatureReader>,
     pub networks: Rc<dyn NetworkReader>,
-    pub contracted: BTreeSet<String>,
+    pub contracted: BTreeSet<atlas_map::Id>,
 }
 impl Sources {
-    fn original<'a>(&'a self, contracted: &'a dyn Fn(&str) -> bool) -> Original<'a> {
+    fn original<'a>(&'a self, contracted: &'a dyn Fn(atlas_map::Id) -> bool) -> Original<'a> {
         Original {
             features: self.features.as_ref(),
             networks: self.networks.as_ref(),
@@ -169,7 +169,7 @@ impl Operations {
             vec![],
             move |state: &mut State, _| {
                 let enabled = |id| geography.selection.get(id).is_some_and(|s| s.enabled);
-                let contracted = |id: &str| geography.original.contracted.contains(id);
+                let contracted = |id: atlas_map::Id| geography.original.contracted.contains(&id);
                 let original = geography.original.original(&contracted);
                 state.finish_geography(
                     GeographicPublication {
@@ -198,7 +198,7 @@ impl Operations {
             CommandKind::Publish,
             vec![],
             move |state: &mut State, _| {
-                let contracted = |id: &str| input.original.contracted.contains(id);
+                let contracted = |id: atlas_map::Id| input.original.contracted.contains(&id);
                 let original = input.original.original(&contracted);
                 state.finish_magic_places(
                     &mut input.publication.places.borrow_mut(),

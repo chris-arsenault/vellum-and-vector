@@ -54,7 +54,7 @@ impl State {
     pub fn retain_geographic_identities(
         &mut self,
         original: &Original<'_>,
-        generated: &[String],
+        generated: &[atlas_map::Id],
     ) -> io::Result<()> {
         let tolerance = self.field().mesh().spacing() * 2.0;
         geographic_identity::retain(
@@ -63,7 +63,7 @@ impl State {
                 networks: self.records.networks.as_mut(),
             },
             original,
-            &self.scope.area,
+            self.scope.area,
             tolerance,
             generated,
             self.spatial.as_ref(),

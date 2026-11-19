@@ -5,9 +5,9 @@ use crate::magic::{
 };
 use std::io;
 pub struct PlacedSource {
-    pub id: String,
+    pub id: atlas_map::Id,
     pub system_id: String,
-    pub space_id: Option<String>,
+    pub space_id: Option<atlas_map::Id>,
     pub starts_at_epoch: i32,
     pub strength: f64,
     pub radius: f64,
@@ -18,16 +18,13 @@ pub fn locate(
     field: &mut MagicField,
     context: Context,
     sources: &[PlacedSource],
-    space_id: &str,
+    space_id: atlas_map::Id,
 ) -> io::Result<()> {
     let origin = &field.definition.origins[context.origin];
     let offset = env.mesh.origin();
     for source in sources {
         if source.system_id != field.definition.id
-            || source
-                .space_id
-                .as_ref()
-                .is_some_and(|space| space != space_id)
+            || source.space_id.is_some_and(|space| space != space_id)
             || source.starts_at_epoch > context.epoch
         {
             continue;
@@ -54,7 +51,7 @@ pub fn locate(
             .set(cell, source.radius)?;
         field.located.push(LocatedSource {
             origin: String::new(),
-            id: source.id.clone(),
+            id: source.id.to_string(),
             x,
             y,
             radius: source.radius,

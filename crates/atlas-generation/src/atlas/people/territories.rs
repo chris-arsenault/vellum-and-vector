@@ -12,7 +12,7 @@ use crate::{
         poi::map_records::{self, Record},
     },
     human::identity,
-    identity::semantic_id,
+    identity::area_record_id,
     scale::{AreaUnit, MapScale},
     storage::Band,
 };
@@ -72,12 +72,7 @@ fn territory(
     if let Some(seat) = &seat {
         attributes.insert(
             "seat".into(),
-            semantic_id(
-                &state.scope.world,
-                &format!("generated:{}", state.scope.area),
-                seat,
-            )?
-            .into(),
+            area_record_id(state.scope.world, false, state.scope.area, seat).into(),
         );
     }
     let mut feature = map_records::generated(

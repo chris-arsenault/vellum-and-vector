@@ -20,7 +20,7 @@ impl State {
     fn walking_places(&self) -> io::Result<Vec<(Feature, TrailRole)>> {
         let mut places = Vec::new();
         for feature in self.records.features.values(FeatureSelection {
-            area_id: Some(&self.scope.area),
+            area_id: Some(self.scope.area),
             ..Default::default()
         })? {
             let feature = feature?;
@@ -162,17 +162,12 @@ impl State {
         };
         let sources: Vec<usize> = places.iter().map(|(_, cell)| *cell).collect();
         let (laid, uses) = trails::lay(&graph, &sources, &ends);
-        let mut ids: Vec<String> = Vec::new();
+        let mut ids: Vec<atlas_map::Id> = Vec::new();
         for trail in &laid {
             let place = &places[trail.source].0;
-            let feature = self.trail_record(
-                trail,
-                place,
-                &positions,
-                &uses,
-                trail.joins.map(|t| ids[t].as_str()),
-            )?;
-            ids.push(feature.id.clone());
+            let feature =
+                self.trail_record(trail, place, &positions, &uses, trail.joins.map(|t| ids[t]))?;
+            ids.push(feature.id);
             self.write_network(feature)?;
         }
         Ok(())
@@ -183,7 +178,7 @@ impl State {
         place: &Feature,
         positions: &[[f64; 2]],
         uses: &[u32],
-        joins: Option<&str>,
+        joins: Option<atlas_map::Id>,
     ) -> io::Result<Feature> {
         let points: Vec<[f64; 2]> = trail.cells.iter().map(|&c| positions[c]).collect();
         let widths: Vec<[f64; 2]> = trail
@@ -225,12 +220,12 @@ impl State {
             attributes,
         )?;
         feature.relations.push(Relation {
-            target_id: place.id.clone(),
+            target_id: place.id,
             kind: "leadsTo".into(),
         });
         if let Some(earlier) = joins {
             feature.relations.push(Relation {
-                target_id: earlier.into(),
+                target_id: earlier,
                 kind: "joins".into(),
             });
         }

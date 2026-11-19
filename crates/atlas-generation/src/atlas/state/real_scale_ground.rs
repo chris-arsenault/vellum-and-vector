@@ -52,9 +52,9 @@ impl State {
     ) -> io::Result<Feature> {
         attributes.insert("nameStatus".into(), "label".into());
         RegionalPublisher {
-            world: &self.scope.world,
-            area: &self.scope.area,
-            space: Some(&self.scope.space),
+            world: self.scope.world,
+            area: self.scope.area,
+            space: Some(self.scope.space),
             chart: Chart {
                 domain: &self.scope.domain,
                 bounds: self.scope.domain_bounds,
@@ -82,7 +82,7 @@ impl State {
         self.records
             .features
             .values(FeatureSelection {
-                area_id: Some(&self.scope.area),
+                area_id: Some(self.scope.area),
                 layer_id: Some(layer),
                 kind: None,
             })?
@@ -291,7 +291,8 @@ impl State {
         let seed = self
             .scope
             .area
-            .bytes()
+            .to_bytes()
+            .into_iter()
             .fold(0xcbf2_9ce4_8422_2325u64, |hash, byte| {
                 (hash ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01b3)
             });

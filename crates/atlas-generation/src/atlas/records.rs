@@ -18,7 +18,7 @@ pub fn prepare(state: &mut State, domains: &[String]) -> io::Result<()> {
     let mut contracted = state.scope.contracted.clone();
     for feature in &features {
         state.records.retained_names.insert(
-            feature.id.clone(),
+            feature.id,
             Named {
                 name: feature.name.clone(),
                 metadata: feature
@@ -51,17 +51,17 @@ pub fn prepare(state: &mut State, domains: &[String]) -> io::Result<()> {
         {
             continue;
         }
-        state.records.features.remove(&feature.id)?;
+        state.records.features.remove(feature.id)?;
         let reaches = state
             .records
             .networks
             .reaches(network::Selection {
-                feature_id: Some(&feature.id),
+                feature_id: Some(feature.id),
                 ..Default::default()
             })?
             .collect::<io::Result<Vec<_>>>()?;
         for reach in reaches {
-            state.records.networks.remove_reach(&reach.id)?;
+            state.records.networks.remove_reach(reach.id)?;
         }
     }
     Ok(())
@@ -96,7 +96,8 @@ fn speakers(state: &State, feature: &Feature) -> io::Result<Vec<(String, f64)>> 
         };
         for (code, people) in held(&state.field().people().column(cell)?, Tradition::Tongue) {
             if let Some(tongue) = memory.traditions.get(code) {
-                *weights.entry(tongue.entity.clone()).or_default() += people;
+                // Languages reach the naming library as its text keys.
+                *weights.entry(tongue.entity.to_string()).or_default() += people;
             }
         }
     }
@@ -109,7 +110,7 @@ fn unnamed(state: &State, original: &Sources, feature: &Feature) -> io::Result<b
     Ok(feature.area_id == state.scope.area
         && feature.state == FeatureState::Generated
         && !feature.protected
-        && original.features.get(&feature.id)?.is_none()
+        && original.features.get(feature.id)?.is_none()
         && !feature.attributes.get("namedInEra").is_some_and(truthy)
         && feature.attributes.get("namingKind").is_some_and(truthy))
 }
@@ -149,7 +150,7 @@ pub fn finalize(
                 let memory = state.people.memory.borrow();
                 let name = memory
                     .entities
-                    .get(&language)
+                    .get(&language.parse().unwrap_or_default())
                     .map_or(language.as_str(), |e| e.name.as_str());
                 feature
                     .causes

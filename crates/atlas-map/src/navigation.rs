@@ -19,7 +19,7 @@ pub struct RegionScale {
 pub struct MapRegion {
     pub id: String,
     pub name: String,
-    pub space_id: String,
+    pub space_id: crate::Id,
     pub parent_id: Option<String>,
     pub geometry: RegionGeometry,
     pub child: Option<MapRef>,
@@ -61,7 +61,7 @@ pub enum NavigationChange {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct RegionQuery {
-    pub space_id: String,
+    pub space_id: crate::Id,
     pub parent_id: Option<String>,
     pub editing_id: Option<String>,
     pub position: Option<Position>,

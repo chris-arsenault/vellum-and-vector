@@ -44,7 +44,7 @@ impl WorkOrigin {
 #[derive(Clone)]
 pub struct InheritedWork {
     pub family: WorkFamily,
-    pub id: String,
+    pub id: atlas_map::Id,
     pub anchor: Point,
     pub design: Option<WorkDesign>,
 }
@@ -54,7 +54,7 @@ pub struct Commission {
     pub design: WorkDesign,
     pub origin: WorkOrigin,
     pub anchor: Point,
-    pub inherited_id: Option<String>,
+    pub inherited_id: Option<atlas_map::Id>,
     pub members: Vec<HoldingId>,
     pub grounds: Option<atlas_map::Geometry>,
     grounds_bounds: Option<atlas_map::Bounds>,
@@ -229,7 +229,7 @@ pub fn commission(town: &mut Town, seed: i32, inherited: &[InheritedWork]) {
             .works
             .commissions
             .iter()
-            .any(|w| w.inherited_id.as_ref() == Some(&work.id))
+            .any(|w| w.inherited_id == Some(work.id))
         {
             let design = work.design.clone().unwrap_or_else(|| {
                 work.family.definition().design(
@@ -247,7 +247,7 @@ pub fn commission(town: &mut Town, seed: i32, inherited: &[InheritedWork]) {
                     &town.template.site,
                     design,
                 )
-                .inherited_id = Some(work.id.clone());
+                .inherited_id = Some(work.id);
         }
     }
     let [x, y] = town.seat.centre;

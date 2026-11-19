@@ -31,7 +31,7 @@ impl State {
         let mesh = self.field().mesh();
         let [ox, oy] = mesh.origin();
         for feature in self.records.features.values(FeatureSelection {
-            area_id: Some(&self.scope.area),
+            area_id: Some(self.scope.area),
             kind: Some("settlement"),
             ..Default::default()
         })? {
@@ -50,7 +50,7 @@ impl State {
                     io::Error::other("Captured living seat is outside its map lattice")
                 })?;
                 seats.push(Seat {
-                    id: feature.id,
+                    id: feature.id.to_string(),
                     cell,
                 });
             }
@@ -91,7 +91,7 @@ impl State {
                 phase,
                 activity: &activity,
                 placed: &input.placed,
-                space: &self.scope.space,
+                space: self.scope.space,
                 seats: &seats,
                 ways: &ways,
                 spatial: self.spatial.as_ref(),

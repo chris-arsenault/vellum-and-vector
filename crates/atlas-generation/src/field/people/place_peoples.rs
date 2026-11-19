@@ -8,7 +8,7 @@ use crate::{field::Field, human::identity};
 use std::{collections::BTreeMap, io};
 
 // hpc-exempt: publication metadata keyed by tradition kind and world entity id.
-pub type Peoples = BTreeMap<String, BTreeMap<String, f64>>;
+pub type Peoples = BTreeMap<String, BTreeMap<atlas_map::Id, f64>>;
 pub fn peoples(field: &Field, traditions: &Traditions, place: &Place) -> io::Result<Peoples> {
     // hpc-exempt: sparse tradition identities aggregated over one named settlement.
     let mut counted: [BTreeMap<i32, f64>; 4] = std::array::from_fn(|_| BTreeMap::new());
@@ -38,12 +38,8 @@ pub fn peoples(field: &Field, traditions: &Traditions, place: &Place) -> io::Res
                 .filter_map(|(code, people)| {
                     let share = people / everyone;
                     let tradition = traditions.get(code)?;
-                    (everyone > 0.0 && share >= 0.01 && !tradition.entity.is_empty()).then(|| {
-                        (
-                            tradition.entity.clone(),
-                            (share * 1000.0 + 0.5).floor() / 1000.0,
-                        )
-                    })
+                    (everyone > 0.0 && share >= 0.01 && tradition.entity != atlas_map::Id::NIL)
+                        .then(|| (tradition.entity, (share * 1000.0 + 0.5).floor() / 1000.0))
                 })
                 .collect();
             (kind.as_str().into(), shares)

@@ -59,7 +59,7 @@ pub struct Position {
 pub struct Tradition {
     pub code: i32,
     pub kind: Kind,
-    pub entity: String,
+    pub entity: atlas_map::Id,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parent: Option<i32>,
     pub founded: String,
@@ -89,16 +89,16 @@ pub struct Traditions {
     pub known: Vec<Tradition>,
 }
 pub struct Context {
-    pub world: String,
+    pub world: atlas_map::Id,
     // hpc-exempt: named world entities indexed by stable identity.
-    pub entities: BTreeMap<String, Entity>,
+    pub entities: BTreeMap<atlas_map::Id, Entity>,
     pub traditions: Traditions,
     pub naming: std::rc::Rc<dyn Naming>,
 }
 impl Context {
     pub fn found(&mut self, founding: Founding) -> io::Result<i32> {
         self.traditions.found(
-            &self.world,
+            self.world,
             &mut self.entities,
             founding,
             self.naming.as_ref(),
@@ -113,19 +113,20 @@ impl Traditions {
     }
     pub fn found(
         &mut self,
-        world: &str,
+        world: atlas_map::Id,
         // hpc-exempt: named world entities indexed by stable identity.
-        entities: &mut BTreeMap<String, Entity>,
+        entities: &mut BTreeMap<atlas_map::Id, Entity>,
         founding: Founding,
         naming: &dyn Naming,
     ) -> io::Result<i32> {
-        let id = semantic_id(world, founding.kind.entity_kind(), &founding.key)?;
+        let id = semantic_id(world, founding.kind.entity_kind(), &founding.key);
         let parent = founding.parent.and_then(|code| self.get(code));
+        // Naming seeds and languages are the naming library's text keys.
         let language = founding
             .tongue
             .and_then(|code| self.get(code))
-            .map(|t| t.entity.as_str());
-        let named = naming.name(&id, &founding, language)?;
+            .map(|t| t.entity.to_string());
+        let named = naming.name(&id.to_string(), &founding, language.as_deref())?;
         let culture = match parent
             .and_then(|p| entities.get(&p.entity))
             .and_then(|e| e.attributes.get("namingCulture"))
@@ -135,7 +136,7 @@ impl Traditions {
             None => naming.culture(founding.origin)?,
         };
         let code = i32::try_from(self.known.len() + 1).map_err(io::Error::other)?;
-        let entity = entities.entry(id.clone()).or_insert_with(|| {
+        let entity = entities.entry(id).or_insert_with(|| {
             let mut attributes = named.metadata;
             attributes.insert("namingCulture".into(), culture);
             attributes.insert(
@@ -143,7 +144,7 @@ impl Traditions {
                 json!({"x":founding.origin.x,"y":founding.origin.y,"z":0}),
             );
             Entity {
-                id: id.clone(),
+                id,
                 kind: founding.kind.entity_kind().into(),
                 name: format!("{}{}", named.name, founding.kind.suffix()),
                 state: Some(State::Generated),
@@ -152,7 +153,7 @@ impl Traditions {
                     parent
                         .map(|p| {
                             vec![Relation {
-                                target_id: p.entity.clone(),
+                                target_id: p.entity,
                                 kind: "derivedFrom".into(),
                             }]
                         })
@@ -249,7 +250,7 @@ impl Traditions {
                 value.unwrap_or(Tradition {
                     code: index as i32 + 1,
                     kind: Kind::Custom,
-                    entity: String::new(),
+                    entity: atlas_map::Id::NIL,
                     parent: None,
                     founded: String::new(),
                     origin: Position::default(),

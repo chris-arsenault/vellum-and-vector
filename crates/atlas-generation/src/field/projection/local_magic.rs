@@ -32,13 +32,13 @@ impl Activity {
 }
 pub fn sources<'a>(
     sources: &'a [Source],
-    space: &'a str,
+    space: atlas_map::Id,
     thermal: bool,
 ) -> impl Iterator<Item = &'a Source> {
     sources.iter().filter(move |source| {
         source.system_id.is_none()
             && ["heat", "cold"].contains(&source.effect.as_str()) == thermal
-            && source.space_id.as_deref().is_none_or(|id| id == space)
+            && source.space_id.is_none_or(|id| id == space)
     })
 }
 impl Surface {
@@ -197,7 +197,7 @@ impl Surface {
     pub fn thermal_sources(
         &mut self,
         sources: &[Source],
-        space: &str,
+        space: atlas_map::Id,
         activity: &Activity,
         spatial: &dyn SpatialKernel,
     ) -> io::Result<Vec<Cause>> {
@@ -230,7 +230,7 @@ impl Surface {
             );
             causes.push(Cause::Magic {
                 process: "magic.thermal".into(),
-                source_id: source.id.clone(),
+                source_id: source.id,
                 activity: activity.multiplier(source),
                 forcing: self.summarize_channel(&forcing_key)?,
                 stored: self.summarize_channel(&key)?,
@@ -250,7 +250,7 @@ impl Surface {
     pub fn advance_local_storage(
         &mut self,
         sources: &[Source],
-        space: &str,
+        space: atlas_map::Id,
         years: f64,
         current: &[Cause],
     ) -> io::Result<Vec<Cause>> {

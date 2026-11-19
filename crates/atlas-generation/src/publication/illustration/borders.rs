@@ -42,7 +42,7 @@ fn node(nodes: &mut BTreeMap<Key, Node>, point: Position) -> &mut Node {
 pub fn soften(
     features: &[&Feature],
     // hpc-exempt: noded feature-boundary vertices and sparse feature ownership, not generation cells.
-    shapes: &mut BTreeMap<String, Option<Geometry>>,
+    shapes: &mut BTreeMap<atlas_map::Id, Option<Geometry>>,
     spatial: &dyn SpatialKernel,
 ) -> SpatialResult<()> {
     if features.len() < 2 {
@@ -67,7 +67,7 @@ pub fn soften(
     }
     relax(&mut nodes, features, spatial)?;
     for feature in features {
-        shapes.insert(feature.id.clone(), Some(replace(&feature.geometry, &nodes)));
+        shapes.insert(feature.id, Some(replace(&feature.geometry, &nodes)));
     }
     Ok(())
 }

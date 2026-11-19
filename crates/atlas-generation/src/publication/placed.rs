@@ -4,7 +4,7 @@ use crate::{
     field::landmarks::catalogue::Landmark,
     spatial::{SpatialKernel, SpatialResult},
 };
-use atlas_map::{Geometry, Position};
+use atlas_map::{Geometry, Id, Position};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 // hpc-exempt: canonical authored feature metadata, not numerical field storage.
@@ -13,27 +13,20 @@ use std::collections::BTreeMap;
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MagicSource {
-    pub id: String,
+    pub id: Id,
     pub name: String,
-    pub area_id: Option<String>,
+    pub area_id: Option<Id>,
     pub system_id: Option<String>,
     pub source: crate::features::context::Origin,
     pub effect: serde_json::Value,
     pub radius: f64,
     pub strength: f64,
 }
-fn feature(
-    id: &str,
-    name: &str,
-    area: &str,
-    layer: &str,
-    kind: &str,
-    geometry: Geometry,
-) -> Feature {
+fn feature(id: Id, name: &str, area: Id, layer: &str, kind: &str, geometry: Geometry) -> Feature {
     Feature {
-        id: id.into(),
+        id,
         name: name.into(),
-        area_id: area.into(),
+        area_id: area,
         layer_id: layer.into(),
         kind: kind.into(),
         geometry,
@@ -66,9 +59,9 @@ pub fn records(
     let mut result = Vec::new();
     for source in magic {
         let mut value = feature(
-            &source.id,
+            source.id,
             &source.name,
-            source.area_id.as_deref().unwrap_or(&root.id),
+            source.area_id.unwrap_or(root.id),
             "magic",
             "magicSource",
             Geometry::Point {
@@ -88,9 +81,9 @@ pub fn records(
             "geology"
         };
         let mut value = feature(
-            &landmark.id,
+            landmark.id,
             &landmark.name,
-            landmark.area_id.as_deref().unwrap_or(&root.id),
+            landmark.area_id.unwrap_or(root.id),
             layer,
             "landmark",
             landmark.geometry.clone(),

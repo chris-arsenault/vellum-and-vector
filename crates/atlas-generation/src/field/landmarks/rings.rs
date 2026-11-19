@@ -17,7 +17,7 @@ pub struct Dome {
     pub ring_relief: f64,
 }
 pub struct DomeWork {
-    pub landmark_id: String,
+    pub landmark_id: atlas_map::Id,
     pub dome: Dome,
     pub relief_shortfall: Option<f64>,
 }
@@ -123,7 +123,7 @@ pub struct ImpactRing {
     pub rim_height: f64,
 }
 pub struct ImpactRingWork {
-    pub landmark_id: String,
+    pub landmark_id: atlas_map::Id,
     pub ring: ImpactRing,
     pub shortfall: Option<CraterMeasures>,
 }
@@ -190,7 +190,7 @@ impl Field {
                 let field = scope.state_mut();
                 let applied = dome_apply(field, work).map_err(failure)?;
                 if work.relief_shortfall.is_some() {
-                    super::changes::maintenance(field, &work.landmark_id, applied)
+                    super::changes::maintenance(field, work.landmark_id, applied)
                         .map_err(failure)?;
                 }
                 Ok(())
@@ -234,7 +234,7 @@ impl Field {
                 if let Some(shortfall) = &work.shortfall {
                     let field = scope.state_mut();
                     let applied = crater_maintain(field, work, shortfall).map_err(failure)?;
-                    super::changes::maintenance(field, &work.landmark_id, applied).map_err(failure)
+                    super::changes::maintenance(field, work.landmark_id, applied).map_err(failure)
                 } else {
                     scope.run(
                         &impact,

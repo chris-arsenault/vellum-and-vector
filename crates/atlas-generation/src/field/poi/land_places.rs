@@ -17,11 +17,10 @@ use atlas_map::{Geometry, Position};
 use serde_json::json;
 use std::io;
 
-pub fn record_id(state: &impl CommunityState, place: &KnownPlace) -> io::Result<String> {
-    match &place.adopted {
-        Some(id) => Ok(id.clone()),
-        None => community_records::local_id(state, &place.id),
-    }
+pub fn record_id(state: &impl CommunityState, place: &KnownPlace) -> atlas_map::Id {
+    place
+        .adopted
+        .unwrap_or_else(|| community_records::local_id(state, &place.id))
 }
 fn standing(
     state: &impl CommunityState,
@@ -119,8 +118,8 @@ fn record(state: &impl CommunityState, place: &KnownPlace, least: f64) -> io::Re
     let language = place
         .tongue
         .and_then(|code| traditions.get(code))
-        .map(|t| t.entity.as_str());
-    let named = state.name_community(place, &land, language)?;
+        .map(|t| t.entity.to_string());
+    let named = state.name_community(place, &land, language.as_deref())?;
     let mut attributes = named.metadata;
     attributes.extend(facts(place, &land));
     standing(state, place, least, &mut attributes)?;
@@ -169,7 +168,7 @@ pub fn places(state: &impl CommunityState, kind: Kind) -> io::Result<Vec<Place>>
             place.cells.clone()
         };
         let mut located = Place::at(kind, place.anchor, cells);
-        located.id = community_records::local_id(state, &place.id)?;
+        located.id = community_records::local_id(state, &place.id).to_string();
         located.feature = Some(record(state, place, known.town)?);
         found.push(located);
     }

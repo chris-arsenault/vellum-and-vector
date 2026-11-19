@@ -6,7 +6,7 @@ use super::{
     EditCommand, Shape, Transform,
 };
 use crate::{
-    spatial::SpatialKernel, CreatorLayer, Geometry, LayerSource, MapDescriptor, MapFeature,
+    spatial::SpatialKernel, CreatorLayer, Geometry, Id, LayerSource, MapDescriptor, MapFeature,
     MapFeatureCatalog, RealScale,
 };
 use serde_json::Value;
@@ -15,14 +15,14 @@ use std::collections::BTreeMap;
 /// The features one command reads before it runs.
 pub enum EditTargets {
     /// These features, by id.
-    Ids(Vec<String>),
+    Ids(Vec<Id>),
     /// Every authorable feature: layer commands find their members by creator layer.
     Authorable,
     /// Authorable features in the primary space within these bounds, and the map's
     /// settlements: town tools read the streets, plots and buildings around them.
     Around(crate::Bounds),
     /// Every feature in one located space, hexes included: a structure map's level.
-    Space(String),
+    Space(Id),
     /// Every feature in the layers of one family, across all spaces (`structures`).
     Family(&'static str),
     Nothing,
@@ -31,15 +31,13 @@ impl EditCommand {
     pub fn targets(&self) -> EditTargets {
         use EditCommand::*;
         match self {
-            Reshape { id, .. } => EditTargets::Ids(vec![id.clone()]),
+            Reshape { id, .. } => EditTargets::Ids(vec![*id]),
             Transform { ids, .. }
             | Duplicate { ids, .. }
             | Delete { ids }
             | SetAttributes { ids, .. }
             | MoveToLayer { ids, .. } => EditTargets::Ids(ids.clone()),
-            PasteStyle { source, ids } => {
-                EditTargets::Ids([vec![source.clone()], ids.clone()].concat())
-            }
+            PasteStyle { source, ids } => EditTargets::Ids([vec![*source], ids.clone()].concat()),
             MergeDown { .. } | DeleteLayer { .. } => EditTargets::Authorable,
             Create { .. }
             | Place { .. }
@@ -59,10 +57,10 @@ impl EditCommand {
                 EditTargets::Around(super::town::town_bounds(&[*at], super::PLACING_REACH))
             }
             AddLevel { .. } => EditTargets::Family("structures"),
-            RemoveLevel { space_id } => EditTargets::Space(space_id.clone()),
+            RemoveLevel { space_id } => EditTargets::Space(*space_id),
             Connect { id, target } | Disconnect { id, target } => match target.map_id {
-                Some(_) => EditTargets::Ids(vec![id.clone()]),
-                None => EditTargets::Ids(vec![id.clone(), target.feature_id.clone()]),
+                Some(_) => EditTargets::Ids(vec![*id]),
+                None => EditTargets::Ids(vec![*id, target.feature_id]),
             },
         }
     }
@@ -94,7 +92,7 @@ pub fn plan(
     map: &MapDescriptor,
     command: &EditCommand,
     targets: &[MapFeature],
-    new_id: &mut dyn FnMut() -> String,
+    new_id: &mut dyn FnMut() -> Id,
     spatial: &dyn SpatialKernel,
 ) -> Result<Draft, String> {
     let real = editable(map)?;
@@ -120,9 +118,9 @@ pub fn plan(
             name.clone(),
             geometry,
             attributes,
-            creator_layer.as_deref(),
+            *creator_layer,
         ),
-        Reshape { id, geometry } => edit.reshape(id, geometry),
+        Reshape { id, geometry } => edit.reshape(*id, geometry),
         Transform { ids, transform } => edit.transform(ids, transform),
         Duplicate { ids, offset } => edit.duplicate(ids, *offset, new_id),
         Delete { ids } => edit.delete(ids),
@@ -131,18 +129,20 @@ pub fn plan(
             name,
             attributes,
         } => edit.set_attributes(ids, name.as_deref(), attributes),
-        PasteStyle { source, ids } => edit.paste_style(source, ids),
+        PasteStyle { source, ids } => edit.paste_style(*source, ids),
         AddLayer { name } => edit.add_layer(new_id(), name),
-        RenameLayer { id, name } => edit.layers_changed(id, &format!("Rename layer {name}"), |l| {
-            l.name = name.clone()
-        }),
+        RenameLayer { id, name } => {
+            edit.layers_changed(*id, &format!("Rename layer {name}"), |l| {
+                l.name = name.clone()
+            })
+        }
         LockLayer { id, locked } => {
             let verb = if *locked { "Lock" } else { "Unlock" };
-            edit.layers_changed(id, verb, |l| l.locked = *locked)
+            edit.layers_changed(*id, verb, |l| l.locked = *locked)
         }
-        MoveToLayer { ids, layer } => edit.move_to_layer(ids, layer),
-        MergeDown { id } => edit.merge_down(id),
-        DeleteLayer { id } => edit.delete_layer(id),
+        MoveToLayer { ids, layer } => edit.move_to_layer(ids, *layer),
+        MergeDown { id } => edit.merge_down(*id),
+        DeleteLayer { id } => edit.delete_layer(*id),
         Place {
             layer_id,
             kind,
@@ -157,7 +157,7 @@ pub fn plan(
                 layer_id,
                 kind,
                 name: name.as_deref(),
-                creator: creator_layer.as_deref(),
+                creator: *creator_layer,
             },
             *at,
             *rotation,
@@ -175,7 +175,7 @@ pub fn plan(
                 layer_id,
                 kind,
                 name: None,
-                creator: creator_layer.as_deref(),
+                creator: *creator_layer,
             },
             outline,
             *spacing,
@@ -192,7 +192,7 @@ pub fn plan(
             road_class,
             geometry,
             name.as_deref(),
-            creator_layer.as_deref(),
+            *creator_layer,
         ),
         PlaceBuilding {
             building_use,
@@ -204,12 +204,12 @@ pub fn plan(
             building_use,
             *at,
             name.as_deref(),
-            creator_layer.as_deref(),
+            *creator_layer,
         ),
         AddLevel { below } => super::levels::add_level(map, targets, *below, spatial),
-        RemoveLevel { space_id } => super::levels::remove_level(map, targets, space_id),
-        Connect { id, target } => super::levels::connect(map, targets, id, target, true),
-        Disconnect { id, target } => super::levels::connect(map, targets, id, target, false),
+        RemoveLevel { space_id } => super::levels::remove_level(map, targets, *space_id),
+        Connect { id, target } => super::levels::connect(map, targets, *id, target, true),
+        Disconnect { id, target } => super::levels::connect(map, targets, *id, target, false),
     }
 }
 
@@ -220,19 +220,19 @@ pub(super) struct Planner<'a> {
     pub(super) spatial: &'a dyn SpatialKernel,
 }
 impl Planner<'_> {
-    pub(super) fn find(&self, id: &str) -> Result<&MapFeature, String> {
+    pub(super) fn find(&self, id: Id) -> Result<&MapFeature, String> {
         self.targets
             .iter()
             .find(|feature| feature.id == id)
             .ok_or_else(|| format!("Feature {id} is not on this map"))
     }
-    fn named(&self, ids: &[String]) -> Result<Vec<&MapFeature>, String> {
+    fn named(&self, ids: &[Id]) -> Result<Vec<&MapFeature>, String> {
         if ids.is_empty() {
             return Err("Select a feature first".into());
         }
         let features = ids
             .iter()
-            .map(|id| self.find(id))
+            .map(|id| self.find(*id))
             .collect::<Result<Vec<_>, _>>()?;
         // Hexes and other derived or generated layers are not drawn into, so not edited.
         if let Some(fixed) = features.iter().find(|f| shape_of(&f.layer_id).is_none()) {
@@ -241,7 +241,7 @@ impl Planner<'_> {
         Ok(features)
     }
     /// Features whose creator layer is unlocked; their own lock still allows non-pointer edits.
-    fn open_layers(&self, ids: &[String]) -> Result<Vec<&MapFeature>, String> {
+    fn open_layers(&self, ids: &[Id]) -> Result<Vec<&MapFeature>, String> {
         let features = self.named(ids)?;
         if let Some(held) = features.iter().find(|f| in_locked_layer(f, self.real)) {
             return Err(format!("{} is on a locked layer", title(held)));
@@ -249,14 +249,14 @@ impl Planner<'_> {
         Ok(features)
     }
     /// Features the pointer may change: not locked on their own or through their layer.
-    fn movable(&self, ids: &[String]) -> Result<Vec<&MapFeature>, String> {
+    fn movable(&self, ids: &[Id]) -> Result<Vec<&MapFeature>, String> {
         let features = self.named(ids)?;
         if let Some(held) = features.iter().find(|f| locked(f, self.real)) {
             return Err(format!("{} is locked", title(held)));
         }
         Ok(features)
     }
-    fn layer(&self, id: &str) -> Result<usize, String> {
+    fn layer(&self, id: Id) -> Result<usize, String> {
         self.real
             .creator_layers
             .iter()
@@ -296,13 +296,13 @@ impl Planner<'_> {
     #[allow(clippy::too_many_arguments)]
     pub(super) fn create(
         &self,
-        id: String,
+        id: Id,
         layer_id: &str,
         kind: &str,
         name: Option<String>,
         drawn: &Geometry,
         attributes: &BTreeMap<String, Value>,
-        creator: Option<&str>,
+        creator: Option<Id>,
     ) -> Result<Draft, String> {
         let layer = self
             .map
@@ -362,8 +362,8 @@ impl Planner<'_> {
         })
     }
     // owner-direction(2026-11-16): dragging a river around preserves the river in tact as a feature line
-    fn reshape(&self, id: &str, geometry: &Geometry) -> Result<Draft, String> {
-        let feature = self.movable(&[id.into()])?[0];
+    fn reshape(&self, id: Id, geometry: &Geometry) -> Result<Draft, String> {
+        let feature = self.movable(&[id])?[0];
         let mut next = feature.clone();
         next.geometry = self.shaped_kind(&feature.layer_id, &feature.kind, geometry)?;
         if let Some(widths) = numbers(feature.attributes.get("widths")) {
@@ -378,7 +378,7 @@ impl Planner<'_> {
             spaces: None,
         })
     }
-    fn transform(&self, ids: &[String], transform: &Transform) -> Result<Draft, String> {
+    fn transform(&self, ids: &[Id], transform: &Transform) -> Result<Draft, String> {
         if !transform.scale.is_finite() || transform.scale <= 0.0 {
             return Err("Scale by a positive amount".into());
         }
@@ -414,9 +414,9 @@ impl Planner<'_> {
     }
     fn duplicate(
         &self,
-        ids: &[String],
+        ids: &[Id],
         [dx, dy]: [f64; 2],
-        new_id: &mut dyn FnMut() -> String,
+        new_id: &mut dyn FnMut() -> Id,
     ) -> Result<Draft, String> {
         let features = self.open_layers(ids)?;
         let shift = Transform {
@@ -446,7 +446,7 @@ impl Planner<'_> {
             ..Draft::default()
         })
     }
-    fn delete(&self, ids: &[String]) -> Result<Draft, String> {
+    fn delete(&self, ids: &[Id]) -> Result<Draft, String> {
         let features = self.movable(ids)?;
         Ok(Draft {
             label: format!("Delete {}", titles(&features)),
@@ -456,7 +456,7 @@ impl Planner<'_> {
     }
     fn set_attributes(
         &self,
-        ids: &[String],
+        ids: &[Id],
         name: Option<&str>,
         attributes: &BTreeMap<String, Value>,
     ) -> Result<Draft, String> {
@@ -495,7 +495,7 @@ impl Planner<'_> {
                 }
                 ("widths", _) => check_widths(feature, value)?,
                 ("creatorLayer", Value::String(id)) => {
-                    self.layer(id)?;
+                    self.layer(id.parse().map_err(|_| "creatorLayer is not a layer")?)?;
                 }
                 ("locked", Value::Bool(_)) => {}
                 ("creatorLayer" | "locked", _) => return Err(format!("{key} has the wrong type")),
@@ -505,7 +505,7 @@ impl Planner<'_> {
         }
         Ok(())
     }
-    fn paste_style(&self, source: &str, ids: &[String]) -> Result<Draft, String> {
+    fn paste_style(&self, source: Id, ids: &[Id]) -> Result<Draft, String> {
         let source = self.find(source)?;
         let features = self.movable(ids)?;
         let style: BTreeMap<_, _> = source
@@ -542,7 +542,7 @@ impl Planner<'_> {
             spaces: None,
         })
     }
-    fn add_layer(&self, id: String, name: &str) -> Result<Draft, String> {
+    fn add_layer(&self, id: Id, name: &str) -> Result<Draft, String> {
         let name = name.trim();
         if name.is_empty() {
             return Err("Name the layer".into());
@@ -561,7 +561,7 @@ impl Planner<'_> {
     }
     fn layers_changed(
         &self,
-        id: &str,
+        id: Id,
         verb: &str,
         change: impl FnOnce(&mut CreatorLayer),
     ) -> Result<Draft, String> {
@@ -580,7 +580,7 @@ impl Planner<'_> {
             ..Draft::default()
         })
     }
-    fn move_to_layer(&self, ids: &[String], layer: &str) -> Result<Draft, String> {
+    fn move_to_layer(&self, ids: &[Id], layer: Id) -> Result<Draft, String> {
         let index = self.layer(layer)?;
         if self.real.creator_layers[index].locked {
             return Err(format!(
@@ -609,13 +609,13 @@ impl Planner<'_> {
             spaces: None,
         })
     }
-    fn members(&self, id: &str) -> Vec<&MapFeature> {
+    fn members(&self, id: Id) -> Vec<&MapFeature> {
         self.targets
             .iter()
-            .filter(|feature| creator_layer(feature, self.real) == id)
+            .filter(|feature| creator_layer(feature, self.real) == Some(id))
             .collect()
     }
-    fn merge_down(&self, id: &str) -> Result<Draft, String> {
+    fn merge_down(&self, id: Id) -> Result<Draft, String> {
         let index = self.layer(id)?;
         if index == 0 {
             return Err("The bottom layer has no layer beneath it".into());
@@ -624,14 +624,13 @@ impl Planner<'_> {
         if layers[index].locked || layers[index - 1].locked {
             return Err("Unlock both layers before merging them".into());
         }
-        let below = layers[index - 1].id.clone();
+        let below = layers[index - 1].id;
         let members = self.members(id);
         let after = members
             .iter()
             .map(|feature| {
                 let mut next = (*feature).clone();
-                next.attributes
-                    .insert("creatorLayer".into(), below.clone().into());
+                next.attributes.insert("creatorLayer".into(), below.into());
                 next
             })
             .collect();
@@ -645,7 +644,7 @@ impl Planner<'_> {
             spaces: None,
         })
     }
-    fn delete_layer(&self, id: &str) -> Result<Draft, String> {
+    fn delete_layer(&self, id: Id) -> Result<Draft, String> {
         let index = self.layer(id)?;
         let layers = &self.real.creator_layers;
         if layers.len() == 1 {

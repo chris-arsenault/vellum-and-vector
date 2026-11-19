@@ -12,8 +12,8 @@ mod shell;
 mod vocabulary;
 
 pub use connections::{
-    candidates, connection_target, foreign_target, is_connection, lands, reaches,
-    ConnectionCandidate, ConnectionTarget, CONNECTS_TO, LEADS_TO,
+    candidates, is_connection, lands, reaches, ConnectionCandidate, ConnectionTarget, CONNECTS_TO,
+    LEADS_TO,
 };
 pub use vocabulary::{vocabulary, VOCABULARY};
 
@@ -39,7 +39,7 @@ use ts_rs::TS;
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct StructureSite {
-    pub building_id: String,
+    pub building_id: crate::Id,
     pub name: Option<String>,
     #[serde(rename = "use")]
     pub use_: Option<String>,
@@ -70,23 +70,24 @@ pub fn level_of(map: &MapDescriptor, space: &MapSpace) -> Option<i32> {
         .ok()
 }
 /// The map's levels as (number, space id), lowest first.
-pub fn levels(map: &MapDescriptor) -> Vec<(i32, String)> {
+pub fn levels(map: &MapDescriptor) -> Vec<(i32, crate::Id)> {
     if !is_structure(map) {
         return Vec::new();
     }
     let mut levels: Vec<_> = map
         .spaces
         .iter()
-        .filter_map(|space| Some((level_of(map, space)?, space.id.clone())))
+        .filter_map(|space| Some((level_of(map, space)?, space.id)))
         .collect();
     levels.sort();
     levels
 }
-pub fn level_space_id(primary: &str, number: i32) -> String {
+/// A level's space: the ground floor is the primary space, each other level its own.
+pub fn level_space_id(primary: crate::Id, number: i32) -> crate::Id {
     if number == 0 {
-        primary.into()
+        primary
     } else {
-        format!("{primary}:{LEVEL_FLOOR}{number}")
+        crate::Id::v5(primary, &number.to_be_bytes())
     }
 }
 /// The id a ground-floor layer takes on another level.
@@ -110,10 +111,10 @@ pub fn level_layout(
         .find(|space| space.id == map.primary_space_id)
         .ok_or("The map has no primary space")?;
     let space = MapSpace {
-        id: level_space_id(&primary.id, number),
+        id: level_space_id(primary.id, number),
         parent_space_id: (number != 0)
-            .then(|| primary.id.clone())
-            .or_else(|| primary.parent_space_id.clone()),
+            .then_some(primary.id)
+            .or(primary.parent_space_id),
         bounds: if number == 0 {
             primary.bounds
         } else {
@@ -187,7 +188,7 @@ fn hex_feature(geometry: &Geometry, hex: Hex, layer: &MapLayer, type_id: &str) -
         ("nameStatus".into(), "label".into()),
     ]);
     MapFeature {
-        id: format!("hex:{}:{}:{}", layer.id, hex.q, hex.r),
+        id: hex.id(crate::Id::from_name(&layer.id)),
         space_id: layer.space_id.clone(),
         entity_id: None,
         layer_id: layer.id.clone(),

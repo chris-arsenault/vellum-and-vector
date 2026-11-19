@@ -193,8 +193,8 @@ fn across<S: CommunityState + 'static, Schedule>(
 ) -> AcrossMaps<S, Schedule> {
     AcrossMaps {
         statement: Must::Value("Captured seats retain identity, grade their footprints and follow their own settled evidence; ruins use the same seat schedule.".into()), stands_on: Slot::Unwritten, carry: Slot::Value(Rc::new(carry_rules::where_it_lands)),
-        realize: Slot::NotApplicable("The settlement schedule restores every captured seat's graded ground."), counterpart: Slot::Value(Rc::new(|state: &S, carried| Ok(Some(state.seat_cell(&carried.feature.id).unwrap_or(carried.cell))))),
-        unrealized: Slot::Value(Rc::new(|_, _| Ok(Unrealized::Keep))), settle: Slot::Value(Rc::new(|state: &S, carried| Ok(match state.seat_cell(&carried.feature.id) { Some(cell) if cell != carried.cell => Unrealized::Move(cell), _ => Unrealized::Keep }))), schedule,
+        realize: Slot::NotApplicable("The settlement schedule restores every captured seat's graded ground."), counterpart: Slot::Value(Rc::new(|state: &S, carried| Ok(Some(state.seat_cell(carried.feature.id).unwrap_or(carried.cell))))),
+        unrealized: Slot::Value(Rc::new(|_, _| Ok(Unrealized::Keep))), settle: Slot::Value(Rc::new(|state: &S, carried| Ok(match state.seat_cell(carried.feature.id) { Some(cell) if cell != carried.cell => Unrealized::Move(cell), _ => Unrealized::Keep }))), schedule,
     }
 }
 fn movement<S: State + 'static>(kind: Community) -> Movement<S> {

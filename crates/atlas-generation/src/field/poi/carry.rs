@@ -31,7 +31,7 @@ pub fn captured_place<S: CarryState<Schedule>, Schedule>(
 ) -> io::Result<Feature> {
     Ok(state
         .source_features()
-        .map(|reader| reader.get(&feature.id))
+        .map(|reader| reader.get(feature.id))
         .transpose()?
         .flatten()
         .map_or_else(|| feature.clone(), |source| located(source, feature)))
@@ -86,7 +86,7 @@ pub fn carried_places<S: CarryState<Schedule>, Schedule>(
                 continue;
             };
             let mut place = Place::at(kind, carried.cell, carried.cells.clone());
-            place.id.clone_from(&feature.id);
+            place.id = feature.id.to_string();
             place.feature = Some(feature);
             found.push(CarriedPlace {
                 kind,
@@ -134,7 +134,7 @@ pub fn stands_for<S: CarryState<Schedule>, Schedule>(
         .attributes
         .insert("capturedRecord".into(), snapshot(&parent));
     state.features_mut().put(feature)?;
-    state.features_mut().remove(&developed.id)?;
+    state.features_mut().remove(developed.id)?;
     for item in &mut publication.written {
         if item.feature_id == developed.id {
             item.feature_id.clone_from(&captured.id);
@@ -161,7 +161,7 @@ impl Outcomes {
 }
 struct Developed {
     kinds: Vec<(Kind, Band<i32>)>,
-    ids: Vec<String>,
+    ids: Vec<atlas_map::Id>,
 }
 impl Developed {
     fn new<S: CarryState<Schedule>, Schedule>(
@@ -192,16 +192,16 @@ impl Developed {
             for &cell in &item.place.cells {
                 result.kinds[at].1.set(cell, result.ids.len() as i32)?;
             }
-            result.ids.push(item.feature_id.clone());
+            result.ids.push(item.feature_id);
         }
         Ok(result)
     }
-    fn at(&self, kind: Kind, cell: usize) -> io::Result<Option<&str>> {
+    fn at(&self, kind: Kind, cell: usize) -> io::Result<Option<atlas_map::Id>> {
         let Some((_, cells)) = self.kinds.iter().find(|(k, _)| *k == kind) else {
             return Ok(None);
         };
         let at = cells.get(cell)?;
-        Ok((at >= 0).then(|| self.ids[at as usize].as_str()))
+        Ok((at >= 0).then(|| self.ids[at as usize]))
     }
 }
 fn unresolved<S: CarryState<Schedule>, Schedule>(
@@ -237,7 +237,7 @@ fn follow_river<S: CarryState<Schedule>, Schedule>(
     outcomes: &mut Outcomes,
 ) -> io::Result<()> {
     let cell = state.hosted_cell(&item.carried.feature)?;
-    let captured = state.features().get(&item.carried.feature.id)?;
+    let captured = state.features().get(item.carried.feature.id)?;
     let (Some(cell), Some(mut captured)) = (cell, captured) else {
         outcomes.log(item.kind, "its river is not here: left");
         return Ok(());

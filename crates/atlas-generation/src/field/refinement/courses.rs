@@ -8,7 +8,7 @@ use std::{collections::BTreeSet, io};
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CarriedCourse {
-    pub source_id: String,
+    pub source_id: atlas_map::Id,
     pub geometry: Geometry,
     pub discharge: f64,
     pub order: f64,
@@ -24,9 +24,9 @@ pub struct CapturedCourse {
 pub fn captured_courses(
     mesh: &TriangularLattice,
     source: &dyn FeatureReader,
-    area: &str,
+    area: atlas_map::Id,
     // hpc-exempt: removed feature identities, not a numerical cell mask.
-    removed: &BTreeSet<String>,
+    removed: &BTreeSet<atlas_map::Id>,
     span: f64,
     bend: f64,
 ) -> io::Result<Vec<CapturedCourse>> {

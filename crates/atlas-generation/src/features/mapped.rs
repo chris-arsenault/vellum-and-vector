@@ -10,7 +10,7 @@ use crate::{
     atlas::resolution::Profile,
     spatial::{Overlay, Predicate, SpatialKernel},
 };
-use atlas_map::Geometry;
+use atlas_map::{Geometry, Id};
 use std::io;
 
 const NAMING: &[&str] = &["nameStatus", "naming", "nameSource", "nameMeaning"];
@@ -34,7 +34,7 @@ pub fn structural(detail: &Representation, feature: &Feature) -> bool {
 }
 pub fn validate(
     context: &Context,
-    area: &str,
+    area: Id,
     source: &dyn FeatureReader,
     spatial: &dyn SpatialKernel,
 ) -> io::Result<()> {
@@ -48,7 +48,7 @@ pub fn validate(
             overlap(
                 context,
                 area,
-                &feature.area_id,
+                feature.area_id,
                 &feature.name,
                 [&feature.geometry]
                     .into_iter()
@@ -65,7 +65,7 @@ pub fn validate(
                     overlap(
                         context,
                         area,
-                        owner,
+                        *owner,
                         &feature.name,
                         [&detail.geometry]
                             .into_iter()
@@ -78,7 +78,7 @@ pub fn validate(
                 overlap(
                     context,
                     area,
-                    owner,
+                    *owner,
                     &feature.name,
                     baseline
                         .map(|b| &b.geometry)
@@ -95,8 +95,8 @@ pub fn validate(
 }
 pub fn overlap<'a>(
     context: &Context,
-    area: &str,
-    owner: &str,
+    area: Id,
+    owner: Id,
     name: &str,
     geometry: impl Iterator<Item = &'a Geometry>,
     spatial: &dyn SpatialKernel,
@@ -137,11 +137,9 @@ pub fn restore(
         let mut target = if feature.map_only == Some(true) {
             feature.clone()
         } else {
-            features
-                .get(&feature.id)?
-                .unwrap_or_else(|| feature.clone())
+            features.get(feature.id)?.unwrap_or_else(|| feature.clone())
         };
-        for (area, detail) in &feature.detail {
+        for (&area, detail) in &feature.detail {
             if detail.map_only != Some(true) {
                 continue;
             }
@@ -150,7 +148,7 @@ pub fn restore(
             } else {
                 refresh(context, features, spatial, &target, area, detail)?
             };
-            target.detail.insert(area.clone(), retained);
+            target.detail.insert(area, retained);
             target.name.clone_from(&feature.name);
             target.relations.clone_from(&feature.relations);
         }
@@ -163,7 +161,7 @@ fn refresh(
     features: &dyn FeatureReader,
     spatial: &dyn SpatialKernel,
     feature: &Feature,
-    area: &str,
+    area: Id,
     detail: &Representation,
 ) -> io::Result<Representation> {
     let selected = context.area(area).map_err(io::Error::other)?;
@@ -217,7 +215,7 @@ fn refresh(
     let mut result = detail.clone();
     result.geometry.clone_from(&baseline.geometry);
     result.footprint.clone_from(&baseline.footprint);
-    result.map_source = feature.detail.get(area).cloned().map(Box::new);
+    result.map_source = feature.detail.get(&area).cloned().map(Box::new);
     result.map_baseline = Some(baseline);
     result.attributes = Some(attributes);
     Ok(result)
@@ -230,12 +228,12 @@ pub fn restore_networks(
     for reach in source.reaches(Selection::default())? {
         let reach = reach?;
         if original
-            .get(&reach.feature_id)?
+            .get(reach.feature_id)?
             .is_none_or(|f| f.map_only != Some(true))
         {
             continue;
         }
-        for id in [&reach.start, &reach.end] {
+        for id in [reach.start, reach.end] {
             if let Some(node) = source.node(id)? {
                 target.put_node(node)?;
             }
