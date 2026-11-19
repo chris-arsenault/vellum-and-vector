@@ -35,9 +35,17 @@ make local-real AT=500000,375000 HEX=300m        # or at a point in world metres
 scripts/local-atlas.sh region --at Amadir --width 120000 --name Amadir-country
 scripts/local-atlas.sh region --parent Amadir-country --at Amadir --width 20000 --name Amadir-district
 scripts/local-atlas.sh real --parent Amadir-district --at Amadir --hex 30m --across 100 --name Amadir-town
+scripts/local-atlas.sh world --name Reference-world --width 4000000 --height 3000000
+scripts/local-atlas.sh places --parent Reference-world     # a named world's settlements
 make local-resume    # after fixing a failed step: make local-up, then resume the job
 make local-down      # stop the server and database; the world stays
 ```
+
+A named world is kept beside the kept world, under its own map folder, and is refined with
+`region --parent <name>`. Each regional level refines on a fixed cell size (ADR 0005): a
+region holds about the world's triangle count when it covers about a seventh of its
+parent's area, and a region smaller than that refines on few triangles. A real-scale map's
+count follows its hex size and the hexes across it.
 
 `HEX` is one of 1.5m, 3m, 10m, 30m, 100m and 300m; `ACROSS` is the number of hexes from
 west to east; `KIND` is `ground` or `structure`. Each run prints every step with the

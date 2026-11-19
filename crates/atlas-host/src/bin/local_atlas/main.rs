@@ -163,6 +163,9 @@ fn run() -> io::Result<()> {
     let harness = Harness::new()?;
     let argument = options.positional(1);
     match (options.positional(0), argument) {
+        (Some("world"), _) if options.get("name").is_some() => {
+            named_world(&harness, options.get("name").unwrap_or_default(), &options)
+        }
         (Some("world"), _) => world(&harness, options.flag("fresh")),
         (Some("real"), _) if options.get("at").is_some() => real_scale(&harness, &options),
         (Some("region"), _) if options.get("at").is_some() && options.get("width").is_some() => {
@@ -172,7 +175,7 @@ fn run() -> io::Result<()> {
         (Some("cancel"), Some(job)) => harness
             .generation::<Value>("cancel", json!({"job_id": job}))
             .map(drop),
-        (Some("places"), _) => places(&harness),
+        (Some("places"), _) => places(&harness, options.get("parent")),
         (Some("census"), _) => census(&harness, &options),
         (Some("town-previews"), Some(job)) if options.get("name").is_some() => {
             town_previews(&harness, job, options.get("name").unwrap_or_default())
@@ -197,7 +200,8 @@ fn usage(harness: &Harness) -> String {
     format!(
         "Usage: scripts/local-atlas.sh <command>
   world [--fresh]
-  places
+  world --name name [--width metres] [--height metres] [--quality draft|standard|fine] [--seed n]
+  places [--parent world folder]
   census [--reference-width] [--full-history [--seed <integer>]]
   summary|history <map folder under {maps}>
   raster <map folder> <layer id>...
@@ -214,6 +218,46 @@ Hex sizes: {sizes}",
     )
 }
 
+/// A named world of a chosen size, kept as a map folder beside the kept world, which it
+/// leaves untouched; regions refine it with `region --parent <name>`.
+fn named_world(harness: &Harness, name: &str, options: &Options) -> io::Result<()> {
+    let metres = |key: &str, default: f64| -> io::Result<f64> {
+        options
+            .get(key)
+            .map_or(Ok(default), |value| value.parse().map_err(io::Error::other))
+    };
+    let choices: Vec<Value> = harness.generation("configurations", Value::Null)?;
+    let choice = choices
+        .first()
+        .ok_or_else(|| io::Error::other("The server offers no world configuration"))?;
+    let mut request = choice["values"].clone();
+    request["name"] = json!(name);
+    request["worldId"] = json!(uuid::Uuid::new_v4().to_string());
+    request["width"] = json!(metres("width", 4_000_000.0)?);
+    request["height"] = json!(metres("height", 3_000_000.0)?);
+    request["recipe"]["quality"] = json!(options.get("quality").unwrap_or("draft"));
+    request["recipe"]["seed"] = json!(metres("seed", 42.0)? as u64);
+    let configuration: Value = harness.generation("validate", request)?;
+    let status: GenerationStatus = harness.generation("create", configuration)?;
+    let record = LastJob {
+        kind: "world".into(),
+        name: Some(name.into()),
+        job_id: None,
+    };
+    if let Ended::Completed(reference) = follow::follow(harness, status, record, None)? {
+        save(harness, &reference)?;
+        let directory = harness.reports.join("maps").join(name);
+        fs::create_dir_all(&directory)?;
+        write_json(
+            &directory.join("map.json"),
+            &Kept {
+                reference: reference.clone(),
+            },
+        )?;
+        report::report(&harness.server, &reference, &directory)?;
+    }
+    Ok(())
+}
 fn world(harness: &Harness, fresh: bool) -> io::Result<()> {
     if !fresh {
         if let Ok(kept) = read_json::<Kept>(&harness.world_file()) {
@@ -347,8 +391,12 @@ fn point(harness: &Harness, reference: &MapRef, at: &str) -> io::Result<[f64; 2]
             ))
         })
 }
-fn places(harness: &Harness) -> io::Result<()> {
-    let kept: Kept = read_json(&harness.world_file())?;
+fn places(harness: &Harness, parent: Option<&str>) -> io::Result<()> {
+    let file = match parent {
+        Some(name) => harness.reports.join("maps").join(name).join("map.json"),
+        None => harness.world_file(),
+    };
+    let kept: Kept = read_json(&file)?;
     for place in settlements(harness, &kept.reference)? {
         println!(
             "{:<28} {},{} {}",
