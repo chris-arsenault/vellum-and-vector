@@ -42,8 +42,8 @@ impl Reference {
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CapturedField {
-    pub area: String,
-    pub space: String,
+    pub area: atlas_map::Id,
+    pub space: atlas_map::Id,
     pub input: bool,
     pub resolution: Option<f64>,
     pub footprint: Geometry,
@@ -64,7 +64,7 @@ impl CapturedField {
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct AuthoredField {
-    pub space: Option<String>,
+    pub space: Option<atlas_map::Id>,
     pub footprint: Geometry,
     pub source_footprint: Geometry,
     pub channels: Vec<String>,

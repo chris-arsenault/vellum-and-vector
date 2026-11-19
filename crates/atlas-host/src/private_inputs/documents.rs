@@ -1,5 +1,5 @@
 //! Immutable completed metadata and records in the private PostgreSQL schema.
-use super::{CompletedInputs, PrivateInputs};
+use super::{uuid, CompletedInputs, PrivateInputs};
 use crate::{generation_document::Document, numerical_resource::Scope};
 use atlas_generation::features::{
     network::{NetworkReader, NetworkWorkspace, Selection},
@@ -34,7 +34,7 @@ impl PrivateInputs {
             .borrow_mut()
             .query_opt(
                 "SELECT 1 FROM generation.inputs WHERE map_id=$1 AND map_revision=$2",
-                &[&reference.map_id, &reference.revision],
+                &[&uuid(reference.map_id), &uuid(reference.revision)],
             )
             .map_err(io::Error::other)?
             .is_some()
@@ -66,21 +66,21 @@ impl PrivateInputs {
             &input.catalog_id,
             "feature",
             features.values(FeatureSelection::default())?,
-            |feature| &feature.id,
+            |feature| feature.id,
         )?;
         records(
             &mut transaction,
             &input.catalog_id,
             "node",
             networks.nodes()?,
-            |node| &node.id,
+            |node| node.id,
         )?;
         records(
             &mut transaction,
             &input.catalog_id,
             "reach",
             networks.reaches(Selection::default())?,
-            |reach| &reach.id,
+            |reach| reach.id,
         )?;
         for value in geography {
             let scope: Scope = serde_json::from_value(value["scope"].clone())?;
@@ -90,7 +90,7 @@ impl PrivateInputs {
             transaction
                 .execute(
                     "INSERT INTO generation.geography VALUES($1,$2,$3,$4)",
-                    &[&scope.world_id, &scope.area_id, &id, value],
+                    &[&uuid(scope.world_id), &uuid(scope.area_id), &id, value],
                 )
                 .map_err(io::Error::other)?;
         }
@@ -98,10 +98,10 @@ impl PrivateInputs {
             .execute(
                 "INSERT INTO generation.inputs VALUES($1,$2,$3,$4,$5,$6)",
                 &[
-                    &reference.map_id,
-                    &reference.revision,
-                    &input.world_id,
-                    &input.area_id,
+                    &uuid(reference.map_id),
+                    &uuid(reference.revision),
+                    &uuid(input.world_id),
+                    &uuid(input.area_id),
                     &i64::try_from(input.revision).map_err(io::Error::other)?,
                     &input.catalog_id,
                 ],
@@ -155,7 +155,7 @@ impl PrivateInputs {
             .borrow_mut()
             .query_opt(
                 "SELECT data FROM generation.geography WHERE world_id=$1 AND area_id=$2 AND id=$3",
-                &[&scope.world_id, &scope.area_id, &id],
+                &[&uuid(scope.world_id), &uuid(scope.area_id), &id],
             )
             .map_err(io::Error::other)?
             .ok_or_else(|| io::Error::other("Completed field geography is missing"))?
@@ -168,7 +168,7 @@ fn records<T: serde::Serialize>(
     catalog: &str,
     kind: &str,
     records: impl Iterator<Item = io::Result<T>>,
-    identity: impl Fn(&T) -> &str,
+    identity: impl Fn(&T) -> atlas_map::Id,
 ) -> io::Result<()> {
     let mut records = records.peekable();
     while records.peek().is_some() {

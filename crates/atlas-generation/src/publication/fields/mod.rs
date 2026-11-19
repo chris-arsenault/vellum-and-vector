@@ -13,7 +13,7 @@ use std::collections::BTreeMap;
 
 pub struct Fields<'a> {
     // hpc-exempt: entity names and published layer metadata, not numerical field storage.
-    pub entities: &'a BTreeMap<String, Entity>,
+    pub entities: &'a BTreeMap<atlas_map::Id, Entity>,
     pub systems: &'a [System],
     pub confluences: &'a [Confluence],
 }
@@ -54,9 +54,11 @@ impl Fields<'_> {
             }
             .into();
         }
-        let name = self
-            .entities
-            .get(parts[1])
+        // A channel key names its entity's identity as text.
+        let name = parts[1]
+            .parse::<atlas_map::Id>()
+            .ok()
+            .and_then(|id| self.entities.get(&id))
             .map(|e| e.name.clone())
             .or_else(|| {
                 self.systems

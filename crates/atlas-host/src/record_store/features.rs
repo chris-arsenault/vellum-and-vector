@@ -3,12 +3,13 @@ use atlas_generation::features::{
     workspace::Revisions, Feature, FeatureReader, FeatureSelection, FeatureWorkspace,
 };
 use atlas_gis::sql::Value;
+use atlas_map::Id;
 use std::{io, rc::Rc};
 
 pub(super) fn create(db: &Database, table: &str) -> io::Result<()> {
     db.connection.batch(&format!("CREATE TABLE {table}(
-        ordinal INTEGER PRIMARY KEY AUTOINCREMENT, id TEXT NOT NULL UNIQUE, revision INTEGER NOT NULL,
-        area_id TEXT NOT NULL, layer_id TEXT NOT NULL, kind TEXT NOT NULL, data TEXT NOT NULL);
+        ordinal INTEGER PRIMARY KEY AUTOINCREMENT, id BLOB NOT NULL UNIQUE, revision INTEGER NOT NULL,
+        area_id BLOB NOT NULL, layer_id TEXT NOT NULL, kind TEXT NOT NULL, data TEXT NOT NULL);
         CREATE INDEX {table}_selection ON {table}(area_id,layer_id,kind);"))
 }
 pub struct Features {
@@ -24,16 +25,16 @@ impl Features {
             self.db.clone(),
             self.table,
             &[
-                ("area_id=?", selection.area_id),
-                ("layer_id=?", selection.layer_id),
-                ("kind=?", selection.kind),
+                ("area_id=?", selection.area_id.map(Value::from)),
+                ("layer_id=?", selection.layer_id.map(Value::from)),
+                ("kind=?", selection.kind.map(Value::from)),
             ],
         )
     }
 }
 impl FeatureReader for Features {
-    fn get(&self, id: &str) -> io::Result<Option<Feature>> {
-        get(&self.db, self.table, "id=?", &[Value::Text(id.to_owned())])
+    fn get(&self, id: Id) -> io::Result<Option<Feature>> {
+        get(&self.db, self.table, "id=?", &[id.into()])
     }
     fn values<'a>(
         &'a self,
@@ -60,9 +61,9 @@ impl FeatureWorkspace for Features {
                 self.table
             ),
             &[
-                feature.id.as_str().into(),
+                feature.id.into(),
                 i64::try_from(revision).map_err(io::Error::other)?.into(),
-                feature.area_id.as_str().into(),
+                feature.area_id.into(),
                 feature.layer_id.as_str().into(),
                 feature.kind.as_str().into(),
                 serde_json::to_string(&feature)?.into(),
@@ -71,7 +72,7 @@ impl FeatureWorkspace for Features {
         self.db.revision.set(revision);
         Ok(())
     }
-    fn remove(&mut self, id: &str) -> io::Result<()> {
+    fn remove(&mut self, id: Id) -> io::Result<()> {
         self.db.connection.execute(
             &format!("DELETE FROM {} WHERE id=?", self.table),
             &[id.into()],
@@ -86,7 +87,7 @@ impl FeatureWorkspace for Features {
                     .connection
                     .value(
                         &format!("SELECT revision FROM {} WHERE id=?", self.table),
-                        &[id.as_str().into()],
+                        &[id.into()],
                     )?
                     .map(|value| {
                         Ok((

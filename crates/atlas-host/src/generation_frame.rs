@@ -12,7 +12,7 @@ use atlas_generation::{
     reconstruction::traits::Trait,
     spatial::SpatialKernel,
 };
-use atlas_map::{regions::rectangle, Bounds, Geometry};
+use atlas_map::{regions::rectangle, Bounds, Geometry, Id};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -22,7 +22,7 @@ use std::{
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Reference {
-    pub id: String,
+    pub id: Id,
     pub domain: Geometry,
     pub boundary_mode: Option<String>,
     pub precision: Option<f64>,
@@ -50,22 +50,22 @@ pub use atlas_generation::publication::catalogue::Layer;
 #[serde(rename_all = "camelCase")]
 pub struct Field {
     pub id: String,
-    pub area_id: String,
+    pub area_id: Id,
     pub layer_id: String,
     #[serde(default)]
     pub input: bool,
     pub channels: Option<Vec<String>>,
     pub footprint: Option<Geometry>,
     pub resource_id: Option<String>,
-    pub space_id: Option<String>,
+    pub space_id: Option<Id>,
     pub state: Option<atlas_generation::features::records::State>,
 }
 #[derive(Serialize, Deserialize)]
 pub struct Geography {
-    pub id: String,
+    pub id: Id,
     pub version: u64,
     pub reference: Reference,
-    pub areas: BTreeMap<String, MappedArea>,
+    pub areas: BTreeMap<Id, MappedArea>,
     pub layers: BTreeMap<String, Layer>,
     pub fields: Vec<Field>,
     pub generations: Vec<GenerationRecord>,
@@ -73,14 +73,14 @@ pub struct Geography {
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GenerationRecord {
-    pub area_id: Option<String>,
+    pub area_id: Option<Id>,
 }
 pub struct Prepared {
     pub frame: MapFrame,
     pub scope: FieldScope,
-    pub ancestors: Vec<String>,
-    pub area_spaces: BTreeMap<String, String>,
-    pub contracted: BTreeSet<String>,
+    pub ancestors: Vec<Id>,
+    pub area_spaces: BTreeMap<Id, Id>,
+    pub contracted: BTreeSet<Id>,
 }
 impl Geography {
     pub fn has_generated_geography(&self) -> bool {
@@ -139,10 +139,7 @@ impl Geography {
                 .map_err(io::Error::other)?,
         };
         let interior = interior(selected, &footprint, bounds, span, spatial)?;
-        let space = context
-            .space(&area.id)
-            .map_err(io::Error::other)?
-            .to_owned();
+        let space = context.space(area.id).map_err(io::Error::other)?;
         let coordinate_width = cylindrical.then_some(domain_bounds.2 - domain_bounds.0);
         let contracted = self
             .areas
@@ -200,32 +197,27 @@ impl Geography {
             },
             scope: FieldScope {
                 located: Located {
-                    world_id: self.id.clone(),
-                    area_id: area.id.clone(),
+                    world_id: self.id,
+                    area_id: area.id,
                     space_id: space,
                 },
                 footprint,
-                crs_id: self.reference.id.clone(),
+                crs_id: self.reference.id,
                 resolution: Some(span),
                 revision: self.version,
                 time: "present".into(),
             },
             ancestors: context
-                .lineage(&area.id)
+                .lineage(area.id)
                 .map_err(io::Error::other)?
                 .into_iter()
                 .skip(1)
-                .map(|a| a.id.clone())
+                .map(|a| a.id)
                 .collect(),
             area_spaces: self
                 .areas
                 .keys()
-                .map(|id| {
-                    Ok((
-                        id.clone(),
-                        context.space(id).map_err(io::Error::other)?.to_owned(),
-                    ))
-                })
+                .map(|&id| Ok((id, context.space(id).map_err(io::Error::other)?)))
                 .collect::<io::Result<_>>()?,
             contracted,
         })

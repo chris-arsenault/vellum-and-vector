@@ -85,7 +85,7 @@ impl Jobs {
         } else {
             let selected = match &target {
                 Target::Map { id, descendants } => {
-                    context_inventory::selected_maps(&maps.inventory()?, id, *descendants)
+                    context_inventory::selected_maps(&maps.inventory()?, *id, *descendants)
                 }
                 _ => Default::default(),
             };
@@ -99,7 +99,7 @@ impl Jobs {
             (files, cleanup)
         };
         self.require_unused(&cleanup.target, &cleanup.maps, jobs)?;
-        for id in &cleanup.maps {
+        for &id in &cleanup.maps {
             maps.delete_map(id)?;
             inputs.delete_map(id)?;
         }
@@ -118,7 +118,7 @@ impl Jobs {
     fn require_unused(
         &self,
         target: &Target,
-        selected: &std::collections::BTreeSet<String>,
+        selected: &std::collections::BTreeSet<atlas_map::Id>,
         jobs: &BTreeMap<String, Job>,
     ) -> io::Result<()> {
         for (id, job) in jobs {
@@ -138,11 +138,11 @@ impl Jobs {
             }
             let parent = status.details.as_ref().and_then(|d| d.parent.as_ref());
             let action: Option<Value> = job.files.read("action.json")?;
-            let world = action
+            let world: Option<atlas_map::Id> = action
                 .as_ref()
-                .and_then(|a| a["request"]["worldId"].as_str());
+                .and_then(|a| serde_json::from_value(a["request"]["worldId"].clone()).ok());
             if parent.is_some_and(|p| selected.contains(&p.map_id))
-                || world.is_some_and(|id| selected.contains(id))
+                || world.is_some_and(|id| selected.contains(&id))
             {
                 return Err(io::Error::other(format!(
                     "Job {id} still uses this map; finish or delete that job first"
@@ -171,10 +171,10 @@ impl Jobs {
                 Some(r) => {
                     self.require_unused(
                         &Target::Map {
-                            id: r.map_id.clone(),
+                            id: r.map_id,
                             descendants: false,
                         },
-                        &std::collections::BTreeSet::from([r.map_id.clone()]),
+                        &std::collections::BTreeSet::from([r.map_id]),
                         jobs,
                     )?;
                     inputs.delete_revision(r)

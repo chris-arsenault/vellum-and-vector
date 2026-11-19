@@ -23,7 +23,8 @@ pub struct NativeJob {
     pub source: Option<MapRef>,
     pub expected: Option<MapRef>,
     pub parent: Option<MapRef>,
-    pub operation: String,
+    /// The job's identity, which the map revision it publishes takes.
+    pub operation: atlas_map::Id,
     pub selection: Option<regional_capture::Child>,
     /// Refinement publishes the captured child; Regenerate on that child generates it.
     pub creates_child: bool,
@@ -51,18 +52,21 @@ impl NativeJob {
         progress: Progress,
     ) -> io::Result<MapRef> {
         let intended = MapRef {
-            map_id: self.submission.input.area_id.clone(),
-            revision: self.operation.clone(),
+            map_id: self.submission.input.area_id,
+            revision: self.operation,
         };
-        if services.maps.find_head(&intended.map_id)?.as_ref() == Some(&intended)
+        if services.maps.find_head(intended.map_id)?.as_ref() == Some(&intended)
             && services.maps.open(&intended)?.state == atlas_map::PublicationState::Complete
         {
-            crate::job_files::JobFiles::new(&services.resources.join(".jobs"), &self.operation)?
-                .retire_checkpoint()?;
+            crate::job_files::JobFiles::new(
+                &services.resources.join(".jobs"),
+                &self.operation.to_string(),
+            )?
+            .retire_checkpoint()?;
             return Ok(intended);
         }
         services.maps.restart_publication(&intended)?;
-        if services.maps.find_head(&self.submission.input.area_id)? != self.expected {
+        if services.maps.find_head(self.submission.input.area_id)? != self.expected {
             return Err(io::Error::other(
                 "The map revision changed before generation started",
             ));
@@ -72,8 +76,10 @@ impl NativeJob {
         let _cleanup = Directory(directory.clone());
         fs::create_dir_all(&services.resources)?;
         let workspace = Workspace::create(directory.join("records.sqlite"))?;
-        let mut recovery =
-            crate::job_files::JobFiles::new(&services.resources.join(".jobs"), &self.operation)?;
+        let mut recovery = crate::job_files::JobFiles::new(
+            &services.resources.join(".jobs"),
+            &self.operation.to_string(),
+        )?;
         let captured: Option<CapturedJob> = recovery.read("captured.json")?;
         if captured.is_none() {
             if let Some(reference) = &self.source {
@@ -158,9 +164,9 @@ impl NativeJob {
             regional_capture::Selection {
                 parent: &parent,
                 selection: &child.selection,
-                id: &self.submission.input.area_id,
+                id: self.submission.input.area_id,
                 name: &child.name,
-                operation: &self.operation,
+                operation: self.operation,
                 real_scale: child.real_scale(self.submission.input.quality),
             },
             self.submission.source,
@@ -210,7 +216,7 @@ impl NativeJob {
         } = runtime;
         let finished = generation_execution::run(
             self.submission,
-            &self.operation,
+            &self.operation.to_string(),
             generation_execution::Services {
                 recovery: Some(recovery),
                 resources: resources.clone(),
@@ -228,8 +234,8 @@ impl NativeJob {
         )
         .await?;
         let reference = MapRef {
-            map_id: finished.snapshot.scope.located.area_id.clone(),
-            revision: self.operation.clone(),
+            map_id: finished.snapshot.scope.located.area_id,
+            revision: self.operation,
         };
         captured_geography.extend(finished.output.geography.iter().cloned());
         let started = std::time::Instant::now();
@@ -272,8 +278,8 @@ impl NativeJob {
     ) -> io::Result<MapRef> {
         let (workspace, geography) = captured;
         let reference = MapRef {
-            map_id: self.submission.input.area_id.clone(),
-            revision: self.operation.clone(),
+            map_id: self.submission.input.area_id,
+            revision: self.operation,
         };
         services.inputs.store(
             &reference,

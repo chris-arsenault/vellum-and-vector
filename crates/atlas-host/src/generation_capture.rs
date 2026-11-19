@@ -17,10 +17,10 @@ pub struct Read {
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FieldPatch {
-    pub area_id: String,
+    pub area_id: atlas_map::Id,
     pub field_id: String,
     pub resource_id: String,
-    pub space_id: String,
+    pub space_id: atlas_map::Id,
     pub footprint: Geometry,
     pub channels: Vec<String>,
     #[serde(default)]
@@ -111,7 +111,12 @@ impl Inputs {
         }
         Ok(result)
     }
-    pub fn resolve(&self, fields: &[Field], area: &str, store: &dyn Store) -> io::Result<Resolved> {
+    pub fn resolve(
+        &self,
+        fields: &[Field],
+        area: atlas_map::Id,
+        store: &dyn Store,
+    ) -> io::Result<Resolved> {
         let mut result = Resolved {
             fields: Vec::new(),
             authored: Vec::new(),
@@ -142,8 +147,8 @@ impl Inputs {
                 result.parent_span = Some(result.parent_span.map_or(span, |old| old.max(span)));
             }
             result.fields.push(CapturedField {
-                area: field.area_id.clone(),
-                space: scope.located.space_id.clone(),
+                area: field.area_id,
+                space: scope.located.space_id,
                 input: field.input,
                 resolution: scope.resolution,
                 footprint: scope.footprint.clone(),
@@ -151,7 +156,7 @@ impl Inputs {
             });
             if protected {
                 result.authored.push(AuthoredField {
-                    space: field.space_id.clone(),
+                    space: field.space_id,
                     footprint: field
                         .footprint
                         .clone()
@@ -170,7 +175,7 @@ impl Inputs {
             let source = self.patch_reference(patch, fields)?;
             let descriptor = describe(store, &source)?;
             result.authored.push(AuthoredField {
-                space: Some(patch.space_id.clone()),
+                space: Some(patch.space_id),
                 footprint: patch.footprint.clone(),
                 source_footprint: descriptor.field.expect("validated field").scope.footprint,
                 channels: patch.channels.clone(),

@@ -14,7 +14,7 @@ pub struct Node {
     pub id: Id,
     pub kind: String,
     pub position: Position,
-    pub space_id: Option<String>,
+    pub space_id: Option<Id>,
     pub water_level: Option<f64>,
 }
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

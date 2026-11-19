@@ -33,7 +33,7 @@ impl Inputs<'_> {
         self.selection.get(id).is_some_and(|choice| choice.enabled)
     }
     // hpc-exempt: named entity metadata selects published channels, never terrain-cell state.
-    pub fn bindings(&self, entities: &BTreeMap<String, Entity>) -> Vec<Binding> {
+    pub fn bindings(&self, entities: &BTreeMap<atlas_map::Id, Entity>) -> Vec<Binding> {
         let mut bindings = channels::physical()
             .into_iter()
             .map(|channel| {

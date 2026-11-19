@@ -291,4 +291,17 @@ M7 `527472bf`, M8 `22fd5701`, M9 `df67b6d7`, M10 `0a302338`, M11 `b0570d3e`.
 
 ## Current state
 
-Planned 2026-11-19. Next: M0.
+2026-11-19:
+- M0 done (14d02fc).
+- M1 done (fb0013c).
+- M2 stores done (0b61b0b): atlas-gis builds, and its row round-trip tests pass.
+- In progress: typing ids through atlas-host so the PostGIS publication test
+  (`atlas-host/tests/postgres_maps.rs`) runs.
+- Still red: the atlas-gis integration tests (`authoring*.rs`, `map_contract.rs`,
+  `town_tools.rs`), which still build text ids.
+- The local atlas database holds the old schema and the kept world. The new schema goes into
+  a fresh database at M11; dropping the old one needs the owner's word.
+
+Open item for M4 and M5: `streetId`, `creatorLayer`, `fromPlace`, `toPlace` and `atPlace`
+are still open attributes holding identity text. They become relation rows when publication
+writes typed rows.

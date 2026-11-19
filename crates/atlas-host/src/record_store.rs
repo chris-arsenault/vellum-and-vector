@@ -122,19 +122,19 @@ struct Ids {
     table: &'static str,
     filter: String,
     values: Vec<Value>,
-    pending: VecDeque<(i64, String)>,
+    pending: VecDeque<(i64, atlas_map::Id)>,
     after: i64,
     done: bool,
 }
 impl Ids {
-    fn new(db: Rc<Database>, table: &'static str, filters: &[(&str, Option<&str>)]) -> Self {
+    fn new(db: Rc<Database>, table: &'static str, filters: &[(&str, Option<Value>)]) -> Self {
         let mut filter = String::new();
         let mut values = Vec::new();
         for (clause, value) in filters {
             if let Some(value) = value {
                 filter.push_str(" AND ");
                 filter.push_str(clause);
-                values.push(Value::Text((*value).to_owned()));
+                values.push(value.clone());
             }
         }
         Self {
@@ -160,18 +160,13 @@ impl Ids {
             .connection
             .query(&sql, &values)?
             .iter()
-            .map(|row| {
-                Ok((
-                    column(row, "ordinal")?.integer()?,
-                    column(row, "id")?.text()?.to_owned(),
-                ))
-            })
+            .map(|row| Ok((column(row, "ordinal")?.integer()?, column(row, "id")?.id()?)))
             .collect::<io::Result<_>>()?;
         Ok(())
     }
 }
 impl Iterator for Ids {
-    type Item = io::Result<String>;
+    type Item = io::Result<atlas_map::Id>;
     fn next(&mut self) -> Option<Self::Item> {
         if self.done {
             return None;
@@ -204,7 +199,7 @@ fn records<T: DeserializeOwned>(
     ids.filter_map(move |id| {
         let result = id.and_then(|id| {
             let mut values = prefix.clone();
-            values.push(Value::Text(id));
+            values.push(id.into());
             get(&db, table, filter, &values)
         });
         result.transpose()

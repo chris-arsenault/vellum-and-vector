@@ -22,9 +22,9 @@ use std::{
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Scope {
-    pub world_id: String,
-    pub space_id: String,
-    pub area_id: String,
+    pub world_id: atlas_map::Id,
+    pub space_id: atlas_map::Id,
+    pub area_id: atlas_map::Id,
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -32,7 +32,7 @@ pub struct FieldScope {
     #[serde(flatten)]
     pub located: Scope,
     pub footprint: Geometry,
-    pub crs_id: String,
+    pub crs_id: atlas_map::Id,
     pub resolution: Option<f64>,
     pub revision: u64,
     pub time: String,
@@ -92,7 +92,7 @@ pub struct Descriptor {
     pub id: String,
     pub revision: u64,
     pub scope: Scope,
-    pub crs_id: String,
+    pub crs_id: atlas_map::Id,
     pub bounds: [f64; 4],
     pub precision: f64,
     pub layout: ResourceLayout,

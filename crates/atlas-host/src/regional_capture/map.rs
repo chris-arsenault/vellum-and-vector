@@ -24,17 +24,17 @@ pub fn capture(
     let geography: Geography = serde_json::from_value(document.world.clone())?;
     let context = geography.context();
     let area = context
-        .area(&selection.parent.reference.map_id)
+        .area(selection.parent.reference.map_id)
         .map_err(io::Error::other)?;
     let composition = Composition {
         context: &context,
         features: records,
         spatial,
-        area: &area.id,
+        area: area.id,
         profile: area.profile,
     };
     let mut query = FeatureQuery {
-        space_id: selection.selection.space_id.clone(),
+        space_id: selection.selection.space_id,
         geometry: Some(selection.footprint(&document, spatial)?),
         ..Default::default()
     };
@@ -42,7 +42,7 @@ pub fn capture(
     loop {
         let page = maps.features(&selection.parent.reference, &query)?;
         for published in page.items {
-            if let Some(feature) = records.get(&published.id)? {
+            if let Some(feature) = records.get(published.id)? {
                 if let Some(composed) = present(&composition, &feature).map_err(|error| {
                     io::Error::other(format!(
                         "Composing captured {} {}: {error}",

@@ -102,7 +102,7 @@ impl RegionalPublisher<'_> {
                 id,
                 kind: format!("network:{}", feature.layer_id),
                 position: Position { x, y, z },
-                space_id: self.space.map(|space| space.to_string()),
+                space_id: self.space,
                 water_level: None,
             });
         }

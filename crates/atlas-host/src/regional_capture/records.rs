@@ -3,22 +3,29 @@ use atlas_generation::features::{
     network::{Node, Position, Reach},
     Feature, State,
 };
-use atlas_map::Geometry;
+use atlas_map::{Geometry, Id};
 use serde_json::json;
-use std::{collections::BTreeMap, io};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    io,
+};
 
 // Arconis: docs/architecture/subsystems.arconis#item=rg_feat — clips feature records and gives them new source-naming ids.
 pub(super) fn capture(
     region: &Region<'_>,
     features: Vec<Feature>,
-    ids: &BTreeMap<String, String>,
+    ids: &BTreeMap<Id, Id>,
     output: &mut Capture,
 ) -> io::Result<()> {
+    // Placed magic sources are carried by the world document, not as captured features.
+    let sources: BTreeSet<String> = output.document.world["magic"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|source| source["id"].as_str().map(String::from))
+        .collect();
     for mut feature in features {
-        if output.document.world["magic"]
-            .as_array()
-            .is_some_and(|sources| sources.iter().any(|source| source["id"] == feature.id))
-        {
+        if sources.contains(&feature.id.to_string()) {
             continue;
         }
         let shape = if matches!(
@@ -36,9 +43,9 @@ pub(super) fn capture(
         let Some(shape) = shape else {
             continue;
         };
-        feature.place_id = Some(feature.place_id.unwrap_or_else(|| feature.id.clone()));
-        feature.id = ids[&feature.id].clone();
-        feature.area_id = region.area.into();
+        feature.place_id = Some(feature.place_id.unwrap_or(feature.id));
+        feature.id = ids[&feature.id];
+        feature.area_id = region.area;
         feature.geometry = shape;
         feature.footprint = feature
             .footprint
@@ -67,8 +74,8 @@ pub(super) fn capture(
             !["follows", "dependsOn"].contains(&r.kind.as_str()) || ids.contains_key(&r.target_id)
         });
         for relation in &mut feature.relations {
-            if let Some(id) = ids.get(&relation.target_id) {
-                relation.target_id.clone_from(id);
+            if let Some(&id) = ids.get(&relation.target_id) {
+                relation.target_id = id;
             }
         }
         let layer = &output.document.world["layers"][&feature.layer_id];
@@ -98,23 +105,28 @@ fn network(region: &Region<'_>, feature: &Feature, output: &mut Capture) -> io::
         let mut ends = Vec::new();
         for point in [first, last] {
             let [x, y, z] = point.coordinates();
-            let id = region.id("node", &format!("{}:{x}:{y}", feature.layer_id))?;
+            let mut key = feature.layer_id.as_bytes().to_vec();
+            key.extend_from_slice(&x.to_be_bytes());
+            key.extend_from_slice(&y.to_be_bytes());
+            let id = region.keyed("node", &key);
             if !output.nodes.iter().any(|node| node.id == id) {
                 output.nodes.push(Node {
-                    id: id.clone(),
+                    id,
                     kind: format!("network:{}", feature.layer_id),
                     position: Position { x, y, z },
-                    space_id: Some(output.document.scope.located.space_id.clone()),
+                    space_id: Some(output.document.scope.located.space_id),
                     water_level: None,
                 });
             }
             ends.push(id);
         }
+        let mut key = feature.id.to_bytes().to_vec();
+        key.extend_from_slice(&(part as u64).to_be_bytes());
         output.reaches.push(Reach {
-            id: region.id("reach", &format!("{}:{part}", feature.id))?,
-            feature_id: feature.id.clone(),
-            start: ends[0].clone(),
-            end: ends[1].clone(),
+            id: region.keyed("reach", &key),
+            feature_id: feature.id,
+            start: ends[0],
+            end: ends[1],
             geometry: Geometry::LineString {
                 coordinates: coordinates.to_vec(),
             },

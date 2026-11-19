@@ -71,7 +71,8 @@ fn log(job: &Job, event: &str) {
 fn execute(action: Action, settings: Settings, job: &Job) -> io::Result<atlas_map::MapRef> {
     let mut maps = PostgresMaps::connect(&settings.database_url)?;
     let inputs = PrivateInputs::connect(&settings.generation_url)?;
-    let operation = job.status()?.job_id;
+    // A job's id is the identity text the service handed out; the map revision takes it.
+    let operation = job.status()?.job_id.parse().map_err(io::Error::other)?;
     let request = match job.files.read::<NativeJob>("request.json")? {
         Some(request) => request,
         None => {
@@ -126,16 +127,15 @@ pub(super) fn prepare(
     action: Action,
     maps: &PostgresMaps,
     inputs: &PrivateInputs,
-    operation: String,
+    operation: atlas_map::Id,
 ) -> io::Result<NativeJob> {
     let (configuration, source, expected, parent, selection, document, area) = match action {
         Action::Create(configuration) => {
-            let input = configuration.input("new")?;
+            let input = configuration.input(atlas_map::Id::NIL)?;
             let document = CreateWorld {
                 id: configuration
                     .world_id
-                    .clone()
-                    .unwrap_or_else(|| uuid::Uuid::new_v4().to_string()),
+                    .unwrap_or_else(crate::private_inputs::random_id),
                 name: configuration.name.clone(),
                 seed: input.seed,
                 width: configuration.width,
@@ -144,7 +144,7 @@ pub(super) fn prepare(
                 boundary_mode: None,
             }
             .create()?;
-            let area = document.scope.located.area_id.clone();
+            let area = document.scope.located.area_id;
             (configuration, None, None, None, None, document, area)
         }
         Action::Regenerate {
@@ -166,7 +166,7 @@ pub(super) fn prepare(
         Action::Refine(request) => {
             let parent = request.selection.parent.clone();
             let document = inputs.document(&parent)?;
-            let area = uuid::Uuid::new_v4().to_string();
+            let area = crate::private_inputs::random_id();
             let name = request.configuration.name.clone();
             (
                 request.configuration,
@@ -186,7 +186,7 @@ pub(super) fn prepare(
     Ok(NativeJob {
         submission: Submission {
             source: document,
-            input: configuration.input(&area)?,
+            input: configuration.input(area)?,
         },
         source,
         expected,

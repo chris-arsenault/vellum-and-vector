@@ -3,14 +3,14 @@ use atlas_generation::{
     spatial::Predicate,
     water::captured::{DrainageNetwork, RetainedNetwork},
 };
-use atlas_map::{Geometry, Position};
+use atlas_map::{Geometry, Id, Position};
 use serde_json::{json, Value};
 use std::{collections::BTreeMap, io};
 
 pub(super) fn capture(
     region: &Region<'_>,
-    owners: &[String],
-    ids: &BTreeMap<String, String>,
+    owners: &[Id],
+    ids: &BTreeMap<Id, Id>,
     output: &mut Capture,
 ) -> io::Result<()> {
     let world = &mut output.document.world;
@@ -20,13 +20,14 @@ pub(super) fn capture(
 // Arconis: docs/architecture/subsystems.arconis#item=rg_ctx — incoming rivers; capture_sources takes landmarks and magic.
 fn capture_drainage(
     region: &Region<'_>,
-    owners: &[String],
-    ids: &BTreeMap<String, String>,
+    owners: &[Id],
+    ids: &BTreeMap<Id, Id>,
     world: &mut Value,
 ) -> io::Result<()> {
+    // The world document keys its drainage by area identity text.
     let drainage = owners
         .iter()
-        .find_map(|id| world["drainage"].get(id))
+        .find_map(|id| world["drainage"].get(id.to_string()))
         .cloned();
     world["drainage"] = json!({});
     if let Some(value) = drainage {
@@ -44,24 +45,24 @@ fn capture_drainage(
             reach.feature_ids = reach
                 .feature_ids
                 .iter()
-                .filter_map(|id| ids.get(id).cloned())
+                .filter_map(|id| ids.get(id).copied())
                 .collect();
         }
         network.reaches = kept;
-        network.area_id = region.area.into();
+        network.area_id = region.area;
         network.input = true;
         network.kept = network
             .kept
             .map(|water| capture_water(region, water))
             .transpose()?;
-        world["drainage"][region.area] = json!(network);
+        world["drainage"][&region.area.to_string()] = json!(network);
     }
     Ok(())
 }
 fn capture_sources(
     region: &Region<'_>,
-    owners: &[String],
-    ids: &BTreeMap<String, String>,
+    owners: &[Id],
+    ids: &BTreeMap<Id, Id>,
     world: &mut Value,
 ) -> io::Result<()> {
     let landmarks = scoped(world, "landmarks", owners, region.parent)?;
@@ -72,9 +73,9 @@ fn capture_sources(
         if !intersects(region, &shape)? {
             continue;
         }
-        let old = identity(&landmark)?.to_owned();
-        let id = local_id(region, ids, "landmark", &old)?;
-        landmark_ids.insert(old, id.clone());
+        let old = identity(&landmark)?;
+        let id = local_id(region, ids, "landmark", old);
+        landmark_ids.insert(old, id);
         landmark["id"] = id.into();
         landmark["areaId"] = region.area.into();
         captured_landmarks.push(landmark);
@@ -106,17 +107,15 @@ fn capture_sources(
         {
             continue;
         }
-        let old = identity(&entry)?.to_owned();
-        magic_ids.insert(old.clone(), local_id(region, ids, "magic", &old)?);
+        let old = identity(&entry)?;
+        magic_ids.insert(old, local_id(region, ids, "magic", old));
         captured_magic.push(entry);
     }
     for entry in &mut captured_magic {
-        entry["id"] = magic_ids[identity(entry)?].clone().into();
+        entry["id"] = magic_ids[&identity(entry)?].into();
         entry["areaId"] = region.area.into();
-        let landmark = entry["landmarkId"]
-            .as_str()
-            .and_then(|id| landmark_ids.get(id))
-            .cloned();
+        let landmark = optional_id(&entry["landmarkId"]).and_then(|id| landmark_ids.get(&id));
+        let landmark = landmark.copied();
         entry.as_object_mut().unwrap().remove("landmarkId");
         if let Some(id) = landmark {
             entry["landmarkId"] = id.into();
@@ -126,7 +125,7 @@ fn capture_sources(
             .map(|values| {
                 json!(values
                     .iter()
-                    .filter_map(|v| v.as_str().and_then(|id| magic_ids.get(id)))
+                    .filter_map(|v| optional_id(v).and_then(|id| magic_ids.get(&id)))
                     .collect::<Vec<_>>())
             })
             .unwrap_or(Value::Null);
@@ -135,31 +134,24 @@ fn capture_sources(
     world["magic"] = json!(captured_magic);
     Ok(())
 }
-fn scoped(world: &Value, key: &str, owners: &[String], parent: &str) -> io::Result<Vec<Value>> {
+fn scoped(world: &Value, key: &str, owners: &[Id], parent: Id) -> io::Result<Vec<Value>> {
     Ok(world[key]
         .as_array()
         .ok_or_else(|| io::Error::other(format!("Private {key} is an array")))?
         .iter()
-        .filter(|v| {
-            owners
-                .iter()
-                .any(|id| id == v["areaId"].as_str().unwrap_or(parent))
-        })
+        .filter(|v| owners.contains(&optional_id(&v["areaId"]).unwrap_or(parent)))
         .cloned()
         .collect())
 }
-fn identity(record: &Value) -> io::Result<&str> {
-    record["id"]
-        .as_str()
-        .ok_or_else(|| io::Error::other("Captured context has an identity"))
+/// An identity held in the world document.
+fn optional_id(value: &Value) -> Option<Id> {
+    serde_json::from_value(value.clone()).ok()
 }
-fn local_id(
-    region: &Region<'_>,
-    ids: &BTreeMap<String, String>,
-    kind: &str,
-    id: &str,
-) -> io::Result<String> {
-    ids.get(id).cloned().map_or_else(|| region.id(kind, id), Ok)
+fn identity(record: &Value) -> io::Result<Id> {
+    optional_id(&record["id"]).ok_or_else(|| io::Error::other("Captured context has an identity"))
+}
+fn local_id(region: &Region<'_>, ids: &BTreeMap<Id, Id>, kind: &str, id: Id) -> Id {
+    ids.get(&id).copied().unwrap_or_else(|| region.id(kind, id))
 }
 fn intersects(region: &Region<'_>, shape: &Geometry) -> io::Result<bool> {
     region

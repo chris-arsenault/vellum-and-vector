@@ -4,7 +4,7 @@ use serde_json::Value;
 use std::io;
 
 pub const JSON: &str = include_str!("defaults.json");
-pub fn input(area: &str) -> io::Result<Input> {
+pub fn input(area: atlas_map::Id) -> io::Result<Input> {
     let mut defaults: Value = serde_json::from_str(JSON)?;
     let recipe = defaults["recipe"]
         .as_object_mut()
@@ -14,7 +14,7 @@ pub fn input(area: &str) -> io::Result<Input> {
     Ok(serde_json::from_value(Value::Object(recipe.clone()))?)
 }
 pub fn settings() -> io::Result<Settings> {
-    let mut settings = input("")?
+    let mut settings = input(atlas_map::Id::NIL)?
         .settings
         .ok_or_else(|| io::Error::other("Default recipe needs history settings"))?;
     settings.normalize()?;

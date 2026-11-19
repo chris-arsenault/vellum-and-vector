@@ -30,7 +30,7 @@ pub type Choices = BTreeMap<String, Choice>;
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Input {
-    pub area_id: String,
+    pub area_id: atlas_map::Id,
     pub domains: Vec<String>,
     pub quality: Quality,
     pub seed: i32,

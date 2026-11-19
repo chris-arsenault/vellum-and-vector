@@ -60,11 +60,13 @@ impl Bindings {
         let scope = &bindings.input.scope;
         let plan = Plan {
             layout_id: format!("{}:layout:0", bindings.input.operation_id),
+            // Numerical resources are keyed by text until capture types them (M6).
             surface_id: semantic_id(
-                &scope.located.world_id,
+                scope.located.world_id,
                 "surface",
                 &format!("{}:{}", scope.located.area_id, bindings.input.seed),
-            )?,
+            )
+            .to_string(),
             scope: scope.clone(),
             precision: bindings.input.precision,
             channels: bindings.channels(&request.entities)?,
@@ -73,11 +75,11 @@ impl Bindings {
     }
     pub fn channels(
         &self,
-        entities: &BTreeMap<String, Entity>,
+        entities: &BTreeMap<atlas_map::Id, Entity>,
     ) -> io::Result<BTreeMap<String, Declaration>> {
         let mut result = BTreeMap::new();
-        let world = &self.input.scope.located.world_id;
-        let area = &self.input.scope.located.area_id;
+        let world = self.input.scope.located.world_id;
+        let area = self.input.scope.located.area_id;
         for binding in (Inputs {
             selection: &self.selection,
             systems: &self.systems,
@@ -87,7 +89,8 @@ impl Bindings {
         })
         .bindings(entities)
         {
-            let field_id = semantic_id(world, "atlas-field", &format!("{area}:{}", binding.layer))?;
+            let field_id =
+                semantic_id(world, "atlas-field", &format!("{area}:{}", binding.layer)).to_string();
             let protected = self.input.fields.iter().any(|field| {
                 field.id == field_id
                     && matches!(field.state, Some(State::Authored | State::Protected))
@@ -99,7 +102,8 @@ impl Bindings {
                         world,
                         "atlas-samples",
                         &format!("{}:{}", self.input.operation_id, binding.layer),
-                    )?,
+                    )
+                    .to_string(),
                 })
             } else {
                 None

@@ -102,7 +102,7 @@ impl Publisher<'_> {
                 id: self.junction(x, y),
                 kind: feature.kind.clone(),
                 position: Position { x, y, z: height },
-                space_id: self.space.map(|space| space.to_string()),
+                space_id: self.space,
                 water_level: None,
             });
         }

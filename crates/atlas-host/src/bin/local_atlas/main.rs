@@ -564,7 +564,7 @@ fn census(harness: &Harness, options: &Options) -> io::Result<()> {
         &harness
             .home
             .join("generation-resources/.jobs")
-            .join(&kept.reference.revision)
+            .join(kept.reference.revision.to_string())
             .join("action.json"),
     )?;
     if action["method"] != "create" {

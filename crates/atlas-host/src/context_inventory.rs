@@ -32,10 +32,19 @@ pub enum Call {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum Target {
-    Map { id: String, descendants: bool },
-    Job { id: String },
-    Orphan { orphan: Orphan },
-    Cleanup { id: String },
+    Map {
+        id: atlas_map::Id,
+        descendants: bool,
+    },
+    Job {
+        id: String,
+    },
+    Orphan {
+        orphan: Orphan,
+    },
+    Cleanup {
+        id: String,
+    },
 }
 pub struct InputEntry {
     pub reference: Option<MapRef>,
@@ -59,8 +68,12 @@ impl InputEntry {
         })
     }
 }
-pub fn selected_maps(maps: &[MapEntry], id: &str, descendants: bool) -> BTreeSet<String> {
-    let mut selected = BTreeSet::from([id.to_owned()]);
+pub fn selected_maps(
+    maps: &[MapEntry],
+    id: atlas_map::Id,
+    descendants: bool,
+) -> BTreeSet<atlas_map::Id> {
+    let mut selected = BTreeSet::from([id]);
     if descendants {
         loop {
             let children: Vec<_> = maps
@@ -70,7 +83,7 @@ pub fn selected_maps(maps: &[MapEntry], id: &str, descendants: bool) -> BTreeSet
                         .as_ref()
                         .is_some_and(|p| selected.contains(&p.map_id))
                 })
-                .map(|m| m.reference.map_id.clone())
+                .map(|m| m.reference.map_id)
                 .collect();
             let before = selected.len();
             selected.extend(children);

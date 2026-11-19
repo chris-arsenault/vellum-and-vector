@@ -56,7 +56,7 @@ impl Submission {
         }))?;
         let drainage = world
             .get("drainage")
-            .and_then(|value| value.get(&area.id))
+            .and_then(|value| value.get(area.id.to_string()))
             .cloned()
             .unwrap_or_default();
         Ok(Request {

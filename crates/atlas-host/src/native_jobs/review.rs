@@ -30,8 +30,8 @@ pub(super) fn review(settings: &Settings, mut action: Action) -> io::Result<Valu
     }
     let maps = PostgresMaps::connect(&settings.database_url)?;
     let inputs = PrivateInputs::connect(&settings.generation_url)?;
-    let operation = uuid::Uuid::new_v4().to_string();
-    let mut job = super::run::prepare(action, &maps, &inputs, operation.clone())?;
+    let operation = crate::private_inputs::random_id();
+    let mut job = super::run::prepare(action, &maps, &inputs, operation)?;
     let resources = NativeResources::new(settings.resources.clone());
     let spatial = NativeGeos::new(
         job.submission.source.world["reference"]["precision"]
@@ -43,7 +43,7 @@ pub(super) fn review(settings: &Settings, mut action: Action) -> io::Result<Valu
     if let Some(child) = job.selection.take() {
         let real_scale = child.real_scale(job.submission.input.quality);
         let (selection, name) = (child.selection, child.name);
-        let directory = settings.scratch.join(operation);
+        let directory = settings.scratch.join(operation.to_string());
         fs::create_dir_all(&directory)?;
         let _cleanup = Directory(directory.clone());
         let records = Workspace::create(directory.join("review.sqlite"))?;
@@ -57,9 +57,9 @@ pub(super) fn review(settings: &Settings, mut action: Action) -> io::Result<Valu
             regional_capture::Selection {
                 parent: &parent,
                 selection: &selection,
-                id: &job.submission.input.area_id,
+                id: job.submission.input.area_id,
                 name: &name,
-                operation: &job.operation,
+                operation: job.operation,
                 real_scale,
             },
             job.submission.source,

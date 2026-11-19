@@ -23,7 +23,7 @@ use std::io;
 #[serde(tag = "method", content = "args", rename_all = "camelCase")]
 pub enum StructureCall {
     /// Open (or find) the floors map of a building on a real-scale ground map.
-    OpenFloors(MapRef, String),
+    OpenFloors(MapRef, atlas_map::Id),
 }
 impl StructureCall {
     /// The call when a request is one, else `None` so authoring calls go their own way.
@@ -44,7 +44,7 @@ impl StructureCall {
         files: &MapFiles,
     ) -> io::Result<MapRef> {
         match self {
-            Self::OpenFloors(parent, building) => open_floors(store, files, &parent, &building),
+            Self::OpenFloors(parent, building) => open_floors(store, files, &parent, building),
         }
     }
 }
@@ -64,15 +64,20 @@ fn all<S: MapAccess + ?Sized>(
         query.cursor = next;
     }
 }
+/// A fresh random identity. Structure maps open in the browser too, where the private input
+/// store's helper is not compiled.
+fn random() -> atlas_map::Id {
+    atlas_map::Id::from_bytes(*uuid::Uuid::new_v4().as_bytes())
+}
 fn feature<S: MapAccess + ?Sized>(
     store: &S,
     map: &MapDescriptor,
-    id: &str,
+    id: atlas_map::Id,
 ) -> io::Result<Option<MapFeature>> {
     for space in &map.spaces {
         let query = FeatureQuery {
-            space_id: space.id.clone(),
-            feature_ids: Some(vec![id.into()]),
+            space_id: space.id,
+            feature_ids: Some(vec![id]),
             ..Default::default()
         };
         if let Some(found) = all(store, &map.reference, query)?.pop() {
@@ -85,7 +90,7 @@ fn feature<S: MapAccess + ?Sized>(
 fn existing<S: MapAccess + ?Sized>(
     store: &S,
     parent: &MapRef,
-    building: &str,
+    building: atlas_map::Id,
 ) -> io::Result<Option<MapRef>> {
     for child in store.related(parent)?.children {
         let map = store.open(&child)?;
@@ -100,7 +105,7 @@ pub fn open_floors<S: MapAccess + Publisher + ?Sized>(
     store: &mut S,
     files: &MapFiles,
     parent: &MapRef,
-    building_id: &str,
+    building_id: atlas_map::Id,
 ) -> io::Result<MapRef> {
     let map = store.open(parent)?;
     if map.real_scale.as_ref().map(|real| real.kind) != Some(RealScaleKind::Ground)
@@ -117,16 +122,16 @@ pub fn open_floors<S: MapAccess + Publisher + ?Sized>(
         .filter(|f| family(&f.layer_id) == "structures" && f.kind == "building")
         .ok_or_else(|| io::Error::other("Choose a building on this map to open its floors"))?;
     let street = match building.relations.iter().find(|r| r.kind == "fronts") {
-        Some(relation) => feature(store, &map, &relation.target_id)?,
+        Some(relation) => feature(store, &map, relation.target_id)?,
         None => None,
     };
     // The ladder size floors open at, from the structure vocabulary.
     let hex: HexSize =
         serde_json::from_value(json!(atlas_map::structure::vocabulary().shell.hex_size))?;
-    let id = uuid::Uuid::new_v4().to_string();
+    let id = random();
     let reference = MapRef {
-        map_id: id.clone(),
-        revision: uuid::Uuid::new_v4().to_string(),
+        map_id: id,
+        revision: random(),
     };
     let request = ShellRequest {
         parent: &map,

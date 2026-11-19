@@ -27,7 +27,7 @@ use atlas_generation::{
     spatial::SpatialKernel,
     storage::SharedCache,
 };
-use atlas_map::{Geometry, MapRef, Publisher};
+use atlas_map::{Geometry, Id, MapRef, Publisher};
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::BTreeMap, io, rc::Rc};
 
@@ -36,7 +36,7 @@ use std::{cell::RefCell, collections::BTreeMap, io, rc::Rc};
 pub struct World {
     #[serde(flatten)]
     pub geography: Geography,
-    pub entities: BTreeMap<String, Entity>,
+    pub entities: BTreeMap<Id, Entity>,
     pub magic_systems: Vec<System>,
     pub confluences: Vec<Confluence>,
     pub magic: Vec<MagicSource>,
@@ -46,7 +46,7 @@ pub struct World {
 #[serde(rename_all = "camelCase")]
 pub struct Request {
     pub world: World,
-    pub area_id: String,
+    pub area_id: Id,
     pub reference: MapRef,
     pub expected: Option<MapRef>,
     pub parent: Option<MapRef>,
@@ -57,15 +57,18 @@ pub struct Request {
 /// Initial generation installs streamed output; regenerating generated geography is atomic.
 /// A child whose only revision is its capture has not been generated, so its first completed
 /// run streams too, replacing the capture revision.
-pub fn progressive(world: &serde_json::Value, area: &str, expected: Option<&MapRef>) -> bool {
+pub fn progressive(world: &serde_json::Value, area: Id, expected: Option<&MapRef>) -> bool {
+    let area = area.to_string();
     expected.is_none()
         || world["generations"].as_array().map_or(0, |runs| {
-            runs.iter().filter(|run| run["areaId"] == area).count()
+            runs.iter()
+                .filter(|run| run["areaId"] == area.as_str())
+                .count()
         }) <= 1
 }
 #[derive(Clone, Serialize, Deserialize)]
 pub struct WaterBody {
-    pub id: String,
+    pub id: Id,
     pub geometry: Geometry,
     pub level: f64,
 }
@@ -102,7 +105,7 @@ impl Request {
         parent: Option<MapRef>,
     ) -> io::Result<Self> {
         Ok(Self {
-            progressive: progressive(&document.world, &reference.map_id, expected.as_ref()),
+            progressive: progressive(&document.world, reference.map_id, expected.as_ref()),
             world: serde_json::from_value(document.world)?,
             area_id: reference.map_id.clone(),
             reference,
@@ -123,14 +126,14 @@ impl Request {
     }
     pub fn references(&self) -> io::Result<Vec<(String, Reference)>> {
         let context = self.world.geography.context();
-        let space = context.space(&self.area_id).map_err(io::Error::other)?;
+        let space = context.space(self.area_id).map_err(io::Error::other)?;
         let areas = context
-            .geography_areas(&self.area_id)
+            .geography_areas(self.area_id)
             .map_err(io::Error::other)?;
         let mut selected = Vec::new();
         for field in &self.world.geography.fields {
-            if !areas.contains(&field.area_id.as_str())
-                || context.space(&field.area_id).map_err(io::Error::other)? != space
+            if !areas.contains(&field.area_id)
+                || context.space(field.area_id).map_err(io::Error::other)? != space
             {
                 continue;
             }
@@ -148,7 +151,7 @@ impl Request {
             {
                 if patch.map_only
                     && !context
-                        .descendant(&self.area_id, &patch.area_id)
+                        .descendant(self.area_id, patch.area_id)
                         .map_err(io::Error::other)?
                 {
                     continue;
@@ -243,7 +246,7 @@ impl Request {
                 continue;
             }
             if let Some(mut realized) = records
-                .get(&value.id)?
+                .get(value.id)?
                 .filter(|feature| feature.kind == "landmark")
             {
                 if !value.name.is_empty() {
@@ -288,7 +291,7 @@ impl PreparedMap {
                         .map_err(io::Error::other)?,
                     cylindrical: reference.boundary_mode.as_deref() == Some("cylinder"),
                 },
-                area: &self.request.area_id,
+                area: self.request.area_id,
                 reference: self.request.reference.clone(),
                 parent: self.request.parent.clone(),
                 precision: reference.precision.unwrap_or(1e-6),
@@ -307,7 +310,7 @@ impl PreparedMap {
                     reader: records,
                     spatial,
                 },
-                area: &self.request.area_id,
+                area: self.request.area_id,
                 placed: &self.placed,
             },
             fields: Fields {

@@ -79,7 +79,7 @@ pub struct Capture {
     #[serde(skip)]
     pub authored: Vec<AuthoredField>,
     #[serde(skip)]
-    pub ancestors: Vec<String>,
+    pub ancestors: Vec<atlas_map::Id>,
     #[serde(skip)]
     pub owned_geography: bool,
     pub reopened: bool,
@@ -105,12 +105,12 @@ pub struct Request {
     pub history: HistorySettings,
     pub existing: bool,
     #[serde(skip)]
-    pub crossed_features: BTreeSet<String>,
+    pub crossed_features: BTreeSet<atlas_map::Id>,
     pub landmarks: Vec<Landmark>,
     pub magic_sources: Vec<Source>,
     #[serde(skip)]
-    pub area_spaces: BTreeMap<String, String>,
-    pub entities: BTreeMap<String, Entity>,
+    pub area_spaces: BTreeMap<atlas_map::Id, atlas_map::Id>,
+    pub entities: BTreeMap<atlas_map::Id, Entity>,
 }
 pub struct PreparedRequest {
     pub request: Request,
@@ -139,7 +139,7 @@ impl Request {
         let captured =
             self.capture
                 .inputs
-                .resolve(&self.geography.fields, &self.input.area_id, resources)?;
+                .resolve(&self.geography.fields, self.input.area_id, resources)?;
         self.region = self.geography.areas[&self.input.area_id]
             .area
             .map
@@ -217,7 +217,7 @@ impl Request {
         let context = self.geography.context();
         atlas_generation::features::mapped::validate(
             &context,
-            &self.input.area_id,
+            self.input.area_id,
             host.original.features.as_ref(),
             host.spatial.as_ref(),
         )?;
@@ -230,8 +230,8 @@ impl Request {
         {
             atlas_generation::features::mapped::overlap(
                 &context,
-                &self.input.area_id,
-                &patch.area_id,
+                self.input.area_id,
+                patch.area_id,
                 &format!("{} painting", patch.channels.join(", ")),
                 std::iter::once(&patch.footprint),
                 host.spatial.as_ref(),
@@ -289,7 +289,7 @@ impl Request {
             rivers: self.capture.drainage.clone().map(Rc::new),
         });
         let domain = application::Domain {
-            people: people(&frame.scope.world, self.entities, naming.clone()),
+            people: people(frame.scope.world, self.entities, naming.clone()),
             records: host.records,
             services: Services {
                 spatial: host.spatial.clone(),
@@ -352,14 +352,18 @@ impl Request {
         )
     }
 }
-fn people(world: &str, entities: BTreeMap<String, Entity>, naming: Rc<Naming>) -> PeopleRecords {
+fn people(
+    world: atlas_map::Id,
+    entities: BTreeMap<atlas_map::Id, Entity>,
+    naming: Rc<Naming>,
+) -> PeopleRecords {
     PeopleRecords {
         places: Default::default(),
         ways: Default::default(),
         events: Default::default(),
         works: Default::default(),
         memory: Rc::new(RefCell::new(traditions::Context {
-            world: world.into(),
+            world,
             entities,
             traditions: Default::default(),
             naming,

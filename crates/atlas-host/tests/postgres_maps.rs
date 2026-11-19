@@ -1,11 +1,11 @@
 #![cfg(all(not(target_arch = "wasm32"), feature = "integration-tests"))]
-//! Ports the existing TypeScript PostGIS publication and reader-permission cases.
+//! PostGIS publication, row storage, queries, saves and the reader permission boundary.
 use atlas_gis::{
     map_store::{FeatureQuery, SaveRequest},
     postgres_maps::PostgresMaps,
 };
 use atlas_host::private_inputs::PrivateInputs;
-use atlas_map::{MapDescriptor, MapRef, PublicationBatch, Publisher};
+use atlas_map::{Id, MapDescriptor, MapRef, PublicationBatch, Publisher};
 use serde_json::{json, Value};
 use std::io;
 use testcontainers::{
@@ -14,13 +14,17 @@ use testcontainers::{
     GenericImage, ImageExt,
 };
 
+/// A fixture's identity from its name.
+fn id(name: &str) -> Id {
+    Id::from_name(name)
+}
 fn map(revision: &str) -> MapDescriptor {
     serde_json::from_value(json!({
-        "reference":{"mapId":"island","revision":revision},"worldId":"world","name":"Island","parent":null,"state":"incomplete",
-        "profile":"world","primarySpaceId":"surface","footprint":shape(),"bounds":[0,0,10,10],
+        "reference":{"mapId":id("island"),"revision":id(revision)},"worldId":id("world"),"name":"Island","parent":null,"state":"incomplete",
+        "profile":"world","primarySpaceId":id("surface"),"footprint":shape(),"bounds":[0,0,10,10],
         "regionScale":{"level":0,"nextArea":25,"subdivision":7,"minimumWidth":0.01,"enabled":true},
-        "spaces":[{"id":"surface","parentSpaceId":null,"bounds":[0,0,10,10],"metresPerUnit":1,"precision":0.000001,"periodicWidth":null,"frame":{"origin":[0,0,0],"rotation":0,"floor":null}}],
-        "layers":[{"id":"places","name":"Places","spaceId":"surface","bounds":[0,0,10,10],"attribution":[],
+        "spaces":[{"id":id("surface"),"parentSpaceId":null,"bounds":[0,0,10,10],"metresPerUnit":1,"precision":0.000001,"periodicWidth":null,"frame":{"origin":[0,0,0],"rotation":0,"floor":null}}],
+        "layers":[{"id":"places","name":"Places","spaceId":id("surface"),"bounds":[0,0,10,10],"attribution":[],
             "catalog":{"path":["Places"],"common":true,"featureTypes":[{"id":"place","kind":"place","label":"Places","path":["Places"],"magicDepiction":null,"count":0,"geometries":[],"footprints":false}],"defaultStyle":null,"presets":[],"properties":{},"examples":[],"geometries":[]},
             "source":{"kind":"vector","data":{"assetId":"places","mediaType":"application/geo+json"}}}]
     })).unwrap()
@@ -28,8 +32,8 @@ fn map(revision: &str) -> MapDescriptor {
 fn shape() -> Value {
     json!({"type":"Polygon","coordinates":[[[0,0],[10,0],[10,10],[0,10],[0,0]]]})
 }
-fn feature(id: &str, geometry: Value) -> Value {
-    json!({"id":id,"name":id,"spaceId":"surface","layerId":"places","typeId":"place","kind":"place","entityId":null,"geometry":geometry,"footprint":null,"attributes":{},"relations":[],"causes":[],"catalog":{"values":{},"columns":[],"origin":"Generated geography","mapOnly":false}})
+fn feature(name: &str, geometry: Value) -> Value {
+    json!({"id":id(name),"name":name,"spaceId":id("surface"),"layerId":"places","typeId":"place","kind":"place","entityId":null,"geometry":geometry,"footprint":null,"attributes":{},"relations":[],"causes":[],"catalog":{"values":{},"columns":[],"origin":"Generated geography","mapOnly":false}})
 }
 fn assets() -> PublicationBatch {
     serde_json::from_value(json!({"assets":[{"id":"places","location":"places.geojson","mediaType":"application/geo+json","byteLength":100,"illustration":false}]})).unwrap()
@@ -65,8 +69,9 @@ fn postgis_publication_queries_saves_and_reader_boundary() -> Result<(), Box<dyn
     store.initialize()?;
     PrivateInputs::connect(&url)?.initialize()?;
     let original = complete(&mut store, "original", None)?;
-    assert_eq!(store.list_saved("")?.items[0].reference, original);
-    assert_eq!(store.find_saved("island")?.unwrap().summary.version, 0);
+    assert_eq!(store.list_saved(None)?.items[0].reference, original);
+    assert_eq!(store.find_saved(id("island"))?.unwrap().summary.version, 0);
+    rows(&mut admin, &original)?;
     replacement(&mut store, &original)?;
     scoped_queries(&mut store)?;
     sample_batches(&mut store)?;
@@ -77,22 +82,34 @@ fn postgis_publication_queries_saves_and_reader_boundary() -> Result<(), Box<dyn
     store.grant_reader("atlas_reader")?;
     let reader_url = url.replace("user=postgres", "user=atlas_reader");
     let reader = PostgresMaps::connect(&reader_url)?;
-    assert!(reader.find_head("island")?.is_some());
+    assert!(reader.find_head(id("island"))?.is_some());
     let mut restricted = postgres::Client::connect(&reader_url, postgres::NoTls)?;
     assert!(restricted
         .query("SELECT * FROM generation.inputs", &[])
         .is_err());
     assert!(restricted.execute("DELETE FROM map.heads", &[]).is_err());
     http_facade(&url, &reader_url)?;
-    let child = store.find_head("child")?.unwrap();
-    store.delete_map("island")?;
+    let child = store.find_head(id("child"))?.unwrap();
+    store.delete_map(id("island"))?;
     store.open(&child)?.require_complete()?;
     assert!(store.inventory()?.iter().any(|m| !m.complete));
     assert!(store
         .inventory()?
         .iter()
-        .all(|m| m.reference.map_id != "island"));
+        .all(|m| m.reference.map_id != id("island")));
     context_deletion(&url, &child)?;
+    Ok(())
+}
+/// A published map is rows: its layer and feature type are queryable without a document.
+fn rows(admin: &mut postgres::Client, r: &MapRef) -> Result<(), Box<dyn std::error::Error>> {
+    let uuid = |value: Id| uuid::Uuid::from_bytes(value.to_bytes());
+    let layer = admin.query_one(
+        "SELECT l.name,t.label FROM map.layers l JOIN map.feature_types t USING(map_id,revision)
+         WHERE l.map_id=$1 AND l.revision=$2 AND t.layer=l.ordinal",
+        &[&uuid(r.map_id), &uuid(r.revision)],
+    )?;
+    assert_eq!(layer.get::<_, String>(0), "Places");
+    assert_eq!(layer.get::<_, String>(1), "Places");
     Ok(())
 }
 fn context_deletion(url: &str, child: &MapRef) -> Result<(), Box<dyn std::error::Error>> {
@@ -110,7 +127,7 @@ fn context_deletion(url: &str, child: &MapRef) -> Result<(), Box<dyn std::error:
     let records = Workspace::create(root.join("records.sqlite"))?;
     let inputs = PrivateInputs::connect(url)?;
     let document = serde_json::from_value(
-        json!({"world":{"version":1,"fields":[]},"scope":{"worldId":"world","areaId":child.map_id,"spaceId":"surface","footprint":shape(),"crsId":"planar-metres","resolution":1,"revision":1,"time":"present"},"coverage":[],"fieldPatches":[]}),
+        json!({"world":{"version":1,"fields":[]},"scope":{"worldId":id("world"),"areaId":child.map_id,"spaceId":id("surface"),"footprint":shape(),"crsId":id("planar-metres"),"resolution":1,"revision":1,"time":"present"},"coverage":[],"fieldPatches":[]}),
     )?;
     inputs.store(
         child,
@@ -133,7 +150,7 @@ fn context_deletion(url: &str, child: &MapRef) -> Result<(), Box<dyn std::error:
     assert!(PostgresMaps::connect(url)?.open(child).is_ok());
     assert!(inputs.document(child).is_ok());
     jobs.contexts(Call::Delete(Target::Map {
-        id: child.map_id.clone(),
+        id: child.map_id,
         descendants: false,
     }))?;
     assert!(PostgresMaps::connect(url)?.open(child).is_err());
@@ -166,21 +183,21 @@ fn http_facade(writer: &str, reader: &str) -> Result<(), Box<dyn std::error::Err
         let map = request(
             address,
             "/api/maps/read",
-            json!({"method":"open","args":[{"mapId":"island","revision":"spatial"}]}),
+            json!({"method":"open","args":[{"mapId":id("island"),"revision":id("spatial")}]}),
         )?;
         assert_eq!(map["state"], "complete");
         let selected = request(
             address,
             "/api/maps/read",
-            json!({"method":"features","args":[map["reference"],{"spaceId":"surface","geometry":{"type":"Point","coordinates":[5,5]}}]}),
+            json!({"method":"features","args":[map["reference"],{"spaceId":id("surface"),"geometry":{"type":"Point","coordinates":[5,5]}}]}),
         )?;
         assert_eq!(selected["items"].as_array().unwrap().len(), 1);
         let saved = request(
             address,
             "/api/maps/library",
-            json!({"method":"open","args":["island"]}),
+            json!({"method":"open","args":[id("island")]}),
         )?;
-        assert_eq!(saved["reference"]["revision"], "after-save");
+        assert_eq!(saved["reference"]["revision"], json!(id("after-save")));
         let state = json!({"version":0,"regions":[],"views":[]});
         let view = request(
             address,
@@ -191,7 +208,7 @@ fn http_facade(writer: &str, reader: &str) -> Result<(), Box<dyn std::error::Err
         let saved = request(
             address,
             "/api/maps/library",
-            json!({"method":"open","args":["island"]}),
+            json!({"method":"open","args":[id("island")]}),
         )?;
         assert_eq!(saved["navigation"]["views"], json!([]));
         Ok(())
@@ -228,7 +245,7 @@ fn replacement(store: &mut PostgresMaps, original: &MapRef) -> io::Result<()> {
     store.begin(&right, Some(original), false)?;
     store.append(&left.reference, assets())?;
     store.append(&right.reference, assets())?;
-    assert_eq!(store.find_head("island")?.as_ref(), Some(original));
+    assert_eq!(store.find_head(id("island"))?.as_ref(), Some(original));
     store.finish(&left.reference)?;
     assert!(store.finish(&right.reference).is_err());
     store.discard(&right.reference)?;
@@ -238,7 +255,7 @@ fn replacement(store: &mut PostgresMaps, original: &MapRef) -> io::Result<()> {
 }
 fn scoped_queries(store: &mut PostgresMaps) -> io::Result<()> {
     let map = map("spatial");
-    let previous = store.find_head("island")?.unwrap();
+    let previous = store.find_head(id("island"))?.unwrap();
     store.begin(&map, Some(&previous), false)?;
     let mut hollow = shape();
     hollow["coordinates"].as_array_mut().unwrap().push(json!([
@@ -257,11 +274,11 @@ fn scoped_queries(store: &mut PostgresMaps) -> io::Result<()> {
     }
     features.push(feature("last", elevated));
     store.append(&map.reference, serde_json::from_value(json!({"features":features,
-        "entities":[{"id":"realm","name":"Coastal union","kind":"polity","people":1200,"places":3}],
-        "history":[{"id":"uplift","title":"Uplift","description":"Raised ground","epoch":2,"featureIds":["last"],"attributes":{}}]
+        "entities":[{"id":id("realm"),"name":"Coastal union","kind":"polity","people":1200,"places":3}],
+        "history":[{"id":id("uplift"),"title":"Uplift","description":"Raised ground","epoch":2,"featureIds":[id("last")],"attributes":{}}]
     }))?)?;
     let query = FeatureQuery {
-        space_id: "surface".into(),
+        space_id: id("surface"),
         geometry: Some(serde_json::from_value(
             json!({"type":"Point","coordinates":[5,5]}),
         )?),
@@ -269,9 +286,9 @@ fn scoped_queries(store: &mut PostgresMaps) -> io::Result<()> {
     };
     let result = store.features(&map.reference, &query)?;
     assert_eq!(result.items.len(), 1);
-    assert_eq!(result.items[0].id, "last");
+    assert_eq!(result.items[0].id, id("last"));
     let mut query = FeatureQuery {
-        space_id: "surface".into(),
+        space_id: id("surface"),
         ..Default::default()
     };
     let page = store.features(&map.reference, &query)?;
@@ -280,17 +297,17 @@ fn scoped_queries(store: &mut PostgresMaps) -> io::Result<()> {
     assert_eq!(store.features(&map.reference, &query)?.items.len(), 2);
     assert_eq!(
         store
-            .history(&map.reference, "", Some(&["last".into()]))?
+            .history(&map.reference, None, Some(&[id("last")]))?
             .items
             .len(),
         1
     );
     assert!(store
-        .history(&map.reference, "", Some(&["absent".into()]))?
+        .history(&map.reference, None, Some(&[id("absent")]))?
         .items
         .is_empty());
     assert_eq!(
-        store.entities(&map.reference, &["realm".into()])?[0].name,
+        store.entities(&map.reference, &[id("realm")])?[0].name,
         "Coastal union"
     );
     let bowtie = json!({"type":"Polygon","coordinates":[[[0,0],[10,10],[10,0],[0,10],[0,0]]]});
@@ -303,13 +320,13 @@ fn scoped_queries(store: &mut PostgresMaps) -> io::Result<()> {
         )
         .is_err());
     query.cursor = None;
-    query.feature_ids = Some(vec!["valid".into()]);
+    query.feature_ids = Some(vec![id("valid")]);
     assert!(store.features(&map.reference, &query)?.items.is_empty());
     store.append(&map.reference, assets())?;
     store.finish(&map.reference)
 }
 fn saves(store: &PostgresMaps) -> io::Result<()> {
-    let reference = store.find_head("island")?.unwrap();
+    let reference = store.find_head(id("island"))?.unwrap();
     let request = || SaveRequest {
         reference: reference.clone(),
         expected_version: Some(0),
@@ -318,20 +335,20 @@ fn saves(store: &PostgresMaps) -> io::Result<()> {
     };
     let saved = store.save(request(), "today".into())?;
     assert_eq!(
-        store.find_saved("island")?.unwrap().summary.version,
+        store.find_saved(id("island"))?.unwrap().summary.version,
         saved.summary.version
     );
-    assert_eq!(store.list_saved("")?.items.len(), 1);
+    assert_eq!(store.list_saved(None)?.items.len(), 1);
     assert!(store.save(request(), "tomorrow".into()).is_err());
     Ok(())
 }
 fn sample_batches(store: &mut PostgresMaps) -> io::Result<()> {
     let mut map = map("samples");
-    map.reference.map_id = "sample-map".into();
+    map.reference.map_id = id("sample-map");
     store.begin(&map, None, true)?;
-    let sample = |id: &str, footprint: Value| {
+    let sample = |name: &str, footprint: Value| {
         json!({
-            "id":id,"spaceId":"surface","footprint":footprint,
+            "id":name,"spaceId":id("surface"),"footprint":footprint,
             "window":{"bounds":[0,0,10,10],"closedEast":true,"closedNorth":true},
             "cellSpan":10,"center":[5,5],"measure":100,"active":true,
             "attributes":[],"sections":[]
@@ -343,7 +360,11 @@ fn sample_batches(store: &mut PostgresMaps) -> io::Result<()> {
             "samples":[sample("a",shape()),sample("b",shape())]
         }))?,
     )?;
-    let found = store.samples_at(&map.reference, "surface", atlas_map::Position::xy(5.0, 5.0))?;
+    let found = store.samples_at(
+        &map.reference,
+        id("surface"),
+        atlas_map::Position::xy(5.0, 5.0),
+    )?;
     assert_eq!(
         found.iter().map(|s| s.id.as_str()).collect::<Vec<_>>(),
         ["a", "b"]
@@ -359,40 +380,44 @@ fn sample_batches(store: &mut PostgresMaps) -> io::Result<()> {
         .is_err());
     assert_eq!(
         store
-            .samples_at(&map.reference, "surface", atlas_map::Position::xy(5.0, 5.0))?
+            .samples_at(
+                &map.reference,
+                id("surface"),
+                atlas_map::Position::xy(5.0, 5.0)
+            )?
             .len(),
         2
     );
     store.discard(&map.reference)
 }
 fn automatic_child(store: &mut PostgresMaps) -> io::Result<()> {
-    let parent = store.find_head("island")?.unwrap();
+    let parent = store.find_head(id("island"))?.unwrap();
     let mut child = map("child-revision");
-    child.reference.map_id = "child".into();
+    child.reference.map_id = id("child");
     child.parent = Some(parent.clone());
     store.begin(&child, None, true)?;
-    assert!(store.find_saved("child")?.is_none());
+    assert!(store.find_saved(id("child"))?.is_none());
     store.append(&child.reference, assets())?;
     store.finish(&child.reference)?;
-    assert_eq!(store.list_saved("")?.items.len(), 2);
+    assert_eq!(store.list_saved(None)?.items.len(), 2);
     assert_eq!(
-        store.find_saved("child")?.unwrap().summary.reference,
+        store.find_saved(id("child"))?.unwrap().summary.reference,
         child.reference
     );
     assert!(store.related(&parent)?.children.contains(&child.reference));
     // A replaced head stays discoverable without reusing the old revision's view state.
     let next = complete(store, "after-save", Some(&parent))?;
-    let opened = store.find_saved("island")?.unwrap();
+    let opened = store.find_saved(id("island"))?.unwrap();
     assert_eq!(opened.summary.reference, next);
     assert_eq!(opened.summary.version, 1);
     Ok(())
 }
 fn interrupted(store: &mut PostgresMaps) -> io::Result<()> {
     let mut initial = map("interrupted");
-    initial.reference.map_id = "new-island".into();
+    initial.reference.map_id = id("new-island");
     store.begin(&initial, None, true)?;
     assert!(store.finish(&initial.reference).is_err());
     store.discard(&initial.reference)?;
-    assert_eq!(store.find_head("new-island")?, Some(initial.reference));
+    assert_eq!(store.find_head(id("new-island"))?, Some(initial.reference));
     Ok(())
 }

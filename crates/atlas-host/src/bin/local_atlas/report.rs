@@ -156,7 +156,7 @@ pub fn report(server: &Server, reference: &MapRef, directory: &Path) -> io::Resu
         let id = text(&space["id"]);
         features(server, reference, &id, None, |feature| {
             let kinds = counts
-                .entry((feature.space_id.clone(), feature.layer_id.clone()))
+                .entry((feature.space_id.to_string(), feature.layer_id.clone()))
                 .or_default();
             match kinds.iter_mut().find(|(kind, _)| *kind == feature.kind) {
                 Some((_, count)) => *count += 1,

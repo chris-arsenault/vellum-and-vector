@@ -13,7 +13,7 @@ use std::{collections::BTreeSet, fs, io, path::Path};
 #[derive(Default)]
 pub struct Retention {
     pub resources: BTreeSet<String>,
-    pub geography: BTreeSet<(String, String, String)>,
+    pub geography: BTreeSet<crate::private_inputs::GeographyKey>,
     pub problems: Vec<String>,
 }
 impl Retention {
@@ -58,8 +58,8 @@ impl Retention {
                 Ok(descriptor) => {
                     if let Some(field) = &descriptor.field {
                         result.geography.insert((
-                            descriptor.scope.world_id.clone(),
-                            descriptor.scope.area_id.clone(),
+                            descriptor.scope.world_id,
+                            descriptor.scope.area_id,
                             field.geography_id.clone(),
                         ));
                     }
@@ -158,7 +158,7 @@ pub fn remove_file(orphan: &Orphan, resources: &Path, assets: &MapFiles) -> io::
 #[derive(Serialize, Deserialize)]
 pub struct Cleanup {
     pub target: Target,
-    pub maps: BTreeSet<String>,
+    pub maps: BTreeSet<atlas_map::Id>,
 }
 pub fn pending(root: &Path) -> io::Result<Vec<String>> {
     fs::create_dir_all(root)?;

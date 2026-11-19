@@ -35,7 +35,7 @@ impl Preparation {
                 .geography
                 .iter()
                 .find(|b| b.layer == feature.layer_id && b.kinds.contains(&feature.kind));
-            let before = records.original.get(&feature.id)?;
+            let before = records.original.get(feature.id)?;
             if before.as_ref() != Some(&feature) {
                 let binding = binding.ok_or_else(|| {
                     io::Error::other(format!(
@@ -118,8 +118,8 @@ impl Preparation {
                 &output.surface_id,
                 spatial,
             )?;
-            self.document.world["areas"][&coverage_scope.located.area_id]["layers"][&layer] =
-                "generated".into();
+            self.document.world["areas"][&coverage_scope.located.area_id.to_string()]["layers"]
+                [&layer] = "generated".into();
         }
         Ok(())
     }
@@ -133,7 +133,7 @@ impl Preparation {
     ) -> io::Result<()> {
         let area = self
             .context
-            .area(&scope.located.area_id)
+            .area(scope.located.area_id)
             .map_err(io::Error::other)?;
         if !area.owns_geography()
             && !spatial
@@ -145,18 +145,17 @@ impl Preparation {
             ));
         }
         let id = semantic_id(
-            &scope.located.world_id,
+            scope.located.world_id,
             "generated-coverage",
             &format!("{}:{layer}", area.id),
-        )?;
+        );
         let entry = json!({"id":id, "areaId":area.id, "spaceId":scope.located.space_id, "layerId":layer,
             "detailRank":area.profile as u8, "resolution":scope.resolution, "time":"present", "footprint":scope.footprint,
             "state":"generated", "resourceId":surface, "generationId":operation});
         if area.map.is_none() {
             for other in &self.document.coverage {
-                let owner = other["areaId"]
-                    .as_str()
-                    .ok_or_else(|| io::Error::other("Coverage needs an owner"))?;
+                let owner: atlas_map::Id = serde_json::from_value(other["areaId"].clone())
+                    .map_err(|_| io::Error::other("Coverage needs an owner"))?;
                 if self
                     .context
                     .area(owner)
@@ -166,11 +165,11 @@ impl Preparation {
                     || !competing(&entry, other)
                     || self
                         .context
-                        .descendant(&area.id, owner)
+                        .descendant(area.id, owner)
                         .map_err(io::Error::other)?
                     || self
                         .context
-                        .descendant(owner, &area.id)
+                        .descendant(owner, area.id)
                         .map_err(io::Error::other)?
                 {
                     continue;
@@ -189,7 +188,10 @@ impl Preparation {
                 }
             }
         }
-        self.document.coverage.retain(|entry| entry["id"] != id);
+        let text = id.to_string();
+        self.document
+            .coverage
+            .retain(|entry| entry["id"] != text.as_str());
         self.document.coverage.push(entry);
         Ok(())
     }
@@ -212,13 +214,13 @@ fn representation(
     }
     if let Some(reach) = network
         .reaches(Selection {
-            feature_id: Some(&feature.id),
+            feature_id: Some(feature.id),
             ..Default::default()
         })?
         .next()
     {
         let reach = reach?;
-        if network.node(&reach.start)?.is_some() && network.node(&reach.end)?.is_some() {
+        if network.node(reach.start)?.is_some() && network.node(reach.end)?.is_some() {
             return Ok(());
         }
     }

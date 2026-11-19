@@ -94,7 +94,7 @@ pub struct EpochHistory {
 #[serde(rename_all = "camelCase")]
 pub struct CompletedGenerationHistory {
     pub run_id: String,
-    pub area_id: String,
+    pub area_id: atlas_map::Id,
     pub entries: Vec<EpochHistory>,
 }
 

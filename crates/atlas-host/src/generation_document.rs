@@ -63,8 +63,9 @@ impl Preparation {
     pub fn new(mut document: Document, prepared: &PreparedRequest) -> io::Result<Self> {
         let request = &prepared.request;
         document.scope = prepared.geography.scope.clone();
-        let area = &document.scope.located.area_id;
-        document.world["areas"][area]["footprint"] = json!(document.scope.footprint);
+        // The world document keys its areas by identity text.
+        let area = document.scope.located.area_id.to_string();
+        document.world["areas"][&area]["footprint"] = json!(document.scope.footprint);
         document.world["reference"]["boundaryMode"] =
             json!(request.geography.reference.boundary_mode);
         if !prepared.geography.frame.has_parent && !request.geography.has_generated_geography() {
@@ -130,7 +131,7 @@ impl Preparation {
         // a map installs only the layers its profile carries.
         let profile = result
             .context
-            .area(&result.document.scope.located.area_id)
+            .area(result.document.scope.located.area_id)
             .map_err(io::Error::other)?
             .profile;
         let definitions = atlas_generation::publication::layers::publication();
@@ -169,7 +170,8 @@ impl Preparation {
             .ok_or_else(|| io::Error::other("World revision is an integer"))?
             + 1;
         world["version"] = version.into();
-        world["areas"][&self.document.scope.located.area_id]["version"] = version.into();
+        let area = self.document.scope.located.area_id.to_string();
+        world["areas"][&area]["version"] = version.into();
         world["entities"] = output.entities.clone();
         for landmark in output
             .landmarks
@@ -185,14 +187,13 @@ impl Preparation {
                 landmarks.push(landmark.clone());
             }
         }
-        let area = &self.document.scope.located.area_id;
         if !output.drainage.is_null() {
             if world.get("drainage").is_none() {
                 world["drainage"] = json!({});
             }
-            world["drainage"][area] = output.drainage.clone();
+            world["drainage"][&area] = output.drainage.clone();
         } else if let Some(drainage) = world.get_mut("drainage").and_then(Value::as_object_mut) {
-            drainage.remove(area);
+            drainage.remove(&area);
         }
         let run = json!({ "id": operation, "areaId": area, "domains": self.input["domains"],
             "quality": self.input["quality"], "seed": self.input["seed"], "parameters": self.input["parameters"],
@@ -229,7 +230,7 @@ impl Preparation {
             .ok_or_else(|| io::Error::other(format!("Declare layer {id}")))?;
         let profile = self
             .context
-            .area(&self.document.scope.located.area_id)
+            .area(self.document.scope.located.area_id)
             .map_err(io::Error::other)?
             .profile;
         if !definition.profiles.contains(&profile) {

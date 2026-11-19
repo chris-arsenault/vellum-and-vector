@@ -7,7 +7,7 @@ use std::io;
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct Configuration {
-    pub world_id: Option<String>,
+    pub world_id: Option<atlas_map::Id>,
     pub name: String,
     pub width: f64,
     pub height: f64,
@@ -18,8 +18,10 @@ impl Configuration {
         document: &crate::generation_document::Document,
         map: &atlas_map::MapDescriptor,
     ) -> io::Result<Self> {
+        // The world document keys its areas by identity text.
         let world = &document.world;
-        let mut area = Some(map.reference.map_id.as_str());
+        let map_area = map.reference.map_id.to_string();
+        let mut area = Some(map_area.as_str());
         let mut run = None;
         while let Some(id) = area {
             run = world["generations"]
@@ -31,8 +33,8 @@ impl Configuration {
             area = world["areas"][id]["parentId"].as_str();
         }
         let mut configuration = Self::default_configuration()?;
-        configuration.world_id = Some(map.world_id.clone());
-        configuration.name = world["areas"][&map.reference.map_id]["name"]
+        configuration.world_id = Some(map.world_id);
+        configuration.name = world["areas"][&map_area]["name"]
             .as_str()
             .unwrap_or_default()
             .into();
@@ -49,7 +51,9 @@ impl Configuration {
         }
         configuration.normalize()
     }
-    pub fn input(&self, area: &str) -> io::Result<Input> {
+    /// The recipe's input for `area`; a configuration read before its area exists passes
+    /// the nil identity.
+    pub fn input(&self, area: atlas_map::Id) -> io::Result<Input> {
         let mut recipe = self.recipe.clone();
         let fields = recipe
             .as_object_mut()
@@ -70,7 +74,7 @@ impl Configuration {
                 "World dimensions must be positive finite metres",
             ));
         }
-        let input = self.input("configuration")?;
+        let input = self.input(atlas_map::Id::NIL)?;
         let resolved = configuration::resolve(&input, &defaults::settings()?)?;
         self.recipe["parameters"] = json!(resolved.parameters);
         self.recipe["settings"] = json!(resolved.settings);
@@ -99,7 +103,7 @@ impl Configuration {
     }
     pub fn choose(self, control: &str, choice: &str) -> io::Result<Self> {
         let mut configuration = self.normalize()?;
-        let mut input = configuration.input("configuration")?;
+        let mut input = configuration.input(atlas_map::Id::NIL)?;
         cartography::apply(&mut input, control, choice)?;
         configuration.recipe["features"] = serde_json::to_value(input.features)?;
         configuration.recipe["domains"] = serde_json::to_value(input.domains)?;
@@ -160,7 +164,7 @@ mod tests {
     fn default_choices_keep_balanced_terrain_and_restless_motion() -> io::Result<()> {
         let input = Configuration::default_configuration()?
             .normalize()?
-            .input("root")?;
+            .input(atlas_map::Id::NIL)?;
         let controls = cartography::controls()?;
         for (id, choice) in [("terrain", "balanced"), ("continental-motion", "restless")] {
             let control = controls.iter().find(|control| control["id"] == id).unwrap();
@@ -174,8 +178,8 @@ mod tests {
             Configuration::default_configuration()?.choose("continental-motion", "quiet")?;
         let restless =
             Configuration::default_configuration()?.choose("continental-motion", "restless")?;
-        let quiet = quiet.input("root")?.settings.unwrap();
-        let restless = restless.input("root")?.settings.unwrap();
+        let quiet = quiet.input(atlas_map::Id::NIL)?.settings.unwrap();
+        let restless = restless.input(atlas_map::Id::NIL)?.settings.unwrap();
         for (quiet, restless) in quiet.epochs.iter().zip(&restless.epochs) {
             assert!(restless.plate_travel > quiet.plate_travel);
             assert_eq!(restless.tectonics, quiet.tectonics);
@@ -186,7 +190,7 @@ mod tests {
     #[test]
     fn creator_review_uses_contracts_without_opening_numerical_inputs() -> io::Result<()> {
         let configuration = Configuration::default_configuration()?.normalize()?;
-        let input = configuration.input("root")?;
+        let input = configuration.input(atlas_map::Id::NIL)?;
         let source = crate::generation_world::CreateWorld {
             id: "00000000-0000-0000-0000-000000000002".into(),
             name: "Atlas".into(),
@@ -252,7 +256,7 @@ mod tests {
             );
         }
         assert_eq!(
-            cartography::selected(&control, &configuration.input("root")?.features)?,
+            cartography::selected(&control, &configuration.input(atlas_map::Id::NIL)?.features)?,
             Some(choice.into())
         );
         Ok(())
@@ -260,7 +264,7 @@ mod tests {
     #[test]
     fn defaults_create_a_current_private_world() -> io::Result<()> {
         let configuration = Configuration::default_configuration()?.normalize()?;
-        let input = configuration.input("root")?;
+        let input = configuration.input(atlas_map::Id::NIL)?;
         let world = crate::generation_world::CreateWorld {
             id: "00000000-0000-0000-0000-000000000001".into(),
             name: "Atlas".into(),

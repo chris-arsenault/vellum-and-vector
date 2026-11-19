@@ -145,8 +145,8 @@ fn handle(request: &mut Request, services: &Services) -> io::Result<ResponseBox>
                     .map_err(io::Error::other)
             };
             let reference = MapRef {
-                map_id: decode(map)?,
-                revision: decode(revision)?,
+                map_id: decode(map)?.parse().map_err(io::Error::other)?,
+                revision: decode(revision)?.parse().map_err(io::Error::other)?,
             };
             return assets::serve(
                 request,

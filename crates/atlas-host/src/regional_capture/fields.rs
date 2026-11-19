@@ -6,10 +6,12 @@ use std::{collections::BTreeMap, io};
 
 pub(super) fn capture(
     region: &Region<'_>,
-    owners: &[String],
+    owners: &[atlas_map::Id],
     source: &impl Source,
     output: &mut Capture,
 ) -> io::Result<()> {
+    // The world document holds area identities as text.
+    let owners: Vec<String> = owners.iter().map(ToString::to_string).collect();
     let fields = output.document.world["fields"]
         .as_array()
         .ok_or_else(|| io::Error::other("Private fields are an array"))?
@@ -19,7 +21,7 @@ pub(super) fn capture(
     let patches = std::mem::take(&mut output.document.field_patches);
     for field in fields
         .into_iter()
-        .filter(|f| owners.iter().any(|id| f["areaId"] == *id))
+        .filter(|f| owners.iter().any(|id| f["areaId"] == id.as_str()))
     {
         let Some(resource_id) = field["resourceId"].as_str() else {
             continue;
@@ -34,8 +36,14 @@ pub(super) fn capture(
         }
         let layout = layout(region, &original, source, &mut layouts, output)?;
         let field_id = string(&field, "id")?;
-        let id = region.id("field", field_id)?;
-        let resource_id = region.id("samples", &format!("{}:{field_id}", region.operation))?;
+        // Numerical resources stay keyed by text until capture types their descriptors (M6).
+        let id = region.keyed("field", field_id.as_bytes()).to_string();
+        let resource_id = region
+            .keyed(
+                "samples",
+                format!("{}:{field_id}", region.operation).as_bytes(),
+            )
+            .to_string();
         let mut resource = alias(region, original, &resource_id)?;
         resource["field"]["id"] = id.clone().into();
         resource["field"]["layoutResourceId"] = layout.clone().into();
@@ -50,14 +58,17 @@ pub(super) fn capture(
         captured.push(local);
         output.resources.push(resource);
         for patch in patches.iter().filter(|p| {
-            p["fieldId"] == field_id && owners.iter().any(|owner| p["areaId"] == *owner)
+            p["fieldId"] == field_id && owners.iter().any(|owner| p["areaId"] == owner.as_str())
         }) {
             let geometry = serde_json::from_value(patch["footprint"].clone())?;
             let Some(footprint) = region.clip(&geometry)? else {
                 continue;
             };
             let mut patch = patch.clone();
-            patch["id"] = region.id("patch", string(&patch, "id")?)?.into();
+            patch["id"] = region
+                .keyed("patch", string(&patch, "id")?.as_bytes())
+                .to_string()
+                .into();
             patch["fieldId"] = id.clone().into();
             patch["areaId"] = region.area.into();
             patch["input"] = true.into();
@@ -81,7 +92,12 @@ fn layout(
     if let Some(id) = layouts.get(geography) {
         return Ok(id.clone());
     }
-    let id = region.id("layout", &format!("{}:{geography}", region.operation))?;
+    let id = region
+        .keyed(
+            "layout",
+            format!("{}:{geography}", region.operation).as_bytes(),
+        )
+        .to_string();
     let layout = source.resource(string(&original["field"], "layoutResourceId")?)?;
     let alias = alias(region, layout, &id)?;
     let scope: Scope = serde_json::from_value(original["scope"].clone())?;

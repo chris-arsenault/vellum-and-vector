@@ -46,7 +46,7 @@ impl PreparedRequest {
         };
         let mut inherited = BTreeSet::new();
         for field in &request.capture.fields {
-            if selection.accepts(&field.area, &field.space, field.input)
+            if selection.accepts(field.area, field.space, field.input)
                 && selection.supports(field.input, &field.footprint, spatial)?
             {
                 inherited.extend(field.source.channels.iter().cloned());
