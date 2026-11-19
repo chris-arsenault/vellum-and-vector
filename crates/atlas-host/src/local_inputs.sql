@@ -8,9 +8,10 @@ CREATE TABLE IF NOT EXISTS generation_catalogs (
 CREATE TABLE IF NOT EXISTS generation_records (
     map_id BLOB NOT NULL,
     revision BLOB NOT NULL,
-    kind TEXT NOT NULL CHECK(kind IN ('feature','node','reach')),
+    -- 0 feature, 1 network node, 2 network reach; data is the record as CBOR.
+    kind INTEGER NOT NULL CHECK(kind IN (0,1,2)),
     id BLOB NOT NULL,
-    data TEXT NOT NULL,
+    data BLOB NOT NULL,
     PRIMARY KEY(map_id,revision,kind,id)
 );
 CREATE TABLE IF NOT EXISTS generation_geography (

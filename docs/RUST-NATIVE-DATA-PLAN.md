@@ -308,12 +308,59 @@ Acceptance: no generation step parses JSON to read a feature; the 37 read sites 
 access.
 Evidence: source review; profile of a regional round and the settlement step.
 
+#### M5 expansion and result
+
+Decision (agent-derived): SQLite stays the durable copy, because checkpoints, recovery and
+child capture copy and reopen the records file. Moving to memory backed by the block cache
+would need a second file format for all three; that cost buys nothing the mirror below
+does not.
+
+1. `record_store::mirror`: each working table is held decoded in memory, in ordinal order,
+   with indexes on area, layer and kind (features) and on feature and end nodes (network
+   reaches). Selections are index lookups; a scan reads at yield time, so writes made during
+   it are seen as a table scan saw them. Reads clone a value and never decode a row.
+2. Rows are written through as CBOR blobs with explicit ordinals, so AUTOINCREMENT order and
+   the revision counter carry over a reopen. Network kinds are integer codes.
+3. Retained inputs (`generation.records`, `generation_records`): `uuid`/BLOB ids, integer
+   kind codes, CBOR data; PostGIS writes them by binary COPY.
+4. Not built, with reasons: feature attributes stay one open map (each process reads its own
+   keys; a typed schema per layer has no single consumer); no spatial index (no generator
+   selection is spatial); kinds and layers stay text keys in the index (catalogue ordinals
+   would only shorten index keys).
+
+Evidence: `records_are_selected_from_memory_and_kept_in_the_file`, the mirror's selection
+test, and the PostGIS test loading a retained feature back. Profiles of a regional round and
+the settlement step are taken on the M11 chain.
+
+Review fixes: browser inputs saved by an older version are refused when opened, and the
+saved-inputs copy skips only records already held, so an old record fails instead of
+vanishing; a failed source copy reloads the in-memory source tables from the file. Stores are
+not migrated: the PostGIS `generation` and `map` schemas of the kept world are replaced by the
+fresh database at M11, as for M2.
+
 ### M6 — Typed parent→child capture [depends on M5]
 Scope: F8. Resource descriptors handled as the typed `Descriptor`; features taken from the
 parent's store in binary and clipped against one prepared region; magic sources excluded
 by id set.
 Acceptance: capture edits no untyped JSON documents; each feature costs one clip.
 Evidence: source review; capture step time on the chain.
+
+#### M6 expansion
+
+1. `regional_capture::Source::resource` returns the typed `numerical_resource::Descriptor`
+   (read through its stored format). Field capture aliases arrays, rescopes the field and
+   clips its footprint on the typed value, and writes the descriptor through the same
+   format. Field and patch entries of the world document stay JSON: the world document is
+   the configuration document the M1 decision kept.
+2. Field summaries (`numerical_output/summary.rs`) are deleted. They scan every channel of
+   every partition at each resource write, and nothing reads them.
+3. Feature capture: the placed magic sources are an `Id` set parsed once, not text compared
+   per feature; network layers are found once per layer, not by reading the world document
+   per feature; network nodes are deduplicated by a set, not by a linear scan; features are
+   clipped in batches against the child footprint, converted once per batch.
+
+Evidence: the capture unit test in `regional_capture/context.rs`; source review; capture step
+time on the M11 chain.
 
 ### M7 — Typed generation service and retained observations [depends on M0]
 Scope: F9. Generation calls reply with typed values; observations write their town

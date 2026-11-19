@@ -1,10 +1,11 @@
 //! Immutable completed metadata and records in the private PostgreSQL schema.
 use super::{uuid, CompletedInputs, PrivateInputs};
-use crate::{generation_document::Document, numerical_resource::Scope};
+use crate::{generation_document::Document, numerical_resource::Scope, record_store::Retained};
 use atlas_generation::features::{
     network::{NetworkReader, NetworkWorkspace, Selection},
     FeatureReader, FeatureSelection, FeatureWorkspace,
 };
+use atlas_gis::map_store::codec;
 use atlas_map::MapRef;
 use serde_json::Value;
 use std::io;
@@ -64,21 +65,21 @@ impl PrivateInputs {
         records(
             &mut transaction,
             &input.catalog_id,
-            "feature",
+            Retained::Feature,
             features.values(FeatureSelection::default())?,
             |feature| feature.id,
         )?;
         records(
             &mut transaction,
             &input.catalog_id,
-            "node",
+            Retained::Node,
             networks.nodes()?,
             |node| node.id,
         )?;
         records(
             &mut transaction,
             &input.catalog_id,
-            "reach",
+            Retained::Reach,
             networks.reaches(Selection::default())?,
             |reach| reach.id,
         )?;
@@ -130,20 +131,28 @@ impl PrivateInputs {
         networks: &mut dyn NetworkWorkspace,
     ) -> io::Result<()> {
         let input = self.read(reference)?;
-        for kind in ["feature", "node", "reach"] {
-            let mut after = String::new();
+        for kind in [Retained::Feature, Retained::Node, Retained::Reach] {
+            let mut after = uuid::Uuid::nil();
             loop {
-                let rows = self.db.borrow_mut().query("SELECT id,data FROM generation.records WHERE catalog_id=$1 AND kind=$2 AND id>$3 ORDER BY id LIMIT 128", &[&input.catalog_id, &kind, &after]).map_err(io::Error::other)?;
+                let rows = self
+                    .db
+                    .borrow_mut()
+                    .query(
+                        "SELECT id,data FROM generation.records WHERE catalog_id=$1 AND kind=$2
+                         AND id>$3 ORDER BY id LIMIT 128",
+                        &[&input.catalog_id, &(kind as i16), &after],
+                    )
+                    .map_err(io::Error::other)?;
                 if rows.is_empty() {
                     break;
                 }
                 for row in rows {
                     after = row.try_get("id").map_err(io::Error::other)?;
-                    let value: Value = row.try_get("data").map_err(io::Error::other)?;
+                    let data: &[u8] = row.try_get("data").map_err(io::Error::other)?;
                     match kind {
-                        "feature" => features.put(serde_json::from_value(value)?)?,
-                        "node" => networks.put_node(serde_json::from_value(value)?)?,
-                        _ => networks.put_reach(serde_json::from_value(value)?)?,
+                        Retained::Feature => features.put(codec::decode(data)?)?,
+                        Retained::Node => networks.put_node(codec::decode(data)?)?,
+                        Retained::Reach => networks.put_reach(codec::decode(data)?)?,
                     }
                 }
             }
@@ -163,24 +172,31 @@ impl PrivateInputs {
             .map_err(io::Error::other)
     }
 }
+/// Records streamed as binary rows: identity, kind code and the record as CBOR.
 fn records<T: serde::Serialize>(
     transaction: &mut postgres::Transaction<'_>,
     catalog: &str,
-    kind: &str,
+    kind: Retained,
     records: impl Iterator<Item = io::Result<T>>,
     identity: impl Fn(&T) -> atlas_map::Id,
 ) -> io::Result<()> {
-    let mut records = records.peekable();
-    while records.peek().is_some() {
-        let mut batch = Vec::with_capacity(128);
-        for record in records.by_ref().take(128) {
-            let record = record?;
-            batch.push(serde_json::json!({"id": identity(&record), "data": serde_json::to_value(&record)?}));
-        }
-        transaction.execute(
-            "INSERT INTO generation.records(catalog_id,kind,id,data) SELECT $1,$2,id,data FROM jsonb_to_recordset($3) AS records(id text,data jsonb)",
-            &[&catalog, &kind, &Value::Array(batch)],
-        ).map_err(io::Error::other)?;
+    use postgres::{
+        binary_copy::BinaryCopyInWriter,
+        types::{ToSql, Type},
+    };
+    let sink = transaction
+        .copy_in("COPY generation.records(catalog_id,kind,id,data) FROM STDIN BINARY")
+        .map_err(io::Error::other)?;
+    let mut writer =
+        BinaryCopyInWriter::new(sink, &[Type::TEXT, Type::INT2, Type::UUID, Type::BYTEA]);
+    let code = kind as i16;
+    for record in records {
+        let record = record?;
+        let id = uuid(identity(&record));
+        let data = codec::encode(&record)?;
+        let row: [&(dyn ToSql + Sync); 4] = [&catalog, &code, &id, &data];
+        writer.write(&row).map_err(io::Error::other)?;
     }
+    writer.finish().map_err(io::Error::other)?;
     Ok(())
 }

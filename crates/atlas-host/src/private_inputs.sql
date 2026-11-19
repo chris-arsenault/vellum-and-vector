@@ -20,9 +20,10 @@ CREATE TABLE IF NOT EXISTS generation.catalogs (
 );
 CREATE TABLE IF NOT EXISTS generation.records (
   catalog_id text NOT NULL REFERENCES generation.catalogs(id) ON DELETE CASCADE,
-  kind text NOT NULL CHECK (kind IN ('feature','node','reach')),
-  id text NOT NULL,
-  data jsonb NOT NULL,
+  -- 0 feature, 1 network node, 2 network reach; data is the record as CBOR.
+  kind smallint NOT NULL CHECK (kind IN (0,1,2)),
+  id uuid NOT NULL,
+  data bytea NOT NULL,
   PRIMARY KEY(catalog_id,kind,id)
 );
 CREATE TABLE IF NOT EXISTS generation.geography (

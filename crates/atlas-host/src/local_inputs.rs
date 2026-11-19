@@ -1,11 +1,12 @@
 //! Browser-local completed inputs. This database is separate from the finished-map catalog.
 mod inventory;
 // Arconis: docs/architecture/subsystems.arconis#item=j_bw_inputs — browser inputs.sqlite holding captured private inputs.
-use crate::{generation_document::Document, numerical_resource::Scope};
+use crate::{generation_document::Document, numerical_resource::Scope, record_store::Retained};
 use atlas_generation::features::{
     network::{NetworkReader, NetworkWorkspace, Selection},
     FeatureReader, FeatureSelection, FeatureWorkspace,
 };
+use atlas_gis::map_store::codec;
 use atlas_gis::sql::{self, column, Database};
 use atlas_map::MapRef;
 use serde_json::Value;
@@ -35,7 +36,9 @@ impl LocalInputs {
                     let document: Document =
                         crate::generation_document::FORMAT.parse(data.text()?)?;
                     self.db.execute("INSERT OR IGNORE INTO generation_catalogs SELECT * FROM imported.generation_catalogs WHERE map_id=? AND revision=?", &values)?;
-                    self.db.execute("INSERT OR IGNORE INTO generation_records SELECT * FROM imported.generation_records WHERE map_id=? AND revision=?", &values)?;
+                    // Only a record already held is skipped; a record of an older stored
+                    // shape fails its check rather than vanishing.
+                    self.db.execute("INSERT INTO generation_records SELECT * FROM imported.generation_records WHERE map_id=? AND revision=? ON CONFLICT DO NOTHING", &values)?;
                     for field in document.world["fields"].as_array().into_iter().flatten() {
                         let area: atlas_map::Id =
                             serde_json::from_value(field["areaId"].clone())
@@ -49,6 +52,19 @@ impl LocalInputs {
     }
     pub fn open(db: Rc<Database>) -> io::Result<Self> {
         db.batch(include_str!("local_inputs.sql"))?;
+        // Records kept by an older version name their kind as text and hold JSON; they are
+        // not readable here, and generating from them would silently start with none.
+        if db
+            .value(
+                "SELECT 1 FROM generation_records WHERE typeof(kind)<>'integer' LIMIT 1",
+                &[],
+            )?
+            .is_some()
+        {
+            return Err(io::Error::other(
+                "These saved generation inputs were made by an older version and cannot be read",
+            ));
+        }
         Ok(Self { db })
     }
     pub fn document(&self, reference: &MapRef) -> io::Result<Document> {
@@ -88,15 +104,15 @@ impl LocalInputs {
             )?;
             for feature in features.values(FeatureSelection::default())? {
                 let feature = feature?;
-                self.record(reference, "feature", feature.id, &feature)?;
+                self.record(reference, Retained::Feature, feature.id, &feature)?;
             }
             for node in networks.nodes()? {
                 let node = node?;
-                self.record(reference, "node", node.id, &node)?;
+                self.record(reference, Retained::Node, node.id, &node)?;
             }
             for reach in networks.reaches(Selection::default())? {
                 let reach = reach?;
-                self.record(reference, "reach", reach.id, &reach)?;
+                self.record(reference, Retained::Reach, reach.id, &reach)?;
             }
             for value in geography {
                 let scope: Scope = serde_json::from_value(value["scope"].clone())?;
@@ -119,7 +135,7 @@ impl LocalInputs {
     fn record(
         &self,
         r: &MapRef,
-        kind: &str,
+        kind: Retained,
         id: atlas_map::Id,
         data: &impl serde::Serialize,
     ) -> io::Result<()> {
@@ -128,9 +144,9 @@ impl LocalInputs {
             &[
                 r.map_id.into(),
                 r.revision.into(),
-                kind.into(),
+                (kind as i64).into(),
                 id.into(),
-                serde_json::to_string(data)?.into(),
+                sql::Value::Blob(codec::encode(data)?),
             ],
         )?;
         Ok(())
@@ -142,20 +158,29 @@ impl LocalInputs {
         networks: &mut dyn NetworkWorkspace,
     ) -> io::Result<()> {
         self.document(r)?;
-        for kind in ["feature", "node", "reach"] {
+        for kind in [Retained::Feature, Retained::Node, Retained::Reach] {
             let mut after = atlas_map::Id::NIL;
             loop {
-                let rows=self.db.query("SELECT id,data FROM generation_records WHERE map_id=? AND revision=? AND kind=? AND id>? ORDER BY id LIMIT 128",&[r.map_id.into(),r.revision.into(),kind.into(),after.into()])?;
+                let rows = self.db.query(
+                    "SELECT id,data FROM generation_records WHERE map_id=? AND revision=?
+                     AND kind=? AND id>? ORDER BY id LIMIT 128",
+                    &[
+                        r.map_id.into(),
+                        r.revision.into(),
+                        (kind as i64).into(),
+                        after.into(),
+                    ],
+                )?;
                 if rows.is_empty() {
                     break;
                 }
                 for row in rows {
                     after = column(&row, "id")?.id()?;
-                    let data = column(&row, "data")?.text()?;
+                    let data = column(&row, "data")?.bytes()?;
                     match kind {
-                        "feature" => features.put(serde_json::from_str(data)?)?,
-                        "node" => networks.put_node(serde_json::from_str(data)?)?,
-                        _ => networks.put_reach(serde_json::from_str(data)?)?,
+                        Retained::Feature => features.put(codec::decode(data)?)?,
+                        Retained::Node => networks.put_node(codec::decode(data)?)?,
+                        Retained::Reach => networks.put_reach(codec::decode(data)?)?,
                     }
                 }
             }

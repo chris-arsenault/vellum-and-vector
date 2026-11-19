@@ -129,6 +129,14 @@ fn context_deletion(url: &str, child: &MapRef) -> Result<(), Box<dyn std::error:
     let document = serde_json::from_value(
         json!({"world":{"version":1,"fields":[]},"scope":{"worldId":id("world"),"areaId":child.map_id,"spaceId":id("surface"),"footprint":shape(),"crsId":id("planar-metres"),"resolution":1,"revision":1,"time":"present"},"coverage":[],"fieldPatches":[]}),
     )?;
+    {
+        use atlas_generation::features::FeatureWorkspace;
+        let feature = json!({"id":id("ford"),"name":"Ford","kind":"crossing","layerId":"roads",
+            "areaId":child.map_id,"geometry":{"type":"Point","coordinates":[1,2]},"detail":{},
+            "attributes":{"depth":0.5},"relations":[],"state":"generated","protected":false,
+            "actor":"generator","generationId":null,"causes":[],"generationDomain":null});
+        records.features().put(serde_json::from_value(feature)?)?;
+    }
     inputs.store(
         child,
         &document,
@@ -136,6 +144,15 @@ fn context_deletion(url: &str, child: &MapRef) -> Result<(), Box<dyn std::error:
         &records.networks(),
         &[],
     )?;
+    // Retained records come back from their binary rows.
+    let loaded = Workspace::create(root.join("loaded.sqlite"))?;
+    inputs.load_records(child, &mut loaded.features(), &mut loaded.networks())?;
+    {
+        use atlas_generation::features::FeatureReader;
+        let ford = loaded.features().get(id("ford"))?.unwrap();
+        assert_eq!(ford.attributes["depth"], 0.5);
+    }
+    drop(loaded);
     let jobs = Jobs::new(Settings {
         database_url: url.into(),
         generation_url: url.into(),
