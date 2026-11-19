@@ -44,7 +44,7 @@ pub(super) struct Prepared {
     /// Refinement publishes the captured child; Regenerate on that child generates it.
     creates_child: bool,
     geography: Vec<Value>,
-    resources: Vec<Value>,
+    resources: Vec<crate::numerical_resource::Descriptor>,
 }
 // Arconis: docs/architecture/subsystems.arconis#item=j_bw_job — browser job that prepares, runs, keeps inputs and publishes.
 #[wasm_bindgen]

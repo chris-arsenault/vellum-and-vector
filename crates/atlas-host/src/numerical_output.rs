@@ -1,7 +1,6 @@
 //! Current field resource publication. Typed chunks are encoded here on both execution hosts.
 mod layout;
 mod partitions;
-mod summary;
 mod vectors;
 use crate::{
     numerical_input::{Alias, Array},
@@ -30,7 +29,6 @@ pub struct Definition {
 pub struct Resource {
     pub definition: Definition,
     vectors: Vec<Vector>,
-    summaries: Option<Value>,
 }
 pub struct Resources {
     pub layout: Resource,
@@ -147,7 +145,6 @@ impl Resources {
             definition.descriptor.arrays.push(vector.array.clone());
             vectors.push(vector);
         }
-        let summaries = summary::summaries(surface, &definition, &field, &vectors)?;
         if let Some(cargo) = surface
             .cargo()
             .filter(|_| names.iter().any(|name| name == "RockLayerKind0"))
@@ -196,7 +193,6 @@ impl Resources {
         Ok(Resource {
             definition,
             vectors,
-            summaries: Some(summaries),
         })
     }
 }
@@ -204,12 +200,6 @@ impl Resource {
     pub fn descriptor(&self, ready: bool) -> io::Result<Value> {
         let mut value = serde_json::to_value(&self.definition)?;
         value["state"] = if ready { "ready" } else { "working" }.into();
-        if let Some(Value::Object(summaries)) = &self.summaries {
-            value["field"]
-                .as_object_mut()
-                .ok_or_else(|| io::Error::other("Field summaries require a field"))?
-                .extend(summaries.clone());
-        }
         crate::numerical_resource::FORMAT.write(&value)
     }
     pub async fn write(

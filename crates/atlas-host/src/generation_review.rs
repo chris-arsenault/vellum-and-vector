@@ -17,13 +17,13 @@ use std::{collections::BTreeSet, io};
 
 /// A regional review uses the same captured descriptors as execution without persisting them.
 pub struct Descriptors<'a> {
-    pub captured: &'a [Value],
+    pub captured: &'a [Descriptor],
     pub store: &'a dyn Store,
 }
 impl Store for Descriptors<'_> {
     fn describe(&self, id: &str) -> io::Result<Descriptor> {
-        match self.captured.iter().find(|value| value["id"] == id) {
-            Some(value) => Ok(serde_json::from_value(value.clone())?),
+        match self.captured.iter().find(|resource| resource.id == id) {
+            Some(resource) => Ok(resource.clone()),
             None => self.store.describe(id),
         }
     }

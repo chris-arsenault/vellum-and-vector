@@ -32,7 +32,6 @@ pub fn layout(surface: &Surface, mut definition: Definition) -> io::Result<Resou
     Ok(Resource {
         definition,
         vectors,
-        summaries: None,
     })
 }
 fn adaptive(vectors: &mut Vec<Vector>, t: &Topology) {
@@ -78,6 +77,5 @@ pub fn tree(
     Ok(Resource {
         definition,
         vectors,
-        summaries: None,
     })
 }

@@ -362,6 +362,15 @@ Evidence: source review; capture step time on the chain.
 Evidence: the capture unit test in `regional_capture/context.rs`; source review; capture step
 time on the M11 chain.
 
+M6 result: built. Capture, the review store and both job hosts carry `Descriptor`
+(`Capture.resources`, the browser job's prepared resources); `numerical_output/summary.rs`
+is deleted; feature capture batches its clips 256 at a time and falls back to one feature at
+a time only to name a failing shape (`parent_features_are_clipped_rebound_and_networked_once`).
+The `Source` fixtures in atlas-host `tests/regions.rs` and `examples/browser_fixture/child.rs`
+move to `Descriptor` with the M10 fixtures. Review fix: a footprint is clipped only for a
+feature the child keeps, as before. Captured descriptors no longer carry `partitions`, which
+nothing reads.
+
 ### M7 — Typed generation service and retained observations [depends on M0]
 Scope: F9. Generation calls reply with typed values; observations write their town
 fabric and preview grid to retained files and the event carries a reference; the harness

@@ -5,7 +5,9 @@ mod footprint;
 mod map;
 pub use map::capture;
 mod records;
-use crate::{generation_document::Document, generation_frame::Geography};
+use crate::{
+    generation_document::Document, generation_frame::Geography, numerical_resource::Descriptor,
+};
 use atlas_generation::{
     atlas::resolution::Quality,
     features::{
@@ -22,7 +24,7 @@ use std::{collections::BTreeMap, io};
 
 /// Completed local metadata only. Implementations never fetch resources across hosts.
 pub trait Source {
-    fn resource(&self, id: &str) -> io::Result<Value>;
+    fn resource(&self, id: &str) -> io::Result<Descriptor>;
     fn geography(&self, scope: &crate::numerical_resource::Scope, id: &str) -> io::Result<Value>;
 }
 pub struct Capture {
@@ -30,7 +32,7 @@ pub struct Capture {
     pub features: Vec<Feature>,
     pub nodes: Vec<Node>,
     pub reaches: Vec<Reach>,
-    pub resources: Vec<Value>,
+    pub resources: Vec<Descriptor>,
     pub geography: Vec<Value>,
 }
 impl Capture {
@@ -42,14 +44,13 @@ impl Capture {
     }
 }
 pub async fn write_resources(
-    resources: &[Value],
+    resources: &[Descriptor],
     sink: &mut impl crate::numerical_output::Sink,
 ) -> io::Result<()> {
     let mut written = Vec::new();
     for resource in resources {
-        let id = resource["id"]
-            .as_str()
-            .ok_or_else(|| io::Error::other("Captured resource has an identity"))?;
+        let id = resource.id.as_str();
+        let stored = crate::numerical_resource::FORMAT.write(resource)?;
         let result = async {
             sink.create(id).await?;
             written.push(id);
@@ -59,7 +60,7 @@ pub async fn write_resources(
                 br#"{"zarr_format":3,"node_type":"group","attributes":{}}"#,
             )
             .await?;
-            sink.write(id, "resource.json", &serde_json::to_vec(resource)?)
+            sink.write(id, "resource.json", &serde_json::to_vec(&stored)?)
                 .await
         }
         .await;
@@ -129,6 +130,12 @@ impl Region<'_> {
     }
     fn polygon(&self, geometry: &Geometry) -> io::Result<Option<Geometry>> {
         Ok(self.clip(geometry)?.and_then(polygon))
+    }
+    /// Many geometries clipped to the child in one pass over its footprint.
+    fn clip_all(&self, geometries: &[Geometry]) -> io::Result<Vec<Option<Geometry>>> {
+        self.spatial
+            .overlays(&self.footprint, geometries, Overlay::Intersection)
+            .map_err(io::Error::other)
     }
 }
 impl Selection<'_> {

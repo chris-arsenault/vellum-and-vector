@@ -23,10 +23,9 @@ pub struct CaptureInputs<'a> {
     pub private: &'a PrivateInputs,
 }
 impl crate::regional_capture::Source for CaptureInputs<'_> {
-    fn resource(&self, id: &str) -> io::Result<serde_json::Value> {
-        Ok(serde_json::from_slice(&std::fs::read(
-            self.resources.directory(id)?.join("resource.json"),
-        )?)?)
+    fn resource(&self, id: &str) -> io::Result<crate::numerical_resource::Descriptor> {
+        use crate::numerical_resource::Store;
+        self.resources.describe(id)
     }
     fn geography(
         &self,

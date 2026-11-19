@@ -162,10 +162,9 @@ struct Inputs<'a> {
     private: &'a LocalInputs,
 }
 impl Source for Inputs<'_> {
-    fn resource(&self, id: &str) -> io::Result<Value> {
-        Ok(serde_json::from_slice(&std::fs::read(
-            self.resources.directory(id)?.join("resource.json"),
-        )?)?)
+    fn resource(&self, id: &str) -> io::Result<crate::numerical_resource::Descriptor> {
+        use crate::numerical_resource::Store;
+        self.resources.describe(id)
     }
     fn geography(&self, scope: &Scope, id: &str) -> io::Result<Value> {
         self.private.geography(scope, id)

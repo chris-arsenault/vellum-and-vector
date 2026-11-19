@@ -1,5 +1,8 @@
 use super::{Capture, Region, Source};
-use crate::numerical_resource::Scope;
+use crate::{
+    numerical_input::Alias,
+    numerical_resource::{Descriptor, State},
+};
 use atlas_map::Geometry;
 use serde_json::{json, Value};
 use std::{collections::BTreeMap, io};
@@ -27,16 +30,15 @@ pub(super) fn capture(
             continue;
         };
         let original = source.resource(resource_id)?;
-        if original["field"].is_null() {
+        let Some(described) = &original.field else {
             continue;
-        }
-        let footprint = serde_json::from_value(original["field"]["scope"]["footprint"].clone())?;
-        if region.clip(&footprint)?.is_none() {
+        };
+        if region.clip(&described.scope.footprint)?.is_none() {
             continue;
         }
         let layout = layout(region, &original, source, &mut layouts, output)?;
         let field_id = string(&field, "id")?;
-        // Numerical resources stay keyed by text until capture types their descriptors (M6).
+        // Numerical resources stay keyed by text; their keys are the captured identities.
         let id = region.keyed("field", field_id.as_bytes()).to_string();
         let resource_id = region
             .keyed(
@@ -45,16 +47,23 @@ pub(super) fn capture(
             )
             .to_string();
         let mut resource = alias(region, original, &resource_id)?;
-        resource["field"]["id"] = id.clone().into();
-        resource["field"]["layoutResourceId"] = layout.clone().into();
-        resource["field"]["geographyId"] = layout.into();
+        let footprint = {
+            let field = resource
+                .field
+                .as_mut()
+                .expect("A field resource keeps its field");
+            field.id = id.clone();
+            field.layout_resource_id = layout.clone();
+            field.geography_id = layout;
+            field.scope.footprint.clone()
+        };
         let mut local = field.clone();
         local["id"] = id.clone().into();
         local["areaId"] = region.area.into();
         local["input"] = true.into();
         local["state"] = "generated".into();
         local["resourceId"] = resource_id.into();
-        local["footprint"] = resource["field"]["scope"]["footprint"].clone();
+        local["footprint"] = json!(footprint);
         captured.push(local);
         output.resources.push(resource);
         for patch in patches.iter().filter(|p| {
@@ -83,12 +92,16 @@ pub(super) fn capture(
 }
 fn layout(
     region: &Region<'_>,
-    original: &Value,
+    original: &Descriptor,
     source: &impl Source,
     layouts: &mut BTreeMap<String, String>,
     output: &mut Capture,
 ) -> io::Result<String> {
-    let geography = string(&original["field"], "geographyId")?;
+    let field = original
+        .field
+        .as_ref()
+        .ok_or_else(|| io::Error::other("A layout belongs to a field resource"))?;
+    let geography = &field.geography_id;
     if let Some(id) = layouts.get(geography) {
         return Ok(id.clone());
     }
@@ -98,12 +111,11 @@ fn layout(
             format!("{}:{geography}", region.operation).as_bytes(),
         )
         .to_string();
-    let layout = source.resource(string(&original["field"], "layoutResourceId")?)?;
+    let layout = source.resource(&field.layout_resource_id)?;
     let alias = alias(region, layout, &id)?;
-    let scope: Scope = serde_json::from_value(original["scope"].clone())?;
-    let mut geography_record = source.geography(&scope, geography)?;
+    let mut geography_record = source.geography(&original.scope, geography)?;
     geography_record["id"] = id.clone().into();
-    geography_record["scope"] = alias["scope"].clone();
+    geography_record["scope"] = serde_json::to_value(&alias.scope)?;
     if let Some(ocean) = geography_record.get("ocean").filter(|v| !v.is_null()) {
         geography_record["ocean"] = json!(region.polygon(&serde_json::from_value(ocean.clone())?)?);
     }
@@ -125,7 +137,7 @@ fn layout(
     }
     output.resources.push(alias);
     output.geography.push(geography_record);
-    layouts.insert(geography.into(), id.clone());
+    layouts.insert(geography.clone(), id.clone());
     Ok(id)
 }
 fn clip_collection(
@@ -149,30 +161,28 @@ fn clip_collection(
     Ok(())
 }
 // Arconis: docs/architecture/subsystems.arconis#item=rg_fields — aliases parent number grids by reference, never copying them.
-fn alias(region: &Region<'_>, mut resource: Value, id: &str) -> io::Result<Value> {
-    let original = string(&resource, "id")?.to_owned();
-    if resource["state"] != "ready" {
+fn alias(region: &Region<'_>, mut resource: Descriptor, id: &str) -> io::Result<Descriptor> {
+    if resource.state != State::Ready {
         return Err(io::Error::other("Capture completed immutable resources"));
     }
-    resource["id"] = id.into();
-    resource["revision"] = 1.into();
-    resource["scope"]["areaId"] = region.area.into();
-    for array in resource["arrays"]
-        .as_array_mut()
-        .ok_or_else(|| io::Error::other("Resource arrays are declared"))?
-    {
-        if array["source"].is_null() {
-            array["source"] = json!({"resourceId":original,"array":string(array,"name")?});
+    let original = std::mem::replace(&mut resource.id, id.into());
+    resource.revision = 1;
+    resource.scope.area_id = region.area;
+    for array in &mut resource.arrays {
+        if array.source.is_none() {
+            array.source = Some(Alias {
+                resource_id: original.clone(),
+                array: array.name.clone(),
+            });
         }
     }
-    if !resource["field"].is_null() {
-        let footprint = serde_json::from_value(resource["field"]["scope"]["footprint"].clone())?;
+    if let Some(field) = &mut resource.field {
         let footprint = region
-            .clip(&footprint)?
+            .clip(&field.scope.footprint)?
             .ok_or_else(|| io::Error::other("Captured field intersects the child"))?;
-        resource["field"]["scope"]["areaId"] = region.area.into();
-        resource["field"]["scope"]["footprint"] = json!(footprint);
-        resource["field"]["scope"]["revision"] = region.version.into();
+        field.scope.located.area_id = region.area;
+        field.scope.footprint = footprint;
+        field.scope.revision = region.version;
     }
     Ok(resource)
 }
