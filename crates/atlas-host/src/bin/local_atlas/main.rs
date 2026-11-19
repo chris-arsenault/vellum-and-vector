@@ -373,7 +373,7 @@ fn real_scale(harness: &Harness, options: &Options) -> io::Result<()> {
     let [x, y] = point(harness, &reference, options.get("at").unwrap_or_default())?;
     let kind = options.get("kind").unwrap_or("ground");
     let hex = options.get("hex").unwrap_or("100m");
-    let across: f64 = options
+    let across: u32 = options
         .get("across")
         .unwrap_or("50")
         .parse()
@@ -388,7 +388,7 @@ fn real_scale(harness: &Harness, options: &Options) -> io::Result<()> {
         .find(|(name, _)| *name == hex)
         .map(|(_, m)| *m)
         .ok_or_else(|| io::Error::other(format!("Unknown hex size {hex}")))?;
-    let width = region.unwrap_or(across * metres);
+    let width = region.unwrap_or(f64::from(across) * metres);
     let name = options
         .get("name")
         .map_or_else(|| format!("{kind} {hex} {across}"), str::to_owned);
