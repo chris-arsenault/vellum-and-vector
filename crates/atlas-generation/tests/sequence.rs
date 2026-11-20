@@ -26,7 +26,7 @@ fn creator_configuration_binds_owned_settings_before_building_the_sequence() {
     }))
     .unwrap();
     let mut input: Input = serde_json::from_value(json!({
-        "areaId": "world", "domains": ["physical"], "quality": "draft", "seed": 4,
+        "areaId": atlas_map::Id::from_name("world"), "domains": ["physical"], "quality": "draft", "seed": 4,
         "features": {
             "physical.foundation": {"settings": {"continents": 7}, "configuration": {"profile": {"ContinentalWarpStrength": 0.8}}},
             "physical.lifecycle": {"configuration": {"history": {"plateTravel": [0.9, 0.5, 0.1]}}},

@@ -9,6 +9,7 @@ use atlas_generation::{
     features::Feature,
 };
 use atlas_gis::geometry::NativeGeos;
+use atlas_map::Id;
 use serde_json::json;
 
 fn feature(
@@ -18,9 +19,9 @@ fn feature(
     attributes: serde_json::Value,
 ) -> Feature {
     serde_json::from_value(
-        json!({"id":format!("{layer}-{kind}"),"placeId":kind,"areaId":"map",
+        json!({"id":Id::from_name(&format!("{layer}-{kind}")),"placeId":Id::from_name(kind),"areaId":Id::from_name("map"),
         "layerId":layer,"kind":kind,"name":kind,"attributes":attributes,"relations":[],"detail":{},
-        "state":"generated","protected":false,"actor":"generator","generationId":"test","causes":[],
+        "state":"generated","protected":false,"actor":"generator","generationId":Id::from_name("test"),"causes":[],
         "geometry":geometry}),
     )
     .unwrap()
