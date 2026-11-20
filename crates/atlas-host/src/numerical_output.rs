@@ -59,7 +59,7 @@ fn base(surface: &Surface, id: &str, frame: &Frame) -> Definition {
             id: id.into(),
             revision: 1,
             scope: frame.scope.located.clone(),
-            crs_id: frame.scope.crs_id.clone(),
+            crs_id: frame.scope.crs_id,
             bounds: grid.bounds,
             precision: frame.precision,
             layout: if sampling.is_some() {

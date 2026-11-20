@@ -61,7 +61,7 @@ pub fn interfaces(geography: &Geography) -> atlas_generation::atlas::validation:
             .filter_map(|(id, area)| {
                 area.boundary
                     .as_ref()
-                    .map(|boundary| (id.clone(), boundary.crossings.clone()))
+                    .map(|boundary| (*id, boundary.crossings.clone()))
             })
             .collect(),
         network_layers: geography

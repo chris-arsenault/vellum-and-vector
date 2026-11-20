@@ -44,8 +44,8 @@ impl PrivateInputs {
         }
         let input = CompletedInputs {
             reference: reference.clone(),
-            world_id: scope.world_id.clone(),
-            area_id: scope.area_id.clone(),
+            world_id: scope.world_id,
+            area_id: scope.area_id,
             revision: document.world["version"]
                 .as_u64()
                 .ok_or_else(|| io::Error::other("Completed document needs its revision"))?,

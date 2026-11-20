@@ -107,7 +107,7 @@ impl Request {
         Ok(Self {
             progressive: progressive(&document.world, reference.map_id, expected.as_ref()),
             world: serde_json::from_value(document.world)?,
-            area_id: reference.map_id.clone(),
+            area_id: reference.map_id,
             reference,
             expected,
             parent,
@@ -218,7 +218,7 @@ impl Request {
                 })?;
             numerical.push(Field {
                 id,
-                area: field.area_id.clone(),
+                area: field.area_id,
                 input: field.input,
                 footprint: field
                     .footprint
@@ -231,7 +231,7 @@ impl Request {
                     .lakes
                     .iter()
                     .map(|lake| Lake {
-                        id: lake.id.clone(),
+                        id: lake.id,
                         geometry: lake.geometry.clone(),
                         level: lake.level,
                     })

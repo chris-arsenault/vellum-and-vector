@@ -93,11 +93,11 @@ impl Geography {
     }
     pub fn context(&self) -> Context {
         Context {
-            id: self.id.clone(),
+            id: self.id,
             areas: self
                 .areas
                 .iter()
-                .map(|(id, area)| (id.clone(), area.area.clone()))
+                .map(|(id, area)| (*id, area.area.clone()))
                 .collect(),
         }
     }
@@ -145,19 +145,19 @@ impl Geography {
             .areas
             .values()
             .filter_map(|area| area.boundary.as_ref())
-            .flat_map(|b| b.crossings.iter().map(|c| c.feature_id.clone()))
+            .flat_map(|b| b.crossings.iter().map(|c| c.feature_id))
             .collect::<BTreeSet<_>>();
         let scope = Scope {
-            world: self.id.clone(),
-            area: area.id.clone(),
+            world: self.id,
+            area: area.id,
             area_name: area.name.clone(),
-            space: space.clone(),
+            space,
             world_geography: area.profile == Profile::World,
             owns_map_geography: area.owns_geography(),
             area_parents: self
                 .areas
                 .iter()
-                .map(|(id, area)| (id.clone(), area.area.parent_id.clone()))
+                .map(|(id, area)| (*id, area.area.parent_id))
                 .collect(),
             domain: self.reference.domain.clone(),
             domain_bounds,

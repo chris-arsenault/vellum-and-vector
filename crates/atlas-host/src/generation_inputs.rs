@@ -52,8 +52,8 @@ pub struct CapturedField {
 impl CapturedField {
     pub fn load(&self, resources: &mut WorkingSet) -> io::Result<Record> {
         Ok(Record {
-            area: self.area.clone(),
-            space: self.space.clone(),
+            area: self.area,
+            space: self.space,
             input: self.input,
             resolution: self.resolution,
             footprint: self.footprint.clone(),
@@ -74,7 +74,7 @@ impl AuthoredField {
     pub fn load(&self, resources: &mut WorkingSet) -> io::Result<Input> {
         Ok(Input {
             source: self.source.load(resources)?,
-            space: self.space.clone(),
+            space: self.space,
             footprint: self.footprint.clone(),
             source_footprint: self.source_footprint.clone(),
             channels: self.channels.clone(),

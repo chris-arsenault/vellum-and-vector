@@ -144,12 +144,14 @@ fn exists(database: &Database, table: &str) -> io::Result<bool> {
         )?
         .is_some())
 }
+/// A table's rows with their ordinals, and the first ordinal it has never used.
+type Stored<K, T> = (Vec<(i64, Row<K, T>)>, i64);
 /// The table's rows in ordinal order, and the first ordinal it has never used.
 fn stored<K, T>(
     database: &Database,
     table: &str,
     row: impl Fn(&sql::Row) -> io::Result<Row<K, T>>,
-) -> io::Result<(Vec<(i64, Row<K, T>)>, i64)> {
+) -> io::Result<Stored<K, T>> {
     let rows = database
         .connection
         .query(&format!("SELECT * FROM {table} ORDER BY ordinal"), &[])?
