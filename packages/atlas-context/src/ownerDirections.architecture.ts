@@ -17,25 +17,29 @@ import { realScaleDirections, type OwnerDirection } from "./ownerDirections.real
  */
 const directions: readonly OwnerDirection[] = [
   {
-    direction: "great works are meta types only, with significant variation per type and no set proper name",
+    direction:
+      "great works are meta types only, with significant variation per type and no set proper name",
     given: "2026-11-19",
     marks: ["crates/atlas-generation/src/town/catalogue/works.rs"],
     test: "crates/atlas-host/tests/major_works.rs",
   },
   {
-    direction: "settlement types own their policies and recurring processes do not switch on settlement type",
+    direction:
+      "settlement types own their policies and recurring processes do not switch on settlement type",
     given: "2026-11-19",
     marks: ["crates/atlas-generation/src/town/templates.rs"],
     test: "crates/atlas-host/tests/town_kernels.rs",
   },
   {
-    direction: "major works are independent of the settlement template, can be preselected for larger cities and can arise organically",
+    direction:
+      "major works are independent of the settlement template, can be preselected for larger cities and can arise organically",
     given: "2026-11-19",
     marks: ["crates/atlas-generation/src/town/major_works.rs"],
     test: "crates/atlas-generation/src/town/major_works.rs",
   },
   {
-    direction: "rank settlement templates from initial conditions and choose randomly with greater weight toward the top",
+    direction:
+      "rank settlement templates from initial conditions and choose randomly with greater weight toward the top",
     given: "2026-11-19",
     marks: ["crates/atlas-generation/src/town/templates.rs"],
     test: "crates/atlas-generation/src/town/templates.rs",
@@ -47,13 +51,15 @@ const directions: readonly OwnerDirection[] = [
     test: "crates/atlas-generation/tests/sequence.rs",
   },
   {
-    direction: "use exaggerated realism for population bands, with 300-500k capitals and exceptional cities around 2 million",
+    direction:
+      "use exaggerated realism for population bands, with 300-500k capitals and exceptional cities around 2 million",
     given: "2026-11-19",
     marks: ["crates/atlas-generation/src/field/people/yields.rs"],
     test: "crates/atlas-generation/src/field/people/feed.rs",
   },
   {
-    direction: "grow towns from an inhabited kernel across roughly 18 recurring iterations of comparable magnitude",
+    direction:
+      "grow towns from an inhabited kernel across roughly 18 recurring iterations of comparable magnitude",
     given: "2026-11-18",
     marks: ["crates/atlas-generation/src/atlas/town.rs"],
     test: "crates/atlas-generation/src/atlas/town.rs",

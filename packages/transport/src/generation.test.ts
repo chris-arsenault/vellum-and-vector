@@ -16,8 +16,18 @@ it("reads a retained preview by epoch and a worker's preview from its event", as
     }
     return {
       events: [
-        { kind: "preview", jobId: "job", epoch: 1, mediaType: "application/vnd.atlas.preview+cbor" },
-        { kind: "preview", jobId: "job", epoch: 2, mediaType: "application/vnd.atlas.preview+cbor" },
+        {
+          kind: "preview",
+          jobId: "job",
+          epoch: 1,
+          mediaType: "application/vnd.atlas.preview+cbor",
+        },
+        {
+          kind: "preview",
+          jobId: "job",
+          epoch: 2,
+          mediaType: "application/vnd.atlas.preview+cbor",
+        },
         {
           kind: "preview",
           jobId: "job",

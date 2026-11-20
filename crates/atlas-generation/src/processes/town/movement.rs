@@ -624,8 +624,8 @@ fn traffic(town: &mut Town, context: &Frontage<'_>) -> io::Result<Traffic> {
         access.add_link(a, b, cost, context.spatial)?;
     }
     let mut unmet = Vec::new();
-    // hpc-exempt: sources keyed by endpoint, in their original order, so each operating
-    // tie finds its counterparty without scanning every source.
+    // Sources keyed by endpoint, in their original order, so each operating tie finds its
+    // hpc-exempt: counterparty without scanning every source.
     let mut by_endpoint = std::collections::BTreeMap::<_, Vec<_>>::new();
     for source in context.sources {
         by_endpoint

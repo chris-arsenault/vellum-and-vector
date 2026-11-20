@@ -152,7 +152,7 @@ describe("Rust crate dependency boundary", () => {
       expect(pkg, name).toBeDefined();
       const allowed =
         name === "atlas-map"
-          ? ["serde", "serde_json", "ts-rs"]
+          ? ["serde", "serde_json", "ts-rs", "rstar"] // rstar: in-memory bounds index; no host capability.
           : name === "atlas-names"
             ? ["serde", "serde_json"]
             : [

@@ -54,7 +54,7 @@ impl Walks {
                 .iter()
                 .map(|h| town.approach(h.id).cloned())
                 .collect(),
-            junctions: BTreeSet::new(),
+            junctions: BTreeSet::new(), // hpc-exempt: observed entry points.
         }
     }
     pub fn visit(&mut self, h: HoldingId, load: f64, a: Point, b: Point, operating: bool) {

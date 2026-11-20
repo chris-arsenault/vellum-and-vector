@@ -42,7 +42,11 @@ export class RpcGeneration<Configuration> implements GenerationService<Configura
     if (event.map) return JSON.parse(new TextDecoder().decode(new Uint8Array(event.map.bytes)));
     let bytes: Uint8Array;
     try {
-      bytes = await this.call<Uint8Array>("preview", { job_id: jobId, epoch: event.epoch }, options);
+      bytes = await this.call<Uint8Array>(
+        "preview",
+        { job_id: jobId, epoch: event.epoch },
+        options
+      );
     } catch (error) {
       if (String(error).includes("no longer kept")) return undefined;
       throw error;
