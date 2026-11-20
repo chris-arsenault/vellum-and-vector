@@ -9,10 +9,37 @@ use crate::town::{
     ground::{FIRST_STREET, PLOT},
     growth::StreetLines,
     network::{Class, StreetProposal as Project},
+    scale::Measure,
     story::Layout,
 };
 use atlas_map::{Geometry, Position};
 use std::io;
+
+// Street work laid out between plots. Street metres, resolved by `Measure::Layout`.
+/// How far past two plot depths a street's end looks for its own holdings.
+const END_PAD: f64 = 5.;
+/// A backland lane starts this far beside and in front of a plot's flank, and runs this far
+/// behind the plot.
+const BACKLAND_OFFSET: f64 = 5.;
+const BACKLAND_REACH: f64 = 20.;
+/// Street ends nearer than this are not joined by a shortcut; a shortcut's gain is measured
+/// against its direct length and this much more.
+const SHORTCUT_LEAST: f64 = 25.;
+const SHORTCUT_SLACK: f64 = 40.;
+/// The least spacing a new route keeps from the streets it does not join.
+const ROUTE_SPACING: f64 = 60.;
+/// The shortest route worth building, and the least length any connection is charged for.
+const MINIMUM_ROUTE: f64 = 20.;
+const LEAST_CONNECTION: f64 = 1.;
+/// The distance from the centre at which new frontage is half as wanted as at the centre.
+/// Street metres, resolved by `Measure::Adjacency`.
+const CENTRE_PULL: f64 = 140.;
+/// The plot depth at which backland is half as worth a lane. Street metres, resolved by
+/// `Measure::Plot`.
+const DEEP_PLOT: f64 = 100.;
+/// The people one dwelling premises houses when reckoning how housed a town is; a holding
+/// houses this many for each premises it stands for (`TownScale::premises`).
+const PEOPLE_PER_HOME: f64 = 5.;
 
 enum Investment {
     Route(Project),
@@ -241,15 +268,14 @@ fn surface(
     context: &mut Frontage<'_>,
     path: &super::walks::LaneCourse,
 ) -> io::Result<Decision> {
-    let size = town.seat.story.size();
-    let minimum = path.class.width(size);
+    let form = town.street_form(path.class);
+    let minimum = form.width();
     if town.access_effort < street_cost(minimum) {
         return Ok(Decision::Unfunded);
     }
     let Some(street) = crate::town::network::lane(
         &path.points,
-        path.class,
-        size,
+        form,
         context.ground,
         crate::town::network::stops_lane,
         minimum,
@@ -300,7 +326,8 @@ fn seek_byway(
     let roads: Vec<_> = town.streets().iter().map(|s| line(&s.points)).collect();
     let index = context.spatial.index(&roads).map_err(io::Error::other)?;
     let size = town.seat.story.size();
-    let (frontage, depth) = atlas_map::town::plot_size(size);
+    let scale = town.scale();
+    let (frontage, depth) = town.plot();
     let reach = (depth * 2.5).min(town.access_effort * 2.);
     for project in projects {
         let from = project.points[0];
@@ -336,20 +363,21 @@ fn seek_byway(
             &town.streets()[id],
             journey,
             context.ground,
-            class.width(size),
+            scale.street_width(class, size),
             reach,
             frontage,
         ) else {
             continue;
         };
-        let street = crate::town::network::Street::new(path, class, size);
+        let street = crate::town::network::Street::new_at(path, class, size, scale);
         let end = street.points.last().copied();
         let length = street.length();
+        let width = street.width();
         if matches!(
             build(town, context, street, project.benefit)?,
             RoadInvestment::Built(_)
         ) {
-            trace.event(|| serde_json::json!({"stage":"byway","result":"built","demand":project.demand,"destination":to,"end":end,"length":length,"width":class.width(size)}));
+            trace.event(|| serde_json::json!({"stage":"byway","result":"built","demand":project.demand,"destination":to,"end":end,"length":length,"width":width}));
             break;
         }
     }
@@ -366,7 +394,8 @@ fn extend_approaches(
     use crate::town::geometry::{line_length, rest};
     use crate::town::network::{main_street, Arm};
     let size = town.seat.story.size();
-    let depth = atlas_map::town::plot_size(size).1;
+    let scale = town.scale();
+    let depth = town.plot().1;
     // How far along each street its holdings reach, gathered once; extending a street
     // does not move holdings.
     let mut occupied = vec![f64::NEG_INFINITY; town.streets().len()];
@@ -408,19 +437,19 @@ fn extend_approaches(
             destination: arm.destination.clone(),
         };
         let reach = (2.5 * depth).min(2. * town.access_effort);
-        if reach < crate::town::network::VERTEX_STEP {
+        if reach < crate::town::network::vertex_step(scale) {
             trace.event(|| serde_json::json!({"stage":"approach","id":street_id,"result":"insufficient reach","reach":reach}));
             continue;
         }
-        if let Some(mut extension) = main_street(&goal, reach, size, context.ground) {
-            let cost = extension.length() * 0.5;
+        if let Some(mut extension) = main_street(&goal, reach, size, context.ground, scale) {
+            let cost = street_cost(extension.length());
             extension.class = street.class;
             extension
                 .widths
                 .fill(if inhabited && street.class == Class::Main {
-                    Class::Main.width(size)
+                    scale.street_width(Class::Main, size)
                 } else {
-                    Class::Road.width(size)
+                    scale.street_width(Class::Road, size)
                 });
             extension.through_route &= remaining <= extension.length() + context.ground.cell
                 || context.ground.owner(*extension.points.last().unwrap())
@@ -451,8 +480,9 @@ fn occupied_ends(town: &Town, context: &Frontage<'_>) -> io::Result<Vec<Project>
         ground::{Rectangle, FREE},
         network::{lane, stops_lane},
     };
-    let size = town.seat.story.size();
-    let (frontage, depth) = atlas_map::town::plot_size(size);
+    let pad = town.scale().length(END_PAD, Measure::Layout);
+    let form = town.street_form(Class::Lane);
+    let (frontage, depth) = town.plot();
     let mut projects = Vec::new();
     for (id, road) in town.streets().iter().enumerate() {
         let Some(pair) = road.points.last_chunk::<2>() else {
@@ -464,7 +494,7 @@ fn occupied_ends(town: &Town, context: &Frontage<'_>) -> io::Result<Vec<Project>
         // A holding's front lies on its outline, so the holdings index finds the fronts
         // near the street's end.
         let [x, y] = pair[1];
-        let near = depth * 2. + 5.;
+        let near = depth * 2. + pad;
         let ends_occupied = town
             .nearby_holdings(
                 atlas_map::Bounds(x - near, y - near, x + near, y + near),
@@ -484,8 +514,7 @@ fn occupied_ends(town: &Town, context: &Frontage<'_>) -> io::Result<Vec<Project>
                 let end = add(pair[1], scale(axis, depth * 2.));
                 let lane = lane(
                     &[pair[1], end],
-                    Class::Lane,
-                    size,
+                    form,
                     context.ground,
                     stops_lane,
                     frontage * 1.5,
@@ -520,7 +549,10 @@ fn prospects(town: &Town, context: &Frontage<'_>) -> Vec<Project> {
         .iter()
         .filter(|h| h.kind.definition().roles.dwelling)
         .count() as f64;
-    let pressure = town.seat.story.people / (town.seat.story.people + housed * 5. + 1.);
+    let town_scale = town.scale();
+    let pressure = town.seat.story.people
+        / (town.seat.story.people + housed * PEOPLE_PER_HOME * town_scale.premises() + 1.);
+    let centre_pull = town_scale.length(CENTRE_PULL, Measure::Adjacency);
     context
         .candidates
         .iter()
@@ -548,7 +580,7 @@ fn prospects(town: &Town, context: &Frontage<'_>) -> Vec<Project> {
                 c.slot.depth,
             );
             let end = add(start, scale(direction, c.slot.depth * 2.5));
-            let focal = 1. / (1. + distance(start, town.seat.centre) / 140.);
+            let focal = 1. / (1. + distance(start, town.seat.centre) / centre_pull);
             let demand = c.opportunities.for_activity(Activity::Household).demand;
             Project {
                 demand: "prospective frontage",
@@ -835,15 +867,20 @@ fn street_loads(town: &Town, context: &Frontage<'_>, use_: &Loads) -> io::Result
     Ok(loads)
 }
 fn backland(town: &Town) -> Vec<Project> {
+    let town_scale = town.scale();
+    let offset = town_scale.length(BACKLAND_OFFSET, Measure::Layout);
+    let behind = town_scale.length(BACKLAND_REACH, Measure::Layout);
+    let deep = town_scale.length(DEEP_PLOT, Measure::Plot);
+    let centre_pull = town_scale.length(CENTRE_PULL, Measure::Adjacency);
     town.holdings()
         .iter()
         .filter(|h| h.slot.street.is_some() && (h.occupation > 0.2 || h.public))
         .map(|h| {
-            let flank = scale(h.slot.direction, h.slot.frontage / 2. + 5.);
-            let start = add(add(h.slot.front, flank), scale(h.slot.inward, -5.));
+            let flank = scale(h.slot.direction, h.slot.frontage / 2. + offset);
+            let start = add(add(h.slot.front, flank), scale(h.slot.inward, -offset));
             let rear = add(
                 add(h.slot.front, flank),
-                scale(h.slot.inward, h.slot.depth + 20.),
+                scale(h.slot.inward, h.slot.depth + behind),
             );
             let lateral = match town.layout {
                 Layout::Radial => 0.,
@@ -856,8 +893,8 @@ fn backland(town: &Town) -> Vec<Project> {
                 class: Class::Lane,
                 points: vec![start, rear, end],
                 benefit: (0.3 + h.occupation + h.crowding + h.kind.definition().prominence)
-                    / (1. + h.slot.depth / 100.)
-                    * (0.3 + 1. / (1. + distance(h.slot.front, town.seat.centre) / 140.)),
+                    / (1. + h.slot.depth / deep)
+                    * (0.3 + 1. / (1. + distance(h.slot.front, town.seat.centre) / centre_pull)),
             }
         })
         .collect()
@@ -926,8 +963,10 @@ fn shortcuts(town: &Town, context: &Frontage<'_>) -> io::Result<Vec<Project>> {
     let entrances: Vec<_> = ends.iter().copied().map(Entrance::external).collect();
     let network = access.bind(&entrances, AccessUse::Foot, context.spatial)?;
     let mut neighbours = vec![Vec::new(); ends.len()];
+    let layout = |metres| town.scale().length(metres, Measure::Layout);
+    let (least, slack) = (layout(SHORTCUT_LEAST), layout(SHORTCUT_SLACK));
     for [a, b] in edges {
-        if distance(ends[a], ends[b]) >= 25. {
+        if distance(ends[a], ends[b]) >= least {
             neighbours[a].push(b);
         }
     }
@@ -937,13 +976,15 @@ fn shortcuts(town: &Town, context: &Frontage<'_>) -> io::Result<Vec<Project>> {
         for &b in adjacent {
             let direct = distance(ends[a], ends[b]);
             let cost = routes.cost(b);
-            let gain = (cost - direct) / (direct + 40.);
+            let gain = (cost - direct) / (direct + slack);
             if gain > 0.4 {
                 result.push(Project {
                     demand: "shortcut",
                     class: Class::Lane,
                     points: vec![ends[a], ends[b]],
-                    benefit: gain * (1. + town.holdings().len() as f64 / 100.),
+                    // A shortcut serves the premises the holdings stand for.
+                    benefit: gain
+                        * (1. + town.holdings().len() as f64 * town.scale().premises() / 100.),
                 });
             }
         }
@@ -973,12 +1014,13 @@ fn invest<'a>(
             })
         });
     };
-    const MINIMUM_ROUTE: f64 = 20.;
+    let scale = town.scale();
+    let minimum_route = scale.length(MINIMUM_ROUTE, Measure::Layout);
     let minimum = connection_cost(
         town,
         &project.points,
         project.class,
-        street_cost(MINIMUM_ROUTE),
+        street_cost(minimum_route),
         context.spatial,
     )?;
     let Some(minimum) = minimum else {
@@ -1003,7 +1045,8 @@ fn invest<'a>(
         };
         points[0] = start;
         if let [a, b] = points.as_mut_slice() {
-            let Some((end, _)) = streets.constrain(&[*a, *b], 60.)? else {
+            let spacing = scale.length(ROUTE_SPACING, Measure::Layout);
+            let Some((end, _)) = streets.constrain(&[*a, *b], spacing)? else {
                 decision("network spacing or overlap", None, town.access_effort);
                 return Ok(Decision::Spacing);
             };
@@ -1012,13 +1055,16 @@ fn invest<'a>(
     }
     let Some(street) = crate::town::network::lane(
         &points,
-        project.class,
-        town.seat.story.size(),
+        town.street_form(project.class),
         context.ground,
         crate::town::network::stops_lane,
-        MINIMUM_ROUTE,
+        minimum_route,
     ) else {
-        decision("less than 20m usable corridor", None, town.access_effort);
+        decision(
+            "less than the minimum usable corridor",
+            None,
+            town.access_effort,
+        );
         return Ok(Decision::Terrain);
     };
     let effort = town.access_effort;
@@ -1116,8 +1162,11 @@ fn connection_cost(
         }
         cost = cost.min(influence.requirement(target, Requirement::ConnectionCost, ordinary));
     }
-    Ok(Some(cost.max(street_cost(1.))))
+    let least = street_cost(town.scale().length(LEAST_CONNECTION, Measure::Layout));
+    Ok(Some(cost.max(least)))
 }
+/// The street work, in effort, a way this many true metres long takes. Effort is spent per
+/// true metre at every fidelity, as the economy reads true floor areas.
 fn street_cost(length: f64) -> f64 {
     length * 0.5
 }

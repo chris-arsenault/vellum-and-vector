@@ -98,69 +98,21 @@ pub fn hot_spots(score: &[f64], at: &[[f64; 2]], spacing: f64, count: usize) -> 
     spots
 }
 
-/// A catalogue place a hot spot's development placed.
+/// A prominent place a hot-spot town built, at the city map cell it stands on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Placed {
     pub spot: usize,
     pub kind: Kind,
 }
 
-/// Strength below which a hot spot raises nothing more.
-const RAISED: f64 = 0.15;
-/// A family already standing at another hot spot shares its clientele with a new one.
-const SHARED: f64 = 0.5;
-
-/// A few development rounds at each hot spot. Each round a spot raises the catalogue place its
-/// reading favours most, read through the places already standing there: what they ease is
-/// favoured, what they bar is not raised, and a family stands once at a spot. A family already
-/// raised at another spot competes for the same clientele.
-pub fn develop(readings: &[CityReading], rounds: usize) -> Vec<Placed> {
-    use super::catalogue::{PlaceRules, PLACES};
-    use super::effects::Placement;
-    let mut placed: Vec<Placed> = Vec::new();
-    for _ in 0..rounds {
-        for (spot, reading) in readings.iter().enumerate() {
-            let here: Vec<Kind> = placed
-                .iter()
-                .filter(|p| p.spot == spot)
-                .map(|p| p.kind)
-                .collect();
-            let best = PLACES
-                .into_iter()
-                .filter_map(|kind| {
-                    let appearance = kind.definition().city.appearance()?;
-                    if here.iter().any(|k| k.same_family(kind)) {
-                        return None;
-                    }
-                    let target = Placement::Premises(kind);
-                    let effects = |k: &Kind| k.definition().roles.effects;
-                    if here
-                        .iter()
-                        .any(|k| effects(k).bars.iter().any(|b| b.target.matches(target)))
-                    {
-                        return None;
-                    }
-                    let eased: f64 = here
-                        .iter()
-                        .flat_map(|k| effects(k).eases.iter())
-                        .filter(|e| e.target.matches(target))
-                        .map(|e| e.relief)
-                        .sum();
-                    let elsewhere = placed
-                        .iter()
-                        .any(|p| p.spot != spot && p.kind.same_family(kind));
-                    let strength = (appearance.raised_by)(reading)
-                        * (1. + 4. * eased)
-                        * if elsewhere { SHARED } else { 1. };
-                    (strength > RAISED).then_some((strength, kind))
-                })
-                .max_by(|a, b| a.0.total_cmp(&b.0));
-            if let Some((_, kind)) = best {
-                placed.push(Placed { spot, kind });
-            }
-        }
-    }
-    placed
+/// A place a hot-spot town built stands out on the city map where its catalogue slot shows it
+/// and the spot's reading does not leave it unraised: none of its conditions wholly missing.
+pub fn prominent(kind: Kind, reading: &CityReading) -> bool {
+    use super::catalogue::PlaceRules;
+    kind.definition()
+        .city
+        .appearance()
+        .is_some_and(|appearance| (appearance.raised_by)(reading) > 0.)
 }
 
 /// Districts: each cell joins the seed it reaches most cheaply, where crossing water, a wall,
@@ -188,8 +140,9 @@ pub fn districts(
             continue;
         }
         for next in neighbours(cell).into_iter().flatten() {
+            // An infinite cost keeps ground out of every district.
             let through = d + cost(cell, next);
-            if through < best[next] {
+            if through.is_finite() && through < best[next] {
                 best[next] = through;
                 label[next] = label[cell];
                 frontier.push(Reverse((Ordered(through), next)));
@@ -215,9 +168,9 @@ impl Ord for Ordered {
 
 /// A city map covers its settlement's built ground and the ground the city can grow into,
 /// this many times the built radius.
-const SURROUNDINGS: f64 = 2.5;
+pub const SURROUNDINGS: f64 = 2.5;
 /// A small built extent still opens on room for its walls, fields and approaches, in metres.
-const LEAST_RADIUS: f64 = 1_500.;
+pub const LEAST_RADIUS: f64 = 1_500.;
 /// The outline a city map is refined over: its settlement's surroundings, centred on it.
 pub fn surroundings(settlement: &crate::features::Feature) -> std::io::Result<atlas_map::Geometry> {
     use atlas_map::{Geometry, Position};
@@ -368,7 +321,7 @@ mod tests {
     }
 
     #[test]
-    fn hot_spots_keep_apart_and_their_development_reads_what_already_stands() {
+    fn hot_spots_keep_apart_and_a_town_built_place_stands_out_where_its_conditions_meet() {
         let at: Vec<[f64; 2]> = (0..10).map(|i| [f64::from(i) * 100., 0.]).collect();
         let score = [0., 9., 8., 1., 0., 0., 5., 0., 0., 7.];
         // The two strongest cells are neighbours; only the first is kept.
@@ -386,24 +339,22 @@ mod tests {
             walls: 1,
             ..CityReading::default()
         };
-        let placed = develop(&[heart, heart], 3);
-        // Each spot raises several places, never one family twice at the same spot.
-        for spot in 0..2 {
-            let here: Vec<_> = placed.iter().filter(|p| p.spot == spot).collect();
-            assert!(here.len() >= 2, "{placed:?}");
-            for (i, a) in here.iter().enumerate() {
-                assert!(here[i + 1..].iter().all(|b| !a.kind.same_family(b.kind)));
-            }
-        }
-        // An open edge raises nothing.
-        assert!(develop(
-            &[CityReading {
-                fringe: 1.,
-                ..CityReading::default()
-            }],
-            3
-        )
-        .is_empty());
+        let edge = CityReading {
+            fringe: 1.,
+            ..CityReading::default()
+        };
+        let market = PLACES
+            .into_iter()
+            .find(|k| k.definition().label == "market")
+            .unwrap();
+        assert!(prominent(market, &heart));
+        assert!(!prominent(market, &edge));
+        // A place the city map hides never stands out, however its spot reads.
+        let hidden = PLACES
+            .into_iter()
+            .find(|k| k.definition().city.appearance().is_none())
+            .unwrap();
+        assert!(!prominent(hidden, &heart));
     }
 
     #[test]
@@ -431,5 +382,10 @@ mod tests {
         let even = districts(&[2, 8], n, |_, _| 1., line);
         assert_eq!(even[4], 0);
         assert_eq!(even[6], 1);
+        // Ground outside the built city joins no district.
+        let built = |_: usize, b: usize| if b >= 7 { f64::INFINITY } else { 1. };
+        let city = districts(&[2, 5], n, built, line);
+        assert!(city[7..].iter().all(|&l| l == u8::MAX));
+        assert!(city[..7].iter().all(|&l| l != u8::MAX));
     }
 }

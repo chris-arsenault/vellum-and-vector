@@ -158,7 +158,7 @@ impl Run<'_> {
         Ok(reached)
     }
     /// Draws the town pictures and writes the step log and picture listing.
-    fn close(mut self) -> io::Result<()> {
+    fn close(&mut self) -> io::Result<()> {
         let directory = self.directory.clone();
         for (file, label) in town::pictures(&directory, &directory, "")? {
             self.print(format_args!("picture {}", directory.join(&file).display()));
@@ -174,8 +174,31 @@ impl Run<'_> {
         fs::write(directory.join("steps.txt"), &steps)?;
         let listing = directory.join("previews.json");
         let temporary = listing.with_extension("json.tmp");
-        write_json(&temporary, &index(self.pictures))?;
+        write_json(&temporary, &index(std::mem::take(&mut self.pictures)))?;
         fs::rename(temporary, &listing)
+    }
+    /// A failed poll is retried while the server process lives; once it is gone the run
+    /// closes with the server's exit record instead of polling a dead address.
+    fn failed_poll(&mut self, error: &io::Error, after: &mut usize) -> io::Result<()> {
+        // A restarted server keeps job status but starts a new observation stream.
+        if error
+            .to_string()
+            .contains("Unknown generation event cursor")
+        {
+            *after = 0;
+        }
+        let Some(ending) = server_gone(&self.harness.home) else {
+            self.print(format_args!("poll failed, retrying: {error}"));
+            return Ok(());
+        };
+        self.print(format_args!("the server is gone: {ending}"));
+        self.close()?;
+        println!(
+            "Server log: {}\nFix the cause, then make local-up and make local-resume (job {}).",
+            self.harness.home.join("server.log").display(),
+            self.job
+        );
+        std::process::exit(1);
     }
 }
 
@@ -211,14 +234,7 @@ pub fn follow(
         let page: Page = match run.call("observe", after) {
             Ok(page) => page,
             Err(error) => {
-                // A restarted server keeps job status but starts a new observation stream.
-                if error
-                    .to_string()
-                    .contains("Unknown generation event cursor")
-                {
-                    after = 0;
-                }
-                run.print(format_args!("poll failed, retrying: {error}"));
+                run.failed_poll(&error, &mut after)?;
                 continue;
             }
         };
@@ -259,6 +275,25 @@ pub fn follow(
             std::process::exit(1);
         }
     }
+}
+
+/// How the server ended when its process is gone: the supervisor's exit record, or the
+/// server log's last line when there is none. A slow but living server is retried, and so is
+/// a missing process file: `local-up` removes it while it restarts the server.
+fn server_gone(home: &Path) -> Option<String> {
+    let pid = fs::read_to_string(home.join("server.pid")).ok()?;
+    if Path::new("/proc").join(pid.trim()).exists() {
+        return None;
+    }
+    let log = fs::read_to_string(home.join("server.log")).unwrap_or_default();
+    Some(
+        log.lines()
+            .rev()
+            .find(|line| line.contains("\"server.exit\""))
+            .or_else(|| log.lines().last())
+            .unwrap_or("no server log")
+            .to_owned(),
+    )
 }
 
 /// The land at one stage, shaded by height with sea and lakes blue, four pixels per sample.

@@ -1,11 +1,15 @@
 use super::*;
 use crate::town::effects::Effects;
 
+/// The distance from the seat at which a household is half as likely to farm as far out.
+/// Street metres, resolved by `Measure::Adjacency`.
+const HALF_RURAL: f64 = 120.;
+
 fn farming_household(site: &development::HousingSite) -> bool {
     let local = site.conditions;
     let rural = local.cultivated / (1. + local.exchange * 0.1 + local.rural_service * 3.)
         * site.distance_from_seat
-        / (site.distance_from_seat + 120.);
+        / (site.distance_from_seat + site.scale.length(HALF_RURAL, Measure::Adjacency));
     site.livelihood_sample < rural * 0.9
 }
 

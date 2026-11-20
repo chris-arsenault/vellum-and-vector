@@ -174,6 +174,8 @@ pub struct Access<'a> {
     paths: &'a [Footpath],
     connections: Vec<[f64; 3]>,
     water_stages: Vec<(Point, f64)>,
+    /// The scale the network's widths are read at: which ways carry which uses.
+    scale: super::scale::TownScale,
 }
 fn lines(value: Geometry) -> Vec<Vec<Position>> {
     match value {
@@ -194,7 +196,7 @@ fn pos(point: Point) -> Position {
 }
 impl<'a> Access<'a> {
     pub fn for_town(town: &'a Town, spatial: &dyn SpatialKernel) -> io::Result<Self> {
-        let mut network = Self::over(town.noded_streets(spatial)?);
+        let mut network = Self::over(town.noded_streets(spatial)?, town.scale());
         network.paths = town.footpaths();
         network.connections.resize(town.streets().len(), [0.; 3]);
         for h in town.holdings().iter().filter(|h| h.occupation > 0.) {
@@ -265,14 +267,18 @@ impl<'a> Access<'a> {
         self.ground = Some(ground);
         self
     }
+    /// A network over streets laid at street fidelity.
     pub fn new(streets: &[Street], spatial: &dyn SpatialKernel) -> io::Result<Self> {
-        Ok(Self::over(std::rc::Rc::new(Self::node(streets, spatial)?)))
+        Ok(Self::over(
+            std::rc::Rc::new(Self::node(streets, spatial)?),
+            super::scale::TownScale::default(),
+        ))
     }
     /// The town's streets alone, without its footpaths and links, from its held noding.
     pub fn over_town_streets(town: &Town, spatial: &dyn SpatialKernel) -> io::Result<Self> {
-        Ok(Self::over(town.noded_streets(spatial)?))
+        Ok(Self::over(town.noded_streets(spatial)?, town.scale()))
     }
-    fn over(noded: std::rc::Rc<Noded>) -> Self {
+    fn over(noded: std::rc::Rc<Noded>, scale: super::scale::TownScale) -> Self {
         Self {
             noded,
             links: vec![],
@@ -280,6 +286,7 @@ impl<'a> Access<'a> {
             paths: &[],
             connections: Vec::new(),
             water_stages: Vec::new(),
+            scale,
         }
     }
     /// The streets noded at their crossings into legs, each kept with the street it is part of.
@@ -552,7 +559,7 @@ impl<'a> Access<'a> {
                 let Some(segment) = nearest.map(|i| indices[i]) else {
                     continue;
                 };
-                if !mode.permits_width(noded.legs[segment].width) {
+                if !mode.permits_width(noded.legs[segment].width, self.scale) {
                     continue;
                 }
                 let entrance = entries[i];
@@ -581,7 +588,7 @@ impl<'a> Access<'a> {
         graph: &mut BoundNetwork,
     ) {
         for (leg, mut cuts) in self.noded.legs.iter().zip(cuts) {
-            if !mode.permits_width(leg.width) {
+            if !mode.permits_width(leg.width, self.scale) {
                 continue;
             }
             cuts.sort_by(|a, b| a.0.total_cmp(&b.0));

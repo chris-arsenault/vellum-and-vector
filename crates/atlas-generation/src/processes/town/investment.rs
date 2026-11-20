@@ -3,8 +3,12 @@ use super::Exposure;
 use crate::town::{
     catalogue::{Kind, PlaceRules},
     fabric::{Anchor, FabricEdit, FabricOwner, Purpose, Relationship, Specification, Town},
+    scale::Measure,
 };
 use std::io;
+/// The margin the search for premises to share pads an accommodation's reach by. Street
+/// metres, resolved by `Measure::Layout`.
+const PREMISES_PAD: f64 = 5.;
 
 pub fn advance(town: &mut Town, context: &Exposure<'_>) -> io::Result<()> {
     extend_precincts(town, context)?;
@@ -179,7 +183,7 @@ fn collective_needs(town: &mut Town, context: &Exposure<'_>) {
             .filter(|p| p.relationships.contains(&Relationship::Accommodation(kind)))
             .map(|p| town.position(p.site))
             .collect();
-        let reach = kind.definition().depth.high * 6.;
+        let reach = town.scale().range(kind.definition().depth).high * 6.;
         let centre = town
             .holdings()
             .iter()
@@ -225,7 +229,9 @@ fn premises(
     // Accommodation admits fronts within six of its depths of the site; a holding's front
     // lies on its outline, so the holdings index finds every candidate. Ids stay in
     // order so ties resolve as a scan would.
-    let reach = kind.definition().depth.high * 6. + 5.;
+    let scale = town.scale();
+    let depth = scale.range(kind.definition().depth);
+    let reach = depth.high * 6. + scale.length(PREMISES_PAD, Measure::Layout);
     let [x, y] = site;
     let mut near = town
         .nearby_holdings(
@@ -255,8 +261,7 @@ fn premises(
                 .premises
                 .shares_with
                 .contains(&footprint.activity);
-            let space = h.slot.depth * h.slot.frontage
-                >= footprint.depth.low * footprint.frontage.low * 0.45;
+            let space = h.slot.depth * h.slot.frontage >= footprint.least_area(scale) * 0.45;
             h.condition > 0.4
                 && space
                 && h.secondary.is_none()
@@ -275,8 +280,7 @@ fn premises(
                     + c.protection
                     + c.effects.prestige
                     + learning * c.effects.learning);
-            let cost = (1. + distance / kind.definition().depth.high)
-                * (1. + h.occupation * h.claim + c.waste);
+            let cost = (1. + distance / depth.high) * (1. + h.occupation * h.claim + c.waste);
             (returns / cost, h.id)
         })
         .max_by(|a, b| a.0.total_cmp(&b.0))

@@ -411,6 +411,7 @@ pub fn use_exposure() -> Query<State, crate::town::influence::SiteConditions> {
         let requests = reader.input::<super::development::SiteRequests>()?;
         let mut results = Vec::new();
         for (town, points) in state.town.towns.iter().zip(&requests.0) {
+            let reach = Reach::of(town.scale());
             let mut services = vec![Conditions::default(); points.len()];
             let fields: Vec<_> = state
                 .town
@@ -424,7 +425,8 @@ pub fn use_exposure() -> Query<State, crate::town::influence::SiteConditions> {
                     .nearest_with_distance(atlas_map::Position::xy(point[0], point[1]))
                     .map_err(io::Error::other)?
                 {
-                    condition.cultivated = state.town.fields[i].worked / (1. + distance / 60.);
+                    condition.cultivated =
+                        state.town.fields[i].worked / (1. + distance / reach.neighbourhood);
                 }
             }
             let shapes: Vec<_> = town.holdings().iter().map(|h| h.outline.clone()).collect();
@@ -444,16 +446,18 @@ pub fn use_exposure() -> Query<State, crate::town::influence::SiteConditions> {
                     p,
                     requests.3[results.len()][site],
                     places::Carrier::at(state.field(), p)?,
+                    town.scale(),
                 );
+                let r = reach.premises;
                 for (i, distance) in index
                     .distances(
-                        atlas_map::Bounds(p[0] - 100., p[1] - 100., p[0] + 100., p[1] + 100.),
+                        atlas_map::Bounds(p[0] - r, p[1] - r, p[0] + r, p[1] + r),
                         atlas_map::Position::xy(p[0], p[1]),
                     )
                     .map_err(io::Error::other)?
                 {
                     let holding = &town.holdings()[i];
-                    premises_effect(holding, areas[i], distance, &mut services[site]);
+                    premises_effect(holding, areas[i], distance, reach, &mut services[site]);
                     local.receive(holding, carriers[i], distance, &mut services[site]);
                 }
                 sites.push(local);
@@ -475,15 +479,49 @@ pub fn use_exposure() -> Query<State, crate::town::influence::SiteConditions> {
     })
 }
 
+/// How far a holding's presence carries to the sites round it, at a town's scale: its
+/// neighbours, its neighbourhood, and the box a site's premises are gathered from.
+#[derive(Clone, Copy)]
+struct Reach {
+    neighbours: f64,
+    neighbourhood: f64,
+    premises: f64,
+    /// The ground a holding's built area is spread over to read as density: a hectare at
+    /// street fidelity, as much more as the neighbourhood reaches further.
+    spread: f64,
+}
+impl Reach {
+    /// The distances at which a holding's neighbours and its neighbourhood feel it half as
+    /// strongly as at its door, and the half side of the box gathered round a site. Street
+    /// metres, resolved by `Measure::Adjacency`.
+    const NEIGHBOURS: f64 = 15.;
+    const NEIGHBOURHOOD: f64 = 60.;
+    const PREMISES: f64 = 100.;
+    fn of(scale: crate::town::scale::TownScale) -> Self {
+        let adjacent = |metres| scale.length(metres, crate::town::scale::Measure::Adjacency);
+        Self {
+            neighbours: adjacent(Self::NEIGHBOURS),
+            neighbourhood: adjacent(Self::NEIGHBOURHOOD),
+            premises: adjacent(Self::PREMISES),
+            spread: scale.area(Self::HECTARE, crate::town::scale::Measure::Adjacency),
+        }
+    }
+    /// A hectare in square metres: the ground density is read over at street fidelity.
+    const HECTARE: f64 = 10_000.;
+}
 fn premises_effect(
     holding: &crate::town::fabric::Holding,
     area: f64,
     distance: f64,
+    reach: Reach,
     condition: &mut crate::town::influence::Conditions,
 ) {
-    let exposure = holding.occupation / (1. + (distance / 15.).powi(2));
+    let exposure = holding.occupation / (1. + (distance / reach.neighbours).powi(2));
     if !holding.public {
-        condition.density += area * holding.occupation / (10000. * (1. + (distance / 60.).powi(2)));
+        // Density is built ground over the neighbourhood that gathers it: a hectare at street
+        // fidelity, the same share of ground at every fidelity.
+        condition.density += area * holding.occupation
+            / (reach.spread * (1. + (distance / reach.neighbourhood).powi(2)));
     }
     for kind in std::iter::once(holding.kind).chain(holding.secondary) {
         let definition = kind.definition();
@@ -497,7 +535,7 @@ fn premises_effect(
     condition.patronage += holding.means * exposure;
     if holding.kind.definition().activity == Activity::Agriculture && !holding.buildings.is_empty()
     {
-        condition.rural_service += holding.occupation / (1. + distance / 60.);
+        condition.rural_service += holding.occupation / (1. + distance / reach.neighbourhood);
     }
 }
 

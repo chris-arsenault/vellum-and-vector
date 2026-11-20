@@ -1,6 +1,7 @@
 //! A city map's own places: the walls and gates its growth raises (`town::walls`), the
-//! prominent places its hot spots raise, its districts and its major works (`town::city`).
-//! City growth and the city plan decide them; the catalogue publishes each with its record.
+//! prominent places its hot-spot towns build, its major works and its districts
+//! (`atlas::regional::city`). The city's rounds decide them; the catalogue publishes each
+//! with its record.
 use super::{
     catalogue::CatalogueState,
     contract::*,
@@ -54,10 +55,8 @@ fn roles<S: 'static>(journeys: &str) -> Roles<S> {
                 "Walls ring the built city; gates, markets and halls gather where its ways meet."
                     .into(),
             ),
-            needs: Slot::NotApplicable("The city plan decides where each stands."),
-            excludes: Slot::NotApplicable(
-                "The city plan's own development rounds read what stands.",
-            ),
+            needs: Slot::NotApplicable("The city's rounds decide where each stands."),
+            excludes: Slot::NotApplicable("The hot-spot towns' own development reads what stands."),
             contains: Slot::NotApplicable("The enclosure question reads walls' cells directly."),
             pairs_with: Slot::NotApplicable("Gates are published with their wall."),
         },
@@ -75,7 +74,10 @@ fn roles<S: 'static>(journeys: &str) -> Roles<S> {
             fate: Slot::Value(Rc::new(|_, _| Ok(Fate::Persists))),
         },
         visibility: Visibility {
-            statement: Must::Value("A city map shows only its prominent places.".into()),
+            statement: Must::Value(
+                "A city map shows its blocks, thoroughfares and landmarks, not its premises."
+                    .into(),
+            ),
             magnitude: Slot::Unwritten,
             local_conditions: Slot::Unwritten,
             isolation: Slot::Unwritten,
@@ -103,7 +105,7 @@ fn across<S, Schedule>() -> AcrossMaps<S, Schedule> {
         unrealized: Slot::NotApplicable("A captured city place keeps its record."),
         settle: Slot::NotApplicable("Water does not move city places."),
         schedule: Slot::NotApplicable(
-            "The city plan decides them; no refinement step refinds them.",
+            "The city's rounds decide them; no refinement step refinds them.",
         ),
     }
 }
@@ -164,13 +166,35 @@ pub fn gate<S: CatalogueState<Schedule> + 'static, Schedule: 'static>() -> Entry
         journeys: "A gate is where journeys pass a wall; markets and inns gather at it.",
     })
 }
+pub fn thoroughfare<S: CatalogueState<Schedule> + 'static, Schedule: 'static>() -> Entry<S, Schedule>
+{
+    entry(Says {
+        kind: Kind::CityThoroughfare,
+        name: "Thoroughfare",
+        distinct: "A major way of a city map; a district map's streets are its own.",
+        arises: "Grown by the town development of the city's hot spots, at city fidelity.",
+        publishes: "Publish each thoroughfare's line with its class.",
+        journeys: "The city's journeys run along its thoroughfares.",
+    })
+}
+pub fn block<S: CatalogueState<Schedule> + 'static, Schedule: 'static>() -> Entry<S, Schedule> {
+    entry(Says {
+        kind: Kind::CityBlock,
+        name: "City block",
+        distinct:
+            "A block of a city map with one use; its houses and premises are a district map's.",
+        arises: "Built up by the town development of the city's hot spots, at city fidelity.",
+        publishes: "Publish each block's outline with its use and the people it houses.",
+        journeys: "Journeys reach a block from the thoroughfares round it.",
+    })
+}
 pub fn place<S: CatalogueState<Schedule> + 'static, Schedule: 'static>() -> Entry<S, Schedule> {
     entry(Says {
         kind: Kind::CityPlace,
-        name: "Prominent city place",
+        name: "City landmark",
         distinct:
             "A place from the settlement catalogue that a city map shows at its rough location.",
-        arises: "Raised by development rounds at a hot spot of the city's social fields.",
+        arises: "Built by the town development of a hot spot where the city map shows its kind.",
         publishes:
             "Publish each at its rough location, with its catalogue place, symbol and ground.",
         journeys: "City places draw journeys from across the city.",

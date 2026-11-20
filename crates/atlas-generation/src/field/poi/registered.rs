@@ -156,5 +156,7 @@ where
         super::city_places::place(),
         super::city_places::district(),
         super::city_places::work(),
+        super::city_places::thoroughfare(),
+        super::city_places::block(),
     ])
 }

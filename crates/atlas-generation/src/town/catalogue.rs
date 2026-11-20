@@ -20,6 +20,7 @@ mod service;
 mod trade;
 pub(crate) mod works;
 use super::city::{crossing, together, CityAppearance, CityMap};
+use super::scale::{Measure, TownScale};
 /// Houses stand in a city map's built and density fields, never as places of their own.
 const ORDINARY: CityMap =
     CityMap::Hidden("Ordinary premises stand in the city map's built and occupation fields.");
@@ -90,13 +91,20 @@ impl AccessUse {
             Self::Waterborne => None,
         }
     }
+    /// Whether every stretch of a street at street fidelity carries this use; see
+    /// `permits_street_at`.
     pub fn permits_street(self, street: &super::network::Street) -> bool {
-        !street.widths.is_empty() && street.widths.iter().all(|w| self.permits_width(*w))
+        self.permits_street_at(street, TownScale::default())
     }
-    pub fn permits_width(self, width: f64) -> bool {
+    /// Whether every stretch of a street carries this use at `scale`.
+    pub fn permits_street_at(self, street: &super::network::Street, scale: TownScale) -> bool {
+        !street.widths.is_empty() && street.widths.iter().all(|w| self.permits_width(*w, scale))
+    }
+    /// Whether a way this wide carries this use at `scale`.
+    pub fn permits_width(self, width: f64, scale: TownScale) -> bool {
         match self {
             Self::Foot => true,
-            Self::Freight => width >= 2.4,
+            Self::Freight => width >= scale.length(super::settings::FREIGHT_WIDTH, Measure::Width),
             Self::Waterborne => false,
         }
     }
@@ -232,6 +240,11 @@ pub(crate) fn founding_work(site: Conditions) -> Kind {
 impl Definition {
     pub fn services(&self) -> &'static [super::effects::Contribution<super::effects::Service>] {
         self.roles.effects.serves
+    }
+    /// The least ground a premises of this kind takes at `scale`: its smallest frontage by its
+    /// smallest depth.
+    pub fn least_area(&self, scale: TownScale) -> f64 {
+        scale.range(self.frontage).low * scale.range(self.depth).low
     }
     pub(crate) fn investment_cost(&self) -> f64 {
         0.12 + self.prominence * 0.18
@@ -373,14 +386,15 @@ mod site_tests {
 
     #[test]
     fn traders_can_settle_before_a_road_while_a_tollhouse_requires_one() {
+        let scale = TownScale::default();
         let road = Street::new(vec![[0., 0.], [80., 0.]], Class::Main, Size::Town);
         let land = Conditions {
             exchange: 1.,
             ..Conditions::default()
         };
         let merchant = Kind(Identity::Retail(Retail::Clothier));
-        let frontage = Location::at(land, Some(&road), 40., 0.);
-        let independent = Location::at(land, None, 0., 0.);
+        let frontage = Location::at(land, Some(&road), 40., 0., scale);
+        let independent = Location::at(land, None, 0., 0., scale);
         assert_eq!(independent.freight, 0.);
         assert!(feasible(merchant, land, None));
         assert!(

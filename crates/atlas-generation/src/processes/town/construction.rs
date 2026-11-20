@@ -81,6 +81,7 @@ pub fn advance(town: &mut Town, context: &mut Frontage<'_>) -> io::Result<()> {
         families: supplied,
         housing: housing_offers(),
     };
+    let scale = town.scale();
     let mut ranked: Vec<_> = context
         .candidates
         .iter()
@@ -107,22 +108,31 @@ pub fn advance(town: &mut Town, context: &mut Frontage<'_>) -> io::Result<()> {
                             *site,
                             town,
                             candidate.slot.front,
-                            kind.definition().depth.sample(1. - sample),
+                            scale.range(kind.definition().depth).sample(1. - sample),
                         )
                 })
                 .max_by(|a, b| {
-                    project_pull(a, candidate.slot.front)
-                        .total_cmp(&project_pull(b, candidate.slot.front))
+                    project_pull(a, candidate.slot.front, scale).total_cmp(&project_pull(
+                        b,
+                        candidate.slot.front,
+                        scale,
+                    ))
                 })
                 .filter(|need| {
-                    let pull = project_pull(need, candidate.slot.front);
+                    let pull = project_pull(need, candidate.slot.front, scale);
                     // A proposed public investment can only displace other uses of
                     // this land if its own premises fit the ground offered here.
                     public_draw * (1. + pull) < pull
                 })
                 .and_then(|need| {
-                    fitted_slot(candidate, need.0.definition(), sample, context.ground)
-                        .map(|slot| (need, slot))
+                    fitted_slot(
+                        candidate,
+                        need.0.definition(),
+                        sample,
+                        context.ground,
+                        scale,
+                    )
+                    .map(|slot| (need, slot))
                 });
             let kind = project
                 .as_ref()
@@ -140,7 +150,7 @@ pub fn advance(town: &mut Town, context: &mut Frontage<'_>) -> io::Result<()> {
                 + production
                 + project
                     .as_ref()
-                    .map_or(0., |(p, _)| project_pull(p, candidate.slot.front));
+                    .map_or(0., |(p, _)| project_pull(p, candidate.slot.front, scale));
             let affinity = site_affinity(town, candidate, kind);
             let order = weighted_order(score * affinity, site_draw(town, candidate, 0x47cc));
             Some((
@@ -163,8 +173,10 @@ pub fn advance(town: &mut Town, context: &mut Frontage<'_>) -> io::Result<()> {
     ranked.extend(participant_offers(town, context, &demand)?);
     // hpc-exempt: ranks exact geometric development proposals, not numerical lattice cells.
     ranked.sort_by(|a, b| b.0.total_cmp(&a.0));
+    // Building labour is reckoned per premises: a holding standing for many premises takes
+    // the labour of them all.
     for (order, offer) in ranked {
-        if town.effort < 1. || order == 0. {
+        if town.effort < scale.premises() || order == 0. {
             break;
         }
         let before = town.holdings().len();
@@ -186,7 +198,7 @@ pub fn advance(town: &mut Town, context: &mut Frontage<'_>) -> io::Result<()> {
                 mut existing,
                 additions,
             } => {
-                let budget = (town.effort / 2.).floor() as usize;
+                let budget = (town.effort / (2. * scale.premises())).floor() as usize;
                 let remaining = space.need(town.seat.story.people);
                 existing.extend(
                     additions
@@ -241,7 +253,7 @@ fn develop_site(
         PLOT,
         context.spatial,
     )?;
-    town.effort -= (1. + definition.prominence) * (1. + means);
+    town.effort -= (1. + definition.prominence) * (1. + means) * town.scale().premises();
     Ok("built")
 }
 fn participant_offers<'a>(
@@ -380,7 +392,7 @@ fn location(town: &Town, candidate: &super::Candidate) -> crate::town::siting::L
     let slot = &candidate.slot;
     let street = slot.street.map(|id| &town.streets()[id]);
     let wear = street.map_or(0., |_| town.frontage_wear(slot));
-    crate::town::siting::Location::at(candidate.conditions, street, slot.along, wear)
+    crate::town::siting::Location::at(candidate.conditions, street, slot.along, wear, town.scale())
 }
 /// Ordering exponential draws samples viable proposals without replacement, in
 /// proportion to their weights. A higher preference still leaves other sites a chance.
@@ -402,7 +414,7 @@ fn commit_participants(
                 .ground
                 .mark_shapes(std::slice::from_ref(&h.outline), PLOT, context.spatial)?;
         }
-        town.effort -= 2. * (town.holdings().len() - previous) as f64;
+        town.effort -= 2. * (town.holdings().len() - previous) as f64 * town.scale().premises();
     }
     Ok(())
 }
@@ -456,15 +468,16 @@ fn proposal(
     if site_affinity(town, candidate, kind) <= 0. {
         return Err("reserved land");
     }
+    let scale = town.scale();
     let mut slot = fitted
-        .or_else(|| fitted_slot(candidate, definition, sample, context.ground))
+        .or_else(|| fitted_slot(candidate, definition, sample, context.ground, scale))
         .ok_or("parcel terrain")?;
     slot.tenure = town
         .template
         .tenure(definition.activity, slot.front, charter_unit(town));
     let means = resources(candidate);
     let outdoor = kind.open();
-    let buildings = crate::town::roofs::components(&slot, kind, means, sample);
+    let buildings = crate::town::roofs::components_at(&slot, kind, means, sample, scale);
     Ok(FabricEdit::Establish {
         conditions: candidate.conditions,
         purpose,
@@ -515,8 +528,16 @@ fn unmet(town: &Town, spatial: &dyn crate::spatial::SpatialKernel) -> io::Result
     }
     Ok(needs)
 }
-fn project_pull(project: &Need, point: crate::town::geometry::Point) -> f64 {
-    project.2 / (1. + crate::town::geometry::distance(project.1, point) / 80.)
+/// The distance from a project's site at which it draws half as strongly. Street metres,
+/// resolved by `Measure::Adjacency`.
+const PROJECT_PULL: f64 = 80.;
+fn project_pull(
+    project: &Need,
+    point: crate::town::geometry::Point,
+    scale: crate::town::scale::TownScale,
+) -> f64 {
+    let half = scale.length(PROJECT_PULL, crate::town::scale::Measure::Adjacency);
+    project.2 / (1. + crate::town::geometry::distance(project.1, point) / half)
 }
 fn frontage_priority(support: &Support, land: Conditions, fit: f64, sample: f64) -> f64 {
     let neighbours = land.households + land.workshops + land.institutions + land.density;
@@ -532,19 +553,24 @@ fn fitted_slot(
     definition: crate::town::catalogue::Definition,
     sample: f64,
     ground: &crate::town::ground::Ground,
+    scale: crate::town::scale::TownScale,
 ) -> Option<crate::town::plots::Slot> {
     use crate::town::{
         geometry::left,
         ground::{FIRST_STREET, FREE},
     };
+    let (frontage, depth) = (
+        scale.range(definition.frontage),
+        scale.range(definition.depth),
+    );
     let mut slot = candidate.slot.clone();
     let attached = slot.street.is_some() || slot.participant.is_some();
-    let mut width = definition.frontage.sample(sample);
+    let mut width = frontage.sample(sample);
     if attached {
-        width = width.min(slot.frontage.max(definition.frontage.low));
+        width = width.min(slot.frontage.max(frontage.low));
     }
-    let desired = (width, definition.depth.sample(1. - sample));
-    let smallest = (definition.frontage.low, definition.depth.low);
+    let desired = (width, depth.sample(1. - sample));
+    let smallest = (frontage.low, depth.low);
     // Independent plots can face any side of the same entrance. On a street
     // or an existing court its frontage fixes its orientation.
     for (w, d) in [desired, smallest] {
@@ -569,7 +595,7 @@ fn fitted_slot(
 }
 pub(super) use crate::town::siting::feasible as eligible;
 fn charter_unit(town: &Town) -> f64 {
-    atlas_map::town::plot_size(town.seat.story.size()).1
+    town.plot().1
 }
 fn site_affinity(town: &Town, candidate: &super::Candidate, kind: Kind) -> f64 {
     town.template.affinity(
@@ -681,6 +707,7 @@ fn choose(
     );
     let kind = household(
         &HousingSite {
+            scale: town.scale(),
             conditions: local,
             distance_from_seat: distance,
             trade_demand: activity,
@@ -773,6 +800,7 @@ mod tests {
                     competitors: 0.,
                 }],
                 land,
+                crate::town::scale::TownScale::default(),
             );
             frontage_priority(&support, land, 1., 0.5)
         };

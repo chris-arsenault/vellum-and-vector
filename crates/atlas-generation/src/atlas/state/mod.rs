@@ -82,7 +82,11 @@ pub struct Scope {
     pub area_parents: BTreeMap<atlas_map::Id, Option<atlas_map::Id>>,
     pub domain: Geometry,
     pub domain_bounds: Bounds,
+    /// What the map generates over: its outline and the context band round it.
     pub footprint: Geometry,
+    /// The map's published outline, where a refined map works a context band beyond it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outline: Option<Geometry>,
     pub cylindrical: bool,
     pub has_boundary: bool,
     pub precision: f64,
@@ -227,13 +231,14 @@ pub struct Regional {
     /// A city map's own state: its template and the walls it has raised.
     pub city: City,
 }
-/// A city map's template, chosen at its first growth round, the walls it raises, and the plan
-/// its last step makes: the places its hot spots raise, its districts and its major works.
+/// A city map's template, chosen at its first growth round; the walls it raises; its hot-spot
+/// towns' cells and the prominent places those towns have built, renewed every round; its
+/// major works, sited in its first round; and the districts cut after its last.
 #[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct City {
     pub template: Option<crate::town::templates::Selection>,
     pub walls: Vec<crate::town::walls::Wall>,
-    /// Hot-spot cells, most concentrated first.
+    /// The cells of the hot-spot towns' centres, largest town first.
     pub spots: Vec<u32>,
     pub places: Vec<crate::town::city::Placed>,
     /// Each cell's district; `u8::MAX` where none reaches.

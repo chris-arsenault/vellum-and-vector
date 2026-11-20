@@ -96,7 +96,7 @@ impl Selection<'_> {
             .buffer(&subject, band)
             .map_err(io::Error::other)?
             .unwrap_or_else(|| subject.clone());
-        let extent = polygonal(
+        let on_domain = polygonal(
             spatial
                 .overlay(
                     &chart
@@ -108,6 +108,18 @@ impl Selection<'_> {
                 .map_err(io::Error::other)?,
         )
         .unwrap_or_else(|| outline.clone());
+        // The band reads its parent alone: past the parent's edge there is only coarser
+        // ancestry, which a refinement one level down must not take up.
+        let extent = polygonal(
+            spatial
+                .overlay(
+                    &on_domain,
+                    &as_geometry(&self.parent.footprint),
+                    Overlay::Intersection,
+                )
+                .map_err(io::Error::other)?,
+        )
+        .unwrap_or(on_domain);
         Ok(Footprint { outline, extent })
     }
     pub(super) fn refinement_level(&self, spatial: &dyn SpatialKernel) -> io::Result<u32> {

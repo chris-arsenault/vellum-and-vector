@@ -51,9 +51,11 @@ impl super::fabric::Town {
         point: super::geometry::Point,
         spatial: &dyn crate::spatial::SpatialKernel,
     ) -> std::io::Result<PlacementInfluence> {
-        use super::{geometry::distance, settings::PREMISES_REACH};
+        use super::{geometry::distance, scale::Measure, settings::PREMISES_REACH};
         let [x, y] = point;
-        let reach = PREMISES_REACH;
+        let scale = self.scale();
+        let reach = scale.length(PREMISES_REACH, Measure::Adjacency);
+        let adjacent = |metres| scale.length(metres, Measure::Adjacency);
         let nearby = self.nearby_holdings(
             atlas_map::Bounds(x - reach, y - reach, x + reach, y + reach),
             spatial,
@@ -79,14 +81,14 @@ impl super::fabric::Town {
                     effects
                         .bars
                         .iter()
-                        .filter(|bar| distance <= bar.reach)
+                        .filter(|bar| distance <= adjacent(bar.reach))
                         .map(|bar| bar.target),
                 );
                 answers.concessions.extend(
                     effects
                         .eases
                         .iter()
-                        .filter(|ease| distance <= ease.reach)
+                        .filter(|ease| distance <= adjacent(ease.reach))
                         .map(|ease| {
                             (
                                 ease.target,
@@ -111,11 +113,21 @@ pub(super) fn suitable_ground(kind: Kind, land: Conditions) -> bool {
     }
 }
 
+/// The street width at which a frontage's freight access is half its best. Street metres,
+/// resolved by `Measure::Width`.
+const HALF_FREIGHT: f64 = 2.;
 impl Location {
-    pub fn at(land: Conditions, road: Option<&Street>, along: f64, wear: f64) -> Self {
+    /// The location `along` a road, or off any road, read at `scale`.
+    pub fn at(
+        land: Conditions,
+        road: Option<&Street>,
+        along: f64,
+        wear: f64,
+        scale: super::scale::TownScale,
+    ) -> Self {
         let width = road.map_or(0., |road| road.width_at(along));
-        let freight = if AccessUse::Freight.permits_width(width) {
-            width / (2. + width)
+        let freight = if AccessUse::Freight.permits_width(width, scale) {
+            width / (scale.length(HALF_FREIGHT, super::scale::Measure::Width) + width)
         } else {
             0.
         };

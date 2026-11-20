@@ -12,6 +12,7 @@ use story::Layout;
 
 /// The process's settings: a layout the creator forces, or none to let each settlement's
 /// story choose.
+#[derive(Clone, Copy)]
 pub struct Settings {
     pub layout: Option<Layout>,
     pub seed: i32,
@@ -93,12 +94,14 @@ pub fn cultivation() -> Command<State> {
                     .iter()
                     .map(|(p, _)| crate::town::edits::line(p))
                     .collect();
+                let scale = state.town.scale();
                 state.town.fields = crate::town::land::establish(
                     site.bounds,
                     &ways,
                     &state.scope.area.to_string(),
                     |p| site::shares(state.field(), p),
                     state.spatial.as_ref(),
+                    scale,
                 )?;
             }
             crate::town::land::develop(

@@ -11,7 +11,9 @@ UI and use supplied fixture maps; they never generate.
   `vellum-local-atlas-db`, on `127.0.0.1:54338`; the cluster lives in the Docker volume
   `vellum-local-atlas`.
 - **Server:** the native release `atlas_server`, built from the checkout that starts it, on
-  `http://127.0.0.1:44138/`. It also serves that checkout's `frontend/dist`.
+  `http://127.0.0.1:44138/`. On a Sulion development node it binds the node's LAN address
+  on port 26010, the range a LAN browser reaches. `ATLAS_LOCAL_HOST` and
+  `ATLAS_LOCAL_PORT` choose another address. It also serves that checkout's `frontend/dist`.
 - **State:** the main checkout's git-ignored `.artifacts/local-atlas/` holds the server's
   map files, generation resources and scratch, its log, the database passwords and the
   kept world's reference.
@@ -73,8 +75,16 @@ The server log groups JSON events by town and development round. The
 `town.construction-decision` records the proposed use, its location and the
 first check that declined it or its establishment. The `town.street-decision`
 events record route demand, proposed endpoints and the reason for rejection
-or the effort spent building a route. Copy the log before the next server
-start replaces it.
+or the effort spent building a route.
+
+The server log (`.artifacts/local-atlas/server.log`) records each generation step and
+publication stage as it starts, with the memory the server holds, and the launcher adds
+`server.memory` each time that memory grows by another GiB. When the server ends, the
+launcher writes `server.exit` with its exit status, what the status means (a SIGKILL from
+the out-of-memory killer, an abort, a segmentation fault), its peak memory and the memory
+left on the machine. A panic's words go into the job's failure message. Each server start
+moves the previous log to the end of `server-history.log`. A harness command following a
+job stops as soon as the server process is gone and prints the exit record.
 
 Each job saves a picture of the land, shaded by height with water in blue, after every
 world epoch and at the start and after each round of regional development, in

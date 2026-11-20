@@ -47,8 +47,10 @@ impl Harness {
             .ok()
             .and_then(|p| p.parse().ok())
             .unwrap_or(44138);
+        // The launcher names the address it bound: loopback, or a development node's LAN.
+        let host = env::var("ATLAS_LOCAL_HOST").unwrap_or_else(|_| "127.0.0.1".into());
         Ok(Self {
-            server: Server::new(port),
+            server: Server::new(&host, port),
             reports: checkout.join(".artifacts/local-atlas"),
             checkout,
             home,

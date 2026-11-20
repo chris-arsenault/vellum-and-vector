@@ -5,8 +5,12 @@ use crate::town::{
     catalogue::{AccessUse, Operation, PlaceRules},
     fabric::{Endpoint, Town},
     influence::{operating_tie, respond, support_for, Reachable},
+    scale::{Measure, TownScale},
 };
 use std::io;
+/// The living floor of one household's premises beyond which it no longer feels crowded; a
+/// holding has this much for each premises it stands for (`TownScale::premises`).
+const HOUSEHOLD_SPACE: f64 = 450.;
 const LIVING_AREA_PER_PERSON: f64 = 16.;
 // A third of the population working in dedicated premises, at 18 m² per worker.
 const WORKING_AREA_PER_PERSON: f64 = 6.;
@@ -69,6 +73,13 @@ fn shortfall(required: f64, supplied: f64) -> f64 {
 pub fn housing_pressure(people: f64, floor_area: f64) -> f64 {
     shortfall(people * LIVING_AREA_PER_PERSON, floor_area)
 }
+/// The people a holding houses: its occupied living floor over each resident's share.
+pub fn housed(
+    h: &crate::town::fabric::Holding,
+    spatial: &dyn crate::spatial::SpatialKernel,
+) -> io::Result<f64> {
+    Ok(FloorSpace::holding(h, spatial)?.occupied_residents(h.occupation))
+}
 pub fn occupancy(home: bool, residential_use: f64, support: f64, burden: f64) -> f64 {
     if home {
         residential_use / (1. + burden * 0.08)
@@ -82,10 +93,14 @@ fn competing_claims(town: &Town) -> ([f64; 7], Commitments) {
     let mut competitors = [0.; 7];
     // hpc-exempt: counterparty identities group the custom already drawing on each offer.
     let mut commitments = std::collections::BTreeMap::new();
+    // A holding competes and commits as the premises it stands for.
+    let premises = town.scale().premises();
     for h in town.holdings() {
-        competitors[h.secondary.unwrap_or(h.kind).definition().activity as usize] += 0.025;
+        competitors[h.secondary.unwrap_or(h.kind).definition().activity as usize] +=
+            0.025 * premises;
         for (tie, share) in h.operating_shares() {
-            *commitments.entry(tie.destination.clone()).or_insert(0.) += h.occupation * share;
+            *commitments.entry(tie.destination.clone()).or_insert(0.) +=
+                h.occupation * share * premises;
         }
     }
     (competitors, commitments)
@@ -147,7 +162,8 @@ pub fn advance(town: &mut Town, context: &Livelihood<'_>) -> io::Result<()> {
         .find(|(mode, _)| *mode == AccessUse::Foot)
         .map(|(_, graph)| super::patronage::visits(town, context.sources, graph))
         .unwrap_or_else(|| vec![Vec::new(); n]);
-    let reach = crate::town::settings::DAILY_REACH;
+    let scale = town.scale();
+    let reach = scale.length(crate::town::settings::DAILY_REACH, Measure::Travel);
     let mut queries: Vec<_> = graphs
         .iter()
         .map(|(mode, graph)| {
@@ -213,6 +229,7 @@ pub fn advance(town: &mut Town, context: &Livelihood<'_>) -> io::Result<()> {
                 *mode,
                 &holding.ties,
                 &mut partners,
+                scale,
             );
             if *mode
                 == holding
@@ -221,14 +238,17 @@ pub fn advance(town: &mut Town, context: &Livelihood<'_>) -> io::Result<()> {
                     .definition()
                     .operating_access()
             {
-                opportunity = support_for(activity, &paths, conditions);
+                opportunity = support_for(activity, &paths, conditions, scale);
             }
             ties.extend(ordinary_ties(
                 holding,
                 &paths,
-                *mode,
+                Binding {
+                    mode: *mode,
+                    exposure: context.exposure,
+                    scale,
+                },
                 needs,
-                context.exposure,
             ));
         }
         let demand = if holding.attracts_clients() {
@@ -274,7 +294,8 @@ pub fn advance(town: &mut Town, context: &Livelihood<'_>) -> io::Result<()> {
             let living_space = floor_areas[i].living;
             let neighbours = conditions.households / (1. + conditions.households);
             let local_pressure = neighbours * conditions.density / (1. + conditions.density);
-            (pressure + local_pressure) * (1. - means) * occupation / (1. + living_space / 450.)
+            (pressure + local_pressure) * (1. - means) * occupation
+                / (1. + living_space / (HOUSEHOLD_SPACE * scale.premises()))
         } else {
             0.
         };
@@ -302,13 +323,25 @@ pub fn advance(town: &mut Town, context: &Livelihood<'_>) -> io::Result<()> {
     Ok(())
 }
 
+/// How a holding's ties are bound this round: by which mode, at what exposure, with travel
+/// read at what scale.
+#[derive(Clone, Copy)]
+struct Binding {
+    mode: AccessUse,
+    exposure: f64,
+    scale: TownScale,
+}
 fn ordinary_ties(
     holding: &crate::town::fabric::Holding,
     paths: &[Reachable<'_>],
-    mode: AccessUse,
+    binding: Binding,
     modes: &[Option<AccessUse>; Operation::ALL.len()],
-    exposure: f64,
 ) -> Vec<crate::town::fabric::OperatingTie> {
+    let Binding {
+        mode,
+        exposure,
+        scale,
+    } = binding;
     let attracts = holding.attracts_clients();
     Operation::ALL
         .into_iter()
@@ -320,7 +353,7 @@ fn ordinary_ties(
             let old = holding.ties.iter().find(|tie| {
                 tie.purpose == purpose && tie.productive.is_none() && tie.clientele.is_none()
             });
-            operating_tie(purpose, paths, mode, old, exposure)
+            operating_tie(purpose, paths, mode, old, exposure, scale)
         })
         .collect()
 }

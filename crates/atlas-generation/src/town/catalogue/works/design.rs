@@ -148,6 +148,8 @@ impl WorkDesign {
     }
 }
 
+// A major work keeps its real size at every fidelity: its roles' frontages and depths are
+// true metres and are never resolved through a town's scale.
 impl Definition {
     pub(crate) fn sponsor_reach(&self) -> f64 {
         self.core

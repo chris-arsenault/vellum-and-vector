@@ -11,6 +11,8 @@ const EDGE: f64 = 1.0;
 const WAY: f64 = 0.8;
 /// Spreading centres: crowded cells draw more people to themselves and their neighbours.
 const CENTRE: f64 = 0.6;
+/// A prominent place or major work draws people to the ground round it.
+const PLACE: f64 = 0.6;
 /// Slope at which ground resists building by half, in rise over run.
 const SLOPE_RESISTANCE: f64 = 0.15;
 /// The share of a cell's people that moves in a round toward a cell twice as attractive.
@@ -27,6 +29,8 @@ pub struct Guidance {
     pub weight: Vec<f64>,
     /// How many lattice steps people can move in one pass.
     pub reach: usize,
+    /// Each cell's draw from the city's prominent places and works, 0 to 1.
+    pub places: Vec<f64>,
 }
 
 /// Move a share of the city's people toward where it grows, through the people owner.
@@ -70,6 +74,7 @@ pub fn operation(
                 slope: &slope,
                 open: &open,
                 guidance: &guidance.weight,
+                places: &guidance.places,
             };
             let pull = attraction(&cells, neighbours);
             let moved = moves(&pull, &people, guidance.reach, neighbours);
@@ -106,6 +111,8 @@ pub struct Cells<'a> {
     pub open: &'a [bool],
     /// The template's city guidance at the cell; zero reserves it.
     pub guidance: &'a [f64],
+    /// The draw of the city's prominent places and works at the cell, 0 to 1.
+    pub places: &'a [f64],
 }
 
 /// How strongly city growth draws people to each cell.
@@ -136,7 +143,8 @@ pub fn attraction(cells: &Cells<'_>, neighbours: impl Fn(usize) -> [Option<usize
             let edge = mean(cells.built).max(cells.built[cell]);
             let way = cells.ways[cell].clamp(0., 1.);
             let centre = (cells.people[cell] / densest).max(mean(cells.people) / densest);
-            let pull = EDGE * edge + WAY * way + CENTRE * centre;
+            let place = cells.places.get(cell).copied().unwrap_or(0.).clamp(0., 1.);
+            let pull = EDGE * edge + WAY * way + CENTRE * centre + PLACE * place;
             let resistance = 1. / (1. + cells.slope[cell].max(0.) / SLOPE_RESISTANCE);
             pull * resistance * cells.guidance[cell].max(0.)
         })
@@ -220,6 +228,7 @@ mod tests {
         let open = vec![true; n];
         let slope = vec![0.; n];
         let guidance = vec![1.; n];
+        let none = vec![0.; n];
         let cells = Cells {
             people: &people,
             built: &built,
@@ -227,12 +236,24 @@ mod tests {
             slope: &slope,
             open: &open,
             guidance: &guidance,
+            places: &none,
         };
         let pull = attraction(&cells, line(n));
         // The ground just beyond the built edge draws more than open ground far from it.
         assert!(pull[4] > pull[6]);
         // A way draws growth along it.
         assert!(pull[8] > pull[7]);
+        // A prominent place draws people to the ground round it.
+        let mut market = none.clone();
+        market[6] = 1.;
+        let drawn = attraction(
+            &Cells {
+                places: &market,
+                ..cells
+            },
+            line(n),
+        );
+        assert!(drawn[6] > pull[6] && drawn[5] == pull[5]);
         let moved = moves(&pull, &people, 3, line(n));
         // The outlying family moves toward the way, not further out.
         assert_eq!(moved[10].0, 8);
@@ -261,6 +282,7 @@ mod tests {
         slope[2] = 0.6;
         let mut open = vec![true; n];
         open[3] = false;
+        let none = vec![0.; n];
         let cells = Cells {
             people: &people,
             built: &built,
@@ -268,6 +290,7 @@ mod tests {
             slope: &slope,
             open: &open,
             guidance: &guidance,
+            places: &none,
         };
         let pull = attraction(&cells, line(n));
         assert!(pull[2] < 0.5 * pull[1]);

@@ -58,6 +58,20 @@ follow the city, not rectangles.
     city selects a template for both levels; a smaller city uses only the district level.
     The city and district guidance give similar layouts, tailored to their size and
     fidelity.
+14. Correction (2026-11-20): larger cities get more districts, up to about 15; the fixed
+    six or seven is withdrawn. A finer refinement level needs a stated reason; a sparse
+    district map is not evidence that the city needs another level.
+15. Correction (2026-11-20): recursive refinement is the ordinary chain of region
+    refinements, level by level, before the city map; nothing new is built for it.
+16. Correction (2026-11-20): on a city map, town development builds the city's large-scale
+    features: major thoroughfares, business blocks, residential blocks and a few major
+    landmarks. It does not scatter small premises. The town system runs at a fidelity:
+    street fidelity on district and town maps, city fidelity on a city map ("the fixed
+    scale is problematic anyways").
+17. Correction (2026-11-20): the hybrid is coupled, not only interleaved. Town development
+    at the hot spots changes the society simulation's numerical fields (population, built
+    ground, ways), and the next refinement round works from the changed fields. A hot spot
+    founds what its conditions and the city's template call for; an inn was an example.
 
 Standing direction: towns grow through processes, never stamped layouts; people live on the
 land's layers ([ADR 0012](adr/0012-people-live-on-the-lands-layers.md)); the POI
@@ -70,8 +84,8 @@ The research pass of 2026-11-19, from the sources it opened:
 
 - **Real cities nest in parts of a few to tens of square kilometres.** Paris's
   arrondissements run 2–16 km², New York's community districts 4–59 km², Tokyo's wards
-  10–60 km². Each level splits into 4 to 18 parts, so six or seven districts per city map
-  fits real cities and the scale contract.
+  10–60 km². Each level splits into 4 to 18 parts; a city map's district count grows with
+  the city, up to about 15 (requirement 14).
 - **Main roads and centres form a city-wide foreground network** (Hillier's space syntax).
   The city refinement therefore decides them once, and districts inherit them as starting
   conditions.
@@ -197,7 +211,8 @@ Agent-derived and revisable; owner decisions are marked.
 
 **Districts.**
 
-- The city refinement cuts six or seven districts.
+- The city refinement cuts districts in proportion to the city, up to about 15, over its
+  built ground rather than the whole surroundings.
 - Outlines follow the refined social fields' boundaries, rivers, walls, main roads and
   fringe belts.
 - Each district is published as a named region polygon with its population, density,
@@ -294,7 +309,8 @@ Evidence: hot-spot and iteration unit tests; the reference city map.
 
 ### M5 — Districts [depends on M3]
 
-Scope: the city refinement cuts six or seven organic districts along its social
+Scope: the city refinement cuts organic districts, more for a larger city up to about 15,
+along its social
 boundaries, rivers, walls, main roads and fringe belts, each published as a region polygon
 with its character.
 Acceptance: districts tile the city, follow its features and differ in character.
@@ -324,6 +340,38 @@ Scope: the viewer goes from the region to the city map, into a district and acro
 neighbouring one.
 Acceptance: the Baldur's Gate pattern in the viewer: city overview, then districts.
 Evidence: browser UI wiring tests on fixture maps.
+
+### M3d — Town development at city fidelity, coupled to the people fields [requirements 16, 17]
+
+Scope, in order:
+
+1. **Scale as a setting.** Every length and area the town system fixes (plots, slots,
+   setbacks, street widths, block depths, ground resolution, walls and gates, building
+   envelopes) is read from the town's fidelity instead of a literal. Street fidelity keeps
+   today's values, so town and district maps are unchanged.
+2. **City fidelity.** A plot is a city block, a street a thoroughfare, a holding a block's
+   use standing for the premises it holds (one record for many). The per-person and
+   per-area economics read true areas, so a block holds a block's people and trade.
+   Travel and service reaches stay human distances.
+3. **Hot-spot towns at city fidelity.** A hot spot founds by the ordinary founding under
+   the city template's city-level guidance; what it founds comes from its conditions and
+   the template.
+4. **Coupling.** After each round's town steps the towns rewrite the people fields through
+   the people owner: people move toward residential and business blocks, built ground
+   rises where blocks stand, and thoroughfares become maintained ways. The next round's
+   refinement and growth start from those fields.
+5. **City-map features.** The city map publishes the towns' thoroughfares, blocks with
+   their use, and landmarks (works and the institutions the catalogue shows at city
+   scale); it publishes no houses or ordinary streets. District maps capture them.
+6. **Run.** Rivassanrema refined level by level (levels 3 and 4 kept as
+   `Rivassanrema-l3`, `Rivassanrema-l4`), then its city map from level 4.
+
+Acceptance: the city map shows thoroughfares, business and residential blocks and
+landmarks grown by town development, and its population and built ground follow them; a
+town map's layout is unchanged in kind by step 1.
+Evidence: fidelity unit tests (the same process at both fidelities gives a street plot and a
+block); coupling unit tests on a small field; the town test suite at street fidelity; one
+city map.
 
 ### M8 — Integrate and record [depends on M1–M7]
 
@@ -398,14 +446,19 @@ Run evidence, 2026-11-20, kept world, Draft:
 
 Open, against the milestone acceptance:
 
-- **M3:** refining three levels at once from the district map leaves parent-cell blocks
-  in the people fields; the map's people layers hold far fewer people than the city's
-  census of 530,000. Every later step inherits this.
+- **M3:** the city map (level 5, about 128 m cells) refines straight from a level-2 map
+  of about 2.4 km cells, so the whole built city comes from about a dozen parent cells and
+  shows as blocks in the people fields. The map's people layers hold far fewer people than
+  the city's census of 530,000; whether the jump causes that shortfall is unverified.
+  Every later step inherits it. The level is the scale-contract formula for the
+  outline's area, not a judgement that the city needs it.
 - **M4:** hot spots raise one place; the readings (craft, faith, crossings) rarely reach
   the raising threshold.
 - **M3c:** the wall opens no gates; its run does not meet the maintained ways strongly
   enough.
-- **M5:** districts are unbalanced; one covers most of the city.
+- **M5:** districts are unbalanced; one covers most of the map. They are seeded from the
+  first seven hot spots and labelled across the whole surroundings, so the seed facing the
+  countryside takes the rural ring.
 - **M6:** a district town is far smaller than its district's share of the city.
 - A resumed city job fails with "Existing output resource belongs to a different scope";
   unverified whether the outline frame causes it.

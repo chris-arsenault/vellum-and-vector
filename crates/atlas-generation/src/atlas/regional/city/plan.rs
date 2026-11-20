@@ -1,7 +1,7 @@
-//! The city plan: hot spots of the refined social fields raise prominent catalogue places
-//! (`town::city::develop`), districts gather round the strongest centres and part along water,
-//! walls, main roads and changes of character (`town::city::districts`), and the city's major
-//! works are sited by their own rules (`town::major_works::city_works`).
+//! The city plan, read from the refined fields: every cell's city reading, which the hot spots
+//! read each round (`spots`), and the districts cut once the rounds are done. Districts gather
+//! round the hot-spot towns and part along water, walls, main roads and changes of character
+//! (`town::city::districts`), over the built city only.
 use super::{habitable, LayerId};
 use crate::{
     atlas::state::State,
@@ -13,37 +13,42 @@ use crate::{
     human::{identity::Tradition, HumanField},
     town::{
         catalogue::PlaceRules,
-        city::{develop, districts, hot_spots, CityReading},
-        major_works::city_works,
+        city::{districts, CityReading},
         templates::Selection,
-        walls::{enclosure, run, GATE},
+        walls::{enclosure, run, BUILT, GATE},
     },
 };
 use atlas_map::{Geometry, Position};
 use std::io;
 
-/// Development rounds each hot spot runs.
-const ROUNDS: usize = 3;
-/// People a hot spot stands for; a city has a spot for each this many, and at least three.
-const PEOPLE_PER_SPOT: f64 = 40_000.;
-/// A city map cuts at most this many districts.
-const DISTRICTS: usize = 7;
+/// People a district stands for; a larger city cuts more districts.
+const PEOPLE_PER_DISTRICT: f64 = 40_000.;
+/// A city map cuts at least this many districts, and at most the most.
+const FEWEST_DISTRICTS: usize = 3;
+const MOST_DISTRICTS: usize = 15;
 /// What crossing each barrier costs, against one step of ordinary ground.
 const WATER: f64 = 4.;
 const WALL: f64 = 6.;
 const ROAD: f64 = 2.;
 const CHARACTER: f64 = 3.;
 
-/// Every cell's reading, with the arrays the plan shares.
-struct Cells {
-    at: Vec<[f64; 2]>,
-    open: Vec<bool>,
-    readings: Vec<CityReading>,
-    people: Vec<f64>,
-    ways: Vec<f64>,
+/// Every cell's reading, with the arrays the plan and the hot spots share.
+pub(super) struct Cells {
+    pub(super) at: Vec<[f64; 2]>,
+    pub(super) open: Vec<bool>,
+    /// The cell lies inside the published city map; the band round it is context only.
+    pub(super) inside: Vec<bool>,
+    pub(super) readings: Vec<CityReading>,
+    /// People per square kilometre.
+    pub(super) people: Vec<f64>,
+    /// Built share of each cell.
+    pub(super) covered: Vec<f64>,
+    /// Each cell's area, square kilometres.
+    pub(super) area: Vec<f64>,
+    pub(super) ways: Vec<f64>,
 }
 
-fn read(state: &State, selection: &Selection) -> io::Result<Cells> {
+pub(super) fn read(state: &State, selection: &Selection) -> io::Result<Cells> {
     let field = state.field();
     let mesh = field.mesh();
     let [ox, oy] = mesh.origin();
@@ -58,15 +63,27 @@ fn read(state: &State, selection: &Selection) -> io::Result<Cells> {
     let mut ways = Vec::with_capacity(n);
     let mut stood = Vec::with_capacity(n);
     let mut covered = Vec::with_capacity(n);
+    let mut area = Vec::with_capacity(n);
     for cell in 0..n {
         let [x, y] = mesh.position(cell);
         at.push([x + ox, y + oy]);
+        area.push(mesh.area(cell) / 1e6);
         open.push(habitable(field, cell)?);
         people.push(people_band(cell)?);
         ways.push(kept.get(cell)?);
         stood.push(standing.get(cell)?);
         covered.push(built.get(cell)?.max(0.));
     }
+    let positions: Vec<Position> = at.iter().map(|&[x, y]| Position::xy(x, y)).collect();
+    let outline = state
+        .scope
+        .outline
+        .as_ref()
+        .unwrap_or(&state.scope.footprint);
+    let inside = state
+        .spatial
+        .covers_points(outline, &positions)
+        .map_err(io::Error::other)?;
     let max = |v: &[f64]| v.iter().copied().fold(0., f64::max).max(f64::EPSILON);
     let (densest, busiest, oldest) = (max(&people), max(&ways), max(&stood));
     // Built ground is read relative to the city's most built, as density is.
@@ -127,14 +144,59 @@ fn read(state: &State, selection: &Selection) -> io::Result<Cells> {
     Ok(Cells {
         at,
         open,
+        inside,
         readings,
         people,
+        covered,
+        area,
         ways,
     })
 }
 
+/// The cell is dry ground inside the published city map, where the city's own places stand.
+pub(super) fn usable(cells: &Cells, cell: usize) -> bool {
+    cells.open[cell] && cells.inside[cell]
+}
+
+/// How strongly each cell concentrates the city: crowded, long-standing ground where ways meet.
+pub(super) fn concentration(cells: &Cells) -> Vec<f64> {
+    (0..cells.readings.len())
+        .map(|cell| {
+            let r = &cells.readings[cell];
+            if usable(cells, cell) {
+                r.density * (0.5 + 0.5 * r.standing) * (1. + f64::from(r.ways.min(4)) / 4.)
+            } else {
+                0.
+            }
+        })
+        .collect()
+}
+
+/// The usable cell nearest a point.
+pub(super) fn nearest_open(cells: &Cells, point: [f64; 2]) -> Option<usize> {
+    (0..cells.at.len())
+        .filter(|&c| usable(cells, c))
+        .min_by(|&a, &b| {
+            let d = |c: usize| (cells.at[c][0] - point[0]).hypot(cells.at[c][1] - point[1]);
+            d(a).total_cmp(&d(b))
+        })
+}
+
+/// The city's people: its settlement's census, or what its people layers hold without one.
+/// The layers hold the city's living pattern either way.
+pub(super) fn population(state: &State, cells: &Cells) -> io::Result<f64> {
+    let layers: f64 = cells
+        .people
+        .iter()
+        .zip(&cells.area)
+        .map(|(p, a)| p * a)
+        .sum();
+    let census = super::settlement(state)?.and_then(|s| s.people);
+    Ok(census.unwrap_or(layers))
+}
+
 /// The share of a cell's people keeping a craft, and the share keeping its commonest faith.
-fn traditions(state: &State, cell: usize) -> io::Result<(f64, f64)> {
+pub(super) fn traditions(state: &State, cell: usize) -> io::Result<(f64, f64)> {
     let column = state.field().people().column(cell)?;
     let total: f64 = column.iter().map(|layer| layer.people).sum();
     if total <= 0. {
@@ -160,74 +222,50 @@ fn traditions(state: &State, cell: usize) -> io::Result<(f64, f64)> {
     Ok((craft / total, faith / total))
 }
 
-/// The population of the captured settlement nearest the city's centre.
-fn census(state: &State, centre: [f64; 2]) -> io::Result<Option<f64>> {
-    use crate::features::FeatureSelection;
-    let Some(source) = state.records.source_features.as_deref() else {
-        return Ok(None);
-    };
-    let mut best: Option<(f64, f64)> = None;
-    for feature in source.values(FeatureSelection {
-        kind: Some("settlement"),
-        ..Default::default()
-    })? {
-        let feature = feature?;
-        let Geometry::Point { coordinates } = &feature.geometry else {
-            continue;
-        };
-        let [x, y, _] = coordinates.coordinates();
-        let distance = (x - centre[0]).hypot(y - centre[1]);
-        let people = ["settlementPopulation", "population"]
-            .iter()
-            .find_map(|key| feature.attributes.get(*key).and_then(serde_json::Value::as_f64));
-        if let Some(people) = people {
-            if best.is_none_or(|(d, _)| distance < d) {
-                best = Some((distance, people));
-            }
-        }
-    }
-    Ok(best.map(|(_, people)| people))
-}
-pub(super) fn plan(state: &mut State, selection: &Selection, seed: i32) -> io::Result<()> {
+/// The districts, cut once the rounds are done: as many as the city's people call for, round
+/// its strongest hot-spot towns, over its built and walled ground only.
+pub(super) fn plan(state: &mut State, selection: &Selection) -> io::Result<()> {
     let cells = read(state, selection)?;
-    let field = state.field();
-    let mesh = field.mesh();
-    let layers: f64 = (0..mesh.len())
-        .map(|c| cells.people[c] * mesh.area(c) / 1e6)
-        .sum();
-    // The city's census is its settlement's; the people layers hold its living pattern.
-    let total = census(state, selection.site.centre)?.unwrap_or(layers);
-    // Hot spots: crowded, long-standing ground where ways meet.
-    let score: Vec<f64> = cells
-        .readings
-        .iter()
-        .zip(&cells.open)
-        .map(|(r, &open)| {
-            if open {
-                r.density * (0.5 + 0.5 * r.standing) * (1. + f64::from(r.ways.min(4)) / 4.)
-            } else {
-                0.
-            }
-        })
+    let total = population(state, &cells)?;
+    let mesh = state.field().mesh();
+    let count =
+        ((total / PEOPLE_PER_DISTRICT).round() as usize).clamp(FEWEST_DISTRICTS, MOST_DISTRICTS);
+    // The built city: built ground as the walls read it, and whatever a wall encloses.
+    let city: Vec<bool> = (0..mesh.len())
+        .map(|c| usable(&cells, c) && (cells.covered[c] >= BUILT || cells.readings[c].walls > 0))
         .collect();
-    let count = ((total / PEOPLE_PER_SPOT).round() as usize + 2).clamp(3, 16);
-    let spacing = (3. * selection.quarter()).max(4. * mesh.cell_span());
-    let spots = hot_spots(&score, &cells.at, spacing, count);
-    let mut readings = Vec::with_capacity(spots.len());
-    for &spot in &spots {
-        let (craft, faith) = traditions(state, spot)?;
-        readings.push(CityReading {
-            craft,
-            faith,
-            ..cells.readings[spot]
-        });
+    // Seeds are the largest hot-spot towns; where too few founded, the city's other
+    // concentrations stand in.
+    let mut seeds: Vec<usize> = state
+        .regional
+        .as_ref()
+        .map_or(&[][..], |r| &r.city.spots[..])
+        .iter()
+        .take(count)
+        .map(|&s| s as usize)
+        .collect();
+    if seeds.len() < count {
+        let apart = (3. * selection.quarter()).max(4. * mesh.cell_span());
+        let far = |c: usize| {
+            seeds.iter().all(|&s| {
+                (cells.at[s][0] - cells.at[c][0]).hypot(cells.at[s][1] - cells.at[c][1]) >= apart
+            })
+        };
+        let score: Vec<f64> = concentration(&cells)
+            .into_iter()
+            .enumerate()
+            .map(|(c, s)| if city[c] && far(c) { s } else { 0. })
+            .collect();
+        let more = crate::town::city::hot_spots(&score, &cells.at, apart, count - seeds.len());
+        seeds.extend(more);
     }
-    let placed = develop(&readings, ROUNDS);
     // Districts part along water, walls, main roads and changes of character.
-    let seeds: Vec<usize> = spots.iter().copied().take(DISTRICTS).collect();
     let neighbours = |cell| [0, 1, 2].map(|edge| mesh.neighbor(cell, edge));
     let r = &cells.readings;
     let cost = |a: usize, b: usize| {
+        if !city[b] {
+            return f64::INFINITY;
+        }
         let mut step = 1.;
         if !cells.open[a] || !cells.open[b] {
             step += WATER;
@@ -242,33 +280,19 @@ pub(super) fn plan(state: &mut State, selection: &Selection, seed: i32) -> io::R
             * ((r[a].density - r[b].density).abs() + (r[a].standing - r[b].standing).abs())
     };
     let labels = districts(&seeds, mesh.len(), cost, neighbours);
-    // Major works by the population band, sited by their own rules on the city's evidence.
-    let works = city_works(&selection.site, total, seed)
-        .into_iter()
-        .filter_map(|(family, anchor)| {
-            let nearest = (0..mesh.len())
-                .filter(|&c| cells.open[c])
-                .min_by(|&a, &b| {
-                    let d =
-                        |c: usize| (cells.at[c][0] - anchor[0]).hypot(cells.at[c][1] - anchor[1]);
-                    d(a).total_cmp(&d(b))
-                })?;
-            Some((family, nearest as u32))
-        })
-        .collect();
-    let Some(regional) = state.regional.as_mut() else {
-        return Ok(());
-    };
-    regional.city.places = placed
-        .into_iter()
-        .map(|p| crate::town::city::Placed {
-            spot: spots[p.spot],
-            kind: p.kind,
-        })
-        .collect();
-    regional.city.spots = spots.iter().map(|&s| s as u32).collect();
-    regional.city.districts = labels;
-    regional.city.works = works;
+    super::trace(
+        "city.plan",
+        serde_json::json!({
+            "people": total,
+            "count": count,
+            "seeds": seeds.len(),
+            "cityCells": city.iter().filter(|&&c| c).count(),
+            "labelled": labels.iter().filter(|&&l| l != u8::MAX).count(),
+        }),
+    );
+    if let Some(regional) = state.regional.as_mut() {
+        regional.city.districts = labels;
+    }
     Ok(())
 }
 

@@ -1,5 +1,9 @@
 //! Economic contributions have domain meaning; providers never prescribe wealth or layout.
-use super::{catalogue::Activity, geometry::Point};
+use super::{
+    catalogue::Activity,
+    geometry::Point,
+    scale::{Measure, TownScale},
+};
 use crate::execution::QueryValue;
 use serde::{Deserialize, Serialize};
 
@@ -109,8 +113,14 @@ struct Totals<'a> {
     label: Option<&'a str>,
 }
 impl<'a> Totals<'a> {
-    fn add(&mut self, source: &'a OpportunitySource, cost: f64, competitors: f64) {
-        let reach = pull(cost);
+    fn add(
+        &mut self,
+        source: &'a OpportunitySource,
+        cost: f64,
+        competitors: f64,
+        scale: TownScale,
+    ) {
+        let reach = pull(cost, scale);
         let demand = source.demand * reach / (1. + competitors);
         self.demand += demand;
         self.capability += source.capability * reach;
@@ -133,15 +143,16 @@ impl<'a> Totals<'a> {
     }
 }
 
-/// How strongly a source draws a site at this travel cost: half as much at 180 m as at the
-/// door, then fading to nothing at the daily reach.
-pub fn pull(cost: f64) -> f64 {
-    within_reach(cost) / (1. + cost / 180.)
+/// How strongly a source draws a site at this travel cost: half as much at the half-pull
+/// distance as at the door, then fading to nothing at the daily reach, both at `scale`.
+pub fn pull(cost: f64, scale: TownScale) -> f64 {
+    within_reach(cost, scale)
+        / (1. + cost / scale.length(super::settings::HALF_PULL, Measure::Travel))
 }
 /// The share of a daily journey's draw left at this travel cost: all of it within half the
 /// daily reach, none beyond it, and a smooth fade between.
-pub fn within_reach(cost: f64) -> f64 {
-    let reach = super::settings::DAILY_REACH;
+pub fn within_reach(cost: f64, scale: TownScale) -> f64 {
+    let reach = scale.length(super::settings::DAILY_REACH, Measure::Travel);
     let fade = ((cost / reach - 0.5) * 2.).clamp(0., 1.);
     1. - fade * fade * (3. - 2. * fade)
 }
@@ -158,35 +169,42 @@ pub(crate) enum FrontageRead {
     Construction,
 }
 /// `distances(source, visit)` names each site the source reaches and its travel cost;
-/// a site it does not name is out of reach.
+/// a site it does not name is out of reach. Travel costs are read at the reading's scale.
 pub(crate) fn frontage_support(
     sources: &[OpportunitySource],
     competitors: impl Fn(&OpportunitySource) -> f64,
     served: impl Fn(&OpportunitySource) -> f64,
     read: FrontageRead,
-    sites: &[Conditions],
+    reading: Reading<'_>,
     distances: impl FnMut(usize, &mut dyn FnMut(usize, f64)),
 ) -> Vec<Opportunities> {
+    let scale = reading.scale;
     match read {
         FrontageRead::HouseholdDemand => batch(
             sources,
             (competitors, |_| 0.),
             &[Activity::Household],
-            sites,
+            reading,
             distances,
             |total, offer, cost| {
-                total.demand += offer.source.demand * pull(cost) / (1. + offer.competitors)
+                total.demand += offer.source.demand * pull(cost, scale) / (1. + offer.competitors)
             },
         ),
         FrontageRead::Construction => batch(
             sources,
             (competitors, served),
             &Activity::ALL,
-            sites,
+            reading,
             distances,
-            |total, offer, cost| total.add(offer.source, cost, offer.competitors),
+            |total, offer, cost| total.add(offer.source, cost, offer.competitors, scale),
         ),
     }
+}
+/// The sites a frontage reading reads and the scale their travel costs are read at.
+#[derive(Clone, Copy)]
+pub(crate) struct Reading<'s> {
+    pub sites: &'s [Conditions],
+    pub scale: TownScale,
 }
 fn batch<'a, const N: usize>(
     sources: &'a [OpportunitySource],
@@ -195,10 +213,11 @@ fn batch<'a, const N: usize>(
         impl Fn(&OpportunitySource) -> f64,
     ),
     activities: &[Activity; N],
-    sites: &[Conditions],
+    reading: Reading<'_>,
     mut distances: impl FnMut(usize, &mut dyn FnMut(usize, f64)),
     accumulate: impl Fn(&mut Totals<'a>, &Offer<'a>, f64),
 ) -> Vec<Opportunities> {
+    let Reading { sites, scale } = reading;
     let mut order: Vec<_> = sources
         .iter()
         .enumerate()
@@ -230,7 +249,7 @@ fn batch<'a, const N: usize>(
         // hpc-exempt: one identity's alternative paths meet per site; ties keep provider order.
         reached.sort_unstable_by_key(|&(site, member, _)| (site, member));
         if N > 1 {
-            collect_custom(group, &reached, &mut audience);
+            collect_custom(group, &reached, &mut audience, scale);
         }
         for (a, &activity) in activities.iter().enumerate() {
             for paths in reached.chunk_by(|x, y| x.0 == y.0) {
@@ -264,6 +283,7 @@ fn collect_custom(
     group: &[Offer<'_>],
     reached: &[(usize, usize, f64)],
     audience: &mut [[f64; super::effects::Clientele::ALL.len()]],
+    scale: TownScale,
 ) {
     for paths in reached.chunk_by(|x, y| x.0 == y.0) {
         let Some(&(site, member, cost)) = paths.iter().min_by(|a, b| a.2.total_cmp(&b.2)) else {
@@ -273,15 +293,22 @@ fn collect_custom(
         let Some(clientele) = offer.source.clientele.filter(|_| offer.unserved > 0.) else {
             continue;
         };
-        let draw = clientele.draw(1., cost);
+        let draw = clientele.draw(1., cost, scale);
         audience[site][clientele as usize] +=
             offer.unserved * draw / (1. + draw * offer.unserved / offer.source.demand);
     }
 }
 impl Opportunities {
+    /// The support paths give a site, their travel read at street fidelity; see `new_at`.
     pub fn new(paths: &[Reachable<'_>], conditions: Conditions) -> Self {
+        Self::new_at(paths, conditions, TownScale::default())
+    }
+    /// The support paths give a site, their travel read at `scale`.
+    pub fn new_at(paths: &[Reachable<'_>], conditions: Conditions, scale: TownScale) -> Self {
         Self {
-            activities: std::array::from_fn(|i| support_for(Activity::ALL[i], paths, conditions)),
+            activities: std::array::from_fn(|i| {
+                support_for(Activity::ALL[i], paths, conditions, scale)
+            }),
             ..Default::default()
         }
     }
@@ -297,12 +324,18 @@ pub fn compatible(consumer: Activity, source: Activity) -> bool {
         source == Activity::Household || source == Activity::Trade || source == consumer
     }
 }
-pub fn support_for(activity: Activity, paths: &[Reachable<'_>], conditions: Conditions) -> Support {
+pub fn support_for(
+    activity: Activity,
+    paths: &[Reachable<'_>],
+    conditions: Conditions,
+    scale: TownScale,
+) -> Support {
     support_from(
         paths
             .iter()
             .filter(|p| compatible(activity, p.source.activity)),
         conditions,
+        scale,
     )
 }
 /// Bind a counterparty for an actual use. Retained custom favours an operating
@@ -313,6 +346,7 @@ pub fn operating_tie(
     access: super::catalogue::AccessUse,
     old: Option<&super::fabric::OperatingTie>,
     exposure: f64,
+    scale: TownScale,
 ) -> Option<super::fabric::OperatingTie> {
     use super::fabric::OperatingTie;
     let offers = paths
@@ -323,8 +357,8 @@ pub fn operating_tie(
                 && purpose.offered_by(p.source.activity)
         })
         .map(|p| {
-            let strength =
-                (p.source.demand + p.source.capability) * pull(p.cost) / (1. + p.competitors);
+            let strength = (p.source.demand + p.source.capability) * pull(p.cost, scale)
+                / (1. + p.competitors);
             let custom = old
                 .filter(|t| t.destination == p.source.endpoint)
                 .map_or(0., |t| t.strength);
@@ -351,12 +385,13 @@ pub fn operating_tie(
     tie.strength = respond(tie.strength, 0., exposure);
     (tie.strength > 0.01).then_some(tie)
 }
-pub fn support(paths: &[Reachable<'_>], conditions: Conditions) -> Support {
-    support_from(paths.iter(), conditions)
+pub fn support(paths: &[Reachable<'_>], conditions: Conditions, scale: TownScale) -> Support {
+    support_from(paths.iter(), conditions, scale)
 }
 fn support_from<'a, 'b: 'a>(
     paths: impl Iterator<Item = &'a Reachable<'b>>,
     conditions: Conditions,
+    scale: TownScale,
 ) -> Support {
     // hpc-exempt: sparse source identities select alternative geographic paths, not lattice values.
     let mut seen = std::collections::BTreeMap::<SourceId, &Reachable<'_>>::new();
@@ -371,7 +406,7 @@ fn support_from<'a, 'b: 'a>(
     }
     let mut result = Totals::default();
     for path in seen.into_values() {
-        result.add(path.source, path.cost, path.competitors);
+        result.add(path.source, path.cost, path.competitors, scale);
     }
     result.finish(conditions)
 }
@@ -383,6 +418,14 @@ pub fn respond(previous: f64, desired: f64, exposure: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A reading of these sites at street fidelity.
+    fn at_street(sites: &[Conditions]) -> Reading<'_> {
+        Reading {
+            sites,
+            scale: TownScale::default(),
+        }
+    }
 
     #[test]
     fn a_new_place_reads_reachable_country_custom_after_incumbents_have_drawn_on_it() {
@@ -406,7 +449,7 @@ mod tests {
                 |_| 0.,
                 |_| already_served,
                 FrontageRead::Construction,
-                &[Conditions::default(); 2],
+                at_street(&[Conditions::default(); 2]),
                 |_, visit| {
                     visit(0, 30.);
                     visit(1, f64::INFINITY);
@@ -465,6 +508,7 @@ mod tests {
                 AccessUse::Foot,
                 old,
                 1.,
+                TownScale::default(),
             )
             .unwrap()
         };
@@ -512,9 +556,18 @@ mod tests {
                 competitors: 0.,
             },
         ];
-        let supply =
-            operating_tie(Operation::Supply, &paths, AccessUse::Freight, None, 1.).unwrap();
-        let care = operating_tie(Operation::Service, &paths, AccessUse::Foot, None, 1.).unwrap();
+        let scale = TownScale::default();
+        let supply = operating_tie(
+            Operation::Supply,
+            &paths,
+            AccessUse::Freight,
+            None,
+            1.,
+            scale,
+        )
+        .unwrap();
+        let care =
+            operating_tie(Operation::Service, &paths, AccessUse::Foot, None, 1., scale).unwrap();
         assert_eq!(supply.destination, fields.endpoint);
         assert_eq!(care.destination, healer.endpoint);
     }
@@ -545,7 +598,10 @@ mod tests {
                 competitors: 2.,
             },
         ];
-        assert_eq!(support(&paths, Conditions::default()).demand, 4.);
+        assert_eq!(
+            support(&paths, Conditions::default(), TownScale::default()).demand,
+            4.
+        );
     }
     #[test]
     fn blocked_access_and_competition_have_distinct_effects() {
@@ -567,7 +623,8 @@ mod tests {
                     cost: f64::INFINITY,
                     competitors: 0.
                 }],
-                Conditions::default()
+                Conditions::default(),
+                TownScale::default()
             )
             .demand,
             0.
@@ -582,6 +639,7 @@ mod tests {
                 waste: 1.,
                 ..Conditions::default()
             },
+            TownScale::default(),
         );
         assert_eq!(result.demand, 2.);
         assert_eq!(result.capability, 2.);
@@ -590,13 +648,14 @@ mod tests {
     #[test]
     fn a_draw_keeps_its_strength_near_by_and_ends_at_the_daily_reach() {
         let reach = super::super::settings::DAILY_REACH;
-        assert_eq!(pull(0.), 1.);
-        assert_eq!(pull(180.), 0.5);
-        assert_eq!(within_reach(reach * 0.5), 1.);
-        assert_eq!(within_reach(reach), 0.);
-        assert_eq!(pull(f64::INFINITY), 0.);
+        let scale = TownScale::default();
+        assert_eq!(pull(0., scale), 1.);
+        assert_eq!(pull(180., scale), 0.5);
+        assert_eq!(within_reach(reach * 0.5, scale), 1.);
+        assert_eq!(within_reach(reach, scale), 0.);
+        assert_eq!(pull(f64::INFINITY, scale), 0.);
         let fading: Vec<_> = (0..=10)
-            .map(|i| within_reach(reach * (0.5 + 0.05 * f64::from(i))))
+            .map(|i| within_reach(reach * (0.5 + 0.05 * f64::from(i)), scale))
             .collect();
         assert!(fading.windows(2).all(|pair| pair[1] < pair[0]));
     }
@@ -657,7 +716,7 @@ mod tests {
             |_| 0.,
             |_| 0.,
             FrontageRead::Construction,
-            &[Conditions::default(); 2],
+            at_street(&[Conditions::default(); 2]),
             |origin, visit| {
                 for (site, &cost) in [[0., f64::INFINITY], [0., 0.], [0., 0.]][origin]
                     .iter()
@@ -678,7 +737,7 @@ mod tests {
             |_| 0.,
             |_| 0.,
             FrontageRead::HouseholdDemand,
-            &[Conditions::default()],
+            at_street(&[Conditions::default()]),
             |origin, visit| {
                 origins.push(origin);
                 visit(0, 0.);

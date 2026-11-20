@@ -68,6 +68,11 @@ pub struct Holding {
     pub claim: f64,
 }
 impl Holding {
+    /// Condition above which a holding still stands in use.
+    pub const STANDING: f64 = 0.2;
+    pub fn standing(&self) -> bool {
+        self.condition > Self::STANDING
+    }
     pub fn operation_scale(&self) -> f64 {
         f64::from(self.operation_tier.max(1))
     }
@@ -123,6 +128,9 @@ pub struct Town {
     noded: std::cell::RefCell<Option<(u64, std::rc::Rc<super::access::Noded>)>>,
     pub seat: Seat,
     pub layout: Layout,
+    /// The fidelity the town develops at; its processes read lengths through `scale`.
+    #[serde(default)]
+    pub fidelity: super::scale::Fidelity,
     pub template: super::templates::Selection,
     pub founding_sites: Vec<(super::templates::AnchorRole, HoldingId)>,
     pub(crate) defences: Vec<Vec<Point>>,
@@ -293,6 +301,15 @@ pub struct Fabric {
     pub towns: Vec<Town>,
     pub fields: Vec<super::land::Field>,
     pub fallow: Vec<super::land::Field>,
+    /// The fidelity the map's towns develop at; a city map sets it before it founds any.
+    #[serde(default)]
+    pub fidelity: super::scale::Fidelity,
+}
+impl Fabric {
+    /// The scale of what is built for the whole map: its town ground, walls and fields.
+    pub fn scale(&self) -> super::scale::TownScale {
+        super::scale::TownScale::new(self.fidelity)
+    }
 }
 pub struct Proposal {
     pub slot: Slot,
@@ -551,6 +568,23 @@ impl Town {
             Anchor::Premises(id) => self.holdings[id.0 as usize].slot.front,
         }
     }
+    /// The town's scale authority: every length its processes declare resolves through it.
+    pub fn scale(&self) -> super::scale::TownScale {
+        super::scale::TownScale::new(self.fidelity)
+    }
+    /// An ordinary plot's frontage and depth at the town's size and scale. Its depth is the
+    /// unit template rules count in.
+    pub fn plot(&self) -> (f64, f64) {
+        self.scale().plot(self.seat.story.size())
+    }
+    /// How the town lays a way of `class`: at its size and scale.
+    pub fn street_form(&self, class: super::network::Class) -> super::network::StreetForm {
+        super::network::StreetForm {
+            class,
+            size: self.seat.story.size(),
+            scale: self.scale(),
+        }
+    }
     pub fn new(seat: Seat, forced: Option<Layout>) -> Self {
         let layout = super::story::layout(&seat.story, forced);
         let purposes = Purpose::for_seat(&seat);
@@ -563,6 +597,7 @@ impl Town {
             works: Default::default(),
             seat,
             layout,
+            fidelity: Default::default(),
             streets: vec![],
             growing_ways: vec![],
             passages: vec![],
@@ -587,7 +622,7 @@ impl Town {
             && self.template.affinity(
                 proposal.kind.definition().activity,
                 proposal.slot.front,
-                atlas_map::town::plot_size(self.seat.story.size()).1,
+                self.plot().1,
             ) <= 0.
         {
             return Ok(None);
@@ -668,7 +703,7 @@ impl Town {
             outline = part;
         }
         if spatial.area(&outline).map_err(io::Error::other)?
-            < definition.frontage.low * definition.depth.low * 0.25
+            < definition.least_area(self.scale()) * 0.25
         {
             return Ok(None);
         }

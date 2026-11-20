@@ -239,6 +239,7 @@ impl NativeJob {
             revision: self.operation,
         };
         captured_geography.extend(finished.output.geography.iter().cloned());
+        publication_start(&reference, "retain-inputs");
         let started = std::time::Instant::now();
         services.inputs.store(
             &reference,
@@ -324,6 +325,7 @@ async fn publish(
     control: &impl GenerationControl,
 ) -> io::Result<MapRef> {
     let reference = map.reference.clone();
+    publication_start(&reference, "prepare-map");
     let started = std::time::Instant::now();
     let Runtime {
         resources,
@@ -356,6 +358,7 @@ async fn publish(
     }
     publication_timing(&reference, "prepare-map", started);
     let mut assets = NativeMapAssets::new(services.assets.clone(), cache);
+    publication_start(&reference, "publish-map");
     let started = std::time::Instant::now();
     let result = product
         .publish(
@@ -377,7 +380,16 @@ fn publication_timing(reference: &MapRef, stage: &str, started: std::time::Insta
     eprintln!(
         "{}",
         serde_json::json!({"event":"generation.publication", "mapId":reference.map_id,
-        "revision":reference.revision, "stage":stage, "seconds":started.elapsed().as_secs_f64()})
+        "revision":reference.revision, "stage":stage, "seconds":started.elapsed().as_secs_f64(),
+        "memory":crate::host_memory::resident()})
+    );
+}
+/// Names a publication stage as it starts, so a server that dies inside it shows where.
+fn publication_start(reference: &MapRef, stage: &str) {
+    eprintln!(
+        "{}",
+        serde_json::json!({"event":"generation.publication.start", "mapId":reference.map_id,
+        "revision":reference.revision, "stage":stage, "memory":crate::host_memory::resident()})
     );
 }
 struct Directory(PathBuf);

@@ -45,11 +45,12 @@ pub(super) fn visits(
         )
     });
     let mut shares = Vec::new();
+    let scale = town.scale();
     for (i, source) in sources.iter().enumerate() {
         let Some(group) = source.clientele.filter(|_| source.demand > 0.) else {
             continue;
         };
-        let reach = group.reach();
+        let reach = group.reach(scale);
         shares.clear();
         queries.within(holdings.len() + i, reach);
         queries.reached(&targets[group as usize], reach, |target, cost| {
@@ -59,7 +60,7 @@ pub(super) fn visits(
                     holding: holdings[target].id,
                 })
             {
-                let draw = group.draw(attractions[target][group as usize], cost);
+                let draw = group.draw(attractions[target][group as usize], cost, scale);
                 shares.push((target, draw));
             }
         });

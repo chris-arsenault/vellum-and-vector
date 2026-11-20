@@ -16,17 +16,25 @@ use crate::{
         geometry::Point,
         ground::FIRST_STREET,
         influence::{
-            frontage_support, Conditions, FrontageRead, OpportunitySource, SiteConditions,
+            frontage_support, Conditions, FrontageRead, OpportunitySource, Reading, SiteConditions,
         },
         plots::{slots, Slot},
+        scale::{Fidelity, Measure, TownScale},
+        settings::{CANDIDATE_DEPTH, CANDIDATE_FRONTAGE, CANDIDATE_REACH},
     },
 };
 use std::{io, rc::Rc};
+/// The passing trade along a stretch of street this long makes one unit of exchange signal.
+/// Street metres, resolved by `Measure::Layout`.
+const TRADE_STRETCH: f64 = 100.;
 
+/// What a town's frontage is travelled over: the walking ground, the kernel, the kept links,
+/// and the town's scale, which travel costs are read at.
 struct FrontageTravel<'a> {
     ground: &'a crate::town::ground::Ground,
     spatial: &'a dyn crate::spatial::SpatialKernel,
     links: &'a [(Point, Point, f64)],
+    scale: TownScale,
 }
 fn frontage_candidates(
     town: &Town,
@@ -83,7 +91,8 @@ fn frontage_candidates(
             .copied()
             .unwrap_or(0.)
     };
-    let reach = crate::town::settings::DAILY_REACH;
+    let scale = travel.scale;
+    let reach = scale.length(crate::town::settings::DAILY_REACH, Measure::Travel);
     let sites = queries.destinations(
         targets
             .iter()
@@ -99,16 +108,20 @@ fn frontage_candidates(
     } else {
         FrontageRead::Construction
     };
-    let mut opportunities =
-        frontage_support(sources, competitors, served, read, &conditions, distances);
+    let mut opportunities = frontage_support(
+        sources,
+        competitors,
+        served,
+        read,
+        Reading {
+            sites: &conditions,
+            scale,
+        },
+        distances,
+    );
     if !movement {
         for (site, productive) in opportunities.iter_mut().zip(productive_frontages(
-            &access,
-            &graph,
-            &places,
-            sources,
-            offset,
-            travel.spatial,
+            &access, &graph, &places, sources, offset, &travel,
         )?) {
             site.production = productive;
         }
@@ -130,14 +143,15 @@ fn productive_frontages(
     places: &[Entrance],
     sources: &[OpportunitySource],
     offset: usize,
-    spatial: &dyn crate::spatial::SpatialKernel,
+    travel: &FrontageTravel<'_>,
 ) -> io::Result<Vec<crate::town::production::Available>> {
     use crate::town::production::Available;
+    let (spatial, scale) = (travel.spatial, travel.scale);
     let mut available = vec![Available::default(); places.len() - offset];
     if !sources.iter().any(|source| source.productive.is_some()) {
         return Ok(available);
     }
-    let reach = crate::town::settings::DAILY_REACH;
+    let reach = scale.length(crate::town::settings::DAILY_REACH, Measure::Travel);
     for mode in [AccessUse::Foot, AccessUse::Freight, AccessUse::Waterborne] {
         let bound;
         let network = if mode == AccessUse::Foot {
@@ -156,7 +170,7 @@ fn productive_frontages(
             if let Some(offer) = source.productive {
                 paths.within(i, reach);
                 paths.reached(&sites, reach, |site, cost| {
-                    available[site].receive(offer, mode, source.capability, cost);
+                    available[site].receive(offer, mode, source.capability, cost, scale);
                 });
             }
         }
@@ -274,6 +288,7 @@ fn habitable_sites(
     state: &State,
     ground: &crate::town::ground::Ground,
     seat: &crate::town::seat::Seat,
+    scale: TownScale,
 ) -> Vec<Point> {
     use crate::town::{
         access::walking,
@@ -294,7 +309,7 @@ fn habitable_sites(
         .iter()
         .map(|&p| matches!(ground.owner(p), FREE | STEEP))
         .collect();
-    let reach = crate::town::founding::reach(seat.story.size());
+    let reach = crate::town::founding::reach(scale, seat.story.size());
     let required_span = seat.story.built_area.sqrt().max(reach);
     let mut ranked = Vec::new();
     for seed in 0..mesh.len() {
@@ -348,19 +363,103 @@ fn buildable_shelves(
     component.retain(|&cell| ground.owner(points[cell]) == crate::town::ground::FREE);
     component
 }
+/// Founding sites a hot spot's town tries, nearest first.
+const SPOT_SITES: usize = 8;
+/// How a town is founded: a settlement commissions the major works its population band
+/// expects; a city map's hot spot takes only the city's works, which the city sites.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Founding {
+    Settlement,
+    HotSpot,
+}
+/// Towns founded at a city map's hot spots, at city fidelity, each under the city's template
+/// where it can found there and its own choice where it cannot. A spot with no habitable
+/// founding site founds none.
+pub(crate) fn found_at_spots(
+    state: &State,
+    spots: Vec<(crate::town::seat::Seat, Settings)>,
+) -> io::Result<Vec<Town>> {
+    if spots.is_empty() {
+        return Ok(Vec::new());
+    }
+    // A new town founds clear of the towns already standing, their streets and premises.
+    let mut ground = (*super::held_ground::HeldGround::default().occupied(state)?).clone();
+    for town in &state.town.towns {
+        for (i, street) in town.streets().iter().enumerate() {
+            ground.take_street(street, FIRST_STREET + i as u32);
+        }
+    }
+    let seats: Vec<_> = spots.iter().map(|(seat, _)| seat.clone()).collect();
+    let context = super::founding_site::Context::new(state, &seats)?;
+    let mut towns = Vec::new();
+    for (index, (seat, settings)) in spots.into_iter().enumerate() {
+        let found = |settings: &Settings| {
+            settle(
+                state,
+                seat.clone(),
+                &ground,
+                settings,
+                Survey {
+                    context: &context,
+                    seat: index,
+                    // A city map's towns build its blocks and thoroughfares.
+                    fidelity: state.town.fidelity,
+                },
+                Founding::HotSpot,
+            )
+        };
+        let own = Settings {
+            template: None,
+            ..settings
+        };
+        let town = match found(&settings)? {
+            Some(town) => Some(town),
+            None if settings.template.is_some() => found(&own)?,
+            None => None,
+        };
+        // The next spot founds clear of this town's streets and holdings.
+        if let Some(town) = &town {
+            for (i, street) in town.streets().iter().enumerate() {
+                ground.take_street(street, FIRST_STREET + i as u32);
+            }
+            let outlines: Vec<_> = town.holdings().iter().map(|h| h.outline.clone()).collect();
+            ground.mark_shapes(&outlines, crate::town::ground::PLOT, state.spatial.as_ref())?;
+        }
+        towns.extend(town);
+    }
+    Ok(towns)
+}
+/// The founding survey of the seats being settled, which of them this one is, and the
+/// fidelity its town is surveyed and founded at.
+#[derive(Clone, Copy)]
+struct Survey<'c, 'a> {
+    context: &'c super::founding_site::Context<'a>,
+    seat: usize,
+    fidelity: Fidelity,
+}
 fn settle(
     state: &State,
     seat: crate::town::seat::Seat,
     ground: &crate::town::ground::Ground,
     settings: &Settings,
-    context: &super::founding_site::Context<'_>,
-    seat_index: usize,
-) -> io::Result<Town> {
+    survey: Survey<'_, '_>,
+    founding: Founding,
+) -> io::Result<Option<Town>> {
+    let fidelity = survey.fidelity;
+    let scale = TownScale::new(fidelity);
     let mesh = state.field().mesh();
     let draw =
         crate::field::poi::true_sizes::roll_bytes(&seat.key.to_bytes(), settings.seed as u64);
     let district = district_seat(state, &seat)?;
-    for centre in habitable_sites(state, ground, &seat) {
+    // A hot spot's town stands at the spot: only its nearest founding sites are tried.
+    let tries = match founding {
+        Founding::Settlement => usize::MAX,
+        Founding::HotSpot => SPOT_SITES,
+    };
+    for centre in habitable_sites(state, ground, &seat, scale)
+        .into_iter()
+        .take(tries)
+    {
         let mut candidate = seat.clone();
         candidate.centre = centre;
         for arm in &mut candidate.arms {
@@ -380,7 +479,10 @@ fn settle(
                 ..Conditions::default()
             }))
         };
-        let (site, inherited) = context.survey(state, &candidate, seat_index, ground)?;
+        let (site, inherited) =
+            survey
+                .context
+                .survey(state, &candidate, survey.seat, ground, scale)?;
         let selection = crate::town::templates::Selection::choose(site, draw);
         if settings.template.is_some_and(|requested| {
             !selection
@@ -401,6 +503,7 @@ fn settle(
         let mut next = Some(settings.template.or(city).unwrap_or(selection.selected));
         while let Some(template) = next {
             let mut town = Town::new(candidate.clone(), settings.layout);
+            town.fidelity = fidelity;
             town.template = selection.clone();
             town.template.selected = template;
             if crate::town::founding::establish(&mut town, ground, state.spatial.as_ref(), local)? {
@@ -410,11 +513,12 @@ fn settle(
                 if let Some(work) = settings.major_work {
                     crate::town::major_works::commission_requested(&mut town, settings.seed, work)?;
                 }
-                // A district's works were placed on its city map and arrive inherited.
-                if district.is_none() {
+                // A district's works were placed on its city map and arrive inherited; a hot
+                // spot's are the city's own.
+                if district.is_none() && founding == Founding::Settlement {
                     crate::town::major_works::commission(&mut town, settings.seed, &inherited);
                 }
-                return Ok(town);
+                return Ok(Some(town));
             }
             if settings.template.is_some() {
                 break;
@@ -427,15 +531,16 @@ fn settle(
             next = selection.draw_remaining(retry, &excluded);
         }
     }
+    Ok(None)
+}
+/// A settlement that must found and found nowhere.
+fn no_site(name: &str, settings: &Settings) -> io::Error {
     let template = settings.template.map_or("", |template| template.name());
-    Err(io::Error::other(if template.is_empty() {
-        format!("No habitable founding site for {}", seat.name)
+    io::Error::other(if template.is_empty() {
+        format!("No habitable founding site for {name}")
     } else {
-        format!(
-            "No eligible and habitable {template} founding site for {}",
-            seat.name
-        )
-    }))
+        format!("No eligible and habitable {template} founding site for {name}")
+    })
 }
 /// When the seat is a city map's district, the template its city chose: `Some(None)` for a
 /// district without one, `None` for an ordinary settlement.
@@ -699,7 +804,22 @@ impl Operations {
                     .seats
                     .into_iter()
                     .enumerate()
-                    .map(|(i, seat)| settle(state, seat, &site.ground, settings, &context, i))
+                    .map(|(i, seat)| {
+                        let name = seat.name.clone();
+                        settle(
+                            state,
+                            seat,
+                            &site.ground,
+                            settings,
+                            Survey {
+                                context: &context,
+                                seat: i,
+                                fidelity: Fidelity::Street,
+                            },
+                            Founding::Settlement,
+                        )?
+                        .ok_or_else(|| no_site(&name, settings))
+                    })
                     .collect::<io::Result<Vec<_>>>()?;
                 drop(context);
                 state.town.towns = towns;
@@ -752,11 +872,16 @@ impl Operations {
                                 if reads != processes::Reads::Frontage {
                                     return Ok(vec![]);
                                 }
+                                let scale = town.scale();
+                                let frontage = scale.length(CANDIDATE_FRONTAGE, Measure::Plot);
+                                let depth = scale.length(CANDIDATE_DEPTH, Measure::Plot);
                                 let sites = town
                                     .streets()
                                     .iter()
                                     .enumerate()
-                                    .flat_map(|(i, street)| slots(i, street, 9., 25.))
+                                    .flat_map(|(i, street)| {
+                                        slots(i, street, frontage, depth, scale)
+                                    })
                                     .chain(crate::town::land_sites::around(
                                         std::iter::once(town.seat.centre)
                                             .chain(
@@ -766,16 +891,14 @@ impl Operations {
                                                     .map(|h| h.slot.front),
                                             )
                                             .chain(town.works.active_sites()),
-                                        50.,
-                                        9.,
-                                        25.,
+                                        scale.length(CANDIDATE_REACH, Measure::Layout),
+                                        frontage,
+                                        depth,
                                         town.round,
                                     ))
-                                    .chain(
-                                        town.holdings()
-                                            .iter()
-                                            .flat_map(crate::town::plots::participant_slots),
-                                    )
+                                    .chain(town.holdings().iter().flat_map(|h| {
+                                        crate::town::plots::participant_slots_at(h, scale)
+                                    }))
                                     .filter_map(|s| {
                                         crate::town::founding::survey_slot(town, &walking_ground, s)
                                     })
@@ -894,6 +1017,7 @@ impl Operations {
                                     ground: &walking_ground,
                                     links: &links,
                                     spatial: spatial.as_ref(),
+                                    scale: town.scale(),
                                 },
                                 &candidates[index],
                                 &conditions.0[index][n..],
@@ -992,8 +1116,9 @@ impl Operations {
                 let field = scope.state().field();
                 let mut sources = Vec::new();
                 for town in &scope.state().town.towns {
+                    let stretch = town.scale().length(TRADE_STRETCH, Measure::Layout);
                     sources.extend(town.passing_trade().filter_map(|(point, activity)| {
-                        cell_at(field.mesh(), point).map(|cell| (cell, activity / 100., 0.))
+                        cell_at(field.mesh(), point).map(|cell| (cell, activity / stretch, 0.))
                     }));
                     for holding in town.holdings() {
                         if let Some(cell) = cell_at(field.mesh(), holding.slot.front) {

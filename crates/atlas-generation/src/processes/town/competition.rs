@@ -1,5 +1,6 @@
 //! Crowding presses on rear gardens while existing buildings and access resist subdivision.
 use super::Exposure;
+use crate::town::scale::Measure;
 use crate::town::{
     catalogue::PlaceRules,
     fabric::{polygon, FabricEdit, FabricOwner, HoldingId, Town},
@@ -7,6 +8,14 @@ use crate::town::{
 };
 use atlas_map::spatial::Overlay;
 use std::io;
+/// The least depth a divided rear garden keeps and the least frontage a plot is divided at.
+/// Street metres, resolved by `Measure::Plot`.
+const LEAST_REAR_DEPTH: f64 = 8.;
+const LEAST_DIVIDED_FRONTAGE: f64 = 6.;
+/// How far a rear holding's passage runs past the division, and its half width. Street
+/// metres, resolved by `Measure::Plot` and `Measure::Width`.
+const PASSAGE_OVERRUN: f64 = 1.;
+const PASSAGE_HALF_WIDTH: f64 = 0.35;
 pub fn advance(town: &mut Town, context: &Exposure<'_>) -> io::Result<()> {
     let claims: Vec<_> = town
         .holdings()
@@ -60,10 +69,13 @@ fn subdivide(town: &mut Town, id: HoldingId, context: &Exposure<'_>) -> io::Resu
     };
     let slot = &original.slot;
     let back = slot.depth * 0.62;
-    if slot.depth - back < 8. || slot.frontage < 6. {
+    let town_scale = town.scale();
+    if slot.depth - back < town_scale.length(LEAST_REAR_DEPTH, Measure::Plot)
+        || slot.frontage < town_scale.length(LEAST_DIVIDED_FRONTAGE, Measure::Plot)
+    {
         return Ok(());
     }
-    let Some((front, rear, passage)) = partition(&original, context)? else {
+    let Some((front, rear, passage)) = partition(&original, context, town_scale)? else {
         return Ok(());
     };
     let mut rear_slot = slot.clone();
@@ -87,6 +99,7 @@ fn subdivide(town: &mut Town, id: HoldingId, context: &Exposure<'_>) -> io::Resu
 fn partition(
     original: &crate::town::fabric::Holding,
     context: &Exposure<'_>,
+    town_scale: crate::town::scale::TownScale,
 ) -> io::Result<
     Option<(
         atlas_map::Geometry,
@@ -120,11 +133,15 @@ fn partition(
         return Ok(None);
     };
     let entrance = add(slot.front, scale(slot.direction, slot.frontage * 0.45));
+    let overrun = town_scale.length(PASSAGE_OVERRUN, Measure::Plot);
     let passage =
-        crate::town::edits::line(&[entrance, add(entrance, scale(slot.inward, back + 1.))]);
+        crate::town::edits::line(&[entrance, add(entrance, scale(slot.inward, back + overrun))]);
     let Some(corridor) = context
         .spatial
-        .buffer(&passage, 0.35)
+        .buffer(
+            &passage,
+            town_scale.length(PASSAGE_HALF_WIDTH, Measure::Width),
+        )
         .map_err(io::Error::other)?
     else {
         return Ok(None);

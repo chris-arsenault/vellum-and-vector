@@ -2,9 +2,14 @@
 use super::{
     geometry::{add, at, left, rectangle, scale, Point},
     network::Street,
+    scale::{Measure, TownScale},
 };
 pub use atlas_map::town::Side;
 use atlas_map::town::VERGE;
+/// The pitch and depth of the plots a holding offers its partners round its boundary. Street
+/// metres, resolved by `Measure::Plot`.
+const PARTNER_PITCH: f64 = 7.;
+const PARTNER_DEPTH: f64 = 20.;
 
 /// A physical site with an entrance and a local frame for laying out buildings.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -66,8 +71,16 @@ impl Slot {
         super::fabric::polygon(&corners)
     }
 }
-/// Every plot place along both sides of a street, from its start.
-pub fn slots(index: usize, street: &Street, frontage: f64, depth: f64) -> Vec<Slot> {
+/// Every plot place along both sides of a street, from its start, of about this frontage and
+/// depth, each its verge back from the street at `scale`.
+pub fn slots(
+    index: usize,
+    street: &Street,
+    frontage: f64,
+    depth: f64,
+    town_scale: TownScale,
+) -> Vec<Slot> {
+    let verge = town_scale.length(VERGE, Measure::Plot);
     let length = street.length();
     let mut result = Vec::new();
     for side in [Side::Left, Side::Right] {
@@ -90,7 +103,7 @@ pub fn slots(index: usize, street: &Street, frontage: f64, depth: f64) -> Vec<Sl
             let along = cursor + pitch / 2.0;
             if let Some((p, d)) = at(&street.points, along) {
                 let inward = scale(left(d), sign);
-                let front = add(p, scale(inward, street.width_at(along) / 2.0 + VERGE));
+                let front = add(p, scale(inward, street.width_at(along) / 2.0 + verge));
                 result.push(Slot {
                     habitat: super::templates::Habitat::Ground,
                     tenure: super::templates::Tenure::Household,
@@ -113,8 +126,13 @@ pub fn slots(index: usize, street: &Street, frontage: f64, depth: f64) -> Vec<Sl
     result
 }
 
-/// Uses offering frontage around their boundary can admit project partners there.
+/// Uses offering frontage around their boundary can admit project partners there; plots at
+/// street fidelity, see `participant_slots_at`.
 pub fn participant_slots(holding: &super::fabric::Holding) -> Vec<Slot> {
+    participant_slots_at(holding, TownScale::default())
+}
+/// The partner plots round a holding's boundary, sized at `scale`.
+pub fn participant_slots_at(holding: &super::fabric::Holding, scale: TownScale) -> Vec<Slot> {
     use super::catalogue::PlaceRules;
     if holding
         .kind
@@ -129,12 +147,12 @@ pub fn participant_slots(holding: &super::fabric::Holding) -> Vec<Slot> {
         atlas_map::Geometry::Polygon { coordinates } => coordinates
             .first()
             .into_iter()
-            .flat_map(|ring| edge_slots(&holding.slot, holding.id, ring))
+            .flat_map(|ring| edge_slots(&holding.slot, holding.id, ring, scale))
             .collect(),
         atlas_map::Geometry::MultiPolygon { coordinates } => coordinates
             .iter()
             .filter_map(|polygon| polygon.first())
-            .flat_map(|ring| edge_slots(&holding.slot, holding.id, ring))
+            .flat_map(|ring| edge_slots(&holding.slot, holding.id, ring, scale))
             .collect(),
         _ => vec![],
     }
@@ -144,8 +162,11 @@ fn edge_slots(
     slot: &Slot,
     participant: super::fabric::HoldingId,
     ring: &[atlas_map::Position],
+    town_scale: TownScale,
 ) -> Vec<Slot> {
     use super::geometry::{distance, sub, unit};
+    let pitch = town_scale.length(PARTNER_PITCH, Measure::Plot);
+    let depth = town_scale.length(PARTNER_DEPTH, Measure::Plot);
     let points: Vec<_> = ring
         .iter()
         .map(|p| {
@@ -164,7 +185,7 @@ fn edge_slots(
     let mut slots = Vec::new();
     for edge in points.windows(2) {
         let length = distance(edge[0], edge[1]);
-        let count = (length / 7.).floor() as usize;
+        let count = (length / pitch).floor() as usize;
         if count == 0 {
             continue;
         }
@@ -179,8 +200,8 @@ fn edge_slots(
                 direction,
                 inward,
                 frontage,
-                depth: 20.,
-                corners: rectangle(front, direction, inward, frontage, 20.),
+                depth,
+                corners: rectangle(front, direction, inward, frontage, depth),
                 ..slot.clone()
             });
         }
@@ -201,7 +222,7 @@ mod tests {
     #[test]
     fn candidate_frontages_vary_on_both_sides_of_a_street() {
         let street = street();
-        let all = slots(0, &street, 8.0, 24.0);
+        let all = slots(0, &street, 8.0, 24.0, TownScale::default());
         let left = all.iter().filter(|s| s.side == Side::Left).count();
         assert!(left > 0 && left < all.len());
         assert!(all.windows(2).any(|s| s[0].frontage != s[1].frontage));

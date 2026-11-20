@@ -663,6 +663,7 @@ fn working_plot_keeps_its_identity_while_built_claims_take_land() {
     let mut fabric = Fabric {
         towns: vec![town],
         fallow: vec![],
+        fidelity: Default::default(),
         fields: vec![land::Field {
             id: 17,
             estate: 4,
@@ -946,6 +947,7 @@ fn working_land_retains_a_reachable_household_relationship() {
     let mut fabric = Fabric {
         towns: vec![town],
         fallow: vec![],
+        fidelity: Default::default(),
         fields: vec![land::Field {
             id: 2,
             estate: 1,
@@ -1229,6 +1231,7 @@ fn a_shared_hall_publishes_its_two_uses_ward_and_street_to_gis() {
     let fabric = Fabric {
         towns: vec![t],
         fallow: vec![],
+        fidelity: Default::default(),
         fields: vec![],
     };
     publish(&mut catalog, &fabric).unwrap();

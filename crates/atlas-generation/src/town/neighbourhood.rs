@@ -6,15 +6,21 @@ use crate::spatial::SpatialKernel;
 use atlas_map::Bounds;
 use std::io;
 
+/// How far a neighbourhood's premises reach to set its character. Street metres, resolved by
+/// `Measure::Adjacency`.
+const NEIGHBOURHOOD_RADIUS: f64 = 60.;
+
 /// Read overlapping neighbourhoods from the occupied premises within a short walk.
 pub fn characters(town: &Town, spatial: &dyn SpatialKernel) -> io::Result<Vec<&'static str>> {
     let shapes: Vec<_> = town.holdings().iter().map(|h| h.outline.clone()).collect();
     let index = spatial.index(&shapes).map_err(io::Error::other)?;
+    let radius = town
+        .scale()
+        .length(NEIGHBOURHOOD_RADIUS, super::scale::Measure::Adjacency);
     town.holdings()
         .iter()
         .map(|home| {
             let [x, y] = home.slot.front;
-            let radius = 60.;
             let mut mix = Occupation::default();
             for i in index
                 .query(Bounds(x - radius, y - radius, x + radius, y + radius))

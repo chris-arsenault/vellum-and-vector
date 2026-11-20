@@ -10,6 +10,7 @@ use crate::{
         geometry::{dot, sub, Point},
         ground::Ground,
         influence::Conditions,
+        scale::{Measure, TownScale},
         settings::{DAILY_REACH, LEARNING_REACH, PREMISES_REACH, SERVICE_CAPACITY, SERVICE_REACH},
     },
 };
@@ -35,12 +36,15 @@ pub(super) fn accessible(
         .collect();
     let mut claims = Vec::new();
     let mut learning = vec![Diversity::new(); points.len()];
+    let scale = town.scale();
+    let travel = |metres| scale.length(metres, Measure::Travel);
+    let (service_reach, learning_reach) = (travel(SERVICE_REACH), travel(LEARNING_REACH));
     Access::for_town(town, spatial)?
         .on_ground(ground)
         .reached_within(
             &sources,
             points,
-            DAILY_REACH,
+            travel(DAILY_REACH),
             spatial,
             |provider, site, cost| {
                 for (kind, strength) in providers[provider].uses.iter().copied() {
@@ -51,7 +55,7 @@ pub(super) fn accessible(
                             site,
                             service: service.kind,
                             cost,
-                            strength: strength * service.strength * response(cost, SERVICE_REACH),
+                            strength: strength * service.strength * response(cost, service_reach),
                         });
                     }
                     let tenure = town
@@ -61,7 +65,7 @@ pub(super) fn accessible(
                     let knowledge = profile.teaches
                         * community
                         * (1. - response(f64::from(tenure) + 1., 6.))
-                        * response(cost, LEARNING_REACH);
+                        * response(cost, learning_reach);
                     record(&mut learning[site], kind, knowledge);
                     for burden in profile
                         .burdens
@@ -69,7 +73,7 @@ pub(super) fn accessible(
                         .filter(|b| b.kind == Nuisance::Disorder)
                     {
                         conditions[site].effects.nuisance[Nuisance::Disorder as usize] +=
-                            strength * burden.strength * response(cost, LEARNING_REACH);
+                            strength * burden.strength * response(cost, learning_reach);
                     }
                 }
             },
@@ -121,13 +125,13 @@ fn supply_services(
     conditions: &mut [Conditions],
     mut claims: Vec<Claim>,
 ) {
+    // A holding serves as many as the premises it stands for.
+    let per_holding = SERVICE_CAPACITY * town.scale().premises();
     let mut capacity: Vec<_> = providers
         .iter()
         .map(|p| {
-            [p.holding.occupation
-                * p.holding.condition
-                * p.holding.operation_scale()
-                * SERVICE_CAPACITY; Service::ALL.len()]
+            [p.holding.occupation * p.holding.condition * p.holding.operation_scale() * per_holding;
+                Service::ALL.len()]
         })
         .collect();
     let mut filled = vec![[false; Service::ALL.len()]; conditions.len()];
@@ -185,14 +189,22 @@ pub(super) struct LocalSite {
     pub member: Membership,
     pub carrier: Carrier,
     prestige: Diversity,
+    /// How far premises' frontage and nuisance carry, at the town's scale.
+    reach: f64,
 }
 impl LocalSite {
-    pub(super) fn new(point: Point, member: Membership, carrier: Carrier) -> Self {
+    pub(super) fn new(
+        point: Point,
+        member: Membership,
+        carrier: Carrier,
+        scale: TownScale,
+    ) -> Self {
         Self {
             point,
             member,
             carrier,
             prestige: Vec::new(),
+            reach: scale.length(PREMISES_REACH, Measure::Adjacency),
         }
     }
 
@@ -212,8 +224,9 @@ impl LocalSite {
             condition.effects.consecration = condition
                 .effects
                 .consecration
-                .max(holding.consecration * response(distance, PREMISES_REACH));
+                .max(holding.consecration * response(distance, self.reach));
         }
+        let reach = self.reach;
         for (kind, share) in active_uses(holding) {
             let profile = holding.effects_as(kind);
             if frontage || enclosed {
@@ -225,13 +238,15 @@ impl LocalSite {
             }
             for burden in profile.burdens {
                 let exposure = match burden.kind {
-                    Nuisance::Smoke => smoke(self.point, holding.slot.front, source.wind, distance),
+                    Nuisance::Smoke => {
+                        smoke(self.point, holding.slot.front, source.wind, distance, reach)
+                    }
                     Nuisance::Noise => {
-                        response(distance, PREMISES_REACH * if enclosed { 0.25 } else { 0.4 })
+                        response(distance, reach * if enclosed { 0.25 } else { 0.4 })
                     }
                     Nuisance::Foulness => response(
                         distance,
-                        PREMISES_REACH
+                        reach
                             * if self.carrier.height <= source.height {
                                 0.7
                             } else {
@@ -239,7 +254,7 @@ impl LocalSite {
                             },
                     ),
                     Nuisance::Disorder => 0.,
-                    Nuisance::Stigma if frontage && !enclosed => response(distance, PREMISES_REACH),
+                    Nuisance::Stigma if frontage && !enclosed => response(distance, reach),
                     Nuisance::Stigma => 0.,
                 };
                 condition.effects.nuisance[burden.kind as usize] +=
@@ -266,14 +281,15 @@ impl LocalSite {
     }
 }
 
-fn smoke(point: Point, source: Point, wind: Point, distance: f64) -> f64 {
+/// How much of a source's smoke reaches a point downwind, carried as far as `reach`.
+fn smoke(point: Point, source: Point, wind: Point, distance: f64, reach: f64) -> f64 {
     let length = dot(wind, wind).sqrt();
     let offset = sub(point, source);
     let along = dot(offset, wind) / length.max(f64::EPSILON);
     let across = (dot(offset, offset) - along * along).max(0.).sqrt();
     let longitudinal = if along >= 0. { 1. } else { 0.25 };
     let cost = (along / longitudinal).hypot(across / 0.45).max(distance);
-    response(cost, PREMISES_REACH)
+    response(cost, reach)
 }
 
 fn record(diversity: &mut Diversity, kind: Kind, strength: f64) {
@@ -303,8 +319,10 @@ mod tests {
 
     #[test]
     fn smoke_reaches_farther_downwind_and_an_unreachable_service_contributes_nothing() {
+        let reach = PREMISES_REACH;
         assert!(
-            smoke([70., 0.], [0., 0.], [1., 0.], 70.) > smoke([-70., 0.], [0., 0.], [1., 0.], 70.)
+            smoke([70., 0.], [0., 0.], [1., 0.], 70., reach)
+                > smoke([-70., 0.], [0., 0.], [1., 0.], 70., reach)
         );
         assert_eq!(response(f64::INFINITY, SERVICE_REACH), 0.);
     }

@@ -13,9 +13,9 @@ pub struct Server {
     address: String,
 }
 impl Server {
-    pub fn new(port: u16) -> Self {
+    pub fn new(host: &str, port: u16) -> Self {
         Self {
-            address: format!("127.0.0.1:{port}"),
+            address: format!("{host}:{port}"),
         }
     }
     /// Calls a service such as `generation` or `maps/read` with a structured request.

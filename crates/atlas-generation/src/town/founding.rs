@@ -11,13 +11,23 @@ use super::{
     network::main_street,
     plots::{slots, Slot},
     roofs,
+    scale::{Measure, TownScale},
+    settings::{FOUNDING_FRONTAGE, GATE_WIDTH},
 };
 use crate::spatial::SpatialKernel;
 use std::io;
 
-/// Distance from the captured place within which its first occupants seek parcels.
-pub(crate) fn reach(size: atlas_map::town::Size) -> f64 {
-    atlas_map::town::plot_size(size).1 * 3.
+/// The least radius an enclosure's gate is measured against. Street metres, resolved by
+/// `Measure::Layout`.
+const LEAST_ENCLOSURE: f64 = 5.;
+/// What a transfer between the founding landings adds to the walk across it. Street metres,
+/// resolved by `Measure::Travel`.
+const TRANSFER_COST: f64 = 6.;
+
+/// Distance from the captured place within which its first occupants seek parcels: three plot
+/// depths at `scale`.
+pub(crate) fn reach(scale: TownScale, size: atlas_map::town::Size) -> f64 {
+    scale.plot(size).1 * 3.
 }
 
 pub fn establish(
@@ -27,29 +37,28 @@ pub fn establish(
     conditions: impl Fn(Point) -> io::Result<Option<Conditions>>,
 ) -> io::Result<bool> {
     let size = town.seat.story.size();
-    let depth = atlas_map::town::plot_size(size).1;
+    let scale = town.scale();
+    let depth = town.plot().1;
+    let frontage = scale.length(FOUNDING_FRONTAGE, Measure::Plot);
+    let reach = reach(scale, size);
     seed_roads(town, ground, depth);
     use super::templates::FounderUse;
     let street_sites = town
         .streets()
         .iter()
         .enumerate()
-        .flat_map(|(i, s)| slots(i, s, 10., depth))
+        .flat_map(|(i, s)| slots(i, s, frontage, depth, scale))
         .collect::<Vec<_>>();
     for (i, founder) in town.template.kernel().iter().enumerate() {
-        let Some(anchor) = town
-            .template
-            .site
-            .founding_point(founder.anchor, reach(size))
-        else {
+        let Some(anchor) = town.template.site.founding_point(founder.anchor, reach) else {
             return Ok(false);
         };
         let seed = 1301_i32.wrapping_add(i as i32 * 677);
-        let mut plots = super::land_sites::around([anchor], reach(size) * 1.5, 10., depth, 0);
+        let mut plots = super::land_sites::around([anchor], reach * 1.5, frontage, depth, 0);
         plots.extend(
             street_sites
                 .iter()
-                .filter(|s| distance(anchor, s.front) <= reach(size))
+                .filter(|s| distance(anchor, s.front) <= reach)
                 .cloned(),
         );
         let score = |s: &Slot| {
@@ -72,6 +81,7 @@ pub fn establish(
                     plot.front,
                     distance(town.seat.centre, plot.front),
                     0.,
+                    scale,
                 ),
                 FounderUse::Livelihood => founding_work(local),
                 FounderUse::Place(kind) => kind,
@@ -84,7 +94,7 @@ pub fn establish(
             {
                 continue;
             }
-            let Some(edit) = placement(&plot, kind, local, ground) else {
+            let Some(edit) = placement(&plot, kind, local, ground, scale) else {
                 continue;
             };
             if let EditOutcome::Premises(id) = town.apply(edit, spatial)? {
@@ -104,8 +114,9 @@ pub fn establish(
 
 fn seed_roads(town: &mut Town, ground: &Ground, depth: f64) {
     let size = town.seat.story.size();
+    let scale = town.scale();
     for way in town.seat.arms.clone() {
-        if let Some(mut street) = main_street(&way, depth * 1.6, size, ground) {
+        if let Some(mut street) = main_street(&way, depth * 1.6, size, ground, scale) {
             if town
                 .streets()
                 .iter()
@@ -126,7 +137,7 @@ fn enclosure(town: &Town, ground: &Ground) -> Vec<Vec<Point>> {
     let Some(anchor) = town.template.enclosed_seat() else {
         return vec![];
     };
-    let unit = atlas_map::town::plot_size(town.seat.story.size()).1;
+    let unit = town.plot().1;
     let Some(radius) = town.template.enclosure_radius(unit) else {
         return vec![];
     };
@@ -140,7 +151,10 @@ fn enclosure(town: &Town, ground: &Ground) -> Vec<Vec<Point>> {
         .or_else(|| town.template.site.approaches.first().copied())
         .unwrap_or(add(centre, [0., -radius]));
     let bearing = angle(sub(entry, centre));
-    let gate = (4. / radius.max(5.)).min(0.4);
+    let town_scale = town.scale();
+    let gate = (town_scale.length(GATE_WIDTH, Measure::Width)
+        / radius.max(town_scale.length(LEAST_ENCLOSURE, Measure::Layout)))
+    .min(0.4);
     let boundary: Vec<_> = (0..=24)
         .map(|i| {
             let d = heading(bearing + gate + (std::f64::consts::TAU - 2. * gate) * i as f64 / 24.);
@@ -240,7 +254,7 @@ impl Town {
             (Some(a), Some(b)) if distance(a, b) > 0. => vec![KernelLink {
                 kind,
                 ends: [a, b],
-                cost: distance(a, b) + 6.,
+                cost: distance(a, b) + self.scale().length(TRANSFER_COST, Measure::Travel),
             }],
             _ => vec![],
         }
@@ -252,9 +266,11 @@ fn founding_household(
     point: Point,
     distance_from_seat: f64,
     trade_demand: f64,
+    scale: TownScale,
 ) -> super::catalogue::Kind {
     household(
         &HousingSite {
+            scale,
             conditions,
             distance_from_seat,
             trade_demand,
@@ -270,11 +286,12 @@ fn placement(
     kind: super::catalogue::Kind,
     local: Conditions,
     ground: &Ground,
+    scale: TownScale,
 ) -> Option<FabricEdit> {
     let def = kind.definition();
     let mut slot = slot.clone();
-    slot.depth = def.depth.low;
-    slot.frontage = def.frontage.low;
+    slot.depth = scale.range(def.depth).low;
+    slot.frontage = scale.range(def.frontage).low;
     slot.corners = rectangle(
         slot.front,
         slot.direction,
@@ -292,7 +309,7 @@ fn placement(
         conditions: local,
         outdoor: kind.open(),
         purpose: None,
-        buildings: roofs::components(&slot, kind, 0.45, 0.5),
+        buildings: roofs::components_at(&slot, kind, 0.45, 0.5, scale),
         proposal: Proposal {
             slot,
             kind,
@@ -361,15 +378,17 @@ impl OutlyingSite {
         let Some((purpose, access)) = operating else {
             return Ok(false);
         };
+        let scale = town.scale();
         let home = founding_household(
             conditions[1],
             self.plots[1].front,
             distance(self.plots[1].front, town.seat.centre),
             self.source.demand,
+            scale,
         );
         let develop = |index: usize, kind: super::catalogue::Kind| {
             let mut slot = survey_slot(town, walking_ground, self.plots[index].clone())?;
-            let unit = atlas_map::town::plot_size(town.seat.story.size()).1;
+            let unit = town.plot().1;
             if town
                 .template
                 .affinity(kind.definition().activity, slot.front, unit)
@@ -380,7 +399,7 @@ impl OutlyingSite {
             slot.tenure = town
                 .template
                 .tenure(kind.definition().activity, slot.front, unit);
-            placement(&slot, kind, conditions[index], ground)
+            placement(&slot, kind, conditions[index], ground, scale)
         };
         let Some(job) = develop(0, work) else {
             return Ok(false);
@@ -454,8 +473,9 @@ pub fn outlying_sites(
     }
     let premises: Vec<_> = town.holdings().iter().map(|h| h.outline.clone()).collect();
     let index = spatial.index(&premises).map_err(io::Error::other)?;
-    let size = town.seat.story.size();
-    let depth = atlas_map::town::plot_size(size).1;
+    let scale = town.scale();
+    let depth = town.plot().1;
+    let frontage = scale.length(FOUNDING_FRONTAGE, Measure::Plot);
     let mut result = Vec::new();
     for source in sources.iter().filter(|s| {
         matches!(s.endpoint, Endpoint::Field(_) | Endpoint::External(_))
@@ -482,12 +502,13 @@ pub fn outlying_sites(
             continue;
         }
         let reach = depth * 2.;
-        let mut slots = super::land_sites::around([source.position], reach, 10., depth, town.round);
+        let mut slots =
+            super::land_sites::around([source.position], reach, frontage, depth, town.round);
         slots.extend(
             town.streets()
                 .iter()
                 .enumerate()
-                .flat_map(|(i, s)| super::plots::slots(i, s, 10., depth))
+                .flat_map(|(i, s)| super::plots::slots(i, s, frontage, depth, scale))
                 .filter(|s| distance(s.front, source.position) <= reach),
         );
         // hpc-exempt: rank independent parcels by their distance to the undertaking they would serve.
@@ -515,4 +536,60 @@ pub fn outlying_sites(
         });
     }
     Ok(result)
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use super::*;
+    use crate::town::{scale::Fidelity, seat::Seat, story::Story};
+
+    /// A commons founded on open ground at `fidelity`.
+    fn founded(fidelity: Fidelity) -> Town {
+        let spatial = atlas_gis::geometry::NativeGeos::new(0.001).unwrap();
+        let ground = Ground::new([-1500., -1500., 1500., 1500.], 3.);
+        let mut town = Town::new(
+            Seat {
+                key: atlas_map::Id::from_name("open commons"),
+                name: "Open commons".into(),
+                centre: [0., 0.],
+                story: Story {
+                    people: 5000.,
+                    ..Default::default()
+                },
+                arms: vec![],
+                culture: None,
+            },
+            None,
+        );
+        town.fidelity = fidelity;
+        let land = |_| Ok(Some(Conditions::default()));
+        assert!(establish(&mut town, &ground, &spatial, land).unwrap());
+        town
+    }
+
+    #[test]
+    fn a_founding_lays_street_plots_at_street_fidelity_and_blocks_at_city_fidelity() {
+        let street = founded(Fidelity::Street);
+        let city = founded(Fidelity::City);
+        let block = city.scale().length(1., Measure::Plot);
+        assert!(block > 1.);
+        // At street fidelity each founding premises takes its kind's least catalogue plot, as
+        // it always has; at city fidelity the same kind takes a block that many times larger.
+        for (town, factor) in [(&street, 1.), (&city, block)] {
+            assert!(!town.holdings().is_empty());
+            for h in town.holdings() {
+                let definition = h.kind.definition();
+                assert_eq!(h.slot.depth, definition.depth.low * factor);
+                assert_eq!(h.slot.frontage, definition.frontage.low * factor);
+            }
+        }
+        let deepest = |town: &Town| {
+            town.holdings()
+                .iter()
+                .map(|h| h.slot.depth)
+                .fold(0., f64::max)
+        };
+        assert!(deepest(&city) > 100., "{}", deepest(&city));
+        assert!(deepest(&street) < 60., "{}", deepest(&street));
+    }
 }

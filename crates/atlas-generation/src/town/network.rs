@@ -3,6 +3,7 @@
 use super::{
     geometry::{at, cut, distance, line_length, offset, resample, Point},
     ground::{Ground, OUTSIDE, SQUARE, STEEP, WALL, WATER},
+    scale::{Measure, TownScale},
     story::Size,
 };
 
@@ -35,8 +36,15 @@ pub struct Street {
     pub bridges: Vec<(f64, f64)>,
 }
 impl Street {
+    /// A way of `class` along `points` at street fidelity; town processes lay theirs with
+    /// `new_at`, at their town's scale.
     pub fn new(points: Vec<Point>, class: Class, size: Size) -> Self {
-        let widths = vec![class.width(size); points.len()];
+        Self::new_at(points, class, size, TownScale::default())
+    }
+    /// A way of `class` along `points`, as wide as its class is in a place of `size` at
+    /// `scale`.
+    pub fn new_at(points: Vec<Point>, class: Class, size: Size, scale: TownScale) -> Self {
+        let widths = vec![scale.street_width(class, size); points.len()];
         Self {
             points,
             widths,
@@ -95,15 +103,30 @@ impl Street {
     }
 }
 pub use super::settings::VERTEX_STEP;
-pub use atlas_map::town::bridge_span;
+/// The vertex spacing of generated streets at `scale`.
+pub fn vertex_step(scale: TownScale) -> f64 {
+    scale.length(VERTEX_STEP, Measure::Layout)
+}
+/// The longest water a way of a place of `size` bridges at `scale`: a wider way bridges wider
+/// water, so the span scales as the way's width does.
+pub fn bridge_span(size: Size, scale: TownScale) -> f64 {
+    scale.length(atlas_map::town::bridge_span(size), Measure::Width)
+}
 /// Whether ground stops a lane: water, steep ground, the map's edge, a square or a wall.
 pub fn stops_lane(owner: u32) -> bool {
     matches!(owner, WATER | STEEP | OUTSIDE | SQUARE | WALL)
 }
 /// A main street along an arm, as far as `reach` from the centre, bridging water it can span
 /// and ending before water it cannot.
-pub fn main_street(arm: &Arm, reach: f64, size: Size, ground: &Ground) -> Option<Street> {
-    let mut points = resample(&cut(&arm.points, reach), VERTEX_STEP);
+pub fn main_street(
+    arm: &Arm,
+    reach: f64,
+    size: Size,
+    ground: &Ground,
+    scale: TownScale,
+) -> Option<Street> {
+    let step = vertex_step(scale);
+    let mut points = resample(&cut(&arm.points, reach), step);
     let edge = ground.reach(&points, |owner| matches!(owner, OUTSIDE | STEEP | WALL));
     let mut through_route = at(&points, edge).is_some_and(|(p, _)| ground.owner(p) != STEEP);
     let mut bridges = Vec::new();
@@ -112,35 +135,49 @@ pub fn main_street(arm: &Arm, reach: f64, size: Size, ground: &Ground) -> Option
         if start >= end {
             break;
         }
-        if stop - start > bridge_span(size) || stop >= end {
+        if stop - start > bridge_span(size, scale) || stop >= end {
             end = start;
             through_route = false;
             break;
         }
         bridges.push((start, stop));
     }
-    points = resample(&cut(&points, end), VERTEX_STEP);
-    if line_length(&points) < VERTEX_STEP {
+    points = resample(&cut(&points, end), step);
+    if line_length(&points) < step {
         return None;
     }
-    let mut street = Street::new(points, Class::Main, size);
+    let mut street = Street::new_at(points, Class::Main, size, scale);
     street.destination.clone_from(&arm.destination);
     street.through_route = through_route;
     street.bridges = bridges;
     Some(street)
 }
+/// How a way is laid: its class, in a place of a size, at a town's scale.
+#[derive(Clone, Copy, Debug)]
+pub struct StreetForm {
+    pub class: Class,
+    pub size: Size,
+    pub scale: TownScale,
+}
+impl StreetForm {
+    /// The way's full width.
+    pub fn width(self) -> f64 {
+        self.scale.street_width(self.class, self.size)
+    }
+}
 /// A lane along `points` until ground `stops` its line or either of its edges; shorter than
 /// `least` metres, it is not laid.
 pub fn lane(
     points: &[Point],
-    class: Class,
-    size: Size,
+    form: StreetForm,
     ground: &Ground,
     stops: impl Fn(u32) -> bool,
     least: f64,
 ) -> Option<Street> {
+    let StreetForm { class, size, scale } = form;
     // The lane's line and both its edges must stay clear, so it never clips a plot's corner.
-    let edge = class.width(size) / 2.0;
+    let width = form.width();
+    let edge = width / 2.0;
     let reach = [0.0, edge, -edge]
         .into_iter()
         .map(|by| {
@@ -158,12 +195,12 @@ pub fn lane(
         })
         .fold(f64::INFINITY, f64::min);
     let end = if reach < line_length(points) {
-        (reach - class.width(size)).max(0.0)
+        (reach - width).max(0.0)
     } else {
         reach
     };
-    let points = resample(&cut(points, end), VERTEX_STEP);
-    (line_length(&points) >= least).then(|| Street::new(points, class, size))
+    let points = resample(&cut(points, end), vertex_step(scale));
+    (line_length(&points) >= least).then(|| Street::new_at(points, class, size, scale))
 }
 /// Where a line first meets a closed ring, as a point.
 pub fn meets(line: &[Point], ring: &[Point]) -> Vec<Point> {
@@ -208,7 +245,8 @@ mod tests {
     fn main_streets_bridge_narrow_water_and_end_at_wide_water() {
         let mut ground = Ground::new([0.0, 0.0, 300.0, 100.0], 1.0);
         river(&mut ground, 100.0, 120.0);
-        let street = main_street(&arm(), 250.0, Size::Town, &ground).unwrap();
+        let scale = TownScale::default();
+        let street = main_street(&arm(), 250.0, Size::Town, &ground, scale).unwrap();
         assert_eq!(street.bridges.len(), 1);
         assert!((street.length() - 250.0).abs() < 1.0);
         assert_eq!(street.destination.as_deref(), Some("Elder Ford"));
@@ -218,7 +256,7 @@ mod tests {
             .windows(2)
             .all(|p| distance(p[0], p[1]) <= VERTEX_STEP + 1e-6));
         assert_eq!(street.widths.len(), street.points.len());
-        let hamlet = main_street(&arm(), 250.0, Size::Hamlet, &ground).unwrap();
+        let hamlet = main_street(&arm(), 250.0, Size::Hamlet, &ground, scale).unwrap();
         assert!(hamlet.bridges.is_empty());
         assert!(hamlet.length() <= 100.0);
         assert!(!hamlet.through_route);

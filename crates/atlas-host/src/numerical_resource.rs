@@ -85,6 +85,13 @@ pub enum State {
     Working,
     Ready,
 }
+/// Two resources cover the same bounds when their edges agree to rounding: bounds computed
+/// along two paths, or read back from a written descriptor, differ in their last bits, and a
+/// resumed job must accept the resources its earlier attempt wrote.
+pub fn same_bounds(a: [f64; 4], b: [f64; 4]) -> bool {
+    let extent = (a[2] - a[0]).abs().max((a[3] - a[1]).abs()).max(1.);
+    a.iter().zip(b).all(|(a, b)| (a - b).abs() <= extent * 1e-9)
+}
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Descriptor {
@@ -163,7 +170,7 @@ impl WorkingSet {
             let original_array = Self::array(&original, &alias.array)?.clone();
             if original.scope.world_id != resource.scope.world_id
                 || original.scope.space_id != resource.scope.space_id
-                || original.bounds != resource.bounds
+                || !same_bounds(original.bounds, resource.bounds)
                 || original_array.dtype != array.dtype
                 || original_array.shape != array.shape
                 || original_array.chunk_shape != array.chunk_shape
@@ -293,5 +300,23 @@ impl WorkingSet {
             offsets: self.u32(resource, &cargo.offsets)?,
             records: self.f64(resource, &cargo.records)?,
         }))
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::same_bounds;
+
+    #[test]
+    fn bounds_agree_to_rounding_and_not_beyond() {
+        let written = [162129.405228, 495484.677505, 193400.149174, 520984.677505];
+        let recomputed = [
+            162129.405228,
+            495484.677505,
+            193400.14917400002,
+            520984.677505,
+        ];
+        assert!(same_bounds(written, recomputed));
+        let moved = [162129.405228, 495484.677505, 193401.149174, 520984.677505];
+        assert!(!same_bounds(written, moved));
     }
 }

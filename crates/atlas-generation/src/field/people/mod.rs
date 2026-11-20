@@ -25,6 +25,7 @@ pub mod place_land;
 pub mod place_peoples;
 pub mod places;
 pub mod political_regions;
+pub mod quarters;
 pub mod questions;
 pub mod reach;
 pub mod realm_era;

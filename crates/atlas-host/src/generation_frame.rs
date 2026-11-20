@@ -162,6 +162,7 @@ impl Geography {
             domain: self.reference.domain.clone(),
             domain_bounds,
             footprint: footprint.clone(),
+            outline: area.map.is_some().then(|| area.footprint.clone()),
             cylindrical,
             has_boundary: selected.boundary.is_some(),
             precision: self.reference.precision.unwrap_or(1e-6),

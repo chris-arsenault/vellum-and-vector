@@ -15,16 +15,19 @@ impl Clientele {
         Self::Travellers,
         Self::Wealthy,
     ];
-    pub fn reach(self) -> f64 {
-        match self {
+    /// The farthest this clientele travels to a place, at `scale`.
+    pub fn reach(self, scale: super::scale::TownScale) -> f64 {
+        let metres = match self {
             Self::Townsfolk => super::settings::TOWNSFOLK_REACH,
             Self::Countryfolk => super::settings::COUNTRYFOLK_REACH,
             Self::Travellers | Self::Wealthy => super::settings::DAILY_REACH,
-        }
+        };
+        scale.length(metres, super::scale::Measure::Travel)
     }
-    pub fn draw(self, strength: f64, cost: f64) -> f64 {
-        if cost < self.reach() {
-            strength * response(cost, self.reach() / 3.)
+    pub fn draw(self, strength: f64, cost: f64, scale: super::scale::TownScale) -> f64 {
+        let reach = self.reach(scale);
+        if cost < reach {
+            strength * response(cost, reach / 3.)
         } else {
             0.
         }

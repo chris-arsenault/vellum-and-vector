@@ -31,7 +31,17 @@ pub(super) fn run(action: Action, settings: Settings, job: Job) {
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         execute(action, settings, &job)
     }))
-    .unwrap_or_else(|_| Err(io::Error::other("Generation worker panicked")));
+    .unwrap_or_else(|payload| {
+        // The panic's own words go into the job's message, not only the server log.
+        let words = payload
+            .downcast_ref::<&str>()
+            .map(|words| (*words).to_owned())
+            .or_else(|| payload.downcast_ref::<String>().cloned())
+            .unwrap_or_default();
+        Err(io::Error::other(format!(
+            "Generation worker panicked: {words}"
+        )))
+    });
     let _ = job.update(|status| {
         if let Some(details) = &mut status.details {
             details.finished_at = Some(chrono::Utc::now().to_rfc3339());
@@ -70,7 +80,24 @@ fn log(job: &Job, event: &str) {
         eprintln!(
             "{}",
             json!({"event":format!("generation.{event}"),"jobId":status.job_id,
-            "state":status.state,"details":status.details,"message":status.message})
+            "state":status.state,"details":status.details,"message":status.message,
+            "memory":crate::host_memory::resident()})
+        );
+    }
+}
+/// Reports a job's progress; a new step is also written to the server log with the memory
+/// held, so the log of a server that dies names the step it died in.
+fn step(job: &Job, fraction: f64, message: &str) {
+    let mut changed = false;
+    let _ = job.update(|status| {
+        changed = status.step != message;
+        status.step = message.into();
+        status.progress = Some(fraction);
+    });
+    if changed {
+        eprintln!(
+            "{}",
+            json!({"event":"generation.step","step":message,"memory":crate::host_memory::resident()})
         );
     }
 }
@@ -91,17 +118,11 @@ fn execute(action: Action, settings: Settings, job: &Job) -> io::Result<atlas_ma
     };
     let reporting = job.clone();
     let control = NativeControl::new(job.token.clone(), move |progress| {
-        let _ = reporting.update(|status| {
-            status.step = progress.message.clone();
-            status.progress = Some(progress.fraction);
-        });
+        step(&reporting, progress.fraction, &progress.message);
     });
     let reporting = job.clone();
     let progress = Rc::new(move |fraction: f64, message: &str| {
-        let _ = reporting.update(|status| {
-            status.step = message.into();
-            status.progress = Some(fraction);
-        });
+        step(&reporting, fraction, message);
     });
     futures::executor::block_on(request.run(
         Services {
@@ -248,7 +269,7 @@ impl Observations for Observer {
             }
             eprintln!(
                 "{}",
-                json!({"event":"generation.epoch.completed","jobId":self.job.status()?.job_id,"epoch":name,"seconds":seconds})
+                json!({"event":"generation.epoch.completed","jobId":self.job.status()?.job_id,"epoch":name,"seconds":seconds,"memory":crate::host_memory::resident()})
             );
         }
         // The preview goes to a retained file; the event only names it, so the job's event

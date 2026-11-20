@@ -35,7 +35,7 @@ pub struct MapOwnership {
 #[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CityRefinement {
-    /// The parent map's settlement the city map was opened at.
+    /// The settlement the city map was opened at: its captured record on the city map.
     pub settlement: Id,
 }
 /// A real-scale map's captured choices: its kind, hex size and the detail it was laid at.

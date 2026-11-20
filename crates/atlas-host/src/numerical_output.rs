@@ -213,7 +213,10 @@ impl Resource {
             let descriptor: Descriptor =
                 crate::numerical_resource::FORMAT.read(existing.clone())?;
             if descriptor.scope != self.definition.descriptor.scope
-                || descriptor.bounds != self.definition.descriptor.bounds
+                || !crate::numerical_resource::same_bounds(
+                    descriptor.bounds,
+                    self.definition.descriptor.bounds,
+                )
             {
                 return Err(io::Error::other(
                     "Existing output resource belongs to a different scope",

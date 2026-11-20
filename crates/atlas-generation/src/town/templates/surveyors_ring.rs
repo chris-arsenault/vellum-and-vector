@@ -35,7 +35,7 @@ pub(super) const POLICY: Policy = Policy {
         0.5 + 3. / (1. + (radius - arc * gap).abs() / p.unit)
     },
     streets: |town| {
-        let unit = atlas_map::town::plot_size(town.seat.story.size()).1;
+        let unit = town.plot().1;
         super::streets::occupied_arcs(town, unit, spacing(unit))
     },
     ..Policy::ordinary(

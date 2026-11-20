@@ -22,7 +22,8 @@ names!(Kind {
     Forest => "forest", Grassland => "grassland", Barren => "barren", ThawedHalo => "thawedHalo", WildZone => "wildZone", Clearance => "clearance", EmberGrove => "emberGrove", ThawMeadow => "thawMeadow", RimeForest => "rimeForest", GlowBarrens => "glowBarrens", FogHeath => "fogHeath", GreenwoodStand => "greenwoodStand", VerdantGround => "verdantGround", Deepwood => "deepwood", WendingFen => "wendingFen", WellMeadow => "wellMeadow", BarrowHeath => "barrowHeath",
     AuroraField => "auroraField", LightWell => "lightWell", CompassDeviation => "compassDeviation", InterferenceLattice => "interferenceLattice", Tear => "tear", Door => "door", FireCore => "fireCore", WardRing => "wardRing", WardLine => "wardLine", HearthRing => "hearthRing", ReadIce => "readIce", HeldShore => "heldShore", BoundWood => "boundWood", SwornGround => "swornGround", VowedGround => "vowedGround",
     Settlement => "settlement", Ruin => "ruin", Dam => "dam", Mill => "mill", Irrigation => "irrigation", Harbour => "harbour", Ford => "ford", Bridge => "bridge", Forge => "forge", Archive => "archive", Shrine => "shrine", Battlefield => "battlefield", DisasterSite => "disasterSite",
-    CityWall => "cityWall", CityGate => "cityGate", CityPlace => "cityPlace", CityDistrict => "district", MajorWork => "majorWork"
+    CityWall => "cityWall", CityGate => "cityGate", CityPlace => "cityPlace", CityDistrict => "district", MajorWork => "majorWork",
+    CityThoroughfare => "thoroughfare", CityBlock => "cityBlock"
 });
 impl Kind {
     pub fn group(self) -> Group {
@@ -44,7 +45,7 @@ impl Kind {
             | SwornGround | VowedGround => Group::Anomalies,
             Settlement | Ruin | Dam | Mill | Irrigation | Harbour | Ford | Bridge | Forge
             | Archive | Shrine | Battlefield | DisasterSite | CityWall | CityGate | CityPlace
-            | CityDistrict | MajorWork => Group::Settlements,
+            | CityDistrict | MajorWork | CityThoroughfare | CityBlock => Group::Settlements,
         }
     }
 }

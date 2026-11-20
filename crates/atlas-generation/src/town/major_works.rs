@@ -143,6 +143,8 @@ impl MajorWorks {
                     .is_some_and(|p| p.station.wet())
             })
             .filter_map(Commission::target);
+        // A work keeps its real size at every fidelity: its afloat parts' berths are surveyed
+        // in true metres.
         super::land_sites::around(anchors, 50., 12., 25., round)
             .into_iter()
             .filter_map(|mut slot| {
@@ -303,6 +305,14 @@ pub fn commission_requested(
         })?;
     start_commission(town, seed, requested, anchor);
     Ok(())
+}
+/// One of a city's works, sited on its city map, taken up by the hot-spot town beside it so
+/// the town's development builds round it.
+pub fn commission_city_work(town: &mut Town, seed: i32, family: WorkFamily, anchor: Point) {
+    town.works.seed.get_or_insert(seed);
+    if !town.works.established_near(family, anchor) {
+        start_commission(town, seed, family, anchor);
+    }
 }
 fn start_commission(town: &mut Town, seed: i32, family: WorkFamily, anchor: Point) {
     let site = &town.template.site;

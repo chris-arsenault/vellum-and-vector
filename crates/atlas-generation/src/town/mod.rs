@@ -25,6 +25,7 @@ pub mod network;
 pub mod plots;
 pub mod production;
 pub mod roofs;
+pub mod scale;
 pub mod seat;
 pub mod settings;
 pub mod signals;

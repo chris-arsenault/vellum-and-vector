@@ -45,6 +45,8 @@ pub fn advance(town: &mut Town, context: &mut Frontage<'_>) -> io::Result<()> {
             let Some(slot) = fit(candidate, work, &part, context) else {
                 continue;
             };
+            // A work keeps its real size at every fidelity, so its buildings are raised at
+            // street fidelity, the size its design declares.
             let buildings = crate::town::roofs::components(&slot, part.use_, 0.85, 0.5);
             let outdoor = part.use_.open();
             let edit = FabricEdit::Establish {

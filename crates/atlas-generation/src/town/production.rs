@@ -1,5 +1,6 @@
 //! Opportunities can have substitute providers and complementary uses.
 use super::catalogue::{AccessUse, Operation};
+use super::scale::TownScale;
 
 #[derive(
     Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Deserialize, serde::Serialize,
@@ -97,9 +98,17 @@ impl Default for Available {
     }
 }
 impl Available {
-    pub fn receive(&mut self, opportunity: Opportunity, mode: AccessUse, offer: f64, cost: f64) {
+    /// An offer reached by `mode` at this travel cost, read at `scale`.
+    pub fn receive(
+        &mut self,
+        opportunity: Opportunity,
+        mode: AccessUse,
+        offer: f64,
+        cost: f64,
+        scale: TownScale,
+    ) {
         let available = &mut self.0[opportunity as usize][mode as usize];
-        *available = available.max(strength(offer, cost));
+        *available = available.max(strength(offer, cost, scale));
     }
 
     pub fn support(&self, needs: &[Need]) -> f64 {
@@ -116,8 +125,8 @@ impl Available {
     }
 }
 
-fn strength(offer: f64, cost: f64) -> f64 {
-    offer * super::influence::pull(cost)
+fn strength(offer: f64, cost: f64, scale: TownScale) -> f64 {
+    offer * super::influence::pull(cost, scale)
 }
 
 pub(crate) fn partner(
@@ -125,6 +134,7 @@ pub(crate) fn partner(
     paths: &[super::influence::Reachable<'_>],
     mode: AccessUse,
     previous: Option<&super::fabric::OperatingTie>,
+    scale: TownScale,
 ) -> Option<super::fabric::OperatingTie> {
     if !need.access.contains(&mode) {
         return None;
@@ -133,7 +143,8 @@ pub(crate) fn partner(
         .iter()
         .filter(|p| p.source.productive == Some(need.opportunity))
         .filter_map(|p| {
-            let strength = strength(p.source.capability, p.cost) / (1. + need.handling / 100.);
+            let strength =
+                strength(p.source.capability, p.cost, scale) / (1. + need.handling / 100.);
             let custom = previous
                 .filter(|tie| tie.destination == p.source.endpoint)
                 .map_or(0., |tie| tie.strength);
@@ -157,6 +168,7 @@ pub(crate) fn compare_partners(
     mode: AccessUse,
     previous: &[super::fabric::OperatingTie],
     selected: &mut [Option<super::fabric::OperatingTie>],
+    scale: TownScale,
 ) {
     for (need, choice) in needs.iter().zip(selected) {
         let old = previous
@@ -165,7 +177,7 @@ pub(crate) fn compare_partners(
         *choice = choice
             .take()
             .into_iter()
-            .chain(partner(*need, paths, mode, old))
+            .chain(partner(*need, paths, mode, old, scale))
             .max_by(|a, b| a.strength.total_cmp(&b.strength));
     }
 }
@@ -230,6 +242,7 @@ mod tests {
         let weave = supplier("weavers", Opportunity::UnfinishedCloth, 0.9);
         let import = supplier("importer", Opportunity::UnfinishedCloth, 0.6);
         let finished = supplier("cloth merchant", Opportunity::PreparedCloth, 1.2);
+        let scale = TownScale::default();
         let need = Need::new(
             Opportunity::UnfinishedCloth,
             Operation::Supply,
@@ -245,6 +258,7 @@ mod tests {
             }],
             AccessUse::Foot,
             None,
+            scale,
         )
         .unwrap();
         let paths = [
@@ -264,15 +278,15 @@ mod tests {
                 competitors: 0.,
             },
         ];
-        let replaced = partner(need, &paths, AccessUse::Freight, Some(&local)).unwrap();
+        let replaced = partner(need, &paths, AccessUse::Freight, Some(&local), scale).unwrap();
         assert_eq!(replaced.destination, import.endpoint);
-        assert!(partner(need, &paths[..2], AccessUse::Freight, Some(&local)).is_none());
+        assert!(partner(need, &paths[..2], AccessUse::Freight, Some(&local), scale).is_none());
         let cutting = Need {
             opportunity: Opportunity::PreparedCloth,
             ..need
         };
         assert_eq!(
-            partner(cutting, &paths[..2], AccessUse::Freight, None)
+            partner(cutting, &paths[..2], AccessUse::Freight, None, scale)
                 .unwrap()
                 .destination,
             finished.endpoint

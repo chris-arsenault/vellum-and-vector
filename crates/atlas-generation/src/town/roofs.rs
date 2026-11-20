@@ -4,12 +4,35 @@ use super::{
     fabric::polygon,
     geometry::{add, rectangle, scale},
     plots::Slot,
+    scale::{Measure, TownScale},
 };
 use atlas_map::Geometry;
+/// A terraced range's bay, the deepest a terraced house runs back, and the setbacks of a
+/// building's front: the eaves, a court's front ranges and a water edge's shed. Street metres,
+/// resolved by `Measure::Plot`.
+const BAY: f64 = 3.8;
+const RANGE_DEPTH: f64 = 12.;
+const EAVES: f64 = 0.6;
+const COURT_FRONT: f64 = 2.;
+const FRONT: f64 = 1.;
+/// The buildings a holding of `kind` raises on its slot at street fidelity; see
+/// `components_at`.
 pub fn components(slot: &Slot, kind: Kind, means: f64, sample: f64) -> Vec<Geometry> {
+    components_at(slot, kind, means, sample, TownScale::default())
+}
+/// The buildings a holding of `kind` raises on its slot, sized by the slot and, where a
+/// building has a size of its own, by `town_scale`.
+pub fn components_at(
+    slot: &Slot,
+    kind: Kind,
+    means: f64,
+    sample: f64,
+    town_scale: TownScale,
+) -> Vec<Geometry> {
     if kind.open() {
         return vec![];
     }
+    let plot = |metres| town_scale.length(metres, Measure::Plot);
     let form = kind.definition().form;
     let width = slot.frontage * (0.7 + means * 0.2);
     let depth = slot.depth;
@@ -27,12 +50,17 @@ pub fn components(slot: &Slot, kind: Kind, means: f64, sample: f64) -> Vec<Geome
     };
     // owner-direction(2026-11-18): town housing includes multi-storey, connected houses.
     if kind.definition().roles.attached_range {
-        let bays = (slot.frontage / 3.8).floor().max(1.) as usize;
+        let bays = (slot.frontage / plot(BAY)).floor().max(1.) as usize;
         let bay = slot.frontage / bays as f64;
         let mut houses = (0..bays)
             .map(|i| {
                 let centre = (i as f64 + 0.5) * bay - slot.frontage / 2.;
-                roof(centre, 0.6, bay, (depth * 0.46).min(12.))
+                roof(
+                    centre,
+                    plot(EAVES),
+                    bay,
+                    (depth * 0.46).min(plot(RANGE_DEPTH)),
+                )
             })
             .collect::<Vec<_>>();
         if form == Form::Court {
@@ -47,22 +75,27 @@ pub fn components(slot: &Slot, kind: Kind, means: f64, sample: f64) -> Vec<Geome
             roof(-width * 0.32, depth * 0.12, width * 0.25, depth * 0.18),
         ],
         Form::WaterEdge => vec![
-            roof(-width * 0.22, 1., width * 0.52, depth * 0.30),
+            roof(-width * 0.22, plot(FRONT), width * 0.52, depth * 0.30),
             roof(width * 0.25, depth * 0.52, width * 0.35, depth * 0.26),
         ],
         Form::Court => {
             let wing = width * 0.23;
             // Two front ranges leave an entrance to a common court; side ranges enclose it.
             vec![
-                roof(-width * 0.3, 2., width * 0.4, depth * 0.22),
-                roof(width * 0.3, 2., width * 0.4, depth * 0.22),
+                roof(-width * 0.3, plot(COURT_FRONT), width * 0.4, depth * 0.22),
+                roof(width * 0.3, plot(COURT_FRONT), width * 0.4, depth * 0.22),
                 roof(-width / 2. + wing / 2., depth * 0.3, wing, depth * 0.4),
                 roof(width / 2. - wing / 2., depth * 0.3, wing, depth * 0.4),
                 roof(0., depth * 0.75, width, depth * 0.18),
             ]
         }
         Form::Yard => {
-            let mut buildings = vec![roof(-width * 0.12, 1. + sample, width * 0.68, depth * 0.35)];
+            let mut buildings = vec![roof(
+                -width * 0.12,
+                plot(FRONT + sample),
+                width * 0.68,
+                depth * 0.35,
+            )];
             if kind.definition().roles.outbuilding.is_some() || means > 0.5 {
                 buildings.push(roof(width * 0.18, depth * 0.7, width * 0.58, depth * 0.22));
             }
@@ -70,7 +103,7 @@ pub fn components(slot: &Slot, kind: Kind, means: f64, sample: f64) -> Vec<Geome
         }
         _ => vec![roof(
             0.,
-            1. + sample * 2.,
+            plot(FRONT + sample * 2.),
             width,
             depth * (0.45 + means * 0.25),
         )],

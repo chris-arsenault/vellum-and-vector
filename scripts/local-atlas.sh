@@ -11,7 +11,15 @@ mkdir -p "$home"
 database=vellum-local-atlas-db
 volume=vellum-local-atlas
 database_port="${ATLAS_LOCAL_DATABASE_PORT:-54338}"
-port="${ATLAS_LOCAL_PORT:-44138}"
+# On a Sulion development node only ports 26000-26010 on the node's LAN address reach a
+# browser on the LAN; elsewhere the atlas stays on loopback.
+if [[ -n "${SULION_PTY_ID:-}" ]]; then
+  lan_address="$(ip -4 -brief addr show scope global 2>/dev/null | awk '{ sub(/\/.*/, "", $3) } $3 ~ /^192\.168\./ { print $3; exit }')"
+fi
+host="${ATLAS_LOCAL_HOST:-${lan_address:-127.0.0.1}}"
+port="${ATLAS_LOCAL_PORT:-$([[ -n "${lan_address:-}" ]] && echo 26010 || echo 44138)}"
+# The harness reaches the server at the same address.
+export ATLAS_LOCAL_HOST="$host" ATLAS_LOCAL_PORT="$port"
 
 # Passwords for the loopback-only database are made once and kept beside the world.
 credentials() {
@@ -69,14 +77,57 @@ server_down() {
   fi
 }
 
+# Kibibytes of one /proc status or meminfo field, or 0.
+kib() {
+  awk -v key="$2:" '$1 == key { print $2; found = 1 } END { if (!found) print 0 }' "$1" 2>/dev/null || echo 0
+}
+
+# How the server ended, from its wait status: a signal is 128 + its number.
+ending() {
+  local status=$1
+  case "$status" in
+    0) echo "exited cleanly" ;;
+    143) echo "stopped by SIGTERM (local-down or local-up)" ;;
+    137) echo "killed by SIGKILL: the out-of-memory killer or a kill -9 from outside" ;;
+    134) echo "aborted (SIGABRT): a failed allocation or an aborting panic; see the lines above" ;;
+    139) echo "crashed with a segmentation fault (SIGSEGV), often a stack overflow" ;;
+    *) if ((status > 128)); then echo "killed by signal $((status - 128))"; else echo "exited with status $status"; fi ;;
+  esac
+}
+
+# Runs the server and writes, into the server log, its resident memory each time it grows
+# by another GiB and how it ended, so a server that dies without a word still leaves both.
+supervise() {
+  "$@" &
+  local child=$! peak=0 step=0 rss hwm status
+  echo "$child" >"$home/server.pid"
+  trap 'kill "$child" 2>/dev/null' TERM
+  while kill -0 "$child" 2>/dev/null; do
+    rss=$(kib "/proc/$child/status" VmRSS)
+    hwm=$(kib "/proc/$child/status" VmHWM)
+    ((hwm > peak)) && peak=$hwm
+    if ((rss / 1048576 > step)); then
+      step=$((rss / 1048576))
+      echo "{\"event\":\"server.memory\",\"at\":\"$(date -u +%FT%TZ)\",\"residentGiB\":$step,\"availableGiB\":$(($(kib /proc/meminfo MemAvailable) / 1048576))}"
+    fi
+    sleep 2
+  done
+  wait "$child"
+  status=$?
+  echo "{\"event\":\"server.exit\",\"at\":\"$(date -u +%FT%TZ)\",\"pid\":$child,\"status\":$status,\"ending\":\"$(ending "$status")\",\"peakResidentGiB\":$((peak / 1048576)),\"availableGiB\":$(($(kib /proc/meminfo MemAvailable) / 1048576))}"
+}
+
 server_up() {
   command -v cmake >/dev/null || { echo "Put CMake on PATH to build the native server" >&2; exit 1; }
   (cd "$root" && cargo build --release -p atlas-host --bin atlas_server)
   server_down
   local url="postgresql://%s:%s@127.0.0.1:$database_port/%s"
   mkdir -p "$home/map-assets" "$home/generation-resources" "$home/scratch"
+  # Earlier servers' logs are kept: the last run's final lines are the evidence of a crash.
+  [[ -f "$home/server.log" ]] && cat "$home/server.log" >>"$home/server-history.log"
+  echo "{\"event\":\"server.start\",\"at\":\"$(date -u +%FT%TZ)\"}" >"$home/server.log"
   # shellcheck disable=SC2059
-  ATLAS_BIND="127.0.0.1:$port" \
+  ATLAS_BIND="$host:$port" \
     ATLAS_MAP_DATABASE_URL="$(printf "$url" atlas_maps "$ATLAS_LOCAL_MAP_PASSWORD" vellum_maps)" \
     ATLAS_MAP_READER_URL="$(printf "$url" atlas_map_reader "$ATLAS_LOCAL_MAP_READER_PASSWORD" vellum_maps)" \
     ATLAS_GENERATION_DATABASE_URL="$(printf "$url" atlas_generation "$ATLAS_LOCAL_GENERATION_PASSWORD" vellum_generation)" \
@@ -84,10 +135,15 @@ server_up() {
     ATLAS_GENERATION_RESOURCES="$home/generation-resources" \
     ATLAS_GENERATION_SCRATCH="$home/scratch" \
     ATLAS_FRONTEND="$root/frontend/dist" \
-    nohup "$root/target/release/atlas_server" >"$home/server.log" 2>&1 &
-  echo $! >"$home/server.pid"
+    RUST_BACKTRACE=1 \
+    nohup bash -c "$(declare -f kib ending supervise); home='$home'; supervise '$root/target/release/atlas_server'" \
+    >>"$home/server.log" 2>&1 &
+  for _ in $(seq 10); do
+    [[ -s "$home/server.pid" ]] && break
+    sleep 0.2
+  done
   for _ in $(seq 60); do
-    curl -s -o /dev/null "http://127.0.0.1:$port/" && { echo "Local atlas at http://127.0.0.1:$port/"; return; }
+    curl -s -o /dev/null "http://$host:$port/" && { echo "Local atlas at http://$host:$port/"; return; }
     kill -0 "$(cat "$home/server.pid")" 2>/dev/null || break
     sleep 1
   done

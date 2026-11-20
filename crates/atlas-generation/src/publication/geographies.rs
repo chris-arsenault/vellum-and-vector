@@ -129,7 +129,15 @@ const GROUPS: &[Group] = &[
     (
         "built.layout",
         "landUse",
-        &["clearance", "hunting", "conservation", "burning", "mine"],
+        // A city map's blocks are its land use; plots exist only at real scale (ADR 0016).
+        &[
+            "clearance",
+            "hunting",
+            "conservation",
+            "burning",
+            "mine",
+            "cityBlock",
+        ],
         false,
     ),
     (
@@ -158,7 +166,8 @@ const GROUPS: &[Group] = &[
         &["road", "lane", "street", "footpath"],
         true,
     ),
-    ("built.layout", "roads", &["trail"], false),
+    // A city map's thoroughfares are lines of their own, not a routed network (ADR 0018).
+    ("built.layout", "roads", &["trail", "thoroughfare"], false),
     ("built.layout", "objects", &["fountain", "statue"], false),
     (
         "ecology.living",

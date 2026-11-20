@@ -4,7 +4,14 @@ use crate::town::{
     access::Access,
     effects::{Improvement, Placement, Service},
     geometry::distance,
+    scale::{Measure, TownScale},
 };
+/// The margin a whole-town check pads a relationship's reach by. Street metres, resolved by
+/// `Measure::Layout`.
+const REACH_PAD: f64 = 5.;
+/// The walk an access purpose allows beyond a fair detour. Street metres, resolved by
+/// `Measure::Travel`.
+const DETOUR_ALLOWANCE: f64 = 15.;
 
 impl Town {
     pub fn access_destinations(&self, kind: Kind) -> impl Iterator<Item = Point> + '_ {
@@ -30,9 +37,10 @@ impl Relationship {
     ) -> io::Result<bool> {
         // A whole-town check reads only holdings near the site when the relationship has
         // a fixed reach; a holding's front lies on its own outline.
-        if let Some(reach) = self.reach().filter(|_| first == 0) {
+        let scale = town.scale();
+        if let Some(reach) = self.reach(scale).filter(|_| first == 0) {
             let [x, y] = town.position(site);
-            let pad = reach + 5.;
+            let pad = reach + scale.length(REACH_PAD, Measure::Layout);
             for i in town.nearby_holdings(Bounds(x - pad, y - pad, x + pad, y + pad), spatial)? {
                 if self.served_by(&town.holdings[i], site, town, spatial)? {
                     return Ok(true);
@@ -47,12 +55,14 @@ impl Relationship {
         }
         Ok(false)
     }
-    /// The furthest a serving front may lie from the site, when it does not depend on
-    /// the serving holding.
-    fn reach(self) -> Option<f64> {
+    /// The furthest a serving front may lie from the site at `scale`, when it does not depend
+    /// on the serving holding.
+    fn reach(self, scale: TownScale) -> Option<f64> {
         match self {
-            Self::Accommodation(kind) => Some(6. * kind.definition().depth.high),
-            Self::GatheringSpace { for_use } => Some(3. * for_use.definition().depth.high),
+            Self::Accommodation(kind) => Some(6. * scale.range(kind.definition().depth).high),
+            Self::GatheringSpace { for_use } => {
+                Some(3. * scale.range(for_use.definition().depth).high)
+            }
             Self::Protection { .. } | Self::Access { .. } => None,
         }
     }
@@ -76,7 +86,7 @@ impl Relationship {
                 h.public
                     && h.kind.definition().roles.gathering_space
                     && spatial.area(&h.outline).map_err(io::Error::other)?
-                        >= size.frontage.low * size.depth.low
+                        >= size.least_area(town.scale())
             }
             Self::Protection { .. } => h
                 .kind
@@ -97,12 +107,15 @@ impl Relationship {
 }
 impl Specification for Relationship {
     fn admits_frontage(&self, site: Anchor, town: &Town, front: Point, depth: f64) -> bool {
+        let scale = town.scale();
         match *self {
             Self::Accommodation(kind) => {
-                distance(town.position(site), front) <= 6. * kind.definition().depth.high
+                distance(town.position(site), front)
+                    <= 6. * scale.range(kind.definition().depth).high
             }
             Self::GatheringSpace { for_use } => {
-                distance(town.position(site), front) < for_use.definition().depth.high * 3.
+                distance(town.position(site), front)
+                    < scale.range(for_use.definition().depth).high * 3.
             }
             Self::Protection { of, .. } => distance(town.position(of), front) < depth * 4.,
             Self::Access { .. } => false,
@@ -135,12 +148,13 @@ impl Specification for Relationship {
                 let graph =
                     Access::over_town_streets(town, spatial)?.bind(&places, use_, spatial)?;
                 let routes = graph.routes(0);
+                let allowance = town.scale().length(DETOUR_ALLOWANCE, Measure::Travel);
                 Ok(targets.into_iter().enumerate().any(|(i, holding)| {
                     let cost = routes.cost(i + 1);
                     let target = holding.slot.front;
                     cost <= distance(start, target) * 1.6
                         + distance(town.position(site), target) * 0.1
-                        + 15.
+                        + allowance
                 }))
             }
         }
@@ -464,6 +478,7 @@ impl FabricOwner for Town {
                 {
                     return Ok(EditOutcome::Declined);
                 }
+                let scale = self.scale();
                 let child = self.holdings.last_mut().unwrap();
                 child.kind = use_;
                 child.secondary = None;
@@ -481,9 +496,13 @@ impl FabricOwner for Town {
                 child.crowding = 0.;
                 child.cause = "Crowding divided a rear garden, retaining a shared passage".into();
                 let id = child.id;
-                for roof in
-                    crate::town::roofs::components(&child.slot, child.kind, child.means, 0.5)
-                {
+                for roof in crate::town::roofs::components_at(
+                    &child.slot,
+                    child.kind,
+                    child.means,
+                    0.5,
+                    scale,
+                ) {
                     if let Err(error) = self.fit_building(id, roof, spatial) {
                         self.holdings.pop();
                         self.holdings[premises.0 as usize] = original;
@@ -585,9 +604,7 @@ impl Town {
             return Ok(EditOutcome::Declined);
         };
         let purpose = space.kind.definition();
-        if spatial.area(&remainder).map_err(io::Error::other)?
-            < purpose.frontage.low * purpose.depth.low
-        {
+        if spatial.area(&remainder).map_err(io::Error::other)? < purpose.least_area(self.scale()) {
             return Ok(EditOutcome::Declined);
         }
         let Some(expanded) = spatial
@@ -628,7 +645,7 @@ impl Town {
     ) -> io::Result<()> {
         let point = self.holdings[source.0 as usize].slot.front;
         let [x, y] = point;
-        let r = effect.reach;
+        let r = self.scale().length(effect.reach, Measure::Adjacency);
         let nearby = self.nearby_holdings(Bounds(x - r, y - r, x + r, y + r), spatial)?;
         let target = nearby
             .into_iter()

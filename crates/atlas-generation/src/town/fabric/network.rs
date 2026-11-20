@@ -2,6 +2,12 @@ use super::{HoldingId, Kind, Point, Street, Town};
 use crate::{spatial::SpatialKernel, town::edits::line};
 use atlas_map::{spatial::Overlay, Geometry};
 use std::io;
+/// The shortest loaded stretch worth widening. Street metres, resolved by `Measure::Layout`.
+const LEAST_WIDENED: f64 = 3.;
+/// The most one widening adds to a way, and the least worth building. Street metres, resolved
+/// by `Measure::Width`.
+const WIDENING: f64 = 1.;
+const LEAST_WIDENING: f64 = 0.2;
 fn points(value: Geometry) -> Vec<Point> {
     match value {
         Geometry::Point { coordinates } => {
@@ -34,10 +40,13 @@ impl Town {
             geometry::{add, at, distance, left, scale, sub, unit},
             ground::{FIRST_STREET, PLOT},
             network::stops_lane,
+            scale::Measure,
+            settings::FREIGHT_WIDTH,
         };
+        let town_scale = self.scale();
         let road = &self.streets[load.street];
         let span = load.end - load.start;
-        if span < 3. {
+        if span < town_scale.length(LEAST_WIDENED, Measure::Layout) {
             return Ok(false);
         }
         let mut measures = vec![0.];
@@ -54,9 +63,12 @@ impl Town {
             road.widths[j - 1] + (road.widths[j] - road.widths[j - 1]) * t
         };
         let old = width_at(middle);
-        let extra = ((2.4 + load.value.sqrt()) - old).clamp(0., 1.);
+        let width = |metres| town_scale.length(metres, Measure::Width);
+        // The load asks for a way this many street metres wider than a cart's.
+        let wanted = width(FREIGHT_WIDTH + load.value.sqrt());
+        let extra = (wanted - old).clamp(0., width(WIDENING));
         let expense = span * extra * 0.5;
-        if extra < 0.2 || expense > self.access_effort {
+        if extra < width(LEAST_WIDENING) || expense > self.access_effort {
             return Ok(false);
         }
         let Some((start, _)) = at(&road.points, load.start) else {

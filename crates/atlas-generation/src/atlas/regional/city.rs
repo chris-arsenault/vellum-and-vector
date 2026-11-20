@@ -1,6 +1,9 @@
-//! City growth on a city map: after each round's people pass, the city's people move toward
-//! where it grows (`field::people::growth`), guided by the settlement template the city
-//! selects at its own scale. The next round's refinement and people pass read the result.
+//! A city map's own steps, inside every refinement round: after the round's people pass the
+//! city's people move toward where it grows (`field::people::growth`), guided by the
+//! settlement template the city selects at its own scale and drawn to its prominent places and
+//! works; walls rise; and hot-spot towns are founded and advanced by the town development
+//! steps (`spots`). The next round's refinement and people pass read the result. Districts are
+//! cut once the rounds are done (`plan`).
 use super::work::{Inputs, Occurrence, Operation};
 use crate::{
     atlas::state::State,
@@ -14,12 +17,12 @@ use crate::{
     town::templates::{Selection, SiteEvidence},
 };
 use std::{io, rc::Rc};
+mod features;
 mod plan;
+pub(super) mod spots;
 
 /// Relief across the core that makes two usable levels of one city, in metres.
 const LEVELS: f64 = 30.;
-/// A city map's outline reaches this many times the city's built radius (`town::city`).
-const SURROUNDINGS: f64 = 2.5;
 
 pub(super) fn growth(input: Rc<Inputs>, field: &Projection<State, Field>) -> Operation {
     let field = field.clone();
@@ -47,6 +50,7 @@ pub(super) fn growth(input: Rc<Inputs>, field: &Projection<State, Field>) -> Ope
                         .collect(),
                     reach: ((2. * selection.quarter() / mesh.cell_span()).ceil() as usize)
                         .clamp(2, 8),
+                    places: places_at(scope.state(), mesh.len()),
                 }
             };
             scope.project(&field).run(&operation, &guidance)?;
@@ -59,6 +63,64 @@ pub(super) fn growth(input: Rc<Inputs>, field: &Projection<State, Field>) -> Ope
 
 /// Slope at which ground defends a wall's face on its own, rise over run.
 const DEFENDING_SLOPE: f64 = 0.4;
+
+type Faces = Vec<crate::town::walls::Face>;
+/// Each of the city's walls as it runs: the faces it stands along and the faces its gates
+/// open on.
+fn wall_runs(state: &State) -> io::Result<Vec<(Faces, Faces)>> {
+    use crate::town::walls::run;
+    let Some(regional) = state.regional.as_ref().filter(|r| !r.city.walls.is_empty()) else {
+        return Ok(Vec::new());
+    };
+    let field = state.field();
+    let mesh = field.mesh();
+    let slope = field.shared().scalar(crate::field::shared::Scalar::Slope);
+    let kept = field.people().view(HumanField::KeptLine);
+    let mut defended = Vec::with_capacity(mesh.len());
+    let mut ways = Vec::with_capacity(mesh.len());
+    for cell in 0..mesh.len() {
+        defended.push(!habitable(field, cell)? || slope.get(cell)? > DEFENDING_SLOPE);
+        ways.push(kept.get(cell)?);
+    }
+    let busiest = ways.iter().copied().fold(0., f64::max).max(f64::EPSILON);
+    ways.iter_mut().for_each(|w| *w /= busiest);
+    // The hot-spot towns' thoroughfares are the city's own ways: a wall opens a gate on them.
+    for street in state.town.towns.iter().flat_map(|t| t.streets()) {
+        for cell in spots::cells_along(mesh, &street.points) {
+            ways[cell] = 1.;
+        }
+    }
+    let neighbours = |cell| [0, 1, 2].map(|edge| mesh.neighbor(cell, edge));
+    let mut runs = Vec::new();
+    for wall in &regional.city.walls {
+        let mut inside = vec![false; mesh.len()];
+        for &cell in &wall.inside {
+            inside[cell as usize] = true;
+        }
+        runs.push(run(&inside, &defended, &ways, neighbours));
+    }
+    Ok(runs)
+}
+/// A wall face's two ends, in map coordinates.
+fn segment(
+    mesh: &crate::lattice::TriangularLattice,
+    face: &crate::town::walls::Face,
+) -> Option<[[f64; 2]; 2]> {
+    let [ox, oy] = mesh.origin();
+    let edge = (0..3).find(|&e| mesh.neighbor(face.inside, e) == Some(face.outside))?;
+    let ([cx, cy], [nx, ny], length) = mesh.physical_face(face.inside, edge)?;
+    let [tx, ty] = [-ny * length / 2., nx * length / 2.];
+    Some([[cx - tx + ox, cy - ty + oy], [cx + tx + ox, cy + ty + oy]])
+}
+/// The city's walls where they stand, gates left open: lines the towns of a city map cannot
+/// build or walk through.
+pub(crate) fn wall_lines(state: &State) -> io::Result<Vec<[[f64; 2]; 2]>> {
+    let mesh = state.field().mesh();
+    Ok(wall_runs(state)?
+        .iter()
+        .flat_map(|(faces, _)| faces.iter().filter_map(|face| segment(mesh, face)))
+        .collect())
+}
 
 /// The city's walls and gates as catalogue places, each with its published geometry: a wall
 /// is the run of faces between its enclosed cells and the outside, a gate the face a way
@@ -74,43 +136,22 @@ pub(crate) fn wall_places(
         map_records::{generated, Record},
         values::Place,
     };
-    use crate::town::walls::run;
     use atlas_map::{Geometry, Position};
-    let Some(regional) = state.regional.as_ref().filter(|r| !r.city.walls.is_empty()) else {
+    let Some(regional) = state.regional.as_ref() else {
         return Ok((Vec::new(), Vec::new()));
     };
-    let field = state.field();
-    let mesh = field.mesh();
-    let [ox, oy] = mesh.origin();
-    let slope = field.shared().scalar(crate::field::shared::Scalar::Slope);
-    let kept = field.people().view(HumanField::KeptLine);
-    let mut defended = Vec::with_capacity(mesh.len());
-    let mut ways = Vec::with_capacity(mesh.len());
-    for cell in 0..mesh.len() {
-        defended.push(!habitable(field, cell)? || slope.get(cell)? > DEFENDING_SLOPE);
-        ways.push(kept.get(cell)?);
-    }
-    let busiest = ways.iter().copied().fold(0., f64::max).max(f64::EPSILON);
-    ways.iter_mut().for_each(|w| *w /= busiest);
-    let neighbours = |cell| [0, 1, 2].map(|edge| mesh.neighbor(cell, edge));
-    // A face's two ends, in map coordinates.
-    let segment = |face: &crate::town::walls::Face| {
-        let edge = (0..3).find(|&e| mesh.neighbor(face.inside, e) == Some(face.outside))?;
-        let ([cx, cy], [nx, ny], length) = mesh.physical_face(face.inside, edge)?;
-        let [tx, ty] = [-ny * length / 2., nx * length / 2.];
-        Some([
-            Position::xy(cx - tx + ox, cy - ty + oy),
-            Position::xy(cx + tx + ox, cy + ty + oy),
-        ])
-    };
+    let mesh = state.field().mesh();
+    let position = |[x, y]: [f64; 2]| Position::xy(x, y);
+    let segment = |face: &crate::town::walls::Face| segment(mesh, face).map(|s| s.map(position));
     let mut walls = Vec::new();
     let mut gates = Vec::new();
-    for (index, wall) in regional.city.walls.iter().enumerate() {
-        let mut inside = vec![false; mesh.len()];
-        for &cell in &wall.inside {
-            inside[cell as usize] = true;
-        }
-        let (faces, openings) = run(&inside, &defended, &ways, neighbours);
+    for (index, (wall, (faces, openings))) in regional
+        .city
+        .walls
+        .iter()
+        .zip(wall_runs(state)?)
+        .enumerate()
+    {
         let lines: Vec<Vec<Position>> = faces.iter().filter_map(segment).map(Vec::from).collect();
         let Some(first) = faces.first() else {
             continue;
@@ -175,22 +216,112 @@ pub(crate) fn places(
     kind: crate::field::poi::kinds::Kind,
 ) -> io::Result<Vec<crate::field::poi::values::Place>> {
     use crate::field::poi::kinds::Kind;
-    match kind {
+    let places = match kind {
         Kind::CityWall => wall_places(state).map(|(walls, _)| walls),
         Kind::CityGate => wall_places(state).map(|(_, gates)| gates),
         Kind::CityPlace => plan::place_records(state),
         Kind::CityDistrict => plan::district_records(state),
         Kind::MajorWork => plan::work_records(state),
+        Kind::CityThoroughfare => features::thoroughfare_records(state),
+        Kind::CityBlock => features::block_records(state),
         _ => Ok(Vec::new()),
+    }?;
+    let city = state.regional.as_ref().map(|r| &r.city);
+    trace(
+        "city.publish",
+        serde_json::json!({
+            "kind": kind.as_str(),
+            "records": places.len(),
+            "towns": state.town.towns.len(),
+            "works": city.map_or(0, |c| c.works.len()),
+            "districtCells": city.map_or(0, |c| c.districts.iter().filter(|&&l| l != u8::MAX).count()),
+        }),
+    );
+    Ok(places)
+}
+
+/// The settlement a city map was opened at, as its captured record tells it.
+pub(super) struct Settlement {
+    pub(super) centre: [f64; 2],
+    /// The radius of its built ground, at least the least a city map opens on.
+    pub(super) built_radius: f64,
+    /// Its census.
+    pub(super) people: Option<f64>,
+}
+/// The city map's settlement, read by the identity its captured record took.
+pub(super) fn settlement(state: &State) -> io::Result<Option<Settlement>> {
+    use atlas_map::Geometry;
+    let Some(city) = state.scope.city.as_ref() else {
+        return Ok(None);
+    };
+    let found = match state.records.source_features.as_deref() {
+        Some(source) => source.get(city.settlement)?,
+        None => state.records.features.get(city.settlement)?,
+    };
+    let Some(feature) = found else {
+        return Ok(None);
+    };
+    let Geometry::Point { coordinates } = &feature.geometry else {
+        return Ok(None);
+    };
+    let [x, y, _] = coordinates.coordinates();
+    let number = |key: &str| {
+        feature
+            .attributes
+            .get(key)
+            .and_then(serde_json::Value::as_f64)
+    };
+    let built = number("builtKm2").unwrap_or(0.).max(0.);
+    Ok(Some(Settlement {
+        centre: [x, y],
+        built_radius: (built * 1e6 / std::f64::consts::PI)
+            .sqrt()
+            .max(crate::town::city::LEAST_RADIUS / crate::town::city::SURROUNDINGS),
+        people: number("settlementPopulation").or_else(|| number("population")),
+    }))
+}
+
+/// A city map's decisions, written to the server log when `ATLAS_TRACE_CITY` is set, as town
+/// decisions are under `ATLAS_TRACE_TOWN`.
+pub(super) fn trace(event: &str, details: serde_json::Value) {
+    if std::env::var_os("ATLAS_TRACE_CITY").is_some() {
+        eprintln!(
+            "{}",
+            serde_json::json!({ "event": event, "details": details })
+        );
     }
 }
 
-/// The city's last step after its growth rounds: hot spots raise prominent places, districts
-/// are cut round the strongest centres, and the city's major works find their sites.
-pub(super) fn plan_step(input: Rc<Inputs>) -> Operation {
-    let seed = input.seed;
+/// Where the city's prominent places and works stand, as each cell's draw on growth: 1 at the
+/// place, a half beside it.
+fn places_at(state: &State, n: usize) -> Vec<f64> {
+    let mut draw = vec![0.; n];
+    let Some(city) = state.regional.as_ref().map(|r| &r.city) else {
+        return draw;
+    };
+    let mesh = state.field().mesh();
+    let cells = city
+        .places
+        .iter()
+        .map(|p| p.spot)
+        .chain(city.works.iter().map(|&(_, cell)| cell as usize));
+    for cell in cells.filter(|&c| c < n) {
+        for next in (0..3).filter_map(|edge| mesh.neighbor(cell, edge)) {
+            draw[next] = f64::max(draw[next], 0.5);
+        }
+        draw[cell] = 1.;
+    }
+    draw
+}
+
+/// A city step that runs only on a city map, with the city's template.
+fn city_step(
+    id: &'static str,
+    seed: i32,
+    run: fn(&mut State, &Selection, i32) -> io::Result<()>,
+) -> Operation {
     crate::execution::Command::with_inputs(
-        "refinement.city-plan",
+        id,
         crate::execution::CommandKind::Event,
         vec![],
         move |scope, _: &Occurrence| {
@@ -198,10 +329,47 @@ pub(super) fn plan_step(input: Rc<Inputs>) -> Operation {
                 return Ok(());
             }
             let selection = template(scope.state_mut(), seed)?;
-            plan::plan(scope.state_mut(), &selection, seed)?;
+            run(scope.state_mut(), &selection, seed)?;
             Ok(())
         },
     )
+}
+
+/// Each round's hot spots: towns founded where the fields concentrate, and the city's works
+/// sited and taken up by the towns beside them.
+pub(super) fn spots_step(input: Rc<Inputs>) -> Operation {
+    city_step("refinement.city-spots", input.seed, spots::found)
+}
+
+/// After each round's town steps: the landmarks the hot-spot towns built, and the towns'
+/// blocks and thoroughfares taken up by the people layers, so the next round's refinement and
+/// growth start from the city the towns built.
+pub(super) fn places_step(input: Rc<Inputs>, field: &Projection<State, Field>) -> Operation {
+    let field = field.clone();
+    let operation = crate::field::people::quarters::operation(Rc::new(Field::human_operations()));
+    let seed = input.seed;
+    crate::execution::Command::with_inputs(
+        "refinement.city-places",
+        crate::execution::CommandKind::Event,
+        vec![],
+        move |scope, _: &Occurrence| {
+            if scope.state().scope.city.is_none() {
+                return Ok(());
+            }
+            let selection = template(scope.state_mut(), seed)?;
+            spots::record(scope.state_mut(), &selection)?;
+            let quarters = spots::quarters(scope.state(), &selection)?;
+            scope.project(&field).run(&operation, &quarters)?;
+            Ok(())
+        },
+    )
+}
+
+/// The city's last step after its rounds: districts cut round its hot-spot towns.
+pub(super) fn plan_step(input: Rc<Inputs>) -> Operation {
+    city_step("refinement.city-plan", input.seed, |state, selection, _| {
+        plan::plan(state, selection)
+    })
 }
 
 /// A deterministic draw in [0, 1) for a city decision at a round.
@@ -336,13 +504,17 @@ fn raise_walls(
 fn survey(state: &State) -> io::Result<SiteEvidence> {
     let field = state.field();
     let mesh = field.mesh();
-    let bounds = state
-        .spatial
-        .bounds(&state.scope.footprint)
-        .map_err(io::Error::other)?;
-    // A city map is centred on its settlement; its extent is a ring about it.
-    let centre = [(bounds.0 + bounds.2) / 2., (bounds.1 + bounds.3) / 2.];
-    let core = (bounds.2 - bounds.0).min(bounds.3 - bounds.1) / 2. / SURROUNDINGS;
+    let Some(Settlement {
+        centre,
+        built_radius,
+        ..
+    }) = settlement(state)?
+    else {
+        return Err(io::Error::other(
+            "A city map holds the settlement it was opened at",
+        ));
+    };
+    let core = built_radius;
     let [ox, oy] = mesh.origin();
     let at = |cell| {
         let [x, y] = mesh.position(cell);

@@ -149,12 +149,13 @@ impl<'a> Context<'a> {
         seat: &Seat,
         seat_index: usize,
         ground: &Ground,
+        scale: crate::town::scale::TownScale,
     ) -> io::Result<(SiteEvidence, Vec<InheritedWork>)> {
         let field = state.field();
         let mesh = field.mesh();
         let centre = seat.centre;
-        let reach =
-            (crate::town::founding::reach(seat.story.size()) * 3.).max(mesh.cell_span() * 3.);
+        let founding = crate::town::founding::reach(scale, seat.story.size());
+        let reach = (founding * 3.).max(mesh.cell_span() * 3.);
         let [x, y] = centre;
         let bounds = Bounds(x - reach, y - reach, x + reach, y + reach);
         let position = |cell| add(mesh.origin(), mesh.position(cell));
@@ -167,13 +168,7 @@ impl<'a> Context<'a> {
             approaches: seat
                 .arms
                 .iter()
-                .filter_map(|a| {
-                    crate::town::geometry::at(
-                        &a.points,
-                        crate::town::founding::reach(seat.story.size()),
-                    )
-                    .map(|(p, _)| p)
-                })
+                .filter_map(|a| crate::town::geometry::at(&a.points, founding).map(|(p, _)| p))
                 .collect(),
             ..Default::default()
         };

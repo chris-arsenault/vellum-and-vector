@@ -3,7 +3,7 @@
 use super::{
     geometry::{angle, at, cut, distance, line_length, rest, sub, Point},
     ground::{Ground, FREE, OUTSIDE, STEEP, WATER},
-    network::{Arm, VERTEX_STEP},
+    network::{vertex_step, Arm},
     seat::Seat,
     story::Story,
 };
@@ -19,7 +19,13 @@ use atlas_map::{Geometry, Id, Position};
 use serde_json::Value;
 use std::io;
 
-use super::settings::{FINEST_CELL, MOST_CELLS_ACROSS, STEEP_SLOPE, UNSTATED_WAY_WIDTH};
+use super::settings::{FINEST_CELL, MOST_CELLS_ACROSS, STEEP_SLOPE, UNSTATED_WAY_WIDTH, WALL_LINE};
+use crate::town::scale::{Measure, TownScale};
+/// How far a captured settlement's ways may pass from it and still enter it, at least. Street
+/// metres, resolved by `Measure::Layout`.
+const MEETING_REACH: f64 = 500.;
+/// How far along an arm its heading is read. Street metres, resolved by `Measure::Layout`.
+const HEADING_PROBE: f64 = 100.;
 
 pub struct Site {
     pub bounds: [f64; 4],
@@ -58,23 +64,30 @@ fn read_from(state: &State, features: &dyn FeatureReader, area: Option<Id>) -> i
         bounds,
         ground,
         seats,
-        ways: ways(features, area)?,
+        ways: ways(features, area, state.town.scale())?,
     })
 }
+/// The map's terrain on the town ground, its cells and walls sized at the map's town scale.
 fn terrain(state: &State, bounds: [f64; 4]) -> io::Result<Ground> {
-    let mut ground = ground(state.field(), bounds)?;
+    let scale = state.town.scale();
+    let mut ground = ground(state.field(), bounds, scale)?;
     let current = state.records.features.as_ref();
     let area = Some(state.scope.area);
     let water = drawn_water(current, area, state.spatial.as_ref())?;
     ground.mark_shapes(&water, WATER, state.spatial.as_ref())?;
-    fortifications(current, area, &mut ground, state.spatial.as_ref())?;
+    fortifications(current, area, &mut ground, state.spatial.as_ref(), scale)?;
     Ok(ground)
 }
-/// The map's terrain with the towns' walls taken: the base the town steps mark buildings on.
+/// The map's terrain with the towns' walls taken, and on a city map the city's walls: the
+/// base the town steps mark buildings on.
 pub(super) fn walled_terrain(state: &State) -> io::Result<Ground> {
     let mut ground = terrain(state, bounds(state)?)?;
+    let line = state.town.scale().length(WALL_LINE, Measure::Width);
     for wall in state.town.towns.iter().flat_map(|town| town.kernel_walls()) {
-        ground.take_line(wall, 1., crate::town::ground::WALL);
+        ground.take_line(wall, line, crate::town::ground::WALL);
+    }
+    for face in crate::atlas::regional::city::wall_lines(state)? {
+        ground.take_line(&face, line, crate::town::ground::WALL);
     }
     Ok(ground)
 }
@@ -84,6 +97,8 @@ pub(super) fn terrain_key(state: &State) -> io::Result<u64> {
     use std::hash::{Hash, Hasher};
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     state.field_version().hash(&mut hasher);
+    // The ground's cells and walls are sized at the map's town scale.
+    (state.town.scale().fidelity() as u8).hash(&mut hasher);
     state.scope.footprint.fingerprint().hash(&mut hasher);
     let area = Some(state.scope.area);
     let features = state.records.features.as_ref();
@@ -116,6 +131,12 @@ pub(super) fn terrain_key(state: &State) -> io::Result<u64> {
     for wall in state.town.towns.iter().flat_map(|town| town.kernel_walls()) {
         for [x, y] in wall {
             (x.to_bits(), y.to_bits()).hash(&mut hasher);
+        }
+    }
+    // A city's walls stand once raised; a new one changes their count.
+    if let Some(regional) = state.regional.as_ref() {
+        for wall in &regional.city.walls {
+            (wall.round, wall.inside.len()).hash(&mut hasher);
         }
     }
     Ok(hasher.finish())
@@ -162,12 +183,14 @@ fn fortifications(
     area: Option<Id>,
     ground: &mut Ground,
     spatial: &dyn SpatialKernel,
+    scale: TownScale,
 ) -> io::Result<()> {
     use super::{
         ground::WALL,
         settings::{GATE_WIDTH, WALL_THICKNESS},
     };
     for (kind, width) in [("wall", WALL_THICKNESS), ("gate", GATE_WIDTH)] {
+        let width = scale.length(width, Measure::Width);
         for item in features.values(FeatureSelection {
             area_id: area,
             layer_id: Some("structures"),
@@ -239,8 +262,14 @@ pub fn water_shapes(
     }
     Ok(shapes)
 }
-/// Every line in the roads layer except sea lanes, with its widest stated width.
-fn ways(features: &dyn FeatureReader, area: Option<Id>) -> io::Result<Vec<(Vec<Point>, f64)>> {
+/// Every line in the roads layer except sea lanes, with its widest stated width; a way with
+/// none stated takes the unstated width at `scale`.
+fn ways(
+    features: &dyn FeatureReader,
+    area: Option<Id>,
+    scale: TownScale,
+) -> io::Result<Vec<(Vec<Point>, f64)>> {
+    let unstated = scale.length(UNSTATED_WAY_WIDTH, Measure::Width);
     let mut result = Vec::new();
     for feature in features.values(FeatureSelection {
         area_id: area,
@@ -256,7 +285,7 @@ fn ways(features: &dyn FeatureReader, area: Option<Id>) -> io::Result<Vec<(Vec<P
             .get("widths")
             .and_then(Value::as_array)
             .and_then(|w| w.iter().filter_map(Value::as_f64).reduce(f64::max))
-            .unwrap_or(UNSTATED_WAY_WIDTH);
+            .unwrap_or(unstated);
         result.extend(lines(&feature.geometry).into_iter().map(|l| (l, width)));
     }
     Ok(result)
@@ -278,9 +307,10 @@ fn marks(field: &Field) -> io::Result<Vec<u32>> {
         })
         .collect()
 }
-fn ground(field: &Field, bounds: [f64; 4]) -> io::Result<Ground> {
+fn ground(field: &Field, bounds: [f64; 4], scale: TownScale) -> io::Result<Ground> {
     let side = (bounds[2] - bounds[0]).max(bounds[3] - bounds[1]);
-    let mut ground = Ground::new(bounds, (side / MOST_CELLS_ACROSS).max(FINEST_CELL));
+    let finest = scale.length(FINEST_CELL, Measure::Ground);
+    let mut ground = Ground::new(bounds, (side / MOST_CELLS_ACROSS).max(finest));
     let marks = marks(field)?;
     let mesh = field.mesh();
     let origin = mesh.origin();
@@ -480,26 +510,18 @@ fn seat(
     roads: &[Road],
     bounds: [f64; 4],
 ) -> io::Result<Seat> {
+    let scale = state.town.scale();
     let meeting = Meeting {
         centre,
-        reach: 500.0_f64.max(0.25 * (bounds[2] - bounds[0]).max(bounds[3] - bounds[1])),
+        reach: scale
+            .length(MEETING_REACH, Measure::Layout)
+            .max(0.25 * (bounds[2] - bounds[0]).max(bounds[3] - bounds[1])),
         name: &feature.name,
+        scale,
     };
-    let mut arms = Vec::new();
-    let mut guarded = feature.attributes.get("fortress").and_then(Value::as_bool) == Some(true);
-    for road in roads {
-        let before = arms.len();
-        for line in &road.lines {
-            arms_of(
-                state.spatial.as_ref(),
-                line,
-                &road.ends,
-                &meeting,
-                &mut arms,
-            )?;
-        }
-        guarded |= road.strategic && arms.len() > before;
-    }
+    let (arms, strategic) = ways_in(state.spatial.as_ref(), roads, &meeting)?;
+    let guarded =
+        strategic || feature.attributes.get("fortress").and_then(Value::as_bool) == Some(true);
     let story = story(feature, arms.len(), guarded);
     Ok(Seat {
         key: feature.id,
@@ -508,6 +530,75 @@ fn seat(
         story,
         arms,
         culture: text(feature, "namingCulture").map(str::to_owned),
+    })
+}
+/// The arms the ways give a seat, and whether a strategic way is among them.
+fn ways_in(
+    spatial: &dyn SpatialKernel,
+    roads: &[Road],
+    meeting: &Meeting<'_>,
+) -> io::Result<(Vec<Arm>, bool)> {
+    let mut arms = Vec::new();
+    let mut strategic = false;
+    for road in roads {
+        let before = arms.len();
+        for line in &road.lines {
+            arms_of(spatial, line, &road.ends, meeting, &mut arms)?;
+        }
+        strategic |= road.strategic && arms.len() > before;
+    }
+    Ok((arms, strategic))
+}
+/// Where a hot spot's town finds its ways: the city's roads passing within `reach`, and the
+/// neighbouring centres it heads for, each with its name.
+pub(crate) struct SpotApproaches<'a> {
+    pub reach: f64,
+    pub toward: &'a [(Point, String)],
+}
+/// The seat of a town founded at a city map's hot spot: its arms are the city's roads passing
+/// within reach and the ways toward its neighbouring centres.
+pub(crate) fn spot_seat(
+    state: &State,
+    key: Id,
+    name: String,
+    centre: Point,
+    approaches: &SpotApproaches<'_>,
+    mut story: Story,
+) -> io::Result<Seat> {
+    let roads = match state.records.source_features.as_deref() {
+        Some(source) => roads(source, None)?,
+        None => roads(state.records.features.as_ref(), Some(state.scope.area))?,
+    };
+    let scale = state.town.scale();
+    let meeting = Meeting {
+        centre,
+        reach: approaches.reach,
+        name: &name,
+        scale,
+    };
+    let (mut arms, strategic) = ways_in(state.spatial.as_ref(), &roads, &meeting)?;
+    // A city's centres are joined to one another: each hot spot's town heads for its
+    // neighbours, and those ways become the city's thoroughfares.
+    let probe = scale.length(HEADING_PROBE, Measure::Layout);
+    for (other, destination) in approaches.toward {
+        add_arm(
+            &mut arms,
+            Arm {
+                points: vec![centre, *other],
+                destination: Some(destination.clone()),
+            },
+            probe,
+        );
+    }
+    story.ways = arms.len();
+    story.guarded |= strategic;
+    Ok(Seat {
+        key,
+        name,
+        centre,
+        story,
+        arms,
+        culture: None,
     })
 }
 fn story(feature: &Feature, ways: usize, guarded: bool) -> Story {
@@ -546,11 +637,12 @@ fn story(feature: &Feature, ways: usize, guarded: bool) -> Story {
     }
 }
 /// A settlement meeting the ways: its centre, how far off a way may pass and still be its
-/// way in, and its name, which a way's label names at one end.
+/// way in, its name, which a way's label names at one end, and the scale its arms are laid at.
 struct Meeting<'a> {
     centre: Point,
     reach: f64,
     name: &'a str,
+    scale: TownScale,
 }
 /// The arms a captured way gives a settlement: from the centre to the way's nearest point and
 /// on along it each way, each named for the place its label puts at that end.
@@ -561,7 +653,7 @@ fn arms_of(
     meeting: &Meeting<'_>,
     arms: &mut Vec<Arm>,
 ) -> io::Result<()> {
-    let (centre, reach, name) = (meeting.centre, meeting.reach, meeting.name);
+    let (centre, reach, name, scale) = (meeting.centre, meeting.reach, meeting.name, meeting.scale);
     if line.len() < 2 {
         return Ok(());
     }
@@ -583,8 +675,9 @@ fn arms_of(
     };
     let mut back = cut(line, along);
     back.reverse();
+    let probe = scale.length(HEADING_PROBE, Measure::Layout);
     for (part, end) in [(back, 0), (rest(line, along), 1)] {
-        if line_length(&part) < 2.0 * VERTEX_STEP {
+        if line_length(&part) < 2.0 * vertex_step(scale) {
             continue;
         }
         let mut points = vec![centre];
@@ -595,20 +688,23 @@ fn arms_of(
                 points,
                 destination: destination(end),
             },
+            probe,
         );
     }
     Ok(())
 }
-fn heading_of(arm: &Arm) -> f64 {
+/// An arm's heading, read `probe` metres along it.
+fn heading_of(arm: &Arm, probe: f64) -> f64 {
     let probe =
-        at(&arm.points, 100.0_f64.min(line_length(&arm.points))).map_or(arm.points[0], |(p, _)| p);
+        at(&arm.points, probe.min(line_length(&arm.points))).map_or(arm.points[0], |(p, _)| p);
     angle(sub(probe, arm.points[0]))
 }
-/// Adds an arm unless one already leaves the centre the same way.
-fn add_arm(arms: &mut Vec<Arm>, arm: Arm) {
-    let heading = heading_of(&arm);
+/// Adds an arm unless one already leaves the centre the same way, its heading read `probe`
+/// metres along it.
+fn add_arm(arms: &mut Vec<Arm>, arm: Arm, probe: f64) {
+    let heading = heading_of(&arm, probe);
     let same = arms.iter_mut().find(|other| {
-        let gap = (heading_of(other) - heading).rem_euclid(std::f64::consts::TAU);
+        let gap = (heading_of(other, probe) - heading).rem_euclid(std::f64::consts::TAU);
         gap.min(std::f64::consts::TAU - gap) < 0.25
     });
     match same {
@@ -661,9 +757,13 @@ mod tests {
     #[test]
     fn ways_leaving_the_same_way_become_one_main_street() {
         let mut arms = Vec::new();
-        add_arm(&mut arms, arm([500.0, 0.0], None));
-        add_arm(&mut arms, arm([500.0, 20.0], Some("Elder Ford")));
-        add_arm(&mut arms, arm([-500.0, 0.0], Some("Kell")));
+        add_arm(&mut arms, arm([500.0, 0.0], None), HEADING_PROBE);
+        add_arm(
+            &mut arms,
+            arm([500.0, 20.0], Some("Elder Ford")),
+            HEADING_PROBE,
+        );
+        add_arm(&mut arms, arm([-500.0, 0.0], Some("Kell")), HEADING_PROBE);
         assert_eq!(arms.len(), 2);
         assert_eq!(arms[0].destination.as_deref(), Some("Elder Ford"));
         assert_eq!(arms[1].destination.as_deref(), Some("Kell"));

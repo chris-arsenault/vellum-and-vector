@@ -5,12 +5,17 @@ use super::{
     fabric::{polygon, Fabric},
     geometry::{add, left, rectangle, scale, sub, unit, Jitter, Point},
     ground::{Ground, OUTSIDE, STEEP, WATER},
+    scale::{Measure, TownScale},
     settings,
 };
 use crate::spatial::SpatialKernel;
 use atlas_map::{spatial::Overlay, Bounds, Geometry, Position};
 use serde::{Deserialize, Serialize};
 use std::io;
+/// The balk left between neighbouring ploughed strips, and the ground a field keeps clear of
+/// a way's or street's edge. Street metres, resolved by `Measure::Plot`.
+const STRIP_BALK: f64 = 1.;
+const WAY_VERGE: f64 = 1.;
 #[derive(Serialize, Deserialize)]
 pub struct Field {
     pub id: u32,
@@ -27,27 +32,30 @@ pub struct Worker {
     pub town: atlas_map::Id,
     pub holding: super::fabric::HoldingId,
 }
+/// The map's fields, laid out in blocks and strips sized at `town_scale`.
 pub fn establish(
     bounds: [f64; 4],
     ways: &[Geometry],
     key: &str,
     share: impl Fn(Point) -> io::Result<(f64, f64)>,
     spatial: &dyn SpatialKernel,
+    town_scale: TownScale,
 ) -> io::Result<Vec<Field>> {
     let [w, s, e, n] = bounds;
+    let block = town_scale.length(settings::FIELD_BLOCK, Measure::Plot);
     let mut jitter = Jitter::new(key);
     let mut sites = Vec::new();
-    let mut y = s + settings::FIELD_BLOCK * 0.4;
+    let mut y = s + block * 0.4;
     while y < n {
-        let mut x = w + settings::FIELD_BLOCK * 0.4;
+        let mut x = w + block * 0.4;
         while x < e {
             sites.push(Position::xy(
-                x + jitter.around(0., settings::FIELD_BLOCK * 0.25),
-                y + jitter.around(0., settings::FIELD_BLOCK * 0.25),
+                x + jitter.around(0., block * 0.25),
+                y + jitter.around(0., block * 0.25),
             ));
-            x += settings::FIELD_BLOCK;
+            x += block;
         }
-        y += settings::FIELD_BLOCK * 0.85;
+        y += block * 0.85;
     }
     if sites.is_empty() {
         return Ok(vec![]);
@@ -72,7 +80,7 @@ pub fn establish(
         let shapes = if pasture > farm {
             vec![shape]
         } else {
-            strips(&shape, at, direction, spatial)?
+            strips(&shape, at, direction, spatial, town_scale)?
         };
         for outline in shapes {
             fields.push(Field {
@@ -108,7 +116,10 @@ fn strips(
     at: Point,
     direction: Point,
     spatial: &dyn SpatialKernel,
+    town_scale: TownScale,
 ) -> io::Result<Vec<Geometry>> {
+    let strip_width = town_scale.length(settings::FIELD_STRIP, Measure::Plot);
+    let balk = town_scale.length(STRIP_BALK, Measure::Plot);
     let Bounds(w, s, e, n) = spatial.bounds(shape).map_err(io::Error::other)?;
     let reach = (e - w).hypot(n - s);
     let mut offset = -reach;
@@ -122,7 +133,7 @@ fn strips(
             start,
             direction,
             left(direction),
-            settings::FIELD_STRIP - 1.,
+            strip_width - balk,
             reach * 2.,
         ));
         if let Some(clipped) = spatial
@@ -132,7 +143,7 @@ fn strips(
         {
             result.push(clipped);
         }
-        offset += settings::FIELD_STRIP;
+        offset += strip_width;
     }
     Ok(result)
 }
@@ -143,6 +154,7 @@ pub fn develop(
     spatial: &dyn SpatialKernel,
 ) -> io::Result<()> {
     fabric.fields.append(&mut fabric.fallow);
+    let verge = fabric.scale().length(WAY_VERGE, Measure::Plot);
     let mut excluded: Vec<_> = fabric
         .towns
         .iter()
@@ -150,14 +162,14 @@ pub fn develop(
         .collect();
     for (points, width) in ways {
         if let Some(mask) = spatial
-            .buffer(&line(points), width / 2. + 1.)
+            .buffer(&line(points), width / 2. + verge)
             .map_err(io::Error::other)?
         {
             excluded.push(mask);
         }
     }
     for street in fabric.towns.iter().flat_map(|town| town.streets()) {
-        if let Some(mask) = street.corridor(1., spatial).map_err(io::Error::other)? {
+        if let Some(mask) = street.corridor(verge, spatial).map_err(io::Error::other)? {
             excluded.push(mask);
         }
     }
@@ -230,6 +242,10 @@ fn assign(fabric: &mut Fabric, ground: &Ground, spatial: &dyn SpatialKernel) -> 
         })
         .collect();
     let mut best = vec![(0., None); fabric.fields.len()];
+    // A farm's labour fades with the walk to its fields, over a field block's walk.
+    let walk = fabric
+        .scale()
+        .length(settings::FIELD_BLOCK, Measure::Travel);
     for town in &fabric.towns {
         let access = super::access::Access::for_town(town, spatial)?.on_ground(ground);
         let farms: Vec<_> = town
@@ -251,8 +267,8 @@ fn assign(fabric: &mut Fabric, ground: &Ground, spatial: &dyn SpatialKernel) -> 
                     } else {
                         1.
                     };
-                let labour = farm.occupation * farm.condition * (0.5 + farm.means)
-                    / (1. + cost / settings::FIELD_BLOCK);
+                let labour =
+                    farm.occupation * farm.condition * (0.5 + farm.means) / (1. + cost / walk);
                 if labour > best.0 {
                     *best = (labour, Some(worker.clone()));
                 }

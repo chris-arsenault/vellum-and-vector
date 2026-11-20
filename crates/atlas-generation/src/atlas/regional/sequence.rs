@@ -58,9 +58,34 @@ fn refresh(catalogue: &Catalogue, context: &Context<'_>, occurrence: &str) -> io
 pub fn sequence(catalogue: &Catalogue, context: &Context<'_>) -> io::Result<Sequence> {
     rounds(catalogue, context, false)
 }
-/// A city map develops as a region does, with a city growth pass after each round's people
-/// pass: growth reads where people, ways and centres stand, and the next round's refinement
-/// reads what growth changed.
+/// A city round's own steps after its people pass: growth and walls, the hot spots' towns
+/// founded and advanced by a few town development rounds, and the prominent places they built.
+fn city_round(occurrence: &str, round: usize) -> Sequence {
+    let mut body = vec![
+        invocation(
+            "refinement.city-growth",
+            occurrence,
+            Values::from_iter([("round".into(), round.into())]),
+        ),
+        invocation("refinement.city-spots", occurrence, Values::new()),
+    ];
+    // The town steps' occurrences stay outside `town/`, so they make no town previews.
+    for town_round in 0..super::city::spots::TOWN_ROUNDS {
+        let path = format!("{occurrence}/hot-spot-town-{town_round}");
+        for id in crate::processes::town::operation_ids() {
+            body.push(invocation(id, &path, Values::new()));
+        }
+    }
+    body.push(invocation(
+        "refinement.city-places",
+        occurrence,
+        Values::new(),
+    ));
+    body
+}
+/// A city map develops as a region does, with its city steps after each round's people pass:
+/// growth, walls and the hot spots' towns read where people, ways and centres stand, and the
+/// next round's refinement reads what they changed.
 pub fn city(catalogue: &Catalogue, context: &Context<'_>) -> io::Result<Sequence> {
     rounds(catalogue, context, true)
 }
@@ -137,11 +162,7 @@ fn rounds(catalogue: &Catalogue, context: &Context<'_>, city: bool) -> io::Resul
             Values::from_iter([("people".into(), society.into())]),
         ));
         if city {
-            body.push(invocation(
-                "refinement.city-growth",
-                &occurrence,
-                Values::from_iter([("round".into(), round.into())]),
-            ));
+            body.extend(city_round(&occurrence, round));
         }
         body.extend(group(
             "water.routing",
@@ -215,4 +236,58 @@ pub fn real_scale(
         body.push(invoke(id, Values::new()));
     }
     Ok(body)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::atlas::features::{Selected, Selection};
+
+    #[test]
+    fn every_city_round_runs_growth_then_its_hot_spot_towns_then_records_their_places() {
+        let catalogue = Catalogue::default();
+        let selection = Selection::from([(
+            "built.layout".into(),
+            Selected {
+                enabled: true,
+                ..Default::default()
+            },
+        )]);
+        let context = Context {
+            selection: &selection,
+            policy: Policy::Regional,
+            refinement: true,
+            landmarks_apply: false,
+            standalone_magic: false,
+            initial: false,
+            material: false,
+            process: None,
+        };
+        let ids: Vec<String> = city(&catalogue, &context)
+            .unwrap()
+            .iter()
+            .filter_map(|node| match node {
+                SequenceNode::Process { id, .. } => Some(id.clone()),
+                _ => None,
+            })
+            .collect();
+        let at = |id: &str| ids.iter().position(|i| i == id).unwrap();
+        for round in 1..=DEVELOPMENT_EXPOSURE.len() {
+            let r = format!("round-{round}");
+            let growth = at(&format!("{r}/refinement.city-growth"));
+            let spots = at(&format!("{r}/refinement.city-spots"));
+            let built = at(&format!("{r}/hot-spot-town-0/town.construction"));
+            let places = at(&format!("{r}/refinement.city-places"));
+            assert!(growth < spots && spots < built && built < places);
+            // The next round's refinement reads what the round's towns did.
+            if round < DEVELOPMENT_EXPOSURE.len() {
+                assert!(places < at(&format!("round-{}/refinement.round", round + 1)));
+            }
+        }
+        // Districts are cut once, after the last round's places.
+        let last = DEVELOPMENT_EXPOSURE.len();
+        assert!(at(&format!("round-{last}/refinement.city-places")) < at("refinement.city-plan"));
+        // No town step runs under `town/`, so a city map makes no town previews.
+        assert!(ids.iter().all(|id| !id.starts_with("town/")));
+    }
 }

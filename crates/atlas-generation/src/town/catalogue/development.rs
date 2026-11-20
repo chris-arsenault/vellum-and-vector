@@ -4,6 +4,8 @@ use crate::town::geometry::Point;
 use crate::town::influence::Conditions;
 
 pub struct HousingSite {
+    /// The scale of the town the site belongs to, which its offers read lengths through.
+    pub scale: crate::town::scale::TownScale,
     pub conditions: Conditions,
     pub distance_from_seat: f64,
     pub trade_demand: f64,

@@ -5,6 +5,7 @@ use crate::town::{
     geometry::{add, angle, at, distance, heading, left, scale, Point},
     ground::{Ground, FIRST_STREET},
     network::{main_street, Arm, Class, Street},
+    scale::TownScale,
     story::Size,
 };
 use atlas_map::{Geometry, Position};
@@ -31,13 +32,25 @@ fn to_edge(start: Point, direction: Point, ground: &Ground) -> f64 {
         .fold(f64::INFINITY, f64::min)
 }
 
-fn crossing(
+/// Where a crossing runs and how it is laid: from a junction along a heading, in a place of
+/// `size` at `scale`, its street giving way to a country road over `core` metres.
+#[derive(Clone, Copy)]
+struct Course {
     start: Point,
     direction: Point,
     size: Size,
+    scale: TownScale,
     core: f64,
-    ground: &Ground,
-) -> Option<Street> {
+}
+
+fn crossing(course: Course, ground: &Ground) -> Option<Street> {
+    let Course {
+        start,
+        direction,
+        size,
+        scale: town_scale,
+        core,
+    } = course;
     let reach = to_edge(start, direction, ground);
     if reach < core {
         return None;
@@ -46,15 +59,18 @@ fn crossing(
         points: vec![start, add(start, scale(direction, reach))],
         destination: None,
     };
-    let mut street = main_street(&arm, reach, size, ground)?;
+    let mut street = main_street(&arm, reach, size, ground, town_scale)?;
     if street.length() < core {
         return None;
     }
     street.class = Class::Street;
+    let (urban, rural) = (
+        town_scale.street_width(Class::Street, size),
+        town_scale.street_width(Class::Road, size),
+    );
     for (point, width) in street.points.iter().zip(&mut street.widths) {
         let rural_share = (distance(start, *point) / core).min(1.);
-        *width =
-            Class::Street.width(size) * (1. - rural_share) + Class::Road.width(size) * rural_share;
+        *width = urban * (1. - rural_share) + rural * rural_share;
     }
     Some(street)
 }
@@ -70,7 +86,8 @@ pub(super) fn establish(
         trace.event(|| serde_json::json!({"stage":"crossing","result":"size or effort below threshold","effort":town.access_effort}));
         return Ok(());
     }
-    let depth = atlas_map::town::plot_size(size).1;
+    let town_scale = town.scale();
+    let depth = town.plot().1;
     let core = depth * 5.;
     let trunks: Vec<_> = town
         .streets()
@@ -91,7 +108,19 @@ pub(super) fn establish(
             trace.event(|| serde_json::json!({"stage":"crossing","result":"insufficient occupied trunk","available":available,"required":depth*3.}));
             continue;
         }
-        let ways = select_crossing(&trunk, available, core, size, town.streets(), context)?;
+        let ways = select_crossing(
+            &trunk,
+            available,
+            Course {
+                start: [0.; 2],
+                direction: [0.; 2],
+                size,
+                scale: town_scale,
+                core,
+            },
+            town.streets(),
+            context,
+        )?;
         trace.event(|| serde_json::json!({"stage":"crossing","directions":ways.len()}));
         for way in ways {
             let arm = Arm {
@@ -102,13 +131,16 @@ pub(super) fn establish(
             if reach < depth {
                 continue;
             }
-            let Some(mut street) = main_street(&arm, reach, size, context.ground) else {
+            let Some(mut street) = main_street(&arm, reach, size, context.ground, town_scale)
+            else {
                 continue;
             };
             street.class = Class::Street;
             street.through_route &= street.length() + context.ground.cell
                 >= crate::town::geometry::line_length(&arm.points);
-            street.widths.fill(Class::Street.width(size));
+            street
+                .widths
+                .fill(town_scale.street_width(Class::Street, size));
             if let EditOutcome::Route(id) = town.apply(
                 FabricEdit::Connect {
                     street: street.clone(),
@@ -130,14 +162,16 @@ pub(super) fn establish(
     Ok(())
 }
 
+/// The best crossing of the trunk's occupied length, laid as `laid` lays one; its start and
+/// direction are each junction's own.
 fn select_crossing(
     trunk: &Street,
     available: f64,
-    core: f64,
-    size: Size,
+    laid: Course,
     existing: &[Street],
     context: &Frontage<'_>,
 ) -> io::Result<Vec<Street>> {
+    let core = laid.core;
     let roads: Vec<_> = existing.iter().map(|s| line(&s.points)).collect();
     let index = context.spatial.index(&roads).map_err(io::Error::other)?;
     let mut best = None;
@@ -158,10 +192,12 @@ fn select_crossing(
             let mut gain = 0.;
             for sign in [-1., 1.] {
                 let Some(street) = crossing(
-                    junction,
-                    scale(normal, sign),
-                    size,
-                    core * 0.65,
+                    Course {
+                        start: junction,
+                        direction: scale(normal, sign),
+                        core: core * 0.65,
+                        ..laid
+                    },
                     context.ground,
                 ) else {
                     continue;
@@ -197,7 +233,14 @@ mod tests {
     #[test]
     fn cross_street_reaches_the_frame_at_country_road_width() {
         let ground = Ground::new([0., 0., 600., 400.], 1.);
-        let street = crossing([150., 125.], [0., 1.], Size::Town, 100., &ground).unwrap();
+        let course = Course {
+            start: [150., 125.],
+            direction: [0., 1.],
+            size: Size::Town,
+            scale: TownScale::default(),
+            core: 100.,
+        };
+        let street = crossing(course, &ground).unwrap();
         assert!(street.destination.is_none());
         assert!(street.through_route);
         assert_eq!(

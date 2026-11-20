@@ -28,7 +28,18 @@ pub fn capture(
             let settlement = records.get(city.settlement)?.ok_or_else(|| {
                 io::Error::other("A city map opens at one of the parent map's settlements")
             })?;
-            let outline = atlas_generation::town::city::surroundings(&settlement)?;
+            // A city near its parent's edge keeps the part of its surroundings the parent holds.
+            let ring = atlas_generation::town::city::surroundings(&settlement)?;
+            let parent = atlas_map::regions::as_geometry(&selection.parent.footprint);
+            let outline = spatial
+                .overlay(
+                    &ring,
+                    &parent,
+                    atlas_generation::spatial::Overlay::Intersection,
+                )
+                .map_err(io::Error::other)?
+                .and_then(atlas_map::regions::polygon)
+                .ok_or_else(|| io::Error::other("The city's surroundings lie outside its map"))?;
             surrounded = atlas_map::RegionSelection {
                 geometry: serde_json::from_value(serde_json::to_value(outline)?)?,
                 region_path: Vec::new(),

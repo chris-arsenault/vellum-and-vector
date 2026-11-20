@@ -311,6 +311,7 @@ fn capture_layout_depends_on_footprint_not_map_profile() {
                 domain: rectangle.clone(),
                 domain_bounds: bounds,
                 footprint: shape.clone(),
+                outline: None,
                 cylindrical: false,
                 has_boundary: false,
                 precision: 1e-6,

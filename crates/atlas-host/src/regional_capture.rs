@@ -209,7 +209,8 @@ impl Selection<'_> {
             area["map"]["realScale"] = serde_json::to_value(real)?;
         }
         if let Some(city) = &self.city {
-            area["map"]["city"] = json!({"settlement": city.settlement});
+            // The city map reads its settlement by the identity its captured record takes.
+            area["map"]["city"] = json!({"settlement": region.id("feature", city.settlement)});
         }
         let owners = geography
             .context()

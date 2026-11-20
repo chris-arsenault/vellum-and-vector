@@ -17,6 +17,20 @@ pub fn generation_budget() -> io::Result<Arc<MemoryBudget>> {
     }
     Ok(MemoryBudget::new(bytes))
 }
+/// This process's resident memory now and at its peak, in GiB, for the host's log events: a
+/// server the system kills for memory leaves no message, so its last events carry the trail.
+pub fn resident() -> serde_json::Value {
+    let status = fs::read_to_string("/proc/self/status").unwrap_or_default();
+    let gib = |key: &str| {
+        status
+            .lines()
+            .find_map(|line| line.strip_prefix(key))
+            .and_then(|value| value.split_whitespace().next())
+            .and_then(|kib| kib.parse::<f64>().ok())
+            .map(|kib| (kib / 1_048_576. * 10.).round() / 10.)
+    };
+    serde_json::json!({"residentGiB": gib("VmRSS:"), "peakGiB": gib("VmHWM:")})
+}
 fn available() -> io::Result<usize> {
     let info = fs::read_to_string("/proc/meminfo").map_err(|error| {
         io::Error::other(format!(
