@@ -14,7 +14,7 @@ import { FinishedMapLibrary } from "./FinishedMapLibrary";
 import { FinishedGeneration } from "./FinishedGeneration";
 import { LoreEncyclopedia } from "./LoreEncyclopedia";
 import { ErrorMessage } from "./ErrorMessage";
-import type { GenerationStatus, RealScaleChoice } from "@atlas/context";
+import type { CityChoice, GenerationStatus, RealScaleChoice } from "@atlas/context";
 import { realScaleFrame } from "./realScale";
 import { Brand } from "./Brand";
 import {
@@ -194,7 +194,8 @@ function useGenerationSetup(
     selection: RegionSelection,
     name: string,
     child?: MapRef,
-    realScale?: RealScaleChoice
+    realScale?: RealScaleChoice,
+    city?: CityChoice
   ) => {
     try {
       if (child) {
@@ -207,6 +208,7 @@ function useGenerationSetup(
         selection,
         configuration: { ...draft, name, ...size },
         ...(realScale ? { realScale } : {}),
+        ...(city ? { city } : {}),
       });
       jobs.start(status, { selection, creates: true });
     } catch (error) {
@@ -288,8 +290,8 @@ function AtlasContent({ state }: { state: ReturnType<typeof useAtlas> }) {
       create={() => void state.create()}
       lore={() => state.setLore(true)}
       library={() => state.setLibrary(true)}
-      refine={(selection, name, child, realScale) =>
-        void state.refine(selection, name, child, realScale)
+      refine={(selection, name, child, realScale, city) =>
+        void state.refine(selection, name, child, realScale, city)
       }
       regenerate={() => void state.regenerate()}
     />

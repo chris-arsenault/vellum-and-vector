@@ -160,6 +160,9 @@ async function checkRegistry(page: import("./uiTest").Page) {
   await registry.getByRole("button", { name: "Add attribute filter", exact: true }).click();
   await expect(registry.locator("tbody tr")).toHaveCount(1);
   await registry.getByLabel("Show River town on map").click();
+  const selection = page.getByRole("complementary", { name: "Selection properties" });
+  await expect(selection.getByRole("button", { name: "Generate city map" })).toBeInViewport();
+  await expect(selection.getByLabel("Map name", { exact: true })).toHaveValue("River town");
   await expect(page.getByTitle("200 settlement residents", { exact: true })).toBeVisible();
   await expect(page.getByTitle("800 rural residents", { exact: true })).toBeVisible();
   await expect(

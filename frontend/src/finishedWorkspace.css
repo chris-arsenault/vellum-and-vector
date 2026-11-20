@@ -144,6 +144,25 @@
   grid-row: 5;
   grid-column: 3;
 }
+.city-refinement-action {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  flex: 0 0 auto;
+  padding: 12px 0;
+  background: inherit;
+  border-bottom: 1px solid #43534c;
+}
+.city-refinement-action label {
+  display: grid;
+  gap: 4px;
+}
+.city-refinement-action input {
+  min-width: 0;
+}
+.city-refinement-action .primary {
+  margin: 8px 0 0;
+}
 .finished-atlas .authoring-panel {
   overflow: auto;
   padding: 12px;

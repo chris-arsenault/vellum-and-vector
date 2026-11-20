@@ -31,11 +31,12 @@ import type { PublishedPresentation } from "./PublishedMapView";
 import { ErrorMessage } from "./ErrorMessage";
 import { RealScaleControls } from "./RealScaleControls";
 import { RealScaleOpen } from "./RealScaleOpen";
+import { CityOpen } from "./CityOpen";
 import { defaultRealScalePresentation, shownSpace } from "./realScale";
 import { RealScaleEditor } from "./RealScaleEditor";
 import { StructureProvider, useStructureServices } from "./structureServices";
 import { useRealScaleAuthoring, type AuthoringSession } from "./useRealScaleAuthoring";
-import type { RealScaleChoice } from "@atlas/context";
+import type { CityChoice, RealScaleChoice } from "@atlas/context";
 import "./mapSettings.css";
 import "./finishedWorkspace.css";
 
@@ -51,7 +52,8 @@ interface Props {
     selection: RegionSelection,
     name: string,
     child?: MapRef,
-    realScale?: RealScaleChoice
+    realScale?: RealScaleChoice,
+    city?: CityChoice
   ): void;
   regenerate(): void;
 }
@@ -351,6 +353,16 @@ function FinishedInspection({ model }: { model: Model }) {
       >
         Close inspection
       </button>
+      {selected && map.state === "complete" && (
+        <CityOpen
+          key={selected.id}
+          map={map}
+          feature={selected}
+          open={(selection, name, realScale, city) =>
+            props.refine(selection, name, undefined, realScale, city)
+          }
+        />
+      )}
       <PublishedCellInspection map={map} inspection={inspection} />
       {inspection && map.state === "complete" && (
         <RealScaleOpen
