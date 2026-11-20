@@ -1,15 +1,67 @@
 import type { PublishedTool } from "./publishedInteractions";
 
-const tools: { id: PublishedTool; label: string; title: string }[] = [
-  { id: "pan", label: "Pan", title: "Drag the map" },
-  { id: "inspect", label: "Select feature", title: "Click a feature to select and inspect it" },
-  { id: "region-pick", label: "Select boundary", title: "Click inside a geographic boundary" },
-  { id: "region-outline", label: "Polygon", title: "Click vertices; double-click to finish" },
-  { id: "region-lasso", label: "Lasso", title: "Drag a freehand selection" },
-  { id: "region-cut", label: "Dividing line", title: "Draw a line, then click the side to select" },
-  { id: "inspect-cell", label: "Inspect place", title: "Inspect geographic values at a point" },
+interface ToolButton {
+  id: PublishedTool;
+  label: string;
+  title: string;
+}
+const lookTools: ToolButton[] = [
+  { id: "pan", label: "Pan", title: "Drag to move the map" },
+  {
+    id: "inspect",
+    label: "Inspect",
+    title: "Click the map to list the features and stored values at that point",
+  },
+];
+const regionTools: ToolButton[] = [
+  {
+    id: "region-pick",
+    label: "Click boundary",
+    title:
+      "Click inside a mapped boundary, such as a coast or territory, to select it. Shift+drag a line across the boundary first to select just one side.",
+  },
+  {
+    id: "region-outline",
+    label: "Draw polygon",
+    title: "Click each corner; double-click or press Enter to finish",
+  },
+  {
+    id: "region-lasso",
+    label: "Draw freehand",
+    title: "Press and drag around the area you want",
+  },
 ];
 
+function ToolGroup({
+  label,
+  tools,
+  tool,
+  setTool,
+  enabled = true,
+}: {
+  label: string;
+  tools: ToolButton[];
+  tool: PublishedTool;
+  setTool(tool: PublishedTool): void;
+  enabled?: boolean;
+}) {
+  return (
+    <div className="tool-group" role="group" aria-label={label}>
+      <span>{label}</span>
+      {tools.map(({ id, label, title }) => (
+        <button
+          key={id}
+          title={title}
+          aria-pressed={tool === id}
+          disabled={!enabled}
+          onClick={() => setTool(id)}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
 // owner-direction(2026-11-17): selection types are tools in a toolbar; select first, then act
 export function PublishedSelectionToolbar({
   tool,
@@ -27,19 +79,15 @@ export function PublishedSelectionToolbar({
   realScale?: boolean;
 }) {
   return (
-    <nav className="selection-toolbar" aria-label="Selection tools">
-      <span>Selection</span>
-      {tools.map(({ id, label, title }) => (
-        <button
-          key={id}
-          title={title}
-          aria-pressed={tool === id}
-          disabled={id.startsWith("region-") && !enabled}
-          onClick={() => setTool(id)}
-        >
-          {label}
-        </button>
-      ))}
+    <nav className="selection-toolbar" aria-label="Map toolbar">
+      <ToolGroup label="View" tools={lookTools} tool={tool} setTool={setTool} />
+      <ToolGroup
+        label="Select a region by"
+        tools={regionTools}
+        tool={tool}
+        setTool={setTool}
+        enabled={enabled}
+      />
       <button disabled={!selected} onClick={clear}>
         Clear selection
       </button>

@@ -117,7 +117,7 @@ async function checkControls(page: import("./uiTest").Page) {
 }
 async function checkNavigation(page: import("./uiTest").Page) {
   const regions = page.getByRole("region", { name: "Map regions", exact: true });
-  await page.getByRole("button", { name: "Select boundary", exact: true }).click();
+  await page.getByRole("button", { name: "Click boundary", exact: true }).click();
   await page
     .getByRole("application", { name: "World map canvas" })
     .click({ position: { x: 256, y: 256 } });

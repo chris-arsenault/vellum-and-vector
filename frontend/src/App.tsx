@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { viewedChrome } from "./carriedPresentation";
 import { v4 as uuid } from "uuid";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { AtlasContext } from "@atlas/context";
@@ -278,6 +279,8 @@ function Atlas({ context }: { context: FinishedContext }) {
 }
 function AtlasContent({ state }: { state: ReturnType<typeof useAtlas> }) {
   const { setup, map, opened, context } = state;
+  // What the viewer chose to show, handed to whichever map opens next.
+  const [viewed] = useState(viewedChrome);
   if (setup && !setup.parent) return <AtlasSetup state={state} />;
   if (!map.data || !opened) return <AtlasWelcome state={state} />;
   return (
@@ -286,6 +289,7 @@ function AtlasContent({ state }: { state: ReturnType<typeof useAtlas> }) {
       context={context}
       map={map.data}
       saved={opened.saved}
+      viewed={viewed}
       open={state.open}
       create={() => void state.create()}
       lore={() => state.setLore(true)}

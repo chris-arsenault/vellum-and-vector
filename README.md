@@ -73,18 +73,25 @@ The editor's right sidebar follows this workflow:
 World setup, manual authoring and library workspaces are outside this sidebar.
 Boundary tools appear during outline selection. Refinement opens a modal over the
 map with only editable settings. **Saved maps** (browser) or **Server maps** (backend)
-also lists the host's generation jobs, including server jobs started on another device.
+lists worlds and the regions refined from them as a one-line-per-map tree. A map's
+generation shows on its row; running, stopped or failed generations sit under the map
+they refine, including server jobs started on another device. Deleting asks for
+confirmation in a modal over the library.
 
-Click a feature to read its
+The toolbar has three groups. **View** holds **Pan** and **Inspect**. With **Inspect**,
+click the map and a menu lists every feature at that point plus **Numerical substrate**;
+choosing one shows only that item in the right-hand pane. A feature shows its
 properties, origin and relationships; settlements also show their residents and
 the peoples among them, their country and its use, their realm, their history
-through the eras and where their ways lead. **Inspect** returns to feature selection.
-**Registry** searches the open map's published geography.
+through the eras and where their ways lead. The numerical substrate explains the place:
+the map colour and its class, the biome and any magic system behind it, with the stored
+values of each cell size folded underneath. **Registry** searches the open map's
+published geography.
 
-**Inspect place** explains a clicked place: the map colour and its class,
-the biome and any magic system behind it, and the mapped features that cover the
-place, each with its causes. The stored values of each cell size stay folded
-underneath.
+**Select a region by** holds the ways to outline a region: **Click boundary**, **Draw
+polygon** and **Draw freehand**. In **Click boundary**, Shift+drag a line across a
+boundary to split it, then click the part on the side you want. Real-scale maps add
+**Map tools** (**Measure**, **Edit map**).
 
 Choose **Regions** to explore a smaller geographic subject. Use an existing
 boundary, trace a custom outline, or combine a dividing line with rivers, shores
@@ -100,7 +107,7 @@ does not generate detail. Regions can nest to any useful geographic depth, witho
 fixed ranks or changing into city, site or interior map types. Use the breadcrumbs
 and region hierarchy to move between them.
 
-Double-click or press Enter to finish an outline or dividing line. Escape cancels
+Double-click or press Enter to finish a polygon outline. Escape cancels
 the unfinished selection. Hold Space to pan, or choose **Pan** for drag navigation.
 Manual feature editing, drawing, field painting, templates and undo are deferred for
 World and Region maps; their implementations remain in the repository for a later design.
@@ -217,8 +224,8 @@ inputs remain on the same host for later refinement; viewing reads only the publ
 Browser saves belong to this browser and site origin; clearing site data removes them.
 Closing the tab stops browser generation. Server maps are shared by home devices,
 and server jobs continue when a browser disconnects or closes progress. Find ongoing
-jobs in **Server maps → Server generation jobs** and completed maps in the library.
-Completed jobs also offer **Open map**. **Cancel generation** stops a running job.
+jobs and completed maps in the **Server maps** tree. **Cancel generation** stops a
+running job.
 Server logs include start, stop, elapsed duration and completed epoch durations.
 Stopping the backend ends running jobs; there is no generation recovery. GIS and
 map-image exports download local files.
@@ -356,8 +363,8 @@ Serve it directly: a replacement HTML shell would discard its execution-host mar
 The public frontend declares no application API, database or Cognito client.
 
 Generation logs its inputs and elapsed stage messages to the browser console,
-including validation, worker transfer and publication. **Generation jobs** shows
-the current stage; failed jobs retain that stage and the error.
+including validation, worker transfer and publication. The map library shows
+the current stage of each generation; failed jobs retain that stage and the error.
 
 The project registration in `ahara-infra` provisions the standard deployer role
 and repository Actions secrets (`OIDC_ROLE`, `STATE_BUCKET`, `PREFIX`). Deploy

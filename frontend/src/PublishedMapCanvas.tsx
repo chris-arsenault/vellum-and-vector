@@ -21,7 +21,7 @@ interface Props {
   tool: PublishedTool;
   selection: RegionSelection | null;
   highlight?: Geometry;
-  onInspection(value: Inspection): void;
+  onInspection(value: Inspection, at: { x: number; y: number }): void;
   regionEvents: PublishedRegionEvents;
   onEngine(value: PublishedMapEngine | null): void;
   /** The edit session of a real-scale map; world and regional maps have none. */
@@ -143,12 +143,11 @@ function useMeasure(
 }
 const instructions: Record<PublishedTool, string> = {
   pan: "Drag to pan",
-  inspect: "Click a feature to inspect it",
-  "inspect-cell": "Click to inspect this place",
-  "region-pick": "Click inside a geographic or territorial boundary",
-  "region-outline": "Draw a region; double-click or press Enter to finish",
-  "region-lasso": "Drag around an area to select it",
-  "region-cut": "Draw a dividing line; double-click to finish",
+  inspect: "Click the map to list what is there",
+  "inspect-cell": "Click the map to list what is there",
+  "region-pick": "Click inside a boundary to select it · Shift+drag a line to split it first",
+  "region-outline": "Click each corner; double-click or press Enter to finish",
+  "region-lasso": "Press and drag around the area you want",
   "region-edit": "Drag outline vertices to adjust the boundary",
   measure: "Click points to measure; double-click to finish",
   edit: "Click a shape to select it; drag to move; Ctrl+K lists commands",

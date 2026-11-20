@@ -5,11 +5,10 @@ import {
   type Inspection,
   type InspectionSection,
   type MapDescriptor,
-  type MapFeature,
   type MapSample,
 } from "@atlas/map";
 import { Facts } from "./InspectionSurface";
-import { inspectionFact as fact, inspectionWords as words } from "./inspectionText";
+import { inspectionFact as fact } from "./inspectionText";
 import "./cellInspection.css";
 
 export function PublishedCellInspection({
@@ -37,17 +36,8 @@ function PublishedCellResult({ map, data }: { map: MapDescriptor; data: Inspecti
       <p>
         Clicked {(data.position[0] * factor).toFixed(2)}, {(data.position[1] * factor).toFixed(2)} m
       </p>
-      {!data.values.length && !data.features.length && (
-        <p>No stored map facts at this position on this map.</p>
-      )}
+      {!data.values.length && <p>No stored map facts at this position on this map.</p>}
       <SurfaceExplanation map={map} data={data} />
-      <section className="cell-features">
-        <h3>Here ({data.features.length})</h3>
-        {!data.features.length && <p>No mapped feature covers or passes through this cell.</p>}
-        {data.features.map((feature) => (
-          <PublishedFeatureCard key={feature.id} map={map} feature={feature} />
-        ))}
-      </section>
       {sections.map((section) => (
         <PublishedFactsTable key={section.id} section={section} />
       ))}
@@ -117,41 +107,6 @@ function SurfaceExplanation({ map, data }: { map: MapDescriptor; data: Inspectio
         })}
       </ul>
     </section>
-  );
-}
-function PublishedFeatureCard({ map, feature }: { map: MapDescriptor; feature: MapFeature }) {
-  const attributes = Object.entries(feature.attributes).filter(([, value]) =>
-    ["number", "boolean", "string"].includes(typeof value)
-  );
-  const shape = feature.geometry.type.includes("Point")
-    ? "on this cell"
-    : feature.geometry.type.includes("Line")
-      ? "through this cell"
-      : "covers this cell";
-  return (
-    <article className="cell-feature">
-      <h4>{feature.name}</h4>
-      <p className="eyebrow">
-        {words(feature.kind)} ·{" "}
-        {map.layers.find((layer) => layer.id === feature.layerId)?.name ?? feature.layerId} ·{" "}
-        {shape}
-      </p>
-      {!!attributes.length && (
-        <Facts
-          items={attributes.map(([key, value]) => [
-            words(key),
-            typeof value === "string" ? words(value) : fact(value),
-          ])}
-        />
-      )}
-      {!!feature.causes.length && (
-        <ul className="cell-causes">
-          {feature.causes.map((cause, index) => (
-            <li key={index}>{cause}</li>
-          ))}
-        </ul>
-      )}
-    </article>
   );
 }
 export function PublishedFactsTable({ section }: { section: InspectionSection }) {

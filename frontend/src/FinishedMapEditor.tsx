@@ -10,26 +10,21 @@ import type {
 import { FinishedMapBar } from "./FinishedMapBar";
 import { PublishedSelectionToolbar } from "./PublishedSelectionToolbar";
 import { MapSelectionMenu } from "./MapSelectionMenu";
+import { FinishedControls } from "./FinishedControls";
+import type { ViewedChrome } from "./carriedPresentation";
+import { useViewedChrome } from "./useViewedChrome";
+import { PointPickMenu } from "./PointPickMenu";
+import { usePointPick } from "./usePointPick";
 import type { AtlasContext } from "@atlas/context";
 import { Brand } from "./Brand";
 import { PublishedMapCanvas } from "./PublishedMapCanvas";
-import { PublishedAppearance } from "./PublishedAppearance";
-import { PublishedLayerPanel } from "./PublishedLayerPanel";
-import { PublishedSheetPanel } from "./PublishedSheetPanel";
 import { PublishedCellInspection } from "./PublishedCellInspection";
-import { PublishedRegistry } from "./PublishedRegistry";
 import { PublishedFeatureInformation } from "./PublishedFeatureInformation";
-import { PublishedRegionsPanel } from "./PublishedRegionsPanel";
-import { PublishedMapViews } from "./PublishedMapViews";
 import { usePublishedNavigation } from "./usePublishedNavigation";
 import { usePublishedRegions, usePublishedRegionPresentation } from "./usePublishedRegions";
-import { initialPublishedPresentation } from "./publishedStyling";
 import { publishedFeature, type PublishedFeature } from "./publishedAppearance";
-import { FinishedHistory, RelatedMaps } from "./FinishedMapPanels";
 import type { PublishedTool } from "./publishedInteractions";
-import type { PublishedPresentation } from "./PublishedMapView";
 import { ErrorMessage } from "./ErrorMessage";
-import { RealScaleControls } from "./RealScaleControls";
 import { RealScaleOpen } from "./RealScaleOpen";
 import { CityOpen } from "./CityOpen";
 import { defaultRealScalePresentation, shownSpace } from "./realScale";
@@ -41,9 +36,14 @@ import "./mapSettings.css";
 import "./finishedWorkspace.css";
 
 interface Props {
-  context: Pick<AtlasContext<unknown>, "maps" | "library" | "navigation" | "editing" | "mode">;
+  context: Pick<
+    AtlasContext<unknown>,
+    "maps" | "library" | "navigation" | "editing" | "mode" | "contexts"
+  >;
   map: MapDescriptor;
   saved?: SavedMapDocument;
+  /** The presentation of the map viewed before this one; layer choices carry over. */
+  viewed?: ViewedChrome;
   open(reference: MapRef): void;
   create(): void;
   lore(): void;
@@ -60,16 +60,10 @@ interface Props {
 // owner-direction(2026-11-14): presentation reads only GIS map storage, never numerical generation storage.
 function useFinishedMap(props: Props) {
   const { map, context } = props;
-  const [appearance, change] = useState(
-    () =>
-      (props.saved?.reference.revision === map.reference.revision
-        ? (props.saved.settings.presentation as unknown as PublishedPresentation)
-        : undefined) ?? initialPublishedPresentation(map)
-  );
+  const chrome = useViewedChrome(map, props.saved, props.viewed);
+  const { appearance, change, tool, setRegionTool, panel, showPanel } = chrome;
   const [inspection, setInspection] = useState<Inspection | null>(null);
   const [selected, select] = useState<PublishedFeature | null>(null);
-  const [tool, setRegionTool] = useState<PublishedTool>("inspect");
-  const [panel, showPanel] = useState("regions");
   const navigation = usePublishedNavigation(map, context.navigation);
   const regions = usePublishedRegions({
     map,
@@ -92,11 +86,11 @@ function useFinishedMap(props: Props) {
   const value = usePublishedRegionPresentation(appearance, regions);
   const selection = finishedSelection(map, regions, selected);
   const [error, setError] = useState<unknown>(null);
-  const inspect = (next: Inspection) => {
+  const point = usePointPick((feature, cell) => {
     regions.select(null);
-    setInspection(next);
-    select(next.features[0] ? publishedFeature(next.features[0]) : null);
-  };
+    setInspection(cell);
+    select(feature && publishedFeature(feature));
+  });
   const refine = (region: MapRegion) =>
     props.refine(regionSelection(map, region, regions), region.name, region.child ?? undefined);
   return {
@@ -110,7 +104,7 @@ function useFinishedMap(props: Props) {
       selection,
       error,
       setError,
-      inspect,
+      point,
       refine,
       clear,
     },
@@ -226,7 +220,7 @@ function FinishedHeader({ model }: { model: Model }) {
         <button onClick={props.lore}>Lore</button>
       </header>
       <nav className="map-navigation" aria-label="Workspace panels">
-        {["regions", "appearance", "layers", "views", "registry", "history"].map((id) => (
+        {["maps", "regions", "appearance", "layers", "views", "registry", "history"].map((id) => (
           <button
             key={id}
             aria-expanded={panel === id}
@@ -241,7 +235,7 @@ function FinishedHeader({ model }: { model: Model }) {
   );
 }
 function FinishedCanvas({ model, authoring }: { model: Model; authoring: AuthoringSession }) {
-  const { map, context, value, tool, selection, inspect, regions, error } = model;
+  const { map, context, value, tool, selection, regions, error } = model;
   return (
     <main className="map-workspace">
       <MapSelectionMenu
@@ -263,77 +257,20 @@ function FinishedCanvas({ model, authoring }: { model: Model; authoring: Authori
           tool={tool}
           selection={selection}
           highlight={model.selected?.footprint ?? model.selected?.geometry}
-          onInspection={inspect}
+          onInspection={model.point.inspect}
           regionEvents={regions}
           onEngine={() => {}}
           authoring={map.realScale ? authoring : undefined}
         />
       </MapSelectionMenu>
+      <PointPickMenu
+        map={map}
+        pick={model.point.pick}
+        choose={model.point.choose}
+        cancel={model.point.cancel}
+      />
       <ErrorMessage error={error} />
     </main>
-  );
-}
-function FinishedControls({ model }: { model: Model }) {
-  const { map, context, value, change, navigation, regions, panel, setPanel } = model;
-  return (
-    <aside className="map-drawer" id="map-drawer" aria-label="Map controls">
-      <div className="drawer-heading">
-        <h2>{panel[0].toUpperCase() + panel.slice(1)}</h2>
-        <button aria-label="Close panel" onClick={() => setPanel("")}>
-          ×
-        </button>
-      </div>
-      <div className="finished-panel-content">
-        {panel === "regions" && (
-          <>
-            <PublishedRegionsPanel
-              map={map}
-              regions={regions}
-              saved={navigation}
-              refine={model.refine}
-              refineSelection={model.refineSelection}
-            />
-            <RelatedMaps {...model.props} />
-          </>
-        )}
-        {panel === "appearance" && (
-          <>
-            <RealScaleControls map={map} reader={context.maps} value={value} change={change} />
-            <PublishedAppearance map={map} reader={context.maps} value={value} change={change} />
-            {value.drawing.mode === "drawn" && (
-              <PublishedSheetPanel map={map} reader={context.maps} value={value} change={change} />
-            )}
-          </>
-        )}
-        {panel === "layers" && (
-          <PublishedLayerPanel map={map} reader={context.maps} value={value} change={change} />
-        )}
-        {panel === "views" && (
-          <PublishedMapViews
-            map={map}
-            saved={navigation}
-            regionId={regions.id}
-            value={value}
-            open={(view, presentation) => {
-              regions.select(view.regionId);
-              change(presentation);
-            }}
-          />
-        )}
-        {panel === "registry" && (
-          <PublishedRegistry
-            map={map}
-            reader={context.maps}
-            selected={model.selected?.id ?? null}
-            open={(row) => model.select(publishedFeature(row.feature))}
-            hidden={(row) =>
-              value.styles.some((style) => style.layerId === row.feature.layerId && !style.visible)
-            }
-          />
-        )}
-        {panel === "history" && <FinishedHistory context={context} map={map} />}
-      </div>
-    </aside>
   );
 }
 function FinishedInspection({ model }: { model: Model }) {
@@ -363,7 +300,7 @@ function FinishedInspection({ model }: { model: Model }) {
           }
         />
       )}
-      <PublishedCellInspection map={map} inspection={inspection} />
+      {(inspection || !selected) && <PublishedCellInspection map={map} inspection={inspection} />}
       {inspection && map.state === "complete" && (
         <RealScaleOpen
           map={map}

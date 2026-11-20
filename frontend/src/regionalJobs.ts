@@ -129,6 +129,7 @@ export async function attachChild(
     cache.setQueryData(["map-navigation", selection.parent], next);
   }
   await cache.invalidateQueries({ queryKey: ["related-maps"] });
+  await cache.invalidateQueries({ queryKey: ["stored-contexts"] });
 }
 /** A map's working regions stay in the cache until saved; the store holds only the saved ones. */
 async function workingNavigation(

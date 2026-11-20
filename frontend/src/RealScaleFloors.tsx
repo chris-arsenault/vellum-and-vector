@@ -20,6 +20,7 @@ export function OpenFloors({ feature }: { feature: MapFeature }) {
       const floors = await services.editing.openFloors(services.map.reference, feature.id);
       // The ground map now lists the floors among its children.
       await cache.invalidateQueries({ queryKey: ["related-maps"] });
+      await cache.invalidateQueries({ queryKey: ["stored-contexts"] });
       services.open(floors);
     } catch (failure) {
       setError(failure);

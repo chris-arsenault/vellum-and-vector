@@ -9,6 +9,14 @@ export const fixtureId = (name: string) => v5(name, NIL);
  * (`Id::v5(surface, b"underground")`). */
 export const undergroundSpace = (surface: string) => v5("underground", surface);
 export const canvas = (page: Page) => page.getByRole("application", { name: "World map canvas" });
+/** The Maps panel's tree of worlds and refined maps, opened if it is not already. */
+export async function mapTree(page: Page) {
+  const tab = page
+    .getByRole("navigation", { name: "Workspace panels" })
+    .getByRole("button", { name: "Maps", exact: true });
+  if ((await tab.getAttribute("aria-expanded")) !== "true") await tab.click();
+  return page.getByRole("navigation", { name: "Maps", exact: true });
+}
 export function pageErrors(page: Page) {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
@@ -21,7 +29,7 @@ export async function exportMap(page: Page) {
 }
 export async function chooseOutline(page: Page, name: string) {
   const regions = page.getByRole("region", { name: "Map regions", exact: true });
-  await page.getByRole("button", { name: "Select boundary", exact: true }).click();
+  await page.getByRole("button", { name: "Click boundary", exact: true }).click();
   await canvas(page).click();
   await expect(regions.getByRole("heading", { name: "Selected outline" })).toBeVisible();
   await regions.getByLabel("Region name", { exact: true }).fill(name);

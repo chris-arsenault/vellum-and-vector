@@ -11,10 +11,10 @@
   margin-left: 0;
 }
 .saved-maps-dialog {
-  width: min(540px, calc(100vw - 32px));
+  width: min(820px, calc(100vw - 32px));
   max-height: 80vh;
   overflow: auto;
-  padding: 20px;
+  padding: 12px 16px 16px;
   border: 1px solid #5a6e60;
   border-radius: 8px;
   background: #1b2b2d;
@@ -26,27 +26,145 @@
 .saved-maps-heading {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
 }
 .saved-maps-heading h2 {
+  margin: 0 auto 0 0;
+  font-size: 1.1rem;
+}
+.saved-maps-heading button {
+  padding: 3px 10px;
+}
+.lib-tree {
+  list-style: none;
   margin: 0;
+  padding: 0;
 }
-.saved-map-list {
+.lib-row {
   display: grid;
-  gap: 8px;
+  grid-template-columns: minmax(180px, 300px) 64px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 8px;
+  min-height: 26px;
+  padding: 0 4px;
+  border-radius: 3px;
 }
-.saved-map-list button {
-  display: grid;
-  text-align: left;
+.lib-row:hover {
+  background: #26393b;
+}
+.lib-row button {
+  border: 0;
+  background: transparent;
+  padding: 0 4px;
+  border-radius: 3px;
+  line-height: 22px;
+}
+.lib-row button:hover:not(:disabled) {
+  background: #3a4e4e;
+}
+.lib-lead {
+  display: flex;
+  align-items: center;
   gap: 4px;
+  min-width: 0;
 }
-.context-row {
+.lib-depth-1 {
+  padding-left: 18px;
+}
+.lib-depth-2 {
+  padding-left: 36px;
+}
+.lib-depth-3 {
+  padding-left: 54px;
+}
+.lib-depth-4 {
+  padding-left: 72px;
+}
+.lib-depth-5 {
+  padding-left: 90px;
+}
+.lib-depth-6 {
+  padding-left: 108px;
+}
+.lib-toggle {
+  flex: none;
+  width: 20px;
+  text-align: center;
+  color: #9fb0a5;
+}
+.lib-chevron {
+  display: inline-block;
+  border: 5px solid transparent;
+  border-left-color: currentColor;
+  border-right-width: 0;
+  vertical-align: middle;
+}
+.lib-chevron[data-open="true"] {
+  border: 5px solid transparent;
+  border-top-color: currentColor;
+  border-bottom-width: 0;
+}
+.lib-name {
+  justify-self: start;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.lib-kind {
+  color: #9fb0a5;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+.lib-status {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #b9c4b9;
+  font-size: 0.85rem;
+}
+.lib-status em {
+  font-style: normal;
+  color: #9fb0a5;
+}
+.lib-warning {
+  color: #e0a070;
+  font-weight: 400;
+}
+.lib-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.lib-text {
+  font-size: 0.85rem;
+  color: #ddbe83;
+  white-space: nowrap;
+}
+.lib-icon {
   display: grid;
-  gap: 6px;
-  padding: 10px;
-  border: 1px solid #5a6e60;
-  border-radius: 5px;
-  overflow-wrap: anywhere;
+  place-items: center;
+  width: 24px;
+  height: 22px;
+  padding: 0;
+  color: #b9c4b9;
+}
+.lib-icon:hover:not(:disabled) {
+  color: #e0a070;
+}
+.lib-leftovers {
+  margin-top: 12px;
+  border-top: 1px solid #405050;
+  padding-top: 8px;
+}
+.lib-leftovers summary {
+  cursor: pointer;
+  color: #b9c4b9;
+  margin-bottom: 4px;
 }
 .context-actions {
   display: flex;
@@ -56,13 +174,23 @@
   margin-block: 6px;
 }
 .context-delete {
-  padding: 12px;
-  margin-top: 12px;
+  width: min(420px, calc(100vw - 32px));
+  padding: 16px;
   border: 1px solid #c89b71;
-  border-radius: 5px;
+  border-radius: 6px;
+  background: #1b2b2d;
+  color: #dfdfd4;
 }
-.saved-maps-dialog details {
-  margin-block: 12px;
+.context-delete::backdrop {
+  background: #0006;
+}
+.context-delete label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.context-delete h3 {
+  margin-top: 0;
 }
 @media (max-width: 800px) {
   .app-header {

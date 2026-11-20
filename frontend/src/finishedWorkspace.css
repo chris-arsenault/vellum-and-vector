@@ -193,13 +193,21 @@
 .finished-atlas .region-list button small {
   flex-shrink: 0;
 }
+.finished-atlas .map-tree summary {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+.finished-atlas .map-tree summary button {
+  flex: 1;
+}
 .finished-atlas .region-list [aria-current="location"] {
   background: #dce8d5;
   border-color: #819577;
   font-weight: 600;
 }
-.finished-atlas .region-selection-details,
-.finished-atlas .related-map-list {
+.finished-atlas .region-selection-details {
   border-top: 1px solid #cbd4c5;
   padding-top: 12px;
   margin-top: 12px;
@@ -216,9 +224,20 @@
   color: #273d32;
   border-bottom: 1px solid #bac4b5;
 }
-.selection-toolbar > span {
-  margin-right: 8px;
+.selection-toolbar {
+  gap: 12px;
+}
+.selection-toolbar .tool-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-right: 12px;
+  border-right: 1px solid #bac4b5;
+}
+.selection-toolbar .tool-group > span {
+  margin-right: 4px;
   font-size: 11px;
+  color: #4c6054;
 }
 .real-scale-map-tools {
   display: flex;
@@ -269,6 +288,38 @@
 }
 .selection-context-menu button:hover,
 .selection-context-menu button:focus-visible {
+  background: #dce8d5;
+}
+.point-pick-menu {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  padding: 4px;
+  width: 280px;
+  max-height: 312px;
+  overflow: auto;
+  background: #f8faf5;
+  color: #273d32;
+  border: 1px solid #8d9d85;
+  box-shadow: 0 4px 16px #0003;
+}
+.point-pick-menu:popover-open {
+  display: grid;
+}
+.point-pick-menu button {
+  display: grid;
+  border: 0;
+  border-radius: 0;
+  text-align: left;
+  padding: 6px 10px;
+  background: transparent;
+  color: #273d32;
+}
+.point-pick-menu button small {
+  color: #5d6f62;
+}
+.point-pick-menu button:hover,
+.point-pick-menu button:focus-visible {
   background: #dce8d5;
 }
 @media (max-width: 1000px) {

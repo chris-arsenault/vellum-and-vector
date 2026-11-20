@@ -1,11 +1,13 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { OrphanContext, StoredContext } from "@atlas/context";
 import { ErrorMessage } from "./ErrorMessage";
-import { ContextJobRow, ContextMapRow, DeleteContextPrompt } from "./FinishedContextRows";
+import { DeleteButton, DeleteContextPrompt, NodeView, type TreeState } from "./FinishedContextRows";
+import { buildLibrary, mapKey } from "./libraryTree";
 import { useContextLibrary, type LibraryProps, type LibraryState } from "./useContextLibrary";
 
 // owner-direction(2026-11-15): list worlds, regions, generations, including orphans; weave it into the UI
 export function FinishedMapLibrary(props: LibraryProps) {
-  const state = useContextLibrary(props);
+  const library = useContextLibrary(props);
   const dialog = useRef<HTMLDialogElement>(null);
   const title = props.context.mode === "backend" ? "Server maps" : "Saved maps";
   useEffect(() => {
@@ -17,134 +19,176 @@ export function FinishedMapLibrary(props: LibraryProps) {
     <dialog ref={dialog} className="saved-maps-dialog" aria-label={title} onCancel={props.close}>
       <header className="saved-maps-heading">
         <h2>{title}</h2>
+        <button
+          onClick={() => {
+            void library.inventory.refetch();
+            void library.jobs.refetch();
+          }}
+        >
+          Refresh library
+        </button>
         <button onClick={props.close} aria-label={`Close ${title.toLowerCase()}`}>
           ×
         </button>
       </header>
-      <button
-        onClick={() => {
-          void state.inventory.refetch();
-          void state.jobs.refetch();
-        }}
-      >
-        Refresh library
-      </button>
-      {state.inventory.isPending && <p>Loading maps…</p>}
-      {state.inventory.data && <ContextContents state={state} />}
-      <DeleteContextPrompt state={state} />
+      {library.inventory.isPending && <p>Loading maps…</p>}
+      {library.inventory.data && <LibraryContents library={library} />}
+      <DeleteContextPrompt state={library} />
       <ErrorMessage
         error={
-          state.inventory.error ??
-          state.jobs.error ??
-          state.opening.error ??
-          state.resume.error ??
-          state.remove.error
+          library.inventory.error ??
+          library.jobs.error ??
+          library.opening.error ??
+          library.resume.error ??
+          library.remove.error
         }
       />
     </dialog>
   );
 }
-function ContextContents({ state }: { state: LibraryState }) {
-  const inventory = state.inventory.data!;
-  const current = inventory.maps.filter((map) => map.head || !map.complete);
-  const selected = state.selected;
-  const visible = selected
-    ? current.filter((map) => map.parent?.mapId === selected.reference.mapId)
-    : current.filter((map) => !map.parent);
-  const jobs = state.jobs.data ?? inventory.jobs;
-  const associated = selected
-    ? jobs.filter(
-        (job) =>
-          job.details?.parent?.mapId === selected.reference.mapId ||
-          job.result?.mapId === selected.reference.mapId
-      )
-    : jobs;
+function LibraryContents({ library }: { library: LibraryState }) {
+  const inventory = library.inventory.data!;
+  const [collapsed, setCollapsed] = useState(new Set<string>());
+  const tree = useMemo(
+    () => buildLibrary(inventory, library.jobs.data ?? inventory.jobs),
+    [inventory, library.jobs.data]
+  );
+  const state: TreeState = {
+    library,
+    collapsed,
+    depth: 0,
+    toggle: (key) =>
+      setCollapsed((current) => {
+        const next = new Set(current);
+        if (!next.delete(key)) next.add(key);
+        return next;
+      }),
+  };
   return (
     <>
-      <ContextBreadcrumb state={state} />
-      {selected && <ContextMapRow map={selected} state={state} />}
-      <h3>{selected ? "Regions" : "Worlds"}</h3>
-      {visible.length === 0 && (
-        <p>
-          {selected
-            ? "No retained regions yet."
-            : "No worlds yet. Generation results and saved maps appear here."}
-        </p>
+      {tree.roots.length === 0 && (
+        <p>No worlds yet. Generation results and saved maps appear here.</p>
       )}
-      <div className="saved-map-list">
-        {visible.map((map) => (
-          <ContextMapRow
-            key={`${map.reference.mapId}:${map.reference.revision}`}
-            map={map}
-            state={state}
+      <ul className="lib-tree" aria-label="Worlds, regions and generations">
+        {tree.roots.map((node) => (
+          <NodeView
+            key={node.kind === "map" ? mapKey(node.map) : node.job.jobId}
+            node={node}
+            tree={state}
           />
         ))}
-      </div>
-      <details open={!!selected} onToggle={(event) => state.setShowJobs(event.currentTarget.open)}>
-        <summary>Generation jobs</summary>
-        <div className="saved-map-list">
-          {associated.map((job) => (
-            <ContextJobRow key={job.jobId} job={job} state={state} />
-          ))}
-        </div>
-        {associated.length === 0 && <p>No generation jobs.</p>}
-      </details>
-      <UnattachedContexts state={state} />
+      </ul>
+      <Leftovers library={library} superseded={tree.superseded} detached={tree.detached} />
     </>
   );
 }
-function ContextBreadcrumb({ state }: { state: LibraryState }) {
-  const selected = state.selected;
-  if (!selected) return null;
-  const parent = state.inventory.data!.maps.find(
-    (map) => map.reference.mapId === selected.parent?.mapId && map.head
-  );
+function MapLine({
+  map,
+  library,
+  note,
+  removable,
+}: {
+  map: StoredContext;
+  library: LibraryState;
+  note: string;
+  removable: boolean;
+}) {
   return (
-    <nav className="context-actions" aria-label="Library ancestry">
-      <button onClick={() => state.select(null)}>All worlds</button>
-      {parent && <button onClick={() => state.select(parent)}>{parent.name}</button>}
-      <span>{selected.name}</span>
-    </nav>
-  );
-}
-function UnattachedContexts({ state }: { state: LibraryState }) {
-  const inventory = state.inventory.data!;
-  const ids = new Set(inventory.maps.map((map) => map.reference.mapId));
-  const unattached = inventory.maps.filter(
-    (map) => (map.parent && !ids.has(map.parent.mapId)) || !map.head || map.problem
-  );
-  return (
-    <details>
-      <summary>
-        Unattached maps, revisions and records ({unattached.length + inventory.orphans.length})
-      </summary>
-      <div className="saved-map-list">
-        {unattached.map((map) => (
-          <ContextMapRow
-            key={`${map.reference.mapId}:${map.reference.revision}`}
-            map={map}
-            state={state}
-          />
-        ))}
-      </div>
-      {inventory.orphans.map((orphan) => (
-        <article className="context-row" key={`${orphan.kind}:${orphan.id}`}>
-          <strong>
-            {orphan.kind} · {orphan.reference?.mapId ?? orphan.id}
-          </strong>
-          {orphan.problem && <p>{orphan.problem}</p>}
-          <button
-            onClick={() =>
-              state.confirmDelete({
-                target: { kind: "orphan", orphan },
-                name: `unattached ${orphan.kind}`,
+    <li className="lib-row">
+      <span className="lib-lead">
+        <span className="lib-toggle" />
+        <button
+          className="lib-name"
+          disabled={!!map.problem || library.opening.isPending}
+          onClick={() => library.opening.mutate(map)}
+        >
+          {map.name}
+        </button>
+      </span>
+      <span className="lib-kind">{map.profile}</span>
+      <span className="lib-status" title={map.problem ?? undefined}>
+        {map.problem ? `cannot open · ${map.problem}` : note}
+      </span>
+      <span className="lib-actions">
+        {removable && (
+          <DeleteButton
+            label={`Delete ${map.name}`}
+            ask={() =>
+              library.confirmDelete({
+                target: { kind: "map", id: map.reference.mapId, descendants: false },
+                name: map.name,
               })
             }
-          >
-            Delete unattached {orphan.kind}
-          </button>
-        </article>
-      ))}
+          />
+        )}
+      </span>
+    </li>
+  );
+}
+function OrphanLine({ orphan, library }: { orphan: OrphanContext; library: LibraryState }) {
+  return (
+    <li className="lib-row">
+      <span className="lib-lead">
+        <span className="lib-toggle" />
+        <span className="lib-name">{orphan.reference?.mapId ?? orphan.id}</span>
+      </span>
+      <span className="lib-kind">{orphan.kind}</span>
+      <span className="lib-status">{orphan.problem ?? "no map or job refers to it"}</span>
+      <span className="lib-actions">
+        <button
+          className="lib-text"
+          onClick={() =>
+            library.confirmDelete({
+              target: { kind: "orphan", orphan },
+              name: `unattached ${orphan.kind}`,
+            })
+          }
+        >
+          Delete unattached {orphan.kind}
+        </button>
+      </span>
+    </li>
+  );
+}
+/** Records that no tree row accounts for: replaced revisions, orphaned data and cleanup left over. */
+function Leftovers({
+  library,
+  superseded,
+  detached,
+}: {
+  library: LibraryState;
+  superseded: StoredContext[];
+  detached: StoredContext[];
+}) {
+  const inventory = library.inventory.data!;
+  const count = superseded.length + detached.length + inventory.orphans.length;
+  if (!count && !inventory.problems.length && !inventory.cleanup.length) return null;
+  return (
+    <details className="lib-leftovers">
+      <summary>Older revisions and unattached records ({count})</summary>
+      <ul className="lib-tree">
+        {detached.map((map) => (
+          <MapLine
+            key={mapKey(map)}
+            map={map}
+            library={library}
+            note="its parent map is gone"
+            removable
+          />
+        ))}
+        {superseded.map((map) => (
+          <MapLine
+            key={mapKey(map)}
+            map={map}
+            library={library}
+            note="replaced by a newer revision"
+            removable={false}
+          />
+        ))}
+        {inventory.orphans.map((orphan) => (
+          <OrphanLine key={`${orphan.kind}:${orphan.id}`} orphan={orphan} library={library} />
+        ))}
+      </ul>
       {inventory.problems.map((problem) => (
         <p role="status" key={problem}>
           {problem}
@@ -154,8 +198,8 @@ function UnattachedContexts({ state }: { state: LibraryState }) {
         <p key={id}>
           Unfinished cleanup{" "}
           <button
-            disabled={state.remove.isPending}
-            onClick={() => state.remove.mutate({ kind: "cleanup", id })}
+            disabled={library.remove.isPending}
+            onClick={() => library.remove.mutate({ kind: "cleanup", id })}
           >
             Retry cleanup
           </button>

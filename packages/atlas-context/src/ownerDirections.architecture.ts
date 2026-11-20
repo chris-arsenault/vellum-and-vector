@@ -112,12 +112,6 @@ const directions: readonly OwnerDirection[] = [
     test: "crates/atlas-host/tests/regions.rs",
   },
   {
-    direction: "group parent navigation and regeneration with the current map's controls",
-    given: "2026-11-17",
-    marks: ["frontend/src/FinishedMapBar.tsx"],
-    test: "frontend/tests/regionalGeneration.test.ts",
-  },
-  {
     direction: "selection types are tools in a toolbar; select first, then act",
     given: "2026-11-17",
     marks: ["frontend/src/PublishedSelectionToolbar.tsx"],

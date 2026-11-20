@@ -6,7 +6,7 @@ test("selection tools stay available and selections clear without a region-creat
 }) => {
   await openFixtureMap(page);
   const regions = page.getByRole("region", { name: "Map regions", exact: true });
-  const choose = page.getByRole("button", { name: "Select boundary", exact: true });
+  const choose = page.getByRole("button", { name: "Click boundary", exact: true });
   await choose.click();
   await canvas(page).click();
   await expect(regions.getByRole("heading", { name: "Selected outline" })).toBeVisible();
@@ -42,7 +42,7 @@ test("selection tools stay available and selections clear without a region-creat
   await page.keyboard.press("Escape");
   await expect(regions.getByRole("heading", { name: "Selected outline" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Choose a region", exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: "Lasso", exact: true }).click();
+  await page.getByRole("button", { name: "Draw freehand", exact: true }).click();
   const box = (await canvas(page).boundingBox())!;
   await page.mouse.move(box.x + box.width * 0.45, box.y + box.height * 0.45);
   await page.mouse.down();
@@ -51,7 +51,7 @@ test("selection tools stay available and selections clear without a region-creat
   await page.mouse.move(box.x + box.width * 0.45, box.y + box.height * 0.55, { steps: 8 });
   await page.mouse.up();
   await expect(regions.getByRole("heading", { name: "Selected outline" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Lasso", exact: true })).toHaveAttribute(
+  await expect(page.getByRole("button", { name: "Draw freehand", exact: true })).toHaveAttribute(
     "aria-pressed",
     "true"
   );
@@ -101,7 +101,7 @@ async function keepPolygon(
   west: number,
   east: number
 ) {
-  await page.getByRole("button", { name: "Polygon", exact: true }).click();
+  await page.getByRole("button", { name: "Draw polygon", exact: true }).click();
   const map = canvas(page);
   const size = (await map.boundingBox())!;
   await map.click({ position: { x: size.width * west, y: size.height * 0.4 } });

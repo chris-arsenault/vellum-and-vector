@@ -1,12 +1,11 @@
 import type { Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import { expect, test } from "./uiTest";
-import { canvas, exportMap, fixtureChild, openFixtureMap } from "./harness";
+import { canvas, exportMap, fixtureChild, mapTree, openFixtureMap } from "./harness";
 
 async function openGlen(page: Page) {
   await openFixtureMap(page);
-  const navigation = page.getByRole("navigation", { name: "Regional maps", exact: true });
-  await navigation.getByRole("button", { name: /^Supplied glen/ }).click();
+  await (await mapTree(page)).getByRole("button", { name: /^Supplied glen/ }).click();
   await expect(page.locator(".app-header strong")).toHaveText("Supplied glen");
 }
 
@@ -73,14 +72,15 @@ test("a real-scale map shows its hexes, units and creator layers and returns to 
     (feature: { properties: { name?: string } }) => feature.properties.name === "Glen burn"
   );
   expect(stream.properties.footprint).toBeTruthy();
-  await page.getByRole("button", { name: "Parent map", exact: true }).click();
+  await (await mapTree(page)).getByRole("button", { name: /^Published island/ }).click();
   await expect(page.getByText("Published island", { exact: true }).first()).toBeVisible();
 });
 
 test("@generation a real-scale map opens from an inspected place", async ({ page }) => {
   const parent = await openFixtureMap(page);
-  await page.getByRole("button", { name: "Inspect place", exact: true }).click();
+  await page.getByRole("button", { name: "Inspect", exact: true }).click();
   await canvas(page).click();
+  await page.getByRole("menuitem", { name: /^Numerical substrate/ }).click();
   const open = page.getByText("Open a real-scale map here", { exact: true });
   await open.click();
   const section = page.locator("details", { has: open });

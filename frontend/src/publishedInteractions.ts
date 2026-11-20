@@ -10,12 +10,12 @@ export type PublishedTool =
   | "region-pick"
   | "region-outline"
   | "region-lasso"
-  | "region-cut"
   | "region-edit"
   | "measure"
   | "edit";
 export interface PublishedMapEvents {
-  inspected(value: Inspection): void;
+  /** `at` is the click's screen position, where the pick menu opens. */
+  inspected(value: Inspection, at: { x: number; y: number }): void;
   position(value: Position): void;
   error(error: Error): void;
 }
@@ -55,7 +55,8 @@ export function installPublishedInteractions(
         { signal }
       );
       signal.throwIfAborted();
-      callbacks().inspected(value);
+      const source = event.originalEvent as MouseEvent;
+      callbacks().inspected(value, { x: source.clientX, y: source.clientY });
     });
   });
   const move = engine.map.on("pointermove", (event) =>

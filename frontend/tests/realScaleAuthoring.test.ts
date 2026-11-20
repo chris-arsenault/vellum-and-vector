@@ -1,6 +1,6 @@
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "./uiTest";
-import { canvas, exportMap, fixtureId, openFixtureMap, openSavedFixture } from "./harness";
+import { canvas, exportMap, fixtureId, mapTree, openFixtureMap, openSavedFixture } from "./harness";
 
 type Point = [number, number];
 interface Exported {
@@ -12,8 +12,7 @@ interface Exported {
   }[];
 }
 async function openGlen(page: Page) {
-  const navigation = page.getByRole("navigation", { name: "Regional maps", exact: true });
-  await navigation.getByRole("button", { name: /^Supplied glen/ }).click();
+  await (await mapTree(page)).getByRole("button", { name: /^Supplied glen/ }).click();
   await expect(page.locator(".app-header strong")).toHaveText("Supplied glen");
 }
 async function startEditing(page: Page) {

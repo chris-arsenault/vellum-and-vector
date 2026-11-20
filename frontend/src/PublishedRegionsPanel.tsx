@@ -28,8 +28,8 @@ export function PublishedRegionsPanel(props: Props) {
           </>
         ) : (
           <p>
-            Use the selection toolbar to click a boundary, draw a polygon or drag a lasso.
-            Right-click a selection for actions.
+            Under “Select a region by” in the toolbar, click a boundary, draw a polygon or draw
+            freehand. Right-click a selection for actions.
           </p>
         )}
         <ErrorMessage error={state.error ?? saved.error} />

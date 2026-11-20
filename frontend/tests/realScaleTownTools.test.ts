@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "./uiTest";
-import { canvas, exportMap, fixtureId, openFixtureMap } from "./harness";
+import { canvas, exportMap, fixtureId, mapTree, openFixtureMap } from "./harness";
 
 type Point = [number, number];
 interface Exported {
@@ -20,8 +20,7 @@ interface Exported {
 }
 async function openVillage(page: Page) {
   await openFixtureMap(page);
-  const navigation = page.getByRole("navigation", { name: "Regional maps", exact: true });
-  await navigation.getByRole("button", { name: /^Supplied village/ }).click();
+  await (await mapTree(page)).getByRole("button", { name: /^Supplied village/ }).click();
   await expect(page.locator(".app-header strong")).toHaveText("Supplied village");
 }
 async function startEditing(page: Page) {

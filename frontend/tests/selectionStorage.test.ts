@@ -55,14 +55,14 @@ test("@generation closing progress keeps the job and a completed job opens its m
     ];
   }, reference);
   await page.getByRole("button", { name: "Saved maps", exact: true }).click();
-  await page.getByText("Generation jobs", { exact: true }).first().click();
-  await page.getByRole("button", { name: /Coastal region/ }).click();
+  await page.getByRole("button", { name: /^Coastal region/ }).click();
   await expect(page.getByText("Elapsed: 12 seconds", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Close progress", exact: true }).click();
   expect(await page.evaluate(() => window.generationCalls)).not.toContain("cancel");
   await page.getByRole("button", { name: "Saved maps", exact: true }).click();
-  await page.getByText("Generation jobs", { exact: true }).first().click();
-  await page.getByRole("button", { name: /Map published.*Open map/ }).click();
+  // The completed job is the map's own row: its generation shows as complete and the name opens it.
+  await expect(page.getByText("generation complete")).toBeVisible();
+  await page.getByRole("button", { name: /^Published island/ }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page.getByRole("application", { name: "World map canvas" })).toBeVisible();
 });
@@ -110,7 +110,6 @@ test("@generation interrupted refinement is found from its world and resumes exp
     ];
   }, reference);
   await page.getByRole("button", { name: "Saved maps", exact: true }).click();
-  await page.getByRole("button", { name: /Regions and jobs for Published island/ }).click();
   await expect(page.getByText("Resume from: Regional development round 1 complete")).toBeVisible();
   expect(await page.evaluate(() => window.generationCalls)).not.toContain("resume");
   await page.getByRole("button", { name: "Resume generation", exact: true }).click();
@@ -128,7 +127,7 @@ test("deleting the open saved map removes it from the library across reload", as
   await page.getByRole("button", { name: /^Delete Published island/ }).click();
   const prompt = page.getByRole("alertdialog");
   await expect(prompt).toContainText("Independent children remain accessible");
-  await prompt.getByRole("button", { name: "Confirm delete", exact: true }).click();
+  await prompt.getByRole("button", { name: "Delete", exact: true }).click();
   await expect(page.getByRole("button", { name: /^Published island/ })).toHaveCount(0);
   await page.reload();
   await page.getByRole("button", { name: "Saved maps", exact: true }).click();

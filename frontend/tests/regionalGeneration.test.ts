@@ -1,6 +1,6 @@
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "./uiTest";
-import { chooseOutline, fixtureChild, openFixtureMap } from "./harness";
+import { chooseOutline, fixtureChild, mapTree, openFixtureMap } from "./harness";
 
 /** Refine "Coastal reach"; the supplied Refine reply opens the fixture's prepared child. */
 async function refineCoastalReach(page: Page) {
@@ -36,7 +36,6 @@ test("@generation refinement creates the child map and edits a modal over it", a
   // The created child is the open map beneath the modal, before anything is generated.
   await expect(page.locator(".app-header strong")).toHaveText("Coastal reach");
   const mapControls = page.getByRole("region", { name: "Current map controls" });
-  await expect(mapControls.getByRole("button", { name: "Parent map", exact: true })).toBeVisible();
   await expect(
     mapControls.getByRole("button", { name: "Regenerate map", exact: true })
   ).toBeVisible();
@@ -70,10 +69,14 @@ test("@generation refinement creates the child map and edits a modal over it", a
   await expect(dialog).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
-  await page.getByRole("button", { name: "Parent map", exact: true }).click();
+  await (await mapTree(page)).getByRole("button", { name: /^Published island/ }).click();
   await expect(page.locator(".app-header strong")).toHaveText("Published island");
-  const related = page.getByRole("navigation", { name: "Regional maps", exact: true });
-  await expect(related.getByRole("button", { name: /Coastal reach/ })).toBeVisible();
+  await expect((await mapTree(page)).getByRole("button", { name: /Coastal reach/ })).toBeVisible();
+  // The open panel carries over from the child, so the Maps panel is still showing.
+  await page
+    .getByRole("navigation", { name: "Workspace panels" })
+    .getByRole("button", { name: "Regions", exact: true })
+    .click();
   const regions = page.getByRole("region", { name: "Map regions", exact: true });
   await expect(regions.getByRole("button", { name: /^Coastal reach/ })).toContainText(
     "Regional map available"
@@ -103,7 +106,7 @@ test("@generation right-click refines a temporary selection without keeping a re
   await page.evaluate((child) => {
     window.generationFixtureChild = child;
   }, child);
-  await page.getByRole("button", { name: "Select boundary", exact: true }).click();
+  await page.getByRole("button", { name: "Click boundary", exact: true }).click();
   const map = page.getByRole("application", { name: "World map canvas" });
   await map.click();
   await expect(page.getByRole("heading", { name: "Selected outline", exact: true })).toBeVisible();

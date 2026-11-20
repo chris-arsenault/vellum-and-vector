@@ -14,8 +14,6 @@ export interface LibraryProps {
 export function useContextLibrary(props: LibraryProps) {
   const { context, open, observe } = props;
   const cache = useQueryClient();
-  const [selected, select] = useState<StoredContext | null>(null);
-  const [showJobs, setShowJobs] = useState(false);
   const [deleting, confirmDelete] = useState<{ target: DeleteContext; name: string } | null>(null);
   const inventory = useQuery({
     queryKey: ["stored-contexts", context.mode],
@@ -23,7 +21,6 @@ export function useContextLibrary(props: LibraryProps) {
   });
   const jobs = useQuery({
     queryKey: ["generation-jobs", context.mode],
-    enabled: showJobs || selected !== null,
     queryFn: ({ signal }) => context.generation.jobs({ signal }),
     refetchInterval: 2000,
   });
@@ -50,8 +47,6 @@ export function useContextLibrary(props: LibraryProps) {
       const retained = new Set(value.maps.map((map) => map.reference.mapId));
       detachDeletedChildren(cache, retained);
       confirmDelete(null);
-      if (selected && !value.maps.some((m) => m.reference.mapId === selected.reference.mapId))
-        select(null);
     },
     onSettled: async () => {
       await Promise.all([
@@ -65,15 +60,12 @@ export function useContextLibrary(props: LibraryProps) {
   return {
     inventory,
     jobs,
-    selected,
-    select,
     deleting,
     confirmDelete,
     opening,
     resume,
     remove,
     props,
-    setShowJobs,
   };
 }
 export type LibraryState = ReturnType<typeof useContextLibrary>;
