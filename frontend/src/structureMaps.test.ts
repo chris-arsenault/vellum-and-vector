@@ -38,7 +38,12 @@ describe("structure maps", () => {
     const feature = {
       relations: [
         { targetId: "stair", targetMapId: null, targetName: "Landing", kind: "leadsTo" },
-        { targetId: "passage", targetMapId: "glen", targetName: "Rowan passage", kind: "connectsTo" },
+        {
+          targetId: "passage",
+          targetMapId: "glen",
+          targetName: "Rowan passage",
+          kind: "connectsTo",
+        },
         { targetId: "wall", targetMapId: null, targetName: "Front wall", kind: "in" },
       ],
     } as MapFeature;
