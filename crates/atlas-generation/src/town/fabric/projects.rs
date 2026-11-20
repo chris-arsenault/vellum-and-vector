@@ -169,24 +169,23 @@ impl FabricOwner for Town {
                 contributors,
                 placement,
             } => self.sponsor(contributors, *placement, spatial),
+            // owner-direction(2026-11-20): a project's steps stand as they are built; one that cannot be built stops the project, leaving what was finished
             FabricEdit::Project(edits) => {
-                let mut staged = self.clone();
                 let mut results = Vec::new();
                 for edit in edits {
                     let optional = matches!(edit, FabricEdit::Optional(_));
-                    let result = staged.apply(edit, spatial)?;
+                    let result = self.apply(edit, spatial)?;
                     if matches!(result, EditOutcome::Declined) {
                         if optional {
                             continue;
                         }
-                        return Ok(EditOutcome::Declined);
+                        break;
                     }
                     results.push(result);
                 }
                 if results.is_empty() {
                     return Ok(EditOutcome::Declined);
                 }
-                *self = staged;
                 Ok(EditOutcome::Project(results))
             }
             FabricEdit::Optional(edit) => self.apply(*edit, spatial),
@@ -670,5 +669,97 @@ impl Town {
                 .all(|p| distance(*p, old_front) > ground.cell)
         });
         Ok(true)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::town::plots::{Side, Slot};
+
+    fn town_with_a_house() -> Town {
+        let seat = crate::town::seat::Seat {
+            key: atlas_map::Id::from_name("seat"),
+            name: "Seat".into(),
+            centre: [0., 0.],
+            story: Default::default(),
+            arms: vec![],
+            culture: None,
+        };
+        let mut town = Town::new(seat, None);
+        let kind = *crate::town::catalogue::PLACES
+            .iter()
+            .find(|k| k.definition().roles.dwelling)
+            .unwrap();
+        let square = Geometry::Polygon {
+            coordinates: vec![[[0., 0.], [10., 0.], [10., 10.], [0., 10.], [0., 0.]]
+                .map(|[x, y]| atlas_map::Position::xy(x, y))
+                .to_vec()],
+        };
+        town.holdings.push(Holding {
+            sponsors: vec![],
+            ties: vec![],
+            storeys: vec![1],
+            id: HoldingId(0),
+            slot: Slot {
+                habitat: Default::default(),
+                tenure: Default::default(),
+                participant: None,
+                street: None,
+                side: Side::Left,
+                along: 0.,
+                corners: vec![],
+                front: [5., 0.],
+                direction: [1., 0.],
+                inward: [0., 1.],
+                frontage: 10.,
+                depth: 10.,
+            },
+            outline: square.clone(),
+            buildings: vec![square],
+            kind,
+            secondary: None,
+            craft: None,
+            access_via: None,
+            institution: None,
+            means: 0.5,
+            support: 0.5,
+            condition: 0.8,
+            occupation: 1.,
+            crowding: 1.,
+            established: 0,
+            public: false,
+            outdoor: false,
+            cause: String::new(),
+            claim: 0.,
+        });
+        town
+    }
+
+    #[test]
+    fn a_project_keeps_what_was_built_when_a_later_step_cannot_be() {
+        let spatial = atlas_gis::geometry::NativeGeos::new(1e-6).unwrap();
+        let mut town = town_with_a_house();
+        let raise = || FabricEdit::Raise {
+            premises: HoldingId(0),
+        };
+        let missing = FabricEdit::Raise {
+            premises: HoldingId(7),
+        };
+        let outcome = town
+            .apply(
+                FabricEdit::Project(vec![raise(), missing, raise()]),
+                &spatial,
+            )
+            .unwrap();
+        assert!(matches!(outcome, EditOutcome::Project(ref steps) if steps.len() == 1));
+        assert_eq!(town.holdings()[0].storeys, vec![2]);
+
+        let skipped = FabricEdit::Optional(Box::new(FabricEdit::Raise {
+            premises: HoldingId(7),
+        }));
+        town.apply(FabricEdit::Project(vec![skipped, raise()]), &spatial)
+            .unwrap();
+        assert_eq!(town.holdings()[0].storeys, vec![3]);
     }
 }

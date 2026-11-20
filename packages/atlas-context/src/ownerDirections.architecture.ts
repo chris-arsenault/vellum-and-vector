@@ -539,6 +539,13 @@ const directions: readonly OwnerDirection[] = [
     test: "crates/atlas-generation/src/town/byway.rs",
   },
   {
+    direction:
+      "a project's steps stand as they are built; one that cannot be built stops the project, leaving what was finished",
+    given: "2026-11-20",
+    marks: ["crates/atlas-generation/src/town/fabric/projects.rs"],
+    test: "crates/atlas-generation/src/town/fabric/projects.rs",
+  },
+  {
     direction: "major crossings of the main road lead out into the countryside",
     given: "2026-11-18",
     marks: ["crates/atlas-generation/src/processes/town/crossroads.rs"],
