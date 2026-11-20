@@ -9,6 +9,7 @@ this file.
 A large city is made the way every other layer is made: refined from larger to smaller. A
 city refinement turns the city and its surroundings into a city map, the city overview of
 Baldur's Gate or Neverwinter Nights. It shows:
+
 - the city's land and water, walls and main roads;
 - its districts with their population, density, wealth, specializations and occupations;
 - its major works and other prominent places, drawn at their rough location.
@@ -20,6 +21,7 @@ follow the city, not rectangles.
 ## User requirements (owner)
 
 2026-11-19:
+
 1. Cities refine like every other layer, larger to smaller, then subdivide.
 2. A city map comes first and is generated completely, with its own features and major
    landmarks. It is coarser than streets and buildings, and holds districts with their
@@ -48,6 +50,9 @@ follow the city, not rectangles.
 11. City walls get their own phase. Not every city has walls, and a city's walls are not
     always at its outskirts; some cities have several. Most processes need to know whether
     a place is inside or outside a wall.
+12. Correction: hot spots are not major works. A district has at least one major work, and
+    in addition some hot-spot POIs that come from the other POIs in the catalogue.
+13. Settlement templates are extended to support a district mode and an overall city mode.
 
 Standing direction: towns grow through processes, never stamped layouts; people live on the
 land's layers ([ADR 0012](adr/0012-people-live-on-the-lands-layers.md)); the POI
@@ -82,6 +87,7 @@ The research pass of 2026-11-19, from the sources it opened:
 Agent-derived and revisable; owner decisions are marked.
 
 **City refinement is a regional refinement focused on people.**
+
 - It is opened at a settlement from the district map that holds it.
 - Like every refinement, it captures the city and its surroundings and the parent's
   numerical fields, and refines them on a finer lattice sized by the scale contract: about
@@ -98,6 +104,7 @@ Agent-derived and revisable; owner decisions are marked.
   occupation.
 
 **Refinement and city growth interleave.**
+
 - The city refinement's rounds alternate:
   - regional refinement rounds that refine the land, water and social fields;
   - city growth rounds that extend the city's built extent, strengthen or seed centres,
@@ -110,12 +117,14 @@ Agent-derived and revisable; owner decisions are marked.
   with city growth as a pass of its own, not a stage after refinement.
 
 **Walls are a phase of city growth.**
+
 - A wall rises where its causes meet:
   - threat, a seat of power and wealth to protect;
   - the ground: ridges, rivers, the existing edge;
   - the people able to build it.
 
   A city without those causes has none.
+
 - A city can hold several walls:
   - a citadel or palace wall inside the city;
   - an old wall the city has outgrown, now inside it;
@@ -133,18 +142,45 @@ Agent-derived and revisable; owner decisions are marked.
 - District maps capture the walls and gates crossing or bounding them and keep asking the
   same question at their scale.
 
-**Hot spots run small development iterations.**
+**Hot spots place prominent ordinary POIs (owner correction 2026-11-20).**
+
 - Where the social fields concentrate (dense, long-standing, at a crossing of ways, a
   harbour, a seat of power, a shrine), the city refinement runs a few rounds of the
-  graph-based town and works system on that spot.
-- Those rounds decide what major works and prominent places stand there, and roughly
-  where.
+  graph-based town system on that spot.
+- Those rounds decide which prominent places from the ordinary catalogue stand there, and
+  roughly where: a great market, a guildhall, a temple precinct, a landing, a court.
+- Hot spots do not place major works.
 - They do not grow the whole city's streets.
-- What they place is published on the city map at its rough location and size:
-  - major works (a cathedral, a harbour mole, a palace, walls and gates);
-  - other prominent places (a great market, a guildhall, a temple precinct).
+
+**Every district has at least one major work (owner correction 2026-11-20).**
+
+- Major works come from the existing major-work contract: work types with their own
+  siting, construction and sponsorship rules (`town/major_works.rs`,
+  `catalogue/works.rs`), sited where the work's own requirements meet in the district.
+- They are published on the city map at their rough location and size, with the
+  hot-spot POIs.
+- [DECISION] owner: today's major-work expectation by population (roughly two or three for
+  a capital, five or six for a million-plus city, in `settlement-major-works.md`) is lower
+  than six or seven districts each holding one. Either the per-district rule replaces that
+  expectation for cities with district maps, or a city has fewer districts. Blocking at M5b.
+
+**Templates work at city and district scale (owner direction 2026-11-20).**
+
+- Today a template is chosen once per settlement from founding-site evidence, and its
+  policy (tenure, where uses prefer to build, ground level, connectors, enclosure,
+  alignment, proposed streets) is read by founding and the recurring town processes.
+- City mode: the city refinement chooses one template for the whole city from the city's
+  evidence. City growth rounds read its policy at city scale: where centres seed, how main
+  roads align, who holds land, which enclosures and walls it implies.
+- District mode: each district chooses its own template from its character, within what the
+  city template allows (a guild quarter, a sanctuary precinct, a treaty-market quarter, a
+  walled household compound). The district map's town rounds read that policy.
+- The template contract gains the mode; each template states which modes it supports and
+  what its policy means in each. A template that has no city meaning offers only district
+  mode.
 
 **The POI catalogue says how a place appears on a large-scale map.**
+
 - Each catalogue entry gains a slot for its large-scale appearance:
   - whether it shows on a city map;
   - the social and physical conditions that raise it there;
@@ -155,6 +191,7 @@ Agent-derived and revisable; owner decisions are marked.
   open work.
 
 **Districts.**
+
 - The city refinement cuts six or seven districts.
 - Outlines follow the refined social fields' boundaries, rivers, walls, main roads and
   fringe belts.
@@ -162,14 +199,17 @@ Agent-derived and revisable; owner decisions are marked.
   wealth, specializations and occupations.
 
 **District maps.**
+
 - A district opens from its polygon as a real-scale map over its own outline.
-- It captures the city map's land, main roads, walls and the major POIs inside it as
-  starting conditions, with rough agreement as today.
+- It captures the city map's land, main roads, walls, the district's major works and its
+  hot-spot POIs as starting conditions, with rough agreement as today.
 - The existing town processes grow its streets, plots, buildings and occupations from the
-  district's character.
-- The major POIs the city map placed seed the district's development where they stand.
+  district's character, under its district-mode template.
+- The major works and hot-spot POIs the city map placed seed the district's development
+  where they stand.
 
 **Generation over arbitrary outlines.**
+
 - Today a refined child's lattice is built over the bounding rectangle of the selected
   outline plus a margin (`atlas-host/src/generation_frame.rs`, `regional_frame`).
 - The change:
@@ -178,6 +218,7 @@ Agent-derived and revisable; owner decisions are marked.
 - This applies to every refinement, not only districts.
 
 **Scale.** **Owner:** confirm the sizes.
+
 - Example: a city of about 16 × 12 km refined at about 15k Draft triangles has cells of
   about a hundred metres, enough for districts, main roads and the rough place of major
   works.
@@ -189,6 +230,7 @@ Agent-derived and revisable; owner decisions are marked.
 ## Milestones
 
 ### M1 — Generation over arbitrary outlines
+
 Scope: refinement and real-scale generation build their frame, capture, processes and
 publication over the selected outline, keeping a context band outside it.
 Acceptance: a region selected as an organic outline (a valley, a coast) is generated and
@@ -197,6 +239,7 @@ Evidence: frame and capture unit tests on supplied polygons; one organic region 
 reference chain.
 
 ### M2 — The large-scale appearance slot in the POI catalogue
+
 Scope: the catalogue contract gains the large-scale appearance slot (conditions, rough
 footprint, symbol, what it seeds). Major works become catalogue places with the slot
 filled; other prominent kinds are filled first, the rest stubbed as open work.
@@ -204,6 +247,7 @@ Acceptance: the catalogue lists, for every kind, whether and how it appears on a
 Evidence: catalogue contract tests.
 
 ### M3 — City refinement and its social fields [depends on M1]
+
 Scope: a city refinement opened at a settlement refines the city's surroundings and the
 parent's fields on a finer lattice, with the people pass refining the social bands. It
 publishes density, land-use and character rasters and the main roads.
@@ -212,15 +256,18 @@ character vary across it as its census, roads and water suggest.
 Evidence: unit tests on small fields; one city map.
 
 ### M3b — City growth rounds interleaved with refinement [depends on M3]
+
 Scope: city growth runs as a repeated pass in the city refinement's schedule. It extends
 the built extent, seeds and strengthens centres and shifts district character; the next
-refinement round reads what it changed.
+refinement round reads what it changed. The city refinement chooses a city-mode template,
+and growth reads its policy (the template contract gains its modes here).
 Acceptance: a city's extent, centres and density change across rounds in response to its
 ways, water and people, and the refined fields respond to the growth.
 Evidence: unit tests of the growth pass on small fields; a removal run showing the city
 refinement without growth loses the change.
 
 ### M3c — Walls and the enclosure question [depends on M3b]
+
 Scope: walls rise as a growth phase where threat, power, wealth, ground and builders meet.
 A city may have none, one or several: inner, outgrown, outer, quarter or partial walls,
 with gates where ways cross. Outgrown walls persist as fixation lines. Processes ask an
@@ -231,43 +278,61 @@ two; an outgrown wall stands inside its city, with gates as centres; trades and 
 sort inside and outside walls as their conditions say.
 Evidence: wall and enclosure unit tests on small fields; the reference city maps.
 
-### M4 — Hot spots place major POIs [depends on M2, M3c]
-Scope: hot spots in the refined social fields run small town and works iterations that
-place major works and prominent POIs at their rough location on the city map.
-Acceptance: the city map shows its palace, temples, harbour works, walls and markets where
-the city's people and ways concentrate, and nowhere else.
+### M4 — Hot spots place prominent ordinary POIs [depends on M2, M3c]
+
+Scope: hot spots in the refined social fields run small town iterations that place
+prominent POIs from the ordinary catalogue at their rough location on the city map. They
+place no major works.
+Acceptance: the city map shows its great markets, guildhalls, temple precincts, landings
+and courts where the city's people and ways concentrate, and nowhere else.
 Evidence: hot-spot and iteration unit tests; the reference city map.
 
 ### M5 — Districts [depends on M3]
+
 Scope: the city refinement cuts six or seven organic districts along its social
 boundaries, rivers, walls, main roads and fringe belts, each published as a region polygon
 with its character.
 Acceptance: districts tile the city, follow its features and differ in character.
 Evidence: geometry unit tests; the reference city's districts.
 
-### M6 — District maps [depends on M1, M4, M5]
+### M5b — Major works and templates per district [depends on M2, M3b, M5]
+
+Scope: each district receives at least one major work, sited by the work type's own
+rules, and chooses a district-mode template from its character within the city template.
+Acceptance: every district of the reference city holds a major work standing where its
+requirements meet, and districts of one city carry different templates where their
+characters differ.
+Evidence: major-work siting and template selection unit tests on supplied districts; the
+reference city map.
+
+### M6 — District maps [depends on M1, M4, M5b]
+
 Scope: a district opens as a real-scale map over its outline. It captures the city map's
-land, main roads, walls and major POIs, and grows its fabric from its character and the
-POIs it holds.
+land, main roads, walls, major works and hot-spot POIs, and grows its fabric from its
+character under its district-mode template.
 Acceptance: a harbour district and a temple district of the same city look like those
 districts, around the major POIs the city map placed.
 Evidence: town development unit tests with supplied city context; two district maps.
 
 ### M7 — Navigating the city [depends on M6]
+
 Scope: the viewer goes from the region to the city map, into a district and across to a
 neighbouring one.
 Acceptance: the Baldur's Gate pattern in the viewer: city overview, then districts.
 Evidence: browser UI wiring tests on fixture maps.
 
 ### M8 — Integrate and record [depends on M1–M7]
+
 Scope: an ADR for cities and organic outlines; backlog entries; this file deleted.
 
 ## Assumptions to check
 
 - The people pass refines meaningfully at city resolution: its steps are sized by area and
   years, not by a cell size tuned to regions.
-- A few town and works rounds at a hot spot can place major POIs without growing the
-  surrounding streets, given the town plan's network ownership.
+- A few town rounds at a hot spot can place prominent POIs without growing the surrounding
+  streets, given the town plan's network ownership.
+- Each template's policy has a meaning at city scale or at district scale, or both; the
+  fourteen templates are read one by one at M3b and M5b to confirm which.
 - The town fabric's existing walls (`town/founding.rs` kernel walls) and the city's walls
   are one representation at two scales; district maps capture the city's walls rather than
   founding their own.
@@ -276,4 +341,4 @@ Scope: an ADR for cities and organic outlines; backlog entries; this file delete
 
 ## Sulion mapping
 
-To be published when work starts, as a root plan with M1–M8, M3b and M3c as phases.
+To be published when work starts, as a root plan with M1–M8, M3b, M3c and M5b as phases.
