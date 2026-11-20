@@ -160,12 +160,12 @@ fn found(
     let index = spatial.index(&geometries).map_err(io::Error::other)?;
     let mut taken: [Band<i32>; 3] =
         std::array::from_fn(|_| field.coverage.borrow_mut().scratch(field.mesh.len(), 0));
-    for cell in 0..field.mesh.len() {
+    for (cell, &owner) in reached.owner.iter().enumerate().take(field.mesh.len()) {
         if field.people.people(cell)? <= 0.0 {
             continue;
         }
-        let from = if reached.owner[cell] >= 0 {
-            reached.owner[cell] as usize
+        let from = if owner >= 0 {
+            owner as usize
         } else {
             let p = field.mesh.position(cell);
             index
