@@ -43,6 +43,11 @@ follow the city, not rectangles.
      representation it runs small development iterations that place major POIs.
 9. Major works are POIs that happen to appear on the bigger map. The city map reaches into
    the POI catalogue, which is extended with how its places appear on a large-scale map.
+10. The city map's generation is a hybrid of regional refinement and city growth, not one
+    after the other.
+11. City walls get their own phase. Not every city has walls, and a city's walls are not
+    always at its outskirts; some cities have several. Most processes need to know whether
+    a place is inside or outside a wall.
 
 Standing direction: towns grow through processes, never stamped layouts; people live on the
 land's layers ([ADR 0012](adr/0012-people-live-on-the-lands-layers.md)); the POI
@@ -91,6 +96,42 @@ Agent-derived and revisable; owner decisions are marked.
 
   From these the city reads districts of distinct population, wealth, specialization and
   occupation.
+
+**Refinement and city growth interleave.**
+- The city refinement's rounds alternate:
+  - regional refinement rounds that refine the land, water and social fields;
+  - city growth rounds that extend the city's built extent, strengthen or seed centres,
+    raise walls and shift districts' character.
+- Each reads what the other last left. Growth reads the refined fields (where people,
+  wealth and ways concentrate). The next refinement round reads what growth changed (built
+  ground, walls, works and their pull on people), through the shared questions and the
+  people pass's registered operations.
+- This follows the regional schedule's repeated passes ([ADR 0008](adr/0008-regional-refinement-is-conditioned-amplification.md)),
+  with city growth as a pass of its own, not a stage after refinement.
+
+**Walls are a phase of city growth.**
+- A wall rises where its causes meet:
+  - threat, a seat of power and wealth to protect;
+  - the ground: ridges, rivers, the existing edge;
+  - the people able to build it.
+
+  A city without those causes has none.
+- A city can hold several walls:
+  - a citadel or palace wall inside the city;
+  - an old wall the city has outgrown, now inside it;
+  - a newer outer ring;
+  - a quarter's own wall;
+  - a wall left partial where the ground defends.
+- An outgrown wall persists as a fixation line. Its ring becomes a fringe belt or a street
+  where it was cleared, and its gates stay centres.
+- Gates are where ways cross a wall; markets, inns and suburbs gather at them.
+- Every process can ask the city's enclosure question: inside which walls a place stands,
+  how many, and through which gate it is reached. The answer conditions density, land
+  value, occupations and which places may stand there: noisome trades and burial grounds
+  outside, markets at gates, palaces within the innermost wall. The POI catalogue's
+  large-scale slot states its conditions in these terms.
+- District maps capture the walls and gates crossing or bounding them and keep asking the
+  same question at their scale.
 
 **Hot spots run small development iterations.**
 - Where the social fields concentrate (dense, long-standing, at a crossing of ways, a
@@ -170,7 +211,27 @@ Acceptance: the reference chain's largest city refines into a city map whose den
 character vary across it as its census, roads and water suggest.
 Evidence: unit tests on small fields; one city map.
 
-### M4 — Hot spots place major POIs [depends on M2, M3]
+### M3b — City growth rounds interleaved with refinement [depends on M3]
+Scope: city growth runs as a repeated pass in the city refinement's schedule. It extends
+the built extent, seeds and strengthens centres and shifts district character; the next
+refinement round reads what it changed.
+Acceptance: a city's extent, centres and density change across rounds in response to its
+ways, water and people, and the refined fields respond to the growth.
+Evidence: unit tests of the growth pass on small fields; a removal run showing the city
+refinement without growth loses the change.
+
+### M3c — Walls and the enclosure question [depends on M3b]
+Scope: walls rise as a growth phase where threat, power, wealth, ground and builders meet.
+A city may have none, one or several: inner, outgrown, outer, quarter or partial walls,
+with gates where ways cross. Outgrown walls persist as fixation lines. Processes ask an
+enclosure question (which walls enclose a place, through which gate), and the POI
+catalogue's large-scale conditions use it.
+Acceptance: across the reference cities, some have no walls, some one and one at least
+two; an outgrown wall stands inside its city, with gates as centres; trades and places
+sort inside and outside walls as their conditions say.
+Evidence: wall and enclosure unit tests on small fields; the reference city maps.
+
+### M4 — Hot spots place major POIs [depends on M2, M3c]
 Scope: hot spots in the refined social fields run small town and works iterations that
 place major works and prominent POIs at their rough location on the city map.
 Acceptance: the city map shows its palace, temples, harbour works, walls and markets where
@@ -207,9 +268,12 @@ Scope: an ADR for cities and organic outlines; backlog entries; this file delete
   years, not by a cell size tuned to regions.
 - A few town and works rounds at a hot spot can place major POIs without growing the
   surrounding streets, given the town plan's network ownership.
+- The town fabric's existing walls (`town/founding.rs` kernel walls) and the city's walls
+  are one representation at two scales; district maps capture the city's walls rather than
+  founding their own.
 - A district's town rounds, seeded with its major POIs, stay within today's single-map town
   run times.
 
 ## Sulion mapping
 
-To be published when work starts, as a root plan with M1–M8 as phases.
+To be published when work starts, as a root plan with M1–M8, M3b and M3c as phases.
