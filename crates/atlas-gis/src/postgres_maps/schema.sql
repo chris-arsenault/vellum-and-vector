@@ -1,4 +1,5 @@
 -- Arconis: docs/architecture/subsystems.arconis#item=r_schema — PostGIS tables of the published map schema.
+-- Baseline for migration 1. Change existing databases through subsequent migrations.
 CREATE EXTENSION IF NOT EXISTS postgis;
 -- owner-direction(2026-11-12): map and generation use separate schemas
 DO $$ BEGIN

@@ -1,0 +1,11 @@
+CREATE SCHEMA atlas_map_upgrade;
+ALTER TABLE map.revisions SET SCHEMA atlas_map_upgrade;
+ALTER TABLE map.heads SET SCHEMA atlas_map_upgrade;
+ALTER TABLE map.saved SET SCHEMA atlas_map_upgrade;
+ALTER TABLE map.features SET SCHEMA atlas_map_upgrade;
+ALTER TABLE map.samples SET SCHEMA atlas_map_upgrade;
+ALTER TABLE map.history SET SCHEMA atlas_map_upgrade;
+ALTER TABLE map.history_features SET SCHEMA atlas_map_upgrade;
+ALTER TABLE map.assets SET SCHEMA atlas_map_upgrade;
+ALTER TABLE map.edits SET SCHEMA atlas_map_upgrade;
+ALTER TABLE map.entities SET SCHEMA atlas_map_upgrade;

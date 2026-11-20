@@ -1,5 +1,7 @@
 #![cfg(all(not(target_arch = "wasm32"), feature = "integration-tests"))]
 //! PostGIS publication, row storage, queries, saves and the reader permission boundary.
+mod upgrade;
+
 use atlas_gis::{
     map_store::{FeatureQuery, SaveRequest},
     postgres_maps::PostgresMaps,
@@ -65,6 +67,7 @@ fn postgis_publication_queries_saves_and_reader_boundary() -> Result<(), Box<dyn
         container.get_host_port_ipv4(5432)?
     );
     let mut admin = postgres::Client::connect(&url, postgres::NoTls)?;
+    upgrade::check(&mut admin, &url)?;
     let mut store = PostgresMaps::connect(&url)?;
     store.initialize()?;
     PrivateInputs::connect(&url)?.initialize()?;

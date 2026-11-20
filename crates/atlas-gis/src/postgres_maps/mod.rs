@@ -6,6 +6,7 @@ mod edits;
 mod features;
 mod inventory;
 mod library;
+mod migration;
 mod publication;
 mod queries;
 mod records;
@@ -13,6 +14,7 @@ mod registry;
 mod registry_query;
 mod settlements;
 use crate::native_map_geometry::NativeMapGeometry;
+use crate::postgres_migrations::database_error;
 use atlas_map::{Id, MapDescriptor, MapRef};
 use postgres::{types::ToSql, Client, NoTls, Row};
 use std::{cell::RefCell, io};
@@ -32,9 +34,6 @@ impl PostgresMaps {
             open: RefCell::new(None),
             geometry_type: RefCell::new(None),
         })
-    }
-    pub fn initialize(&self) -> io::Result<()> {
-        self.batch(include_str!("schema.sql"))
     }
     pub fn grant_reader(&self, role: &str) -> io::Result<()> {
         let role = format!("\"{}\"", role.replace('"', "\"\""));
@@ -94,12 +93,6 @@ impl PostgresMaps {
         let key = i64::from_be_bytes(bytes[..8].try_into().expect("eight bytes"));
         self.query("SELECT pg_advisory_xact_lock($1)", &[&key])?;
         Ok(())
-    }
-}
-fn database_error(error: postgres::Error) -> io::Error {
-    match error.as_db_error() {
-        Some(detail) => io::Error::other(format!("{}: {}", detail.code().code(), detail.message())),
-        None => io::Error::other(error),
     }
 }
 fn to_json(value: &impl serde::Serialize) -> io::Result<serde_json::Value> {

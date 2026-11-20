@@ -1,6 +1,7 @@
 //! Completed generation captures. This capability is never supplied to map readers.
 mod documents;
 mod inventory;
+mod migration;
 use atlas_map::{Id, MapRef};
 use postgres::{Client, NoTls};
 use serde::{Deserialize, Serialize};
@@ -40,12 +41,6 @@ impl PrivateInputs {
         Ok(Self {
             db: RefCell::new(Client::connect(url, NoTls).map_err(io::Error::other)?),
         })
-    }
-    pub fn initialize(&self) -> io::Result<()> {
-        self.db
-            .borrow_mut()
-            .batch_execute(include_str!("private_inputs.sql"))
-            .map_err(io::Error::other)
     }
     pub fn bind(&self, input: &CompletedInputs) -> io::Result<()> {
         self.db
