@@ -7,6 +7,7 @@ use crate::town::production::{Need, Offer, Opportunity, Production};
 pub(super) fn carrier_yard() -> Definition {
     Definition {
         label: "carrier yard",
+        city: WORKING,
         naming_work: "carrier",
         activity: Activity::Service,
         form: Form::Yard,
@@ -47,6 +48,7 @@ pub(super) fn carrier_yard() -> Definition {
 pub(super) fn healer() -> Definition {
     Definition {
         label: "healer",
+        city: LOCAL,
         naming_work: "healer",
         activity: Activity::Service,
         form: Form::Frontage,
@@ -90,6 +92,13 @@ pub(super) fn healer() -> Definition {
 pub(super) fn learning() -> Definition {
     Definition {
         label: "learned premises",
+        // A college stands where long-settled people with means keep learning in the city.
+        city: CityMap::Shows(CityAppearance {
+            symbol: "college",
+            ground: 10_000.,
+            raised_by: |r| together(&[r.wealth, r.standing, r.density.max(r.faith)]),
+            seeds: &[Kind(Identity::Retail(Retail::Bookseller))],
+        }),
         naming_work: "school",
         activity: Activity::Service,
         form: Form::Frontage,
@@ -129,6 +138,7 @@ pub(super) fn learning() -> Definition {
 pub(super) fn water_point() -> Definition {
     Definition {
         label: "water point",
+        city: LOCAL,
         naming_work: "well",
         activity: Activity::Service,
         form: Form::Open,
@@ -160,6 +170,7 @@ pub(super) fn water_point() -> Definition {
 pub(super) fn wash_house() -> Definition {
     Definition {
         label: "wash house",
+        city: LOCAL,
         naming_work: "washhouse",
         activity: Activity::Service,
         form: Form::Yard,
@@ -208,6 +219,7 @@ pub(super) fn wash_house() -> Definition {
 pub(super) fn sanitation() -> Definition {
     Definition {
         label: "service yard",
+        city: LOCAL,
         naming_work: "yard",
         activity: Activity::Service,
         form: Form::Yard,
@@ -244,6 +256,9 @@ pub(super) fn sanitation() -> Definition {
 pub(super) fn craft_practice() -> Definition {
     Definition {
         label: "practiced premises",
+        city: CityMap::Hidden(
+            "A keeping place follows its own system's practice, which the city map carries in its magic and craft fields.",
+        ),
         naming_work: "workshop",
         activity: Activity::Service,
         form: Form::Court,

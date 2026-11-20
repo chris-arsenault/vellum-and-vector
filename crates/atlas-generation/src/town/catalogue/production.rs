@@ -5,6 +5,7 @@ use crate::town::production::{Need, Offer, Opportunity, Production};
 pub(super) fn fine_craft(v: FineCraft) -> Definition {
     Definition {
         label: v.label(),
+        city: WORKING,
         naming_work: "workshop",
         activity: Activity::Production,
         form: Form::Frontage,
@@ -102,6 +103,7 @@ pub(super) fn fine_craft(v: FineCraft) -> Definition {
 pub(super) fn domestic_craft() -> Definition {
     Definition {
         label: "domestic craft",
+        city: WORKING,
         naming_work: "workshop",
         activity: Activity::Production,
         form: Form::Frontage,
@@ -141,6 +143,7 @@ pub(super) fn domestic_craft() -> Definition {
 pub(super) fn heavy_craft() -> Definition {
     Definition {
         label: "craft yard",
+        city: WORKING,
         naming_work: "workshop",
         activity: Activity::Production,
         form: Form::Yard,
@@ -207,6 +210,7 @@ pub(super) fn heavy_craft() -> Definition {
 pub(super) fn smithy() -> Definition {
     Definition {
         label: "smithy",
+        city: WORKING,
         naming_work: "smithy",
         activity: Activity::Production,
         form: Form::Yard,
@@ -284,6 +288,7 @@ pub(super) fn smithy() -> Definition {
 pub(super) fn noxious_works() -> Definition {
     Definition {
         label: "tannery",
+        city: WORKING,
         naming_work: "workshop",
         activity: Activity::Production,
         form: Form::Yard,
@@ -318,6 +323,7 @@ pub(super) fn noxious_works() -> Definition {
 pub(super) fn mill() -> Definition {
     Definition {
         label: "mill",
+        city: WORKING,
         naming_work: "mill",
         activity: Activity::Production,
         form: Form::WaterEdge,
@@ -348,6 +354,7 @@ pub(super) fn mill() -> Definition {
 pub(super) fn brewhouse() -> Definition {
     Definition {
         label: "brewhouse",
+        city: WORKING,
         naming_work: "brewery",
         activity: Activity::Production,
         form: Form::Yard,
@@ -378,6 +385,7 @@ pub(super) fn brewhouse() -> Definition {
 pub(super) fn resource_yard() -> Definition {
     Definition {
         label: "resource yard",
+        city: WORKING,
         naming_work: "workshop",
         activity: Activity::Production,
         form: Form::Yard,

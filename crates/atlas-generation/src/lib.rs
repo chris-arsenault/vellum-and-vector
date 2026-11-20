@@ -55,6 +55,17 @@ pub struct RefinementRequest<Configuration> {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub real_scale: Option<RealScaleChoice>,
+    /// Present when the child is a city map refined over a settlement and its surroundings.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub city: Option<CityChoice>,
+}
+
+/// A city refinement is opened at one of the parent map's settlements.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CityChoice {
+    pub settlement: atlas_map::Id,
 }
 
 /// The creator's choices for a real-scale child map (ADR 0016).
@@ -132,6 +143,7 @@ pub fn declarations() -> String {
     [
         RefinementRequest::<()>::decl(&cfg),
         RealScaleChoice::decl(&cfg),
+        CityChoice::decl(&cfg),
         atlas::resolution::HexSize::decl(&cfg),
         GenerationState::decl(&cfg),
         GenerationStatus::decl(&cfg),

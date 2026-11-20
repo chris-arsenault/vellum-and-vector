@@ -62,8 +62,16 @@ pub(super) fn shelf_habitat(site: &SiteEvidence, point: Point, wet: bool) -> Hab
     }
 }
 
+/// A template's guidance on a city map. Its layout rules are the same as on a district map,
+/// read in units of its quarters instead of its plots, so a city and its districts share a
+/// layout at their own size and fidelity.
+pub(super) struct CityLevel {
+    /// The size of the template's quarters on a city map, in metres.
+    pub quarter: f64,
+}
 pub(super) struct Policy {
     pub name: &'static str,
+    pub city: CityLevel,
     pub eligible: fn(&SiteEvidence) -> bool,
     pub matches: fn(&SiteEvidence) -> Vec<Match>,
     pub kernel: fn(&SiteEvidence) -> &'static [Founder],
@@ -80,9 +88,11 @@ impl Policy {
         name: &'static str,
         kernel: fn(&SiteEvidence) -> &'static [Founder],
         matches: fn(&SiteEvidence) -> Vec<Match>,
+        city: CityLevel,
     ) -> Self {
         Self {
             name,
+            city,
             kernel,
             matches,
             eligible: |_| true,
@@ -125,6 +135,15 @@ impl Selection {
             point,
             unit,
         })
+    }
+    /// The size of the selected template's quarters on a city map, in metres.
+    pub fn quarter(&self) -> f64 {
+        self.selected.policy().city.quarter
+    }
+    /// How strongly the template draws a city's homes to a point of its city map, read in
+    /// the template's quarters. Zero reserves the point, as it does a plot on a district map.
+    pub fn city_affinity(&self, point: Point) -> f64 {
+        self.affinity(Activity::Household, point, self.quarter())
     }
     /// Zero reserves the location independently of competing economic offers.
     pub fn affinity(&self, activity: Activity, point: Point, unit: f64) -> f64 {

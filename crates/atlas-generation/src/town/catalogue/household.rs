@@ -51,6 +51,7 @@ fn residential_form(
 pub(super) fn garden() -> Definition {
     Definition {
         label: "garden",
+        city: LAND,
         naming_work: "clearance",
         activity: Activity::Household,
         form: Form::Open,
@@ -86,6 +87,13 @@ pub(super) fn garden() -> Definition {
 pub(super) fn park() -> Definition {
     Definition {
         label: "public green",
+        // A city's great green lies among the wealthy, where crowding has not built it over.
+        city: CityMap::Shows(CityAppearance {
+            symbol: "park",
+            ground: 30_000.,
+            raised_by: |r| together(&[r.wealth, r.built, 1. - 0.6 * r.density]),
+            seeds: &[],
+        }),
         function: BuildingFunction::Civic,
         activity: Activity::Institution,
         premises: Premises {
@@ -120,6 +128,7 @@ pub(super) fn residence(variant: Residence) -> Definition {
 
     Definition {
         label,
+        city: ORDINARY,
         naming_work: "household",
         activity: Activity::Household,
         form,

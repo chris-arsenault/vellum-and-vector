@@ -53,6 +53,7 @@ fn creator_configuration_binds_owned_settings_before_building_the_sequence() {
             &Frame {
                 profile: Profile::World,
                 regional: false,
+                city: false,
                 inherited: false,
                 landmarks_apply: true,
                 standalone_magic: false,

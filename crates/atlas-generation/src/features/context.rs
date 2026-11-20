@@ -27,6 +27,16 @@ pub struct MapOwnership {
     pub extent: Option<Geometry>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub real_scale: Option<RealScaleMap>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub city: Option<CityRefinement>,
+}
+/// A city map: a regional refinement over one settlement and its surroundings, refined to
+/// the cell size the scale contract gives that extent.
+#[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CityRefinement {
+    /// The parent map's settlement the city map was opened at.
+    pub settlement: Id,
 }
 /// A real-scale map's captured choices: its kind, hex size and the detail it was laid at.
 #[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]

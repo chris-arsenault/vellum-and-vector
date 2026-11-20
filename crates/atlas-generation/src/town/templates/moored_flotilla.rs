@@ -33,5 +33,7 @@ pub(super) const POLICY: Policy = Policy {
                 (Axis::Institution, s.industry.is_some(), 1),
             ])
         },
+        // Moorings gather in tight floating quarters along the water.
+        super::rules::CityLevel { quarter: 200. },
     )
 };

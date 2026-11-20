@@ -7,6 +7,7 @@ pub mod byway;
     reason = "the POI catalogue owns the concrete settlement identities"
 )]
 pub mod catalogue;
+pub mod city;
 pub mod edits;
 pub mod effects;
 pub mod fabric;
@@ -30,4 +31,5 @@ pub mod signals;
 pub mod siting;
 pub mod story;
 pub mod templates;
+pub mod walls;
 pub mod wards;

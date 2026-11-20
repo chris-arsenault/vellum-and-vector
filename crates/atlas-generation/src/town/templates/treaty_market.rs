@@ -45,5 +45,7 @@ pub(super) const POLICY: Policy = Policy {
                 (Axis::Institution, s.institution.is_some(), 1),
             ])
         },
+        // Each side's quarters keep their distance from the neutral court.
+        super::rules::CityLevel { quarter: 300. },
     )
 };

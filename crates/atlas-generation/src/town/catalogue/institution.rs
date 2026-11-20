@@ -6,6 +6,13 @@ use crate::town::production::{Need, Offer, Opportunity, Production};
 pub(super) fn assembly_hall() -> Definition {
     Definition {
         label: "assembly hall",
+        // A city hall stands at the old, crowded heart where its people gather.
+        city: CityMap::Shows(CityAppearance {
+            symbol: "hall",
+            ground: 5_000.,
+            raised_by: |r| together(&[r.density, r.standing, 1. - r.fringe]),
+            seeds: &[Kind(Identity::Market)],
+        }),
         naming_work: "hall",
         activity: Activity::Institution,
         form: Form::Court,
@@ -38,6 +45,16 @@ pub(super) fn assembly_hall() -> Definition {
 pub(super) fn guild_hall() -> Definition {
     Definition {
         label: "guild hall",
+        // Guilds build their halls where many long-settled people work a craft.
+        city: CityMap::Shows(CityAppearance {
+            symbol: "guildhall",
+            ground: 3_000.,
+            raised_by: |r| together(&[2. * r.craft, r.density, r.standing]),
+            seeds: &[
+                Kind(Identity::DomesticCraft),
+                Kind(Identity::FineCraft(FineCraft::Jeweller)),
+            ],
+        }),
         naming_work: "hall",
         activity: Activity::Institution,
         form: Form::Court,
@@ -78,6 +95,13 @@ pub(super) fn guild_hall() -> Definition {
 pub(super) fn court_house() -> Definition {
     Definition {
         label: "court and confinement",
+        // Courts sit in the settled core, most of all where the city is a seat of power.
+        city: CityMap::Shows(CityAppearance {
+            symbol: "court",
+            ground: 6_000.,
+            raised_by: |r| together(&[r.standing, 1. - r.fringe, if r.seat { 1. } else { 0.5 }]),
+            seeds: &[Kind(Identity::Watch)],
+        }),
         naming_work: "court",
         activity: Activity::Institution,
         form: Form::Compound,
@@ -120,6 +144,13 @@ pub(super) fn court_house() -> Definition {
 pub(super) fn watch() -> Definition {
     Definition {
         label: "watch premises",
+        // A garrison holds the crossings of an old city, most of all at a seat of power.
+        city: CityMap::Shows(CityAppearance {
+            symbol: "garrison",
+            ground: 8_000.,
+            raised_by: |r| together(&[crossing(r), r.standing, if r.seat { 1. } else { 0.5 }]),
+            seeds: &[Kind(Identity::Smithy)],
+        }),
         naming_work: "barracks",
         activity: Activity::Institution,
         form: Form::Yard,
@@ -166,6 +197,9 @@ fn protection(kind: Kind, seat: &Seat) -> Option<Purpose> {
 pub(super) fn toll() -> Definition {
     Definition {
         label: "tollhouse",
+        city: CityMap::Hidden(
+            "Tolls are taken at the city's gates, which belong to its walls and main ways.",
+        ),
         naming_work: "tollhouse",
         activity: Activity::Institution,
         form: Form::Frontage,
@@ -209,6 +243,17 @@ pub(super) fn toll() -> Definition {
 pub(super) fn manor() -> Definition {
     Definition {
         label: "manor",
+        // Great households stand among the wealthy and within the walls; at a seat of power
+        // the ruler's stands out.
+        city: CityMap::Shows(CityAppearance {
+            symbol: "residence",
+            ground: 30_000.,
+            raised_by: |r| {
+                together(&[r.wealth, r.standing, if r.seat { 1. } else { 0.5 }])
+                    * if r.walls > 0 { 1. } else { 0.7 }
+            },
+            seeds: &[Kind(Identity::Garden)],
+        }),
         naming_work: "manor",
         activity: Activity::Institution,
         form: Form::Compound,
@@ -263,6 +308,13 @@ pub(super) fn manor() -> Definition {
 pub(super) fn worship() -> Definition {
     Definition {
         label: "worship house",
+        // A temple precinct rises where a faith has long gathered many people.
+        city: CityMap::Shows(CityAppearance {
+            symbol: "temple",
+            ground: 12_000.,
+            raised_by: |r| together(&[1.5 * r.faith, r.standing, r.density.max(0.3)]),
+            seeds: &[Kind(Identity::Shrine), Kind(Identity::Almshouse)],
+        }),
         naming_work: "temple",
         activity: Activity::Institution,
         form: Form::Court,
@@ -296,6 +348,9 @@ pub(super) fn worship() -> Definition {
 pub(super) fn shrine() -> Definition {
     Definition {
         label: "shrine",
+        city: CityMap::Hidden(
+            "A shrine is a small sacred site, placed on district maps where its faith is kept.",
+        ),
         naming_work: "temple",
         activity: Activity::Institution,
         form: Form::Open,
@@ -328,6 +383,13 @@ pub(super) fn shrine() -> Definition {
 pub(super) fn religious_house() -> Definition {
     Definition {
         label: "religious house",
+        // A cloister keeps to quieter ground at the settled edge of a faithful city.
+        city: CityMap::Shows(CityAppearance {
+            symbol: "cloister",
+            ground: 25_000.,
+            raised_by: |r| together(&[r.faith, r.standing, r.fringe.max(0.3)]),
+            seeds: &[Kind(Identity::Garden), Kind(Identity::Healer)],
+        }),
         naming_work: "religiousHouse",
         activity: Activity::Institution,
         form: Form::Compound,
@@ -372,6 +434,16 @@ pub(super) fn religious_house() -> Definition {
 pub(super) fn burial() -> Definition {
     Definition {
         label: "burial ground",
+        // An old city buries its dead at its edge, outside its walls.
+        city: CityMap::Shows(CityAppearance {
+            symbol: "cemetery",
+            ground: 30_000.,
+            raised_by: |r| {
+                together(&[r.standing, r.fringe, r.faith.max(0.3)])
+                    * if r.walls == 0 { 1. } else { 0.3 }
+            },
+            seeds: &[Kind(Identity::Shrine)],
+        }),
         naming_work: "graveyard",
         activity: Activity::Institution,
         form: Form::Open,
@@ -403,6 +475,13 @@ pub(super) fn burial() -> Definition {
 pub(super) fn almshouse() -> Definition {
     Definition {
         label: "almshouse",
+        // A hospital serves crowded old ground where faith or wealth sponsors it.
+        city: CityMap::Shows(CityAppearance {
+            symbol: "hospital",
+            ground: 6_000.,
+            raised_by: |r| together(&[r.density, r.standing, r.faith.max(r.wealth)]),
+            seeds: &[Kind(Identity::Healer)],
+        }),
         naming_work: "almshouse",
         activity: Activity::Institution,
         form: Form::Court,

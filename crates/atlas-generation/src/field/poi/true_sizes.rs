@@ -444,6 +444,11 @@ pub fn reason(kind: Kind) -> &'static str {
         Shrine => "A holy place people keep.",
         Battlefield => "Where armies fought.",
         DisasterSite => "Where a disaster struck.",
+        CityWall => "A wall the city raised round its built land when it had cause to.",
+        CityGate => "Where a way passes through the city's wall.",
+        CityPlace => "Where the city's people and ways concentrate enough to raise it.",
+        CityDistrict => "A part of the city gathered round one of its centres.",
+        MajorWork => "An extraordinary work the city's people sustain.",
     }
 }
 /// The kind's reason as the place's account.

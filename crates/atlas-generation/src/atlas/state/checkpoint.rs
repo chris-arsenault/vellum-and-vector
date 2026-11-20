@@ -101,6 +101,7 @@ impl Regional {
         )?;
         archive.value("media", self.media.get_mut())?;
         self.contributions.checkpoint(archive, coverage)?;
-        archive.value("removed-products", &mut self.removed_products)
+        archive.value("removed-products", &mut self.removed_products)?;
+        archive.value("city", &mut self.city)
     }
 }

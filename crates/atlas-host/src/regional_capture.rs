@@ -16,7 +16,7 @@ use atlas_generation::{
         Feature,
     },
     spatial::{Overlay, SpatialKernel},
-    RealScaleChoice,
+    CityChoice, RealScaleChoice,
 };
 use atlas_map::{regions::polygon, Geometry, Id, MapDescriptor, RegionSelection};
 use serde_json::{json, Value};
@@ -79,6 +79,8 @@ pub struct Child {
     pub selection: RegionSelection,
     pub name: String,
     pub real_scale: Option<RealScaleChoice>,
+    #[serde(default)]
+    pub city: Option<CityChoice>,
 }
 impl Child {
     /// The captured real-scale record, laid at this job's detail.
@@ -99,6 +101,9 @@ pub struct Selection<'a> {
     pub name: &'a str,
     pub operation: Id,
     pub real_scale: Option<RealScaleMap>,
+    /// A city map's settlement. Capture refines the settlement's surroundings, not the
+    /// selected geometry, at the level the scale contract gives that extent.
+    pub city: Option<CityChoice>,
 }
 pub struct Region<'a> {
     world: Id,
@@ -151,12 +156,14 @@ impl Selection<'_> {
         self.validate(&document)?;
         let geography: Geography = serde_json::from_value(document.world.clone())?;
         let parent = self.parent.reference.map_id;
+        let footprint::Footprint { outline, extent } = self.footprint(&document, spatial)?;
+        // Records and fields are captured across the context band the child generates over.
         let region = Region {
             world: geography.id,
             area: self.id,
             parent,
             operation: self.operation,
-            footprint: self.footprint(&document, spatial)?,
+            footprint: extent,
             version: geography.version,
             spatial,
         };
@@ -171,14 +178,15 @@ impl Selection<'_> {
             Some(atlas_map::RealScaleKind::Structure) => "interior",
         }
         .into();
-        area["footprint"] = json!(region.footprint);
+        // The child map is its outline; its extent adds the band generation reads around it.
+        area["footprint"] = json!(outline);
         area["version"] = 1.into();
         area["spaceId"] = self.selection.space_id.into();
         area["localTraits"] = json!([]);
         // Independent mapped areas begin with their own local constraints.
         area["traits"] = json!([]);
         let origin = spatial
-            .interior_position(&region.footprint)
+            .interior_position(&outline)
             .map_err(io::Error::other)?;
         let [x, y, _] = origin.coordinates();
         area["frame"]["origin"]["x"] = json!(x);
@@ -199,6 +207,9 @@ impl Selection<'_> {
             "sourceMap":self.parent.reference,"refinementLevel":self.refinement_level(spatial)?,"extent":region.footprint});
         if let Some(real) = &self.real_scale {
             area["map"]["realScale"] = serde_json::to_value(real)?;
+        }
+        if let Some(city) = &self.city {
+            area["map"]["city"] = json!({"settlement": city.settlement});
         }
         let owners = geography
             .context()

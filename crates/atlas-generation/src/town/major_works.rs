@@ -266,6 +266,26 @@ pub fn commission(town: &mut Town, seed: i32, inherited: &[InheritedWork]) {
         start_commission(town, seed, family, anchor);
     }
 }
+/// A city map's major works: as many as its population band expects, each a different work
+/// type at a site its own rules accept in the city's evidence.
+pub fn city_works(site: &SiteEvidence, people: f64, seed: i32) -> Vec<(WorkFamily, Point)> {
+    let story = Story {
+        people,
+        ..Story::default()
+    };
+    let [x, y] = site.centre;
+    let count = (expected_commissions(people) + hash_unit(seed ^ 0x554f, x, y)).floor() as usize;
+    let mut chosen: Vec<(WorkFamily, Point)> = Vec::new();
+    for (family, anchor, _) in offers(site, &story, seed) {
+        if chosen.len() >= count {
+            break;
+        }
+        if chosen.iter().all(|(f, _)| *f != family) {
+            chosen.push((family, anchor));
+        }
+    }
+    chosen
+}
 pub fn commission_requested(
     town: &mut Town,
     seed: i32,

@@ -50,5 +50,7 @@ pub(super) const POLICY: Policy = Policy {
                 (Axis::Access, !s.approaches.is_empty(), 1),
             ])
         },
+        // A commons city stays loose: wide quarters strung along its ways.
+        super::rules::CityLevel { quarter: 300. },
     )
 };

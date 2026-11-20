@@ -93,6 +93,9 @@ pub struct Scope {
     /// A real-scale map's captured choices (ADR 0016); none on world and regional maps.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub real_scale: Option<crate::features::context::RealScaleMap>,
+    /// A city map's settlement; none on other maps.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub city: Option<crate::features::context::CityRefinement>,
 }
 impl Scope {
     pub fn validate_ancestry(&self) -> io::Result<()> {
@@ -221,6 +224,21 @@ pub struct Regional {
     pub contributions: field::contributions::Contributions,
     // hpc-exempt: identities of earlier generated records removed from this map.
     pub removed_products: BTreeSet<atlas_map::Id>,
+    /// A city map's own state: its template and the walls it has raised.
+    pub city: City,
+}
+/// A city map's template, chosen at its first growth round, the walls it raises, and the plan
+/// its last step makes: the places its hot spots raise, its districts and its major works.
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
+pub struct City {
+    pub template: Option<crate::town::templates::Selection>,
+    pub walls: Vec<crate::town::walls::Wall>,
+    /// Hot-spot cells, most concentrated first.
+    pub spots: Vec<u32>,
+    pub places: Vec<crate::town::city::Placed>,
+    /// Each cell's district; `u8::MAX` where none reaches.
+    pub districts: Vec<u8>,
+    pub works: Vec<(crate::town::catalogue::works::WorkFamily, u32)>,
 }
 impl Regional {
     pub fn new(field: &Field, domains: Vec<String>, parent_span: f64) -> io::Result<Self> {
@@ -242,6 +260,7 @@ impl Regional {
             contributions: Default::default(),
             // hpc-exempt: removed record identities, not numerical membership.
             removed_products: BTreeSet::new(),
+            city: City::default(),
         })
     }
 }

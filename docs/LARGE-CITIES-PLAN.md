@@ -347,4 +347,43 @@ Scope: an ADR for cities and organic outlines; backlog entries; this file delete
 
 ## Sulion mapping
 
-To be published when work starts, as a root plan with M1–M8, M3b, M3c and M5b as phases.
+Root `fa4e971d-be53-4820-89bb-81dd58e8a183`. Phases: M1 `bc1c8375`, M2 `e8a4a2b9`, M3
+`6d468d52`, M3b `f5df21b8`, M3c `46e10f3e`, M4 `34684574`, M5 `661a72fe`, M5b `4a298065`,
+M6 `a50dcf10`, M7 `4a94c87f`, M8 `c3b6a81b`.
+
+## Current state
+
+Execution authorized 2026-11-20 ("execute all phases of the plan").
+
+- **M1 done.** Capture keeps the selected outline as the child's footprint and stores the
+  outline with a context band (10% of its extent) as `map.extent`; the frame generates over
+  the extent as captured; publication clips fields, samples, features and hexes to the
+  outline (`publication/product/inputs.rs`). A real-scale map clicked at a point keeps its
+  hex frame; one opened over a region (a district) covers that region. Evidence:
+  `tests/regions.rs` organic capture, the publication clip test, and Alagalo Savanna
+  refined on the local atlas as its 168 × 142 km, 291-vertex outline. Fixed on the way: the
+  cargo donor is located as the material sampler locates it.
+- **M2 done.** `town/city.rs`: every catalogue place states its city appearance
+  (`CityMap::Shows` with symbol, rough ground, the reading that raises it and what it seeds,
+  or `Hidden` with a reason); every major work has one and is never raised at a hot spot.
+- **M3 built.** `RefinementRequest.city` opens a city map at a settlement over its
+  surroundings (2.5 times its built radius), at the level the scale contract gives that
+  extent (`Quality::level_for_extent`). Rivassanrema refined into a 26 km city map at about
+  128 m cells. Limitation: refining three levels in one step from the district map leaves
+  the parent's cells as blocks in the people fields and concentrates population in a few
+  cells.
+- **M3b–M5b built** (`atlas/regional/city.rs`, `city/plan.rs`, `field/people/growth.rs`,
+  `town/walls.rs`, `field/poi/city_places.rs`): city growth after each round's people pass
+  (SLEUTH-style edge, road and centre growth moving people; the template's city level
+  weighs every cell); walls raised where a guarded or seated template, builders and unwalled
+  built land meet, with gaps where water or steep ground defends and gates on ways; the
+  enclosure question; hot spots raising catalogue places through a few development rounds
+  that read the town catalogue's eases and bars; districts by a barrier-weighted
+  multi-source shortest path; major works by the population-band expectation, sited by
+  their own rules. Wealth is read from standing ground and nearness to the heart, since the
+  people layers hold no means.
+- **M6 built.** A district map's seat is its captured district polygon, with the
+  district's people, built ground and its city's template; its works arrive inherited from
+  the city map.
+- **M7 built.** The viewer offers "Open a city map" on a settlement and "Open this
+  district" on a city map's district (`frontend/src/CityOpen.tsx`, `cityMaps.ts`).

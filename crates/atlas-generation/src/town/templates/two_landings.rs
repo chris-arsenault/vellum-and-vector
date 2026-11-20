@@ -29,5 +29,7 @@ pub(super) const POLICY: Policy = Policy {
                 (Axis::Institution, s.industry.is_some(), 1),
             ])
         },
+        // Each level grows its own quarters about its landing.
+        super::rules::CityLevel { quarter: 300. },
     )
 };

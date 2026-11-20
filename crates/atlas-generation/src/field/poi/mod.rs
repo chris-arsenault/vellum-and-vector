@@ -5,6 +5,7 @@ pub mod area_hosting;
 pub mod carry;
 pub mod carry_rules;
 pub mod catalogue;
+pub mod city_places;
 pub mod clearance;
 pub mod coastal_places;
 pub mod community_records;

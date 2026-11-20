@@ -168,6 +168,7 @@ impl NativeJob {
                 name: &child.name,
                 operation: self.operation,
                 real_scale: child.real_scale(self.submission.input.quality),
+                city: child.city,
             },
             self.submission.source,
             &crate::private_inputs::CaptureInputs {

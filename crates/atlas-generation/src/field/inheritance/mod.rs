@@ -278,10 +278,12 @@ impl Samples {
 }
 
 /// Position in a captured resource is in the shared world chart, including its periodic seam.
+/// The point is located on the grid first, as the discrete material sampler locates it, so a
+/// cell past the grid's outer samples takes its cargo from the same donor as its layers.
 pub fn donor(mesh: &TriangularLattice, grid: &Grid, cell: usize) -> io::Result<usize> {
     let [ox, oy] = mesh.origin();
     let [x, y] = mesh.position(cell);
-    grid.sample_index([x + ox, y + oy])
+    grid.sample_index(grid.located_point(grid.locate([x + ox, y + oy])?)?)
 }
 
 pub struct Completion<'a> {

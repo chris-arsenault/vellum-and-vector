@@ -58,6 +58,17 @@ macro_rules! works {
             }
             pub fn key(self) -> &'static str { self.definition().key }
             pub fn label(self) -> &'static str { self.definition().label }
+            /// A work always stands out on a city map. It is sited by its own rules, never
+            /// raised at a hot spot; its rough ground is its core with grounds about it.
+            pub fn city(self) -> crate::town::city::CityAppearance {
+                let definition = self.definition();
+                crate::town::city::CityAppearance {
+                    symbol: definition.key,
+                    ground: 3. * definition.core.iter().map(|r| r.frontage * r.depth).sum::<f64>(),
+                    raised_by: |_| 0.,
+                    seeds: definition.custodians,
+                }
+            }
             pub fn from_key(key: &str) -> Option<Self> { Self::ALL.iter().copied().find(|f| f.key()==key) }
         }
     };

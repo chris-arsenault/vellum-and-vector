@@ -37,5 +37,7 @@ pub(super) const POLICY: Policy = Policy {
                 (Axis::Practice, s.practice[2] > 0., 1),
             ])
         },
+        // Submerged quarters are small; habitable volume is scarce.
+        super::rules::CityLevel { quarter: 200. },
     )
 };

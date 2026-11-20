@@ -177,6 +177,7 @@ impl Geography {
                 .collect(),
             contracted: contracted.clone(),
             real_scale: area.map.as_ref().and_then(|map| map.real_scale),
+            city: area.map.as_ref().and_then(|map| map.city),
         };
         Ok(Prepared {
             frame: MapFrame {
@@ -229,34 +230,35 @@ impl Geography {
         spatial: &dyn SpatialKernel,
     ) -> io::Result<Geometry> {
         let pinned = area.map.as_ref().and_then(|map| map.extent.as_ref());
-        let subject = pinned
-            .or_else(|| {
-                self.fields
-                    .iter()
-                    .find(|field| {
-                        field.area_id == area.id
-                            && field.input
-                            && field
-                                .channels
-                                .as_ref()
-                                .is_some_and(|names| names.iter().any(|name| name == "Elevation"))
-                            && field.footprint.is_some()
-                    })
-                    .and_then(|field| field.footprint.as_ref())
+        // A captured extent is the child's outline with its context band; generation covers
+        // it as captured, so an organic region has no rectangular edge.
+        if let Some(extent) = pinned {
+            return chart.geometry(extent, spatial).map_err(io::Error::other);
+        }
+        let subject = self
+            .fields
+            .iter()
+            .find(|field| {
+                field.area_id == area.id
+                    && field.input
+                    && field
+                        .channels
+                        .as_ref()
+                        .is_some_and(|names| names.iter().any(|name| name == "Elevation"))
+                    && field.footprint.is_some()
             })
+            .and_then(|field| field.footprint.as_ref())
             .unwrap_or(&area.footprint);
         let mut bounds = chart
             .compact_bounds(subject, spatial)
             .map_err(io::Error::other)?;
-        if pinned.is_none() {
-            let margin = (bounds.2 - bounds.0).max(bounds.3 - bounds.1) * 0.1;
-            bounds = Bounds(
-                bounds.0 - margin,
-                bounds.1 - margin,
-                bounds.2 + margin,
-                bounds.3 + margin,
-            );
-        }
+        let margin = (bounds.2 - bounds.0).max(bounds.3 - bounds.1) * 0.1;
+        bounds = Bounds(
+            bounds.0 - margin,
+            bounds.1 - margin,
+            bounds.2 + margin,
+            bounds.3 + margin,
+        );
         bounds.1 = bounds.1.max(chart.bounds.1);
         bounds.3 = bounds.3.min(chart.bounds.3);
         if !chart.cylindrical {

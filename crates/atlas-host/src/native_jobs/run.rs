@@ -185,6 +185,7 @@ pub(super) fn prepare(
                     selection: request.selection,
                     name,
                     real_scale: request.real_scale,
+                    city: request.city,
                 }),
                 document,
                 area,

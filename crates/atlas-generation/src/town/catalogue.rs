@@ -19,6 +19,21 @@ mod purposes;
 mod service;
 mod trade;
 pub(crate) mod works;
+use super::city::{crossing, together, CityAppearance, CityMap};
+/// Houses stand in a city map's built and density fields, never as places of their own.
+const ORDINARY: CityMap =
+    CityMap::Hidden("Ordinary premises stand in the city map's built and occupation fields.");
+/// Working trades show through occupation; their yards gather into districts on district maps.
+const WORKING: CityMap = CityMap::Hidden(
+    "Working premises stand in the city map's craft and occupation fields; their yards gather into districts on district maps.",
+);
+/// Neighbourhood services follow the people they serve and are placed on district maps.
+const LOCAL: CityMap = CityMap::Hidden(
+    "A neighbourhood service follows the city map's density fields and is placed on district maps.",
+);
+/// Ground worked or kept open stands in the city map's land fields.
+const LAND: CityMap =
+    CityMap::Hidden("Worked and open ground stands in the city map's land fields.");
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Form {
     Frontage,
@@ -158,6 +173,8 @@ impl Kind {
 pub struct Definition {
     pub premises: Premises,
     pub label: &'static str,
+    /// How the place appears on a city map; every place states it.
+    pub city: super::city::CityMap,
     pub naming_work: &'static str,
     pub activity: Activity,
     pub form: Form,

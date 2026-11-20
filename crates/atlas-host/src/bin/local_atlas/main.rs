@@ -107,7 +107,7 @@ struct Options {
     // hpc-exempt: command-line options by name.
     values: BTreeMap<String, String>,
 }
-const FLAGS: [&str; 3] = ["fresh", "reference-width", "full-history"];
+const FLAGS: [&str; 4] = ["fresh", "reference-width", "full-history", "outline"];
 impl Options {
     fn parse(arguments: impl Iterator<Item = String>) -> io::Result<Self> {
         let mut positionals = Vec::new();
@@ -168,7 +168,11 @@ fn run() -> io::Result<()> {
         }
         (Some("world"), _) => world(&harness, options.flag("fresh")),
         (Some("real"), _) if options.get("at").is_some() => real_scale(&harness, &options),
-        (Some("region"), _) if options.get("at").is_some() && options.get("width").is_some() => {
+        (Some("city"), _) if options.get("at").is_some() => real_scale(&harness, &options),
+        (Some("region"), _)
+            if options.get("at").is_some()
+                && (options.get("width").is_some() || options.flag("outline")) =>
+        {
             real_scale(&harness, &options)
         }
         (Some("resume"), job) => resume(&harness, job, options.get("name")),
@@ -210,6 +214,10 @@ fn usage(harness: &Harness) -> String {
        [--template template-name] [--major-work work-type]
        [--until \"<stage picture label, e.g. Initial regional detail>\"]
   region --at x,y|Settlement --width metres --name name [--parent map folder]
+  region --at x,y|Settlement --outline [--choice n] --name name [--parent map folder]
+  city --at Settlement --name name [--parent map folder]
+  real --outline [--choice n] --at x,y|Settlement --parent city map folder --name name
+       [--hex 30m] opens a district of a city map as its own map
   cancel <jobId>
   resume [jobId] [--name map folder]
   town-previews <jobId> --name <existing map folder>
@@ -336,6 +344,7 @@ fn save(harness: &Harness, reference: &MapRef) -> io::Result<()> {
 }
 
 struct Place {
+    id: atlas_map::Id,
     name: String,
     position: [f64; 2],
     population: f64,
@@ -357,6 +366,7 @@ fn settlements(harness: &Harness, reference: &MapRef) -> io::Result<Vec<Place>> 
             if let atlas_map::Geometry::Point { coordinates } = feature.geometry {
                 let [x, y, _] = coordinates.coordinates();
                 places.push(Place {
+                    id: feature.id,
                     name: feature.name.unwrap_or_default(),
                     position: [x, y],
                     population: feature
@@ -410,6 +420,142 @@ fn places(harness: &Harness, parent: Option<&str>) -> io::Result<()> {
     Ok(())
 }
 
+/// The parent map's first region choice at a point, as the viewer offers it on a click,
+/// with its outline's bounds. It is refined as a new region of the parent.
+fn region_at(
+    harness: &Harness,
+    reference: &MapRef,
+    space: Value,
+    [x, y]: [f64; 2],
+    choice: Option<usize>,
+) -> io::Result<(Value, [f64; 4])> {
+    let map = harness.open(reference)?;
+    let choices: Value = harness.server.call(
+        "maps/navigation",
+        &json!({"method": "choices", "args": [
+            reference,
+            {"version": 0, "regions": [], "views": []},
+            {"spaceId": space, "parentId": null, "editingId": null, "position": [x, y],
+             "viewport": map["bounds"], "cuts": []},
+        ]}),
+    )?;
+    let candidates = choices["candidates"]
+        .as_array()
+        .filter(|all| !all.is_empty())
+        .ok_or_else(|| io::Error::other("The parent map offers no region at that point"))?;
+    fn visit(value: &Value, bounds: &mut [f64; 4]) {
+        match value.as_array() {
+            Some(pair) if pair.len() >= 2 && pair[0].is_number() => {
+                let (x, y) = (pair[0].as_f64().unwrap(), pair[1].as_f64().unwrap());
+                *bounds = [
+                    bounds[0].min(x),
+                    bounds[1].min(y),
+                    bounds[2].max(x),
+                    bounds[3].max(y),
+                ];
+            }
+            Some(items) => items.iter().for_each(|item| visit(item, bounds)),
+            None => {}
+        }
+    }
+    let extent = |candidate: &Value| {
+        let mut bounds = [
+            f64::INFINITY,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            f64::NEG_INFINITY,
+        ];
+        visit(&candidate["geometry"]["coordinates"], &mut bounds);
+        bounds
+    };
+    for (index, candidate) in candidates.iter().enumerate() {
+        let b = extent(candidate);
+        println!(
+            "  choice {index}: {} ({:.0} × {:.0} m)",
+            candidate["name"].as_str().unwrap_or("unnamed"),
+            b[2] - b[0],
+            b[3] - b[1]
+        );
+    }
+    let Some(index) = choice.filter(|&n| n < candidates.len()) else {
+        return Err(io::Error::other(
+            "Choose one of these regions with --choice n",
+        ));
+    };
+    let candidate = &candidates[index];
+    let bounds = extent(candidate);
+    println!(
+        "Refining choice {index}, {}",
+        candidate["name"].as_str().unwrap_or("unnamed")
+    );
+    let region = json!({
+        "id": uuid::Uuid::new_v4().to_string(), "name": candidate["name"], "spaceId": space,
+        "parentId": null, "geometry": candidate["geometry"], "child": null,
+    });
+    Ok((region, bounds))
+}
+/// With `--outline`, the parent's own region at the point, refined as its organic outline.
+fn outline_choice(
+    harness: &Harness,
+    options: &Options,
+    reference: &MapRef,
+    parent: &Value,
+    point: [f64; 2],
+) -> io::Result<Option<(Value, [f64; 4])>> {
+    if !options.flag("outline") {
+        return Ok(None);
+    }
+    let choice = options
+        .get("choice")
+        .map(|n| n.parse().map_err(io::Error::other))
+        .transpose()?;
+    region_at(
+        harness,
+        reference,
+        parent["primarySpaceId"].clone(),
+        point,
+        choice,
+    )
+    .map(Some)
+}
+/// What the refine request selects: a region's outline (a district when `real`), a city
+/// map at a settlement, a real-scale map at a point, or a drawn rectangle.
+fn shape(
+    harness: &Harness,
+    options: &Options,
+    reference: &MapRef,
+    request: &mut Value,
+    outline: Option<(Value, [f64; 4])>,
+    region: Option<f64>,
+) -> io::Result<()> {
+    let command = options.positional(0);
+    let real = json!({
+        "kind": options.get("kind").unwrap_or("ground"),
+        "hexSize": options.get("hex").unwrap_or("100m"),
+        "hexesAcross": options.get("across").unwrap_or("50").parse::<u32>().map_err(io::Error::other)?,
+    });
+    if let Some((region, _)) = outline {
+        request["selection"]["geometry"] = region["geometry"].clone();
+        request["selection"]["regionPath"] = json!([region]);
+        if command == Some("real") {
+            request["realScale"] = real;
+        }
+    } else if command == Some("city") {
+        request["city"] = city_choice(harness, options, reference)?;
+    } else if region.is_none() {
+        request["realScale"] = real;
+    }
+    Ok(())
+}
+/// A city map is refined over the named settlement's surroundings.
+fn city_choice(harness: &Harness, options: &Options, reference: &MapRef) -> io::Result<Value> {
+    let at = options.get("at").unwrap_or_default();
+    let settlement = settlements(harness, reference)?
+        .into_iter()
+        .find(|place| place.name == at)
+        .ok_or_else(|| io::Error::other(format!("No settlement named {at} on the parent")))?;
+    Ok(json!({"settlement": settlement.id}))
+}
 fn real_scale(harness: &Harness, options: &Options) -> io::Result<()> {
     let parent_file = match options.get("parent") {
         Some(parent) => harness.reports.join("maps").join(parent).join("map.json"),
@@ -428,10 +574,14 @@ fn real_scale(harness: &Harness, options: &Options) -> io::Result<()> {
         .parse()
         .map_err(io::Error::other)?;
     let detail = options.get("detail").unwrap_or("draft");
-    let region: Option<f64> = options
-        .get("width")
-        .map(|w| w.parse().map_err(io::Error::other))
-        .transpose()?;
+    let outline = outline_choice(harness, options, &reference, &parent, [x, y])?;
+    let region: Option<f64> = match &outline {
+        Some((_, [w, _, e, _])) => Some(e - w),
+        None => options
+            .get("width")
+            .map(|w| w.parse().map_err(io::Error::other))
+            .transpose()?,
+    };
     let metres = HEX_METRES
         .iter()
         .find(|(name, _)| *name == hex)
@@ -473,9 +623,7 @@ fn real_scale(harness: &Harness, options: &Options) -> io::Result<()> {
         },
         "configuration": configuration,
     });
-    if region.is_none() {
-        request["realScale"] = json!({"kind": kind, "hexSize": hex, "hexesAcross": across});
-    }
+    shape(harness, options, &reference, &mut request, outline, region)?;
     let review: Value =
         harness.generation("review", json!({"method": "refine", "request": request}))?;
     refuse_errors(&review)?;

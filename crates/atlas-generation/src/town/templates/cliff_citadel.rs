@@ -43,5 +43,7 @@ pub(super) const POLICY: Policy = Policy {
         "cliff-citadel",
         |_| CLIFF,
         |s| matches([(Axis::Relief, true, 2), (Axis::Civic, s.guarded, 2)]),
+        // A citadel's ledge holds a few compact quarters; suppliers spread below.
+        super::rules::CityLevel { quarter: 250. },
     )
 };

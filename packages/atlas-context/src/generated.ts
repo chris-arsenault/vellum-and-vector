@@ -16,6 +16,10 @@ export type RefinementRequest<Configuration> = {
    * Present when the child is a real-scale map opened at the selection's centre.
    */
   realScale?: RealScaleChoice;
+  /**
+   * Present when the child is a city map refined over a settlement and its surroundings.
+   */
+  city?: CityChoice;
 };
 
 export type RealScaleChoice = {
@@ -26,6 +30,8 @@ export type RealScaleChoice = {
    */
   hexesAcross: number;
 };
+
+export type CityChoice = { settlement: string };
 
 export type HexSize = "1.5m" | "3m" | "10m" | "30m" | "100m" | "300m";
 

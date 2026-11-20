@@ -35,5 +35,7 @@ pub(super) const POLICY: Policy = Policy {
                 (Axis::Access, s.opposing_ways(), 1),
             ])
         },
+        // Successive communities hold courts of a few hundred metres each.
+        super::rules::CityLevel { quarter: 250. },
     )
 };

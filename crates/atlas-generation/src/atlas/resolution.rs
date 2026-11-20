@@ -129,6 +129,14 @@ impl Quality {
     pub fn real_scale_span(self, hex: HexSize) -> f64 {
         real_scale_span(hex, self.triangles_per_hex_edge())
     }
+    /// The regional level whose cells give an extent of this many square metres about a
+    /// standard region's triangle count: each level holds a seventh of the one above it.
+    pub fn level_for_extent(area: f64) -> u32 {
+        let reference = MapScale::REFERENCE_WIDTH * MapScale::REFERENCE_HEIGHT * 0.35;
+        ((reference / area.max(1.)).ln() / 7f64.ln())
+            .round()
+            .max(1.) as u32
+    }
     // owner-direction(2026-11-12): a standard region has roughly the cells of the default standard world, at 7-ish land regions in a world.
     pub fn regional_span(self, level: u32) -> Result<f64, &'static str> {
         if level == 0 {

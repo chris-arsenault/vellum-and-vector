@@ -42,6 +42,7 @@ pub(super) fn review(settings: &Settings, mut action: Action) -> io::Result<Valu
     let mut captured = Vec::new();
     if let Some(child) = job.selection.take() {
         let real_scale = child.real_scale(job.submission.input.quality);
+        let city = child.city;
         let (selection, name) = (child.selection, child.name);
         let directory = settings.scratch.join(operation.to_string());
         fs::create_dir_all(&directory)?;
@@ -61,6 +62,7 @@ pub(super) fn review(settings: &Settings, mut action: Action) -> io::Result<Valu
                 name: &name,
                 operation: job.operation,
                 real_scale,
+                city,
             },
             job.submission.source,
             &crate::private_inputs::CaptureInputs {

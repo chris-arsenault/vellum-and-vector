@@ -41,5 +41,7 @@ pub(super) const POLICY: Policy = Policy {
                 (Axis::Occupation, s.cultivated, 2),
             ])
         },
+        // Living ground keeps its patches large at city scale.
+        super::rules::CityLevel { quarter: 350. },
     )
 };

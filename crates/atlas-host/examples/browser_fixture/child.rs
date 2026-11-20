@@ -57,6 +57,7 @@ pub async fn capture(
             name: "Coastal reach",
             operation: Id::from_name("captured"),
             real_scale: None,
+            city: None,
         },
         stores.inputs.document(parent)?,
         &Inputs {

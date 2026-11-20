@@ -37,5 +37,7 @@ pub(super) const POLICY: Policy = Policy {
                 (Axis::Institution, s.institution.is_some(), 1),
             ])
         },
+        // The door's quarter of yards and hostels stays close to the post.
+        super::rules::CityLevel { quarter: 250. },
     )
 };

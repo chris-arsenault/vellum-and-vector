@@ -47,5 +47,7 @@ pub(super) const POLICY: Policy = Policy {
                 (Axis::Civic, s.planned || s.seat, 2),
             ])
         },
+        // The charter's rings, every four quarters, become ring roads on a city map.
+        super::rules::CityLevel { quarter: 200. },
     )
 };

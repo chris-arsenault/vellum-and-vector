@@ -19,7 +19,8 @@ the [spatial ADR](docs/adr/0001-spatial-authority.md),
 [people ADR](docs/adr/0012-people-live-on-the-lands-layers.md) and
 [plate travel ADR](docs/adr/0013-plates-travel-far-apart-from-strength.md) and
 [real-scale maps ADR](docs/adr/0016-real-scale-maps.md) and
-[GIS-native storage ADR](docs/adr/0017-gis-native-storage-and-rust-native-data.md) record
+[GIS-native storage ADR](docs/adr/0017-gis-native-storage-and-rust-native-data.md) and
+[cities ADR](docs/adr/0018-cities-refine-into-city-and-district-maps.md) record
 implementation direction. User requirements and explicitly agreed boundaries govern revisions
 to agent-derived choices in those documents and in open plans. The
 [documentation index](docs/README.md) lists every durable document.

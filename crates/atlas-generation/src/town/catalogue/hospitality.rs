@@ -4,6 +4,7 @@ use crate::town::effects::{Clientele, Contribution, Ease, Effects, Improvement, 
 pub(super) fn inn() -> Definition {
     Definition {
         label: "inn",
+        city: LOCAL,
         naming_work: "inn",
         activity: Activity::Hospitality,
         form: Form::Court,
@@ -50,6 +51,7 @@ pub(super) fn inn() -> Definition {
 pub(super) fn tavern() -> Definition {
     Definition {
         label: "tavern",
+        city: LOCAL,
         naming_work: "tavern",
         activity: Activity::Hospitality,
         form: Form::Frontage,
@@ -86,6 +88,7 @@ pub(super) fn tavern() -> Definition {
 pub(super) fn cookshop() -> Definition {
     Definition {
         label: "cookshop",
+        city: LOCAL,
         naming_work: "shop",
         activity: Activity::Hospitality,
         form: Form::Frontage,
@@ -122,6 +125,13 @@ pub(super) fn cookshop() -> Definition {
 pub(super) fn entertainment() -> Definition {
     Definition {
         label: "entertainment premises",
+        // A city's theatre or arena draws on crowds with means where many ways meet.
+        city: CityMap::Shows(CityAppearance {
+            symbol: "theatre",
+            ground: 8_000.,
+            raised_by: |r| together(&[r.density, r.wealth, crossing(r)]),
+            seeds: &[Kind(Identity::Tavern), Kind(Identity::Cookshop)],
+        }),
         naming_work: "playhouse",
         activity: Activity::Hospitality,
         form: Form::Frontage,

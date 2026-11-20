@@ -2,7 +2,7 @@ use super::Selection;
 use crate::{generation_document::Document, generation_frame::Geography};
 use atlas_generation::{
     features::{chart::Chart, context::RealScaleMap},
-    spatial::{Predicate, SpatialKernel},
+    spatial::{Overlay, Predicate, SpatialKernel},
 };
 use atlas_map::{
     regions::{as_geometry, rectangle, validate_navigation},
@@ -15,12 +15,19 @@ const REGIONAL_CONTEXT_FRACTION: f64 = 0.1;
 // A real-scale map is a few hundred hexes across at most; detail multiplies its triangles.
 const MIN_HEXES_ACROSS: u32 = 10;
 const MAX_HEXES_ACROSS: u32 = 200;
+
+/// A child map is its selected outline. Generation also works a band of context around it,
+/// so coasts, rivers and nearby land develop across the edge; only the outline is published.
+pub struct Footprint {
+    pub outline: Geometry,
+    pub extent: Geometry,
+}
 impl Selection<'_> {
     pub fn footprint(
         &self,
         document: &Document,
         spatial: &dyn SpatialKernel,
-    ) -> io::Result<Geometry> {
+    ) -> io::Result<Footprint> {
         let geography: Geography = serde_json::from_value(document.world.clone())?;
         let chart = Chart {
             domain: &geography.reference.domain,
@@ -49,36 +56,74 @@ impl Selection<'_> {
             let centre = spatial
                 .interior_position(&subject)
                 .map_err(io::Error::other)?;
-            return chart
-                .geometry(&rectangle(real_scale_frame(real, centre, &chart)), spatial)
-                .map_err(io::Error::other);
+            // The chosen hexes bound the map. A clicked point only centres it; a selected
+            // region (a district) shapes the map, and its frame covers the whole region.
+            let frame = if self.selection.region_path.is_empty() {
+                real_scale_frame(real, centre, &chart)
+            } else {
+                chart
+                    .compact_bounds(&subject, spatial)
+                    .map_err(io::Error::other)?
+            };
+            let extent = chart
+                .geometry(&rectangle(frame), spatial)
+                .map_err(io::Error::other)?;
+            let outline = if self.selection.region_path.is_empty() {
+                extent.clone()
+            } else {
+                polygonal(
+                    spatial
+                        .overlay(&subject, &extent, Overlay::Intersection)
+                        .map_err(io::Error::other)?,
+                )
+                .unwrap_or_else(|| extent.clone())
+            };
+            return Ok(Footprint {
+                outline: chart
+                    .geometry(&outline, spatial)
+                    .map_err(io::Error::other)?,
+                extent,
+            });
         }
         let Bounds(w, s, e, n) = chart
             .compact_bounds(&subject, spatial)
             .map_err(io::Error::other)?;
-        let margin = (e - w).max(n - s) * REGIONAL_CONTEXT_FRACTION;
-        let bounds = Bounds(
-            if chart.cylindrical {
-                w - margin
-            } else {
-                (w - margin).max(chart.bounds.0)
-            },
-            (s - margin).max(chart.bounds.1),
-            if chart.cylindrical {
-                e + margin
-            } else {
-                (e + margin).min(chart.bounds.2)
-            },
-            (n + margin).min(chart.bounds.3),
-        );
-        chart
-            .geometry(&rectangle(bounds), spatial)
-            .map_err(io::Error::other)
+        let band = (e - w).max(n - s) * REGIONAL_CONTEXT_FRACTION;
+        let outline = chart
+            .geometry(&subject, spatial)
+            .map_err(io::Error::other)?;
+        let buffered = spatial
+            .buffer(&subject, band)
+            .map_err(io::Error::other)?
+            .unwrap_or_else(|| subject.clone());
+        let extent = polygonal(
+            spatial
+                .overlay(
+                    &chart
+                        .geometry(&buffered, spatial)
+                        .map_err(io::Error::other)?,
+                    chart.domain,
+                    Overlay::Intersection,
+                )
+                .map_err(io::Error::other)?,
+        )
+        .unwrap_or_else(|| outline.clone());
+        Ok(Footprint { outline, extent })
     }
     pub(super) fn refinement_level(&self, spatial: &dyn SpatialKernel) -> io::Result<u32> {
         if self.real_scale.is_some() {
             // A real-scale map leaves the regional ladder; it keeps its parent's level.
             return Ok(self.parent.region_scale.level);
+        }
+        if self.city.is_some() {
+            // A city map refines to the level whose cells give its extent a region's count.
+            let area = spatial
+                .area(&as_geometry(&self.selection.geometry))
+                .map_err(io::Error::other)?;
+            return Ok(
+                atlas_generation::atlas::resolution::Quality::level_for_extent(area)
+                    .max(self.parent.region_scale.level + 1),
+            );
         }
         let path = &self.selection.region_path;
         if let Some(selected) = path.last() {
@@ -117,6 +162,10 @@ impl Selection<'_> {
             .checked_add(u32::try_from(path.len().max(1)).map_err(io::Error::other)?)
             .ok_or_else(|| io::Error::other("Refinement level exceeds its representation"))
     }
+}
+/// The polygonal part of an overlay; a selection touching only at its edge has none.
+fn polygonal(geometry: Option<Geometry>) -> Option<Geometry> {
+    geometry.and_then(atlas_map::regions::polygon)
 }
 /// A 4:3 frame of the chosen hexes across, centred on the selection and kept on the chart.
 pub fn real_scale_frame(real: &RealScaleMap, centre: Position, chart: &Chart<'_>) -> Bounds {

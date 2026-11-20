@@ -68,6 +68,10 @@ pub struct Work {
     pub ecology_initialize: Operation,
     pub ecology_develop: Operation,
     pub place_effects: Operation,
+    /// City growth on a city map (`regional/city`); a no-op elsewhere.
+    pub city_growth: Operation,
+    /// A city map's hot-spot places, districts and major works after its growth rounds.
+    pub city_plan: Operation,
     pub magic_map: Operation,
     pub identity: Operation,
     pub places: Operation,
@@ -158,6 +162,8 @@ impl Work {
         );
         let ecology_develop = development::ecology(input.clone(), environment, reads, field);
         let place_effects = people::effects(input.clone(), reads, field);
+        let city_growth = super::city::growth(input.clone(), field);
+        let city_plan = super::city::plan_step(input.clone());
         let places = people::publish(input.clone(), reads, field);
         let caves = command(
             "caves",
@@ -204,6 +210,8 @@ impl Work {
             ecology_initialize,
             ecology_develop,
             place_effects,
+            city_growth,
+            city_plan,
             magic_map,
             identity,
             places,

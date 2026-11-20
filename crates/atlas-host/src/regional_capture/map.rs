@@ -21,6 +21,26 @@ pub fn capture(
     records: &dyn FeatureReader,
     spatial: &dyn SpatialKernel,
 ) -> io::Result<Capture> {
+    // A city map is refined over its settlement's surroundings, whatever was clicked.
+    let surrounded;
+    let selection = match selection.city {
+        Some(city) => {
+            let settlement = records.get(city.settlement)?.ok_or_else(|| {
+                io::Error::other("A city map opens at one of the parent map's settlements")
+            })?;
+            let outline = atlas_generation::town::city::surroundings(&settlement)?;
+            surrounded = atlas_map::RegionSelection {
+                geometry: serde_json::from_value(serde_json::to_value(outline)?)?,
+                region_path: Vec::new(),
+                ..selection.selection.clone()
+            };
+            Selection {
+                selection: &surrounded,
+                ..selection
+            }
+        }
+        None => selection,
+    };
     let geography: Geography = serde_json::from_value(document.world.clone())?;
     let context = geography.context();
     let area = context
@@ -35,7 +55,7 @@ pub fn capture(
     };
     let mut query = FeatureQuery {
         space_id: selection.selection.space_id,
-        geometry: Some(selection.footprint(&document, spatial)?),
+        geometry: Some(selection.footprint(&document, spatial)?.extent),
         ..Default::default()
     };
     let mut features = Vec::new();

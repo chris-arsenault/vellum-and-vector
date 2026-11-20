@@ -151,5 +151,10 @@ where
         shrine::entry(),
         historical_sites::entry(Historical::Battlefield),
         historical_sites::entry(Historical::Disaster),
+        super::city_places::wall(),
+        super::city_places::gate(),
+        super::city_places::place(),
+        super::city_places::district(),
+        super::city_places::work(),
     ])
 }

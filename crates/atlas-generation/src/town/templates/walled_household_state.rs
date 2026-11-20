@@ -51,5 +51,7 @@ pub(super) const POLICY: Policy = Policy {
                 (Axis::Occupation, s.cultivated, 1),
             ])
         },
+        // The ruling compound fills the core; dependants' quarters press outside it.
+        super::rules::CityLevel { quarter: 250. },
     )
 };

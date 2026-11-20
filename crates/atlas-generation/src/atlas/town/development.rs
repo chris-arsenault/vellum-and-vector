@@ -359,6 +359,7 @@ fn settle(
     let mesh = state.field().mesh();
     let draw =
         crate::field::poi::true_sizes::roll_bytes(&seat.key.to_bytes(), settings.seed as u64);
+    let district = district_seat(state, &seat)?;
     for centre in habitable_sites(state, ground, &seat) {
         let mut candidate = seat.clone();
         candidate.centre = centre;
@@ -389,8 +390,15 @@ fn settle(
         }) {
             continue;
         }
+        // A district takes its city's template where that template can found here.
+        let city = district.flatten().filter(|template| {
+            selection
+                .ranked
+                .iter()
+                .any(|candidate| candidate.template == *template)
+        });
         let mut excluded = Vec::new();
-        let mut next = Some(settings.template.unwrap_or(selection.selected));
+        let mut next = Some(settings.template.or(city).unwrap_or(selection.selected));
         while let Some(template) = next {
             let mut town = Town::new(candidate.clone(), settings.layout);
             town.template = selection.clone();
@@ -402,7 +410,10 @@ fn settle(
                 if let Some(work) = settings.major_work {
                     crate::town::major_works::commission_requested(&mut town, settings.seed, work)?;
                 }
-                crate::town::major_works::commission(&mut town, settings.seed, &inherited);
+                // A district's works were placed on its city map and arrive inherited.
+                if district.is_none() {
+                    crate::town::major_works::commission(&mut town, settings.seed, &inherited);
+                }
                 return Ok(town);
             }
             if settings.template.is_some() {
@@ -424,6 +435,25 @@ fn settle(
             "No eligible and habitable {template} founding site for {}",
             seat.name
         )
+    }))
+}
+/// When the seat is a city map's district, the template its city chose: `Some(None)` for a
+/// district without one, `None` for an ordinary settlement.
+fn district_seat(
+    state: &State,
+    seat: &crate::town::seat::Seat,
+) -> io::Result<Option<Option<crate::town::templates::Template>>> {
+    let mut found = state.records.features.get(seat.key)?;
+    if found.is_none() {
+        if let Some(source) = state.records.source_features.as_deref() {
+            found = source.get(seat.key)?;
+        }
+    }
+    Ok(found.filter(|f| f.kind == "district").map(|f| {
+        f.attributes
+            .get("template")
+            .and_then(serde_json::Value::as_str)
+            .and_then(crate::town::templates::Template::from_name)
     }))
 }
 pub struct Operations {

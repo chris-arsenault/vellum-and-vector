@@ -429,6 +429,29 @@ fn seats(
             [p[0] + origin[0], p[1] + origin[1]]
         })
         .collect();
+    // A district map grows from its district: the city map's district polygon covering the
+    // frame's centre is its one seat, with the district's people and built ground.
+    let middle = Position::xy((bounds[0] + bounds[2]) / 2., (bounds[1] + bounds[3]) / 2.);
+    for feature in features.values(FeatureSelection {
+        area_id: area,
+        layer_id: Some("settlements"),
+        kind: Some("district"),
+    })? {
+        let feature = feature?;
+        let covers = state
+            .spatial
+            .covers_points(&feature.geometry, &[middle])
+            .map_err(io::Error::other)?;
+        if covers.first() == Some(&true) {
+            let [x, y, _] = state
+                .spatial
+                .interior_position(&feature.geometry)
+                .map_err(io::Error::other)?
+                .coordinates();
+            let centre = town_centre([x, y], &candidates, ground, state.spatial.as_ref())?;
+            return Ok(vec![seat(state, &feature, centre, roads, bounds)?]);
+        }
+    }
     for feature in features.values(FeatureSelection {
         area_id: area,
         layer_id: Some("settlements"),

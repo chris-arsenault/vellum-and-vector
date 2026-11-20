@@ -72,6 +72,7 @@ impl PreparedRequest {
             &configuration::Frame {
                 profile: frame.profile,
                 regional: request.region.is_some(),
+                city: frame.scope.city.is_some(),
                 inherited: frame.has_parent,
                 landmarks_apply: !frame.has_parent || !request.landmarks.is_empty(),
                 standalone_magic: !sources.is_empty(),

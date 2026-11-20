@@ -44,5 +44,7 @@ pub(super) const POLICY: Policy = Policy {
                 (Axis::Access, !s.approaches.is_empty(), 1),
             ])
         },
+        // A wide inner precinct and an outer rim of petitioners' quarters.
+        super::rules::CityLevel { quarter: 300. },
     )
 };

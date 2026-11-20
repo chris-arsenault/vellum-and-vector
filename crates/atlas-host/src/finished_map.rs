@@ -18,7 +18,7 @@ use atlas_generation::{
         fields::Fields,
         placed::{self, MagicSource},
         product::{
-            inputs::{Field, Lake},
+            inputs::{self, Field, Lake},
             Assets, Product,
         },
         registry::Registry,
@@ -195,6 +195,7 @@ impl Request {
         spatial: &dyn SpatialKernel,
     ) -> io::Result<PreparedMap> {
         let context = self.world.geography.context();
+        let outline = inputs::outline(&context, self.area_id)?;
         let mut resources = WorkingSet::new(store.clone(), cache);
         let mut numerical = Vec::new();
         for (id, source) in self.references()? {
@@ -216,14 +217,19 @@ impl Request {
                 .ok_or_else(|| {
                     io::Error::other("Map publication requires the field's pinned geography")
                 })?;
+            let footprint = field
+                .footprint
+                .clone()
+                .unwrap_or_else(|| manifest.scope.footprint.clone());
+            // A field lying only in the context band has nothing to publish on this map.
+            let Some(footprint) = inputs::within(footprint, outline, spatial)? else {
+                continue;
+            };
             numerical.push(Field {
                 id,
                 area: field.area_id,
                 input: field.input,
-                footprint: field
-                    .footprint
-                    .clone()
-                    .unwrap_or_else(|| manifest.scope.footprint.clone()),
+                footprint,
                 resource: source.load(&mut resources)?,
                 ocean: shape.ocean.clone().flatten(),
                 ocean_recorded: shape.ocean.is_some(),

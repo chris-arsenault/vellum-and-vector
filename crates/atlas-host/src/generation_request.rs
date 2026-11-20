@@ -167,6 +167,7 @@ impl Request {
             &configuration::Frame {
                 profile: frame.profile,
                 regional: self.region.is_some(),
+                city: frame.scope.city.is_some(),
                 inherited: frame.has_parent,
                 landmarks_apply: !frame.has_parent || !self.landmarks.is_empty(),
                 standalone_magic: !crate::generation_rules::located_sources(

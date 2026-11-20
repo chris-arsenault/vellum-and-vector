@@ -43,5 +43,7 @@ pub(super) const POLICY: Policy = Policy {
                 (Axis::Civic, s.old, 1),
             ])
         },
+        // Courts and lodging ring wide kept ground at city scale.
+        super::rules::CityLevel { quarter: 300. },
     )
 };

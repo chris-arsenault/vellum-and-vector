@@ -9,6 +9,17 @@ use crate::town::{
 pub(super) fn market() -> Definition {
     Definition {
         label: "market",
+        // A great market fills the crowded, built-up crossing of the city's ways, or the
+        // ground before one of its gates.
+        city: CityMap::Shows(CityAppearance {
+            symbol: "market",
+            ground: 15_000.,
+            raised_by: |r| {
+                let meeting = if r.gate { 1. } else { crossing(r) };
+                together(&[r.density, r.built, meeting, 1. - r.fringe * 0.5])
+            },
+            seeds: &[Kind(Identity::Provision), Kind(Identity::Inn)],
+        }),
         naming_work: "square",
         activity: Activity::Trade,
         form: Form::Open,
@@ -86,6 +97,13 @@ fn exchange(kind: Kind, seat: &Seat) -> Option<Purpose> {
 pub(super) fn exchange_hall() -> Definition {
     Definition {
         label: "exchange hall",
+        // Merchants with means build their exchange at an old crossing near the heart.
+        city: CityMap::Shows(CityAppearance {
+            symbol: "exchange",
+            ground: 4_000.,
+            raised_by: |r| together(&[r.wealth, crossing(r), r.standing, 1. - r.fringe]),
+            seeds: &[Kind(Identity::Storehouse)],
+        }),
         naming_work: "marketHall",
         activity: Activity::Trade,
         form: Form::Frontage,
@@ -129,6 +147,7 @@ pub(super) fn exchange_hall() -> Definition {
 pub(super) fn provision() -> Definition {
     Definition {
         label: "provision seller",
+        city: LOCAL,
         naming_work: "shop",
         activity: Activity::Trade,
         form: Form::Frontage,
@@ -161,6 +180,7 @@ pub(super) fn provision() -> Definition {
 pub(super) fn retail(v: Retail) -> Definition {
     Definition {
         label: v.label(),
+        city: ORDINARY,
         naming_work: "shop",
         activity: Activity::Trade,
         form: Form::Frontage,
@@ -220,6 +240,7 @@ pub(super) fn retail(v: Retail) -> Definition {
 pub(super) fn storehouse() -> Definition {
     Definition {
         label: "storehouse",
+        city: WORKING,
         naming_work: "warehouse",
         activity: Activity::Trade,
         form: Form::Yard,
@@ -255,6 +276,19 @@ pub(super) fn storehouse() -> Definition {
 pub(super) fn landing() -> Definition {
     Definition {
         label: "landing",
+        // The city's quays line usable shore where its built ground and ways come down to it.
+        city: CityMap::Shows(CityAppearance {
+            symbol: "quay",
+            ground: 20_000.,
+            raised_by: |r| {
+                if r.shore {
+                    together(&[r.built, 0.5 * (r.density + crossing(r))])
+                } else {
+                    0.
+                }
+            },
+            seeds: &[Kind(Identity::Storehouse), Kind(Identity::CarrierYard)],
+        }),
         naming_work: "harbor",
         activity: Activity::Trade,
         form: Form::WaterEdge,
@@ -312,6 +346,13 @@ fn landing_access(kind: Kind, seat: &Seat) -> Option<Purpose> {
 pub(super) fn fairground() -> Definition {
     Definition {
         label: "fairground",
+        // Fairs meet on open ground at the city's edge where ways arrive.
+        city: CityMap::Shows(CityAppearance {
+            symbol: "fair",
+            ground: 40_000.,
+            raised_by: |r| together(&[r.fringe, crossing(r), 1. - r.built]),
+            seeds: &[Kind(Identity::Tavern)],
+        }),
         naming_work: "square",
         activity: Activity::Trade,
         form: Form::Open,

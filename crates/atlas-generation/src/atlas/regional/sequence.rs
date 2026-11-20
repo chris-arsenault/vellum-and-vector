@@ -56,6 +56,15 @@ fn refresh(catalogue: &Catalogue, context: &Context<'_>, occurrence: &str) -> io
 }
 // Arconis: docs/architecture/subsystems.arconis#item=rg_publish — composes the regional sequence ending in an independent child map.
 pub fn sequence(catalogue: &Catalogue, context: &Context<'_>) -> io::Result<Sequence> {
+    rounds(catalogue, context, false)
+}
+/// A city map develops as a region does, with a city growth pass after each round's people
+/// pass: growth reads where people, ways and centres stand, and the next round's refinement
+/// reads what growth changed.
+pub fn city(catalogue: &Catalogue, context: &Context<'_>) -> io::Result<Sequence> {
+    rounds(catalogue, context, true)
+}
+fn rounds(catalogue: &Catalogue, context: &Context<'_>, city: bool) -> io::Result<Sequence> {
     let context = Context {
         policy: Policy::Regional,
         ..context.clone()
@@ -127,11 +136,21 @@ pub fn sequence(catalogue: &Catalogue, context: &Context<'_>) -> io::Result<Sequ
             &occurrence,
             Values::from_iter([("people".into(), society.into())]),
         ));
+        if city {
+            body.push(invocation(
+                "refinement.city-growth",
+                &occurrence,
+                Values::from_iter([("round".into(), round.into())]),
+            ));
+        }
         body.extend(group(
             "water.routing",
             &format!("{occurrence}/final-courses"),
             span,
         )?);
+    }
+    if city {
+        body.push(invoke("refinement.city-plan", Values::new()));
     }
     body.extend(refresh(catalogue, &context, "final")?);
     for slot in [

@@ -341,4 +341,7 @@ impl poi::catalogue::CatalogueState<Schedule<Self>> for State {
             .as_ref()
             .clone())
     }
+    fn city(&self, kind: Kind) -> io::Result<Vec<Place>> {
+        crate::atlas::regional::city::places(self, kind)
+    }
 }

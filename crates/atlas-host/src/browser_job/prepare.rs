@@ -70,6 +70,7 @@ impl BrowserJob {
                         selection: request.selection,
                         name,
                         real_scale: request.real_scale,
+                        city: request.city,
                     }),
                     document,
                     area,
@@ -122,6 +123,7 @@ impl BrowserJob {
             name,
             operation,
             real_scale: child.real_scale(prepared.submission.input.quality),
+            city: child.city,
         };
         let captured = regional_capture::capture(
             capture,

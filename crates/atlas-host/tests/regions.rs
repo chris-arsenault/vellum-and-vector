@@ -336,6 +336,105 @@ fn surveyed_dry_land_can_be_divided_without_named_polygons() {
     }
 }
 
+/// An organic region becomes a child map of that outline. The child generates over the
+/// outline with a band of context around it, which is not a rectangle.
+#[test]
+fn an_organic_region_is_captured_as_its_outline_with_a_context_band() {
+    use atlas_host::{
+        generation_world::{random_id, CreateWorld},
+        numerical_resource::{Descriptor, Scope},
+        regional_capture::{Selection, Source},
+    };
+    struct Empty;
+    impl Source for Empty {
+        fn resource(&self, _: &str) -> std::io::Result<Descriptor> {
+            unreachable!()
+        }
+        fn geography(&self, _: &Scope, _: &str) -> std::io::Result<serde_json::Value> {
+            unreachable!()
+        }
+    }
+    let (mut input, _, kernel) = supplied();
+    let world_id = random_id();
+    let document = CreateWorld {
+        id: world_id,
+        name: "Parent".into(),
+        seed: 1,
+        width: 100.0,
+        height: 100.0,
+        settings: None,
+        boundary_mode: None,
+    }
+    .create()
+    .unwrap();
+    input.map.reference.map_id = document.scope.located.area_id;
+    input.map.world_id = world_id;
+    input.map.primary_space_id = world_id;
+    input.map.spaces[0].id = world_id;
+    // A valley bending round a ridge: an L of two arms.
+    let valley = Geometry::Polygon {
+        coordinates: vec![vec![
+            Position::xy(20.0, 20.0),
+            Position::xy(60.0, 20.0),
+            Position::xy(60.0, 35.0),
+            Position::xy(35.0, 35.0),
+            Position::xy(35.0, 70.0),
+            Position::xy(20.0, 70.0),
+            Position::xy(20.0, 20.0),
+        ]],
+    };
+    let region = MapRegion {
+        id: "valley".into(),
+        name: "Valley".into(),
+        space_id: world_id,
+        parent_id: None,
+        geometry: region(valley.clone()),
+        child: None,
+    };
+    let selection = atlas_map::RegionSelection {
+        parent: input.map.reference.clone(),
+        space_id: world_id,
+        geometry: region.geometry.clone(),
+        feature_ids: vec![],
+        region_path: vec![region],
+    };
+    let area_id = random_id();
+    let captured = Selection {
+        parent: &input.map,
+        selection: &selection,
+        id: area_id,
+        name: "Valley",
+        operation: id("capture"),
+        real_scale: None,
+        city: None,
+    }
+    .capture(document, vec![], &Empty, &kernel)
+    .unwrap();
+    let area = &captured.document.world["areas"][&area_id.to_string()];
+    let outline: Geometry = serde_json::from_value(area["footprint"].clone()).unwrap();
+    let extent: Geometry = serde_json::from_value(area["map"]["extent"].clone()).unwrap();
+    let area_of = |g: &Geometry| kernel.area(g).unwrap();
+    // The child map is exactly the valley, not its bounding box.
+    assert!((area_of(&outline) - area_of(&valley)).abs() < 1e-6);
+    // Generation covers the valley and a band around it, cut to the parent's domain.
+    assert!(kernel
+        .relation(&extent, &outline, Predicate::Covers)
+        .unwrap());
+    assert!(area_of(&extent) > area_of(&outline));
+    let Bounds(w, s, e, n) = kernel.bounds(&extent).unwrap();
+    assert!(area_of(&extent) < 0.8 * (e - w) * (n - s));
+    // The ridge inside the bend stays outside the band.
+    assert!(
+        !kernel
+            .covers_points(&extent, &[Position::xy(55.0, 65.0)])
+            .unwrap()[0]
+    );
+    assert_eq!(
+        kernel.area(&captured.document.scope.footprint).unwrap(),
+        area_of(&extent)
+    );
+}
+
 #[test]
 fn regional_capture_preserves_selected_depth_and_leaves_room_for_coasts() {
     use atlas_host::{
@@ -390,6 +489,7 @@ fn regional_capture_preserves_selected_depth_and_leaves_room_for_coasts() {
         name: "Coast",
         operation: id("capture"),
         real_scale: None,
+        city: None,
     }
     .capture(
         serde_json::from_value(serde_json::to_value(&document).unwrap()).unwrap(),
@@ -427,6 +527,7 @@ fn regional_capture_preserves_selected_depth_and_leaves_room_for_coasts() {
         name: "Glen",
         operation: id("real-scale"),
         real_scale: Some(real),
+        city: None,
     }
     .capture(document, vec![], &Empty, &kernel)
     .unwrap();

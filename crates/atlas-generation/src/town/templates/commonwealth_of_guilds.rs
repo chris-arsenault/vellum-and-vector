@@ -40,5 +40,7 @@ pub(super) const POLICY: Policy = Policy {
                 (Axis::Civic, s.old, 1),
             ])
         },
+        // Guild jurisdictions are quarters strung along shared conduits and lanes.
+        super::rules::CityLevel { quarter: 250. },
     )
 };

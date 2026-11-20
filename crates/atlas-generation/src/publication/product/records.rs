@@ -56,6 +56,8 @@ impl Product<'_> {
         let mut cave_marks = marks.clone();
         let mut hex_layer = None;
         let key = crate::publication::key::map_key(&self.vectors, map)?;
+        let outline = super::inputs::outline(self.descriptor.context, self.descriptor.area)?;
+        let spatial = self.vectors.registry.spatial;
         for layer in &map.layers {
             if layer.id == "vector:hexes" {
                 hex_layer = Some(layer);
@@ -89,10 +91,15 @@ impl Product<'_> {
                 feature.space_id = layer.space_id;
                 Ok(feature)
             });
+            let features = super::inputs::clip_records(
+                features.collect::<io::Result<Vec<_>>>()?,
+                outline,
+                spatial,
+            )?;
             self.vector_layer(
                 map,
                 layer,
-                features,
+                features.into_iter().map(Ok),
                 layer_marks,
                 publisher,
                 assets,
@@ -103,7 +110,6 @@ impl Product<'_> {
         self.cave_hexes(map, &cave_marks, publisher, assets, control)
             .await?;
         if let (Some(real), Some(layer), Some(sources)) = (&map.real_scale, hex_layer, &marks) {
-            let spatial = self.vectors.registry.spatial;
             // The descriptor's bounds stay compact across a cylinder seam.
             let frame = map.bounds;
             let area = self.descriptor.area;
@@ -130,9 +136,19 @@ impl Product<'_> {
             let hexes =
                 super::hexes::hex_features(real, frame, area, sources, ground.as_ref(), spatial)?
                     .into_iter()
-                    .map(|feature| self.vectors.record(feature).map_err(io::Error::other));
-            self.vector_layer(map, layer, hexes, &mut None, publisher, assets, control)
-                .await?;
+                    .map(|feature| self.vectors.record(feature).map_err(io::Error::other))
+                    .collect::<io::Result<Vec<_>>>()?;
+            let hexes = super::inputs::clip_records(hexes, outline, spatial)?;
+            self.vector_layer(
+                map,
+                layer,
+                hexes.into_iter().map(Ok),
+                &mut None,
+                publisher,
+                assets,
+                control,
+            )
+            .await?;
         }
         Ok(())
     }

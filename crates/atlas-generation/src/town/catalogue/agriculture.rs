@@ -12,6 +12,7 @@ fn farming_household(site: &development::HousingSite) -> bool {
 pub(super) fn common() -> Definition {
     Definition {
         label: "common",
+        city: LAND,
         naming_work: "clearance",
         activity: Activity::Agriculture,
         form: Form::Open,
@@ -44,6 +45,7 @@ pub(super) fn common() -> Definition {
 pub(super) fn farmstead() -> Definition {
     Definition {
         label: "farmstead",
+        city: LAND,
         naming_work: "household",
         activity: Activity::Agriculture,
         form: Form::Yard,
@@ -79,6 +81,9 @@ pub(super) fn grove() -> Definition {
     let common = common();
     Definition {
         label: "tenders' grove",
+        city: CityMap::Hidden(
+            "A tenders' grove keeps to Greenwood's own rooted ground, which the city map carries in its magic fields.",
+        ),
         naming_work: "grove",
         premises: Premises {
             site: Site::RootedGround,
@@ -106,6 +111,7 @@ fn farm_access(kind: Kind, seat: &Seat) -> Option<Purpose> {
 pub(super) fn outbuilding() -> Definition {
     Definition {
         label: "agricultural outbuilding",
+        city: LAND,
         naming_work: "farmBuilding",
         activity: Activity::Agriculture,
         form: Form::Yard,

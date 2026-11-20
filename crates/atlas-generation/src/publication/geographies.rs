@@ -109,7 +109,8 @@ const GROUPS: &[Group] = &[
     (
         "built.layout",
         "settlements",
-        &["settlement", "ward"],
+        // A city map's hot-spot places, districts and major works (ADR 0018).
+        &["settlement", "ward", "cityPlace", "district", "majorWork"],
         false,
     ),
     ("built.layout", "ruins", &["settlement"], false),
@@ -178,6 +179,8 @@ const GROUPS: &[Group] = &[
             "wall",
             "bridge",
             "gate",
+            "cityWall",
+            "cityGate",
         ],
         false,
     ),

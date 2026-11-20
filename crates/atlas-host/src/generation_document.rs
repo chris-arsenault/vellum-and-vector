@@ -65,7 +65,10 @@ impl Preparation {
         document.scope = prepared.geography.scope.clone();
         // The world document keys its areas by identity text.
         let area = document.scope.located.area_id.to_string();
-        document.world["areas"][&area]["footprint"] = json!(document.scope.footprint);
+        // A captured child keeps its outline; it generates over its wider extent.
+        if document.world["areas"][&area]["map"]["extent"].is_null() {
+            document.world["areas"][&area]["footprint"] = json!(document.scope.footprint);
+        }
         document.world["reference"]["boundaryMode"] =
             json!(request.geography.reference.boundary_mode);
         if !prepared.geography.frame.has_parent && !request.geography.has_generated_geography() {

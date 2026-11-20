@@ -124,6 +124,8 @@ pub fn resolve(input: &Input, defaults: &Settings) -> io::Result<Resolved> {
 pub struct Frame {
     pub profile: Profile,
     pub regional: bool,
+    /// A city map: a regional refinement whose rounds interleave city growth.
+    pub city: bool,
     pub inherited: bool,
     pub landmarks_apply: bool,
     pub standalone_magic: bool,
@@ -147,6 +149,33 @@ impl Frame {
     }
 }
 impl Resolved {
+    /// The process sequence a map's frame selects: real-scale, city, regional or world.
+    fn sequence(
+        &self,
+        frame: &Frame,
+        catalogue: &Catalogue,
+        context: &Context<'_>,
+    ) -> io::Result<crate::recipe::Sequence> {
+        let regional = super::regional::sequence::sequence;
+        Ok(
+            match (frame.regional, frame.profile.real_scale(), frame.city) {
+                (true, true, _) => super::regional::sequence::real_scale(
+                    catalogue,
+                    context,
+                    super::town::sequence(catalogue, context)?,
+                )?,
+                (true, false, true) => super::regional::sequence::city(catalogue, context)?,
+                (true, false, false) => regional(catalogue, context)?,
+                (false, ..) => super::sequence::configured(
+                    catalogue,
+                    context,
+                    &self.settings.epochs,
+                    &self.settings.human_eras,
+                    frame.inherited,
+                )?,
+            },
+        )
+    }
     pub fn recipe(&self, input: &Input, frame: &Frame) -> io::Result<Configuration> {
         validate_domains(input, frame.profile)?;
         if !frame.regional && self.parameters.map_boundary == 2.0 {
@@ -182,23 +211,7 @@ impl Resolved {
             .unwrap()
             .to_owned();
         let real_scale = frame.regional && frame.profile.real_scale();
-        let sequence = if real_scale {
-            super::regional::sequence::real_scale(
-                &catalogue,
-                &context,
-                super::town::sequence(&catalogue, &context)?,
-            )?
-        } else if frame.regional {
-            super::regional::sequence::sequence(&catalogue, &context)?
-        } else {
-            super::sequence::configured(
-                &catalogue,
-                &context,
-                &self.settings.epochs,
-                &self.settings.human_eras,
-                frame.inherited,
-            )?
-        };
+        let sequence = self.sequence(frame, &catalogue, &context)?;
         Ok(Configuration {
             id: if real_scale {
                 "real-scale".into()

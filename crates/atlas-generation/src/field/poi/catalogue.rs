@@ -5,6 +5,9 @@ pub trait CatalogueState<Schedule>: super::carry::CarryState<Schedule> {
     fn catalogue(&self) -> &Catalogue<Self, Schedule>;
     fn parent_cell_span(&self) -> f64;
     fn settlement_places(&self) -> io::Result<Vec<super::values::Place>>;
+    /// A city map's own places of one kind, each with its published record: walls, gates,
+    /// hot-spot places, districts and major works. None on other maps.
+    fn city(&self, kind: super::kinds::Kind) -> io::Result<Vec<super::values::Place>>;
 }
 
 // Arconis: docs/architecture/subsystems.arconis#item=pp_catalogue — the one place catalogue that classifies and publishes places.
