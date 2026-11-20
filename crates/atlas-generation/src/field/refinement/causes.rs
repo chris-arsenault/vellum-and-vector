@@ -75,11 +75,11 @@ fn order_cells<T>(items: &mut Vec<T>, key: impl Fn(&T) -> usize) {
 impl Evidence {
     fn order(&mut self) {
         // hpc-exempt: sparse named feature records are ordered by stable identity.
-        self.courses.sort_by(|a, b| a.feature.id.cmp(&b.feature.id));
+        self.courses.sort_by_key(|c| c.feature.id);
         // hpc-exempt: sparse captured landmark identities.
-        self.landmarks.sort_by(|a, b| a.id.cmp(&b.id));
+        self.landmarks.sort_by_key(|l| l.id);
         // hpc-exempt: sparse named settlement records.
-        self.seats.sort_by(|a, b| a.feature_id.cmp(&b.feature_id));
+        self.seats.sort_by_key(|s| s.feature_id);
         order_cells(&mut self.entries, |entry| entry.cell);
         order_cells(&mut self.lakes, |lake| lake.cells[0]);
     }

@@ -122,7 +122,7 @@ fn upsert(
             placed.landmark.name.clone()
         },
         system_id: Some(system.into()),
-        landmark_id: Some(placed.landmark.id.clone()),
+        landmark_id: Some(placed.landmark.id),
         area_id: Some(scene.area),
         space_id: Some(scene.space),
         scope: None,

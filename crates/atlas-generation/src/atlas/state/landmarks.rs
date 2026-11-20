@@ -247,11 +247,11 @@ impl State {
             );
         }
         Ok(Feature {
-            id: landmark.id.clone(),
+            id: landmark.id,
             name: landmark.name.clone(),
             kind: "landmark".into(),
             layer_id: layer.into(),
-            area_id: self.scope.area.clone(),
+            area_id: self.scope.area,
             geometry: self
                 .chart()
                 .geometry(&landmark.geometry, self.spatial.as_ref())

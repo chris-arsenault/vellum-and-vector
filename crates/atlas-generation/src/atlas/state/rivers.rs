@@ -122,8 +122,8 @@ impl State {
         drop(discharges);
         dry::publish(self)?;
         self.drainage = Some(DrainageNetwork {
-            area_id: self.scope.area.clone(),
-            space_id: self.scope.space.clone(),
+            area_id: self.scope.area,
+            space_id: self.scope.space,
             reaches: records.into_iter().map(|r| r.reach).collect(),
             kept: Some(self.field().capture_rivers()),
             input: false,

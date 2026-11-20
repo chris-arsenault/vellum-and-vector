@@ -49,7 +49,7 @@ fn standing(
     };
     attributes.insert("settlementRole".into(), role.into());
     if let Some(realm) = realm {
-        attributes.insert("polityId".into(), realm.entity.clone().into());
+        attributes.insert("polityId".into(), realm.entity.into());
     }
     Ok(())
 }

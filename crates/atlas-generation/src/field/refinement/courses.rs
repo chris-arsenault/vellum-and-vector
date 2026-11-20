@@ -38,7 +38,7 @@ pub fn captured_courses(
         })?
         .collect::<io::Result<Vec<_>>>()?;
     // hpc-exempt: order sparse named feature identities, not cell storage.
-    rivers.sort_by(|a, b| a.id.cmp(&b.id));
+    rivers.sort_by_key(|r| r.id);
     let mut courses = Vec::new();
     for feature in rivers {
         if removed.contains(&feature.id) {

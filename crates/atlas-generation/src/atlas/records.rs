@@ -29,12 +29,7 @@ pub fn prepare(state: &mut State, domains: &[String]) -> io::Result<()> {
                     .collect(),
             },
         );
-        contracted.extend(
-            feature
-                .relations
-                .iter()
-                .map(|relation| relation.target_id.clone()),
-        );
+        contracted.extend(feature.relations.iter().map(|relation| relation.target_id));
     }
     for feature in features {
         let selected = domains

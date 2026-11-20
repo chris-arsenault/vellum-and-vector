@@ -96,7 +96,7 @@ impl Publication {
         for (place, mut feature) in records {
             self.attributes(state, entry, &place, &mut feature)?;
             super::names::apply_term(state, entry, &place, &mut feature)?;
-            let feature_id = feature.id.clone();
+            let feature_id = feature.id;
             if put_generated(state, feature)? {
                 self.written.push(Published {
                     kind: entry.id,

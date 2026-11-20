@@ -55,10 +55,10 @@ impl Product<'_> {
         {
             let drawn = atlas_map::authoring::shape_of(&layer.id).is_some();
             let (space_id, is_latent) = match (layers::underground(&layer.id), &underground) {
-                (false, _) => (map.primary_space_id.clone(), false),
-                (true, Some(space)) => (space.id.clone(), false),
+                (false, _) => (map.primary_space_id, false),
+                (true, Some(space)) => (space.id, false),
                 (true, None) => match &latent_space {
-                    Some(space) if drawn => (space.id.clone(), true),
+                    Some(space) if drawn => (space.id, true),
                     _ => continue,
                 },
             };
@@ -301,7 +301,7 @@ impl Product<'_> {
                 None => lake.geometry.clone(),
             };
             lakes.insert(
-                lake.id.clone(),
+                lake.id,
                 Lake {
                     geometry,
                     level: lake.level,

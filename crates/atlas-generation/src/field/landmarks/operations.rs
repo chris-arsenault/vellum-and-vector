@@ -157,7 +157,7 @@ impl Operations {
         shortfall: Option<&Measures>,
     ) -> ExecutionResult<()> {
         let missing = |key: &str| shortfall.map(|m| m.get(key).copied().unwrap_or(0.0));
-        let id = placed.landmark.id.clone();
+        let id = placed.landmark.id;
         match placed.landmark.kind {
             Kind::VolcanicMountain | Kind::ResistantMountain => {
                 let command = if placed.landmark.kind == Kind::VolcanicMountain {
@@ -256,7 +256,7 @@ fn impact(p: &Placed<'_>) -> ImpactRing {
 fn scarp(p: &Placed<'_>) -> Escarpment {
     let m = &p.landmark.parameters;
     Escarpment {
-        id: p.landmark.id.clone(),
+        id: p.landmark.id,
         path: p.path.clone(),
         width_km: m["scarpWidth"],
         throw_metres: m["throw"],
@@ -265,7 +265,7 @@ fn scarp(p: &Placed<'_>) -> Escarpment {
 fn canyon(p: &Placed<'_>) -> Canyon {
     let m = &p.landmark.parameters;
     Canyon {
-        id: p.landmark.id.clone(),
+        id: p.landmark.id,
         path: p.path.clone(),
         rim_width_km: m["rimWidth"],
         depth_metres: m["depth"],
@@ -275,7 +275,7 @@ fn canyon(p: &Placed<'_>) -> Canyon {
 fn falls(p: &Placed<'_>) -> Falls {
     let m = &p.landmark.parameters;
     Falls {
-        id: p.landmark.id.clone(),
+        id: p.landmark.id,
         center: p.center,
         drop_metres: m["drop"],
         capture_distance_km: m["captureDistance"],

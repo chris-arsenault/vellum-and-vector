@@ -201,7 +201,7 @@ impl State {
         };
         for (target, relation) in [(&water.id, "crosses"), (&way.id, "carries")] {
             feature.relations.push(Relation {
-                target_id: target.clone(),
+                target_id: *target,
                 kind: relation.into(),
             });
         }

@@ -37,7 +37,7 @@ fn floors(state: &impl LandmarkState) -> io::Result<Rc<BitSet>> {
         for placed in landmarks::landmarks_of(state, LandmarkKind::Canyon)?.iter() {
             let p = &placed.landmark.parameters;
             let input = Canyon {
-                id: placed.landmark.id.clone(),
+                id: placed.landmark.id,
                 path: placed.path.clone(),
                 rim_width_km: p["rimWidth"],
                 depth_metres: p["depth"],

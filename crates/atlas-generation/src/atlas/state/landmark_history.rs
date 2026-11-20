@@ -225,7 +225,7 @@ impl State {
                 "landmark.emplace"
             }
             .into(),
-            subjects: vec![landmark.id.clone()],
+            subjects: vec![landmark.id],
             description,
         });
     }

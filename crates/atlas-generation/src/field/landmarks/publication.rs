@@ -43,7 +43,7 @@ pub fn claimed_cells(
         return canyon::floor_cells(
             field,
             &Canyon {
-                id: landmark.id.clone(),
+                id: landmark.id,
                 path: placed.path,
                 rim_width_km: p["rimWidth"],
                 depth_metres: p["depth"],

@@ -102,7 +102,7 @@ pub fn records(state: &impl MapState, parent: &Feature) -> io::Result<(Vec<Featu
                 continue;
             };
             let mut relations = vec![Relation {
-                target_id: parent.id.clone(),
+                target_id: parent.id,
                 kind: "partOf".into(),
             }];
             relations.extend(parent.relations.clone());

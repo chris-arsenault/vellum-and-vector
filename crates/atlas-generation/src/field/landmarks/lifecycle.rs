@@ -40,7 +40,7 @@ fn ensure(
         return Ok(at);
     }
     let record = LandmarkRecord {
-        id: placed.landmark.id.clone(),
+        id: placed.landmark.id,
         kind: placed.landmark.kind.id().into(),
         realized: realized(context.state(), placed),
         emplaced_at_epoch: placed.landmark.emplaced_at_epoch,

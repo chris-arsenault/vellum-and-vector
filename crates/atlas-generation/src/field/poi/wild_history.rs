@@ -38,7 +38,7 @@ impl<S: super::map_records::MapState + WildHistory> super::contract::Publication
 impl From<&Feature> for Observation {
     fn from(feature: &Feature) -> Self {
         Self {
-            id: feature.id.clone(),
+            id: feature.id,
             name: feature.name.clone(),
             geometry: feature
                 .footprint

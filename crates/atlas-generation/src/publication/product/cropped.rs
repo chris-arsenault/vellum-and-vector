@@ -83,7 +83,7 @@ fn parent_assets(layers: &[MapLayer]) -> Vec<String> {
 }
 fn child_layer(layer: &MapLayer, map: &MapDescriptor, id: &str, window: &crop::Window) -> MapLayer {
     let mut layer = layer.clone();
-    layer.space_id = map.primary_space_id.clone();
+    layer.space_id = map.primary_space_id;
     layer.bounds = window.grid.bounds;
     if let LayerSource::Raster(source) | LayerSource::Attributes(source) = &mut layer.source {
         source.asset_id = id.into();

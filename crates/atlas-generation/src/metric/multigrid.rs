@@ -128,36 +128,38 @@ impl Level {
         }
         Ok(())
     }
-    fn cycle(&mut self) -> io::Result<()> {
-        {
-            let mut x = self.x.write_values()?;
-            match x.as_mut_slice() {
-                Some(x) => x[..self.matrix.count].fill(0.0),
-                None => {
-                    for i in 0..self.matrix.count {
-                        x.set(i, 0.0)?;
-                    }
+    fn clear_solution(&mut self) -> io::Result<()> {
+        let mut x = self.x.write_values()?;
+        match x.as_mut_slice() {
+            Some(x) => x[..self.matrix.count].fill(0.0),
+            None => {
+                for i in 0..self.matrix.count {
+                    x.set(i, 0.0)?;
                 }
             }
         }
-        match &self.solver {
-            Solver::Diagonal => {
-                let rhs = self.rhs.read_values()?;
-                let diagonal = self.matrix.diagonal.read_values()?;
-                let mut x = self.x.write_values()?;
-                if let (Some(r), Some(d)) = (rhs.as_slice(), diagonal.as_slice()) {
-                    if let Some(x) = x.as_mut_slice() {
-                        for (i, x) in x.iter_mut().enumerate().take(self.matrix.count) {
-                            *x = r[i] / d[i];
-                        }
-                        return Ok(());
-                    }
-                }
-                for i in 0..self.matrix.count {
-                    x.set(i, rhs.get(i)? / diagonal.get(i)?)?;
-                }
-                return Ok(());
+        Ok(())
+    }
+    fn diagonal_solve(&mut self) -> io::Result<()> {
+        let rhs = self.rhs.read_values()?;
+        let diagonal = self.matrix.diagonal.read_values()?;
+        let mut x = self.x.write_values()?;
+        if let (Some(r), Some(d), Some(x)) = (rhs.as_slice(), diagonal.as_slice(), x.as_mut_slice())
+        {
+            for (i, x) in x.iter_mut().enumerate().take(self.matrix.count) {
+                *x = r[i] / d[i];
             }
+            return Ok(());
+        }
+        for i in 0..self.matrix.count {
+            x.set(i, rhs.get(i)? / diagonal.get(i)?)?;
+        }
+        Ok(())
+    }
+    fn cycle(&mut self) -> io::Result<()> {
+        self.clear_solution()?;
+        match &self.solver {
+            Solver::Diagonal => return self.diagonal_solve(),
             Solver::Factor(lower) => return triangular_solve(lower, &self.rhs, &mut self.x),
             Solver::Coarse { .. } => (),
         }

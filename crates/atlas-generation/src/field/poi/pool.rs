@@ -100,7 +100,7 @@ fn record<S: MapState>(state: &S, feature: &Feature, pool: &Pool) -> io::Result<
         },
     )?;
     record.relations.push(crate::features::Relation {
-        target_id: feature.id.clone(),
+        target_id: feature.id,
         kind: "on".into(),
     });
     Ok(record)

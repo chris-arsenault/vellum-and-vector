@@ -30,11 +30,11 @@ impl Activity {
         }
     }
 }
-pub fn sources<'a>(
-    sources: &'a [Source],
+pub fn sources(
+    sources: &[Source],
     space: atlas_map::Id,
     thermal: bool,
-) -> impl Iterator<Item = &'a Source> {
+) -> impl Iterator<Item = &Source> {
     sources.iter().filter(move |source| {
         source.system_id.is_none()
             && ["heat", "cold"].contains(&source.effect.as_str()) == thermal
@@ -299,7 +299,7 @@ impl Surface {
                 .unwrap_or(0.0);
             causes.push(Cause::Magic {
                 process: "magic.advanceStorage".into(),
-                source_id: source.id.clone(),
+                source_id: source.id,
                 activity,
                 forcing: self.summarize_channel(&forcing_key)?,
                 stored: self.summarize_channel(&key)?,

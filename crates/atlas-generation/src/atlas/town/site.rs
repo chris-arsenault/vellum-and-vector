@@ -479,7 +479,7 @@ fn seat(
     }
     let story = story(feature, arms.len(), guarded);
     Ok(Seat {
-        key: feature.id.clone(),
+        key: feature.id,
         name: feature.name.clone(),
         centre,
         story,

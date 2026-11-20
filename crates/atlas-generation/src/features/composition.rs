@@ -88,7 +88,7 @@ impl Composition<'_> {
             }
         }
         // hpc-exempt: feature representation ancestry, not numerical cell ordering.
-        details.sort_by(|a, b| (a.0, a.1).cmp(&(b.0, b.1)));
+        details.sort_by_key(|a| (a.0, a.1));
         for (_, id, detail) in details {
             let footprint = &self.context.area(id)?.footprint;
             let mut parts = Vec::new();

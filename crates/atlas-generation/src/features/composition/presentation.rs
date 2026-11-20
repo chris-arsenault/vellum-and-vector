@@ -58,7 +58,7 @@ pub fn present(composition: &Composition<'_>, feature: &Feature) -> SpatialResul
             result.state = detail.state;
             result.actor = detail.actor.clone();
             result.protected = detail.protected;
-            result.generation_id = detail.generation_id.clone();
+            result.generation_id = detail.generation_id;
             if detail.map_only == Some(true) {
                 result.map_only = Some(true);
             }
