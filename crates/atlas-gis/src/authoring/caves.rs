@@ -31,7 +31,7 @@ pub(super) fn opening(
         return Ok((map, Vec::new()));
     }
     let surface = FeatureQuery {
-        space_id: map.primary_space_id.clone(),
+        space_id: map.primary_space_id,
         layer_ids: Some(vec!["vector:hexes".into()]),
         ..Default::default()
     };
@@ -89,7 +89,7 @@ fn wall_depth(
     let reach = map.real_scale.as_ref().map_or(1.0, |r| r.across_flats) * CAVE_REACH_HEXES;
     let Bounds(w, s, e, n) = spatial.bounds(&wall.geometry).map_err(other)?;
     let query = FeatureQuery {
-        space_id: wall.space_id.clone(),
+        space_id: wall.space_id,
         bounds: Some(Bounds(w - reach, s - reach, e + reach, n + reach)),
         layer_ids: Some(vec!["vector:caves".into()]),
         ..Default::default()

@@ -21,7 +21,7 @@ impl dyn MapAccess + '_ {
         let mut first = true;
         for space in &map.spaces {
             let mut query = FeatureQuery {
-                space_id: space.id.clone(),
+                space_id: space.id,
                 ..Default::default()
             };
             loop {

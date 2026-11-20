@@ -319,7 +319,7 @@ impl Planner<'_> {
         let geometry = self.shaped_kind(layer_id, kind, drawn)?;
         let mut feature = MapFeature {
             id,
-            space_id: layer.space_id.clone(),
+            space_id: layer.space_id,
             entity_id: None,
             layer_id: layer_id.into(),
             name: name.filter(|name| !name.trim().is_empty()),

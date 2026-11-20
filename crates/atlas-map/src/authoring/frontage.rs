@@ -234,21 +234,24 @@ mod tests {
         }))
         .unwrap()
     }
+    fn streets_and_plot() -> (MapFeature, MapFeature, MapFeature) {
+        let line = |x: f64| json!({"type":"LineString","coordinates":[[x,0],[x,10]]});
+        (
+            feature("High Street", "vector:roads", "street", line(0.0)),
+            feature("Mill Lane", "vector:roads", "street", line(5.0)),
+            feature(
+                "plot",
+                "vector:plots",
+                "yard",
+                json!({"type":"Polygon","coordinates":[[[1,1],[2,1],[2,2],[1,1]]]}),
+            ),
+        )
+    }
     /// A plot's street is its `fronts` relation; readdressing replaces it, and removing the
     /// address removes the relation with the address text.
     #[test]
     fn a_holder_finds_its_street_by_relation() {
-        let line = |x: f64| json!({"type":"LineString","coordinates":[[x,0],[x,10]]});
-        let (high, mill) = (
-            feature("High Street", "vector:roads", "street", line(0.0)),
-            feature("Mill Lane", "vector:roads", "street", line(5.0)),
-        );
-        let plot = feature(
-            "plot",
-            "vector:plots",
-            "yard",
-            json!({"type":"Polygon","coordinates":[[[1,1],[2,1],[2,2],[1,1]]]}),
-        );
+        let (high, mill, plot) = streets_and_plot();
         assert_eq!(street_of(&plot), None);
         let numbered = readdress(&plot, Some((&high, 3)));
         assert_eq!(street_of(&numbered), Some(high.id));
@@ -260,8 +263,12 @@ mod tests {
         let cleared = readdress(&moved, None);
         assert_eq!(street_of(&cleared), None);
         assert!(!cleared.attributes.contains_key("address"));
-        // A plot reached from its street keeps that tie when renumbered on it.
-        let mut reached = numbered.clone();
+    }
+    /// A plot reached from its street keeps that tie when renumbered on it.
+    #[test]
+    fn a_plot_reached_from_its_street_keeps_the_tie_when_renumbered() {
+        let (high, _, plot) = streets_and_plot();
+        let mut reached = readdress(&plot, Some((&high, 3)));
         reached.relations[0].kind = ACCESS_FROM.into();
         let renumbered = readdress(&reached, Some((&high, 5)));
         assert_eq!(renumbered.relations[0].kind, ACCESS_FROM);

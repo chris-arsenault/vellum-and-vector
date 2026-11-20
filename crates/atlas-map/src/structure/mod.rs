@@ -189,7 +189,7 @@ fn hex_feature(geometry: &Geometry, hex: Hex, layer: &MapLayer, type_id: &str) -
     ]);
     MapFeature {
         id: hex.id(crate::Id::from_name(&layer.id)),
-        space_id: layer.space_id.clone(),
+        space_id: layer.space_id,
         entity_id: None,
         layer_id: layer.id.clone(),
         name: Some(format!("Hex {}, {}", hex.q, hex.r)),

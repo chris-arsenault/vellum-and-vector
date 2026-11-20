@@ -244,7 +244,7 @@ fn descriptor(request: &ShellRequest<'_>, ring: &[Point]) -> Result<MapDescripto
     let bounds = frame(ring, request.hex.across_flats);
     // The ground floor stands in the parent's space; its ancestors come along so it resolves.
     let mut spaces = Vec::new();
-    let mut next = Some(building.space_id.clone());
+    let mut next = Some(building.space_id);
     while let Some(id) = next.take() {
         let space = parent
             .spaces
@@ -270,9 +270,9 @@ fn descriptor(request: &ShellRequest<'_>, ring: &[Point]) -> Result<MapDescripto
     scale.enabled = false;
     Ok(MapDescriptor {
         reference: request.reference.clone(),
-        world_id: parent.world_id.clone(),
+        world_id: parent.world_id,
         name,
-        primary_space_id: building.space_id.clone(),
+        primary_space_id: building.space_id,
         profile: "interior".into(),
         region_scale: scale,
         footprint: rectangle(bounds),
@@ -319,7 +319,7 @@ fn shell_feature(
         .clone();
     Ok(MapFeature {
         id,
-        space_id: layer.space_id.clone(),
+        space_id: layer.space_id,
         entity_id: None,
         layer_id: layer.id.clone(),
         name: Some(name.into()),

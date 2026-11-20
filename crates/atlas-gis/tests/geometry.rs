@@ -172,9 +172,8 @@ fn trace_resampling_retains_endpoints_and_polygonization_uses_noded_lines() {
     assert_eq!(spatial.area(&faces[0]).unwrap(), 16.0);
 }
 
-#[test]
-fn indexed_queries_preserve_input_order_and_use_geometry_distance_not_envelope_distance() {
-    let spatial = NativeGeos::new(0.001).unwrap();
+/// A holed square around the origin and a point one unit east of it.
+fn holed_square_and_point() -> [Geometry; 2] {
     let mut holed = polygon(-5.0, -5.0, 10.0);
     let Geometry::Polygon { coordinates: inner } = polygon(-4.0, -4.0, 8.0) else {
         unreachable!()
@@ -182,12 +181,18 @@ fn indexed_queries_preserve_input_order_and_use_geometry_distance_not_envelope_d
     if let Geometry::Polygon { coordinates } = &mut holed {
         coordinates.push(inner[0].clone());
     }
-    let values = [
+    [
         holed,
         Geometry::Point {
             coordinates: Position::xy(1.0, 0.0),
         },
-    ];
+    ]
+}
+
+#[test]
+fn indexed_queries_preserve_input_order_and_use_geometry_distance_not_envelope_distance() {
+    let spatial = NativeGeos::new(0.001).unwrap();
+    let values = holed_square_and_point();
     let index = spatial.index(&values).unwrap();
     assert_eq!(index.query(Bounds(-5.0, -5.0, 5.0, 5.0)).unwrap(), [0, 1]);
     assert_eq!(index.query(Bounds(0.0, 0.0, 0.0, 0.0)).unwrap(), [0]);
@@ -202,6 +207,13 @@ fn indexed_queries_preserve_input_order_and_use_geometry_distance_not_envelope_d
         index.nearest_with_distance(Position::xy(0., 0.)).unwrap(),
         Some((1, 1.))
     );
+}
+
+#[test]
+fn indexed_nearest_many_and_empty_or_inverted_queries() {
+    let spatial = NativeGeos::new(0.001).unwrap();
+    let values = holed_square_and_point();
+    let index = spatial.index(&values).unwrap();
     assert_eq!(
         index
             .nearest_many(&[Position::xy(0.0, 0.0), Position::xy(0.0, 4.0)])

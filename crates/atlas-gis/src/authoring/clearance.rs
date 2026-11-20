@@ -52,7 +52,7 @@ fn around(scope: &Scope<'_>, draft: &Draft, geometry: &Geometry) -> io::Result<V
         .map(|layer| layer.id.clone())
         .collect();
     let query = FeatureQuery {
-        space_id: scope.map.primary_space_id.clone(),
+        space_id: scope.map.primary_space_id,
         bounds: Some(Bounds(w - 1.0, s - 1.0, e + 1.0, n + 1.0)),
         layer_ids: Some(layers),
         ..Default::default()
@@ -84,7 +84,7 @@ fn size_of(scope: &Scope<'_>, street: &MapFeature) -> io::Result<Size> {
         .map(|layer| layer.id.clone())
         .collect();
     let query = FeatureQuery {
-        space_id: scope.map.primary_space_id.clone(),
+        space_id: scope.map.primary_space_id,
         layer_ids: Some(layers),
         ..Default::default()
     };

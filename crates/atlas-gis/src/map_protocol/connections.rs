@@ -43,7 +43,7 @@ fn in_layers(
             continue;
         }
         let query = FeatureQuery {
-            space_id: space.id.clone(),
+            space_id: space.id,
             bounds: Some(near),
             layer_ids: Some(layers),
             ..Default::default()

@@ -127,7 +127,7 @@ fn features(centre: [f64; 2], nearby: &[(crate::Id, MapFeature)]) -> Vec<NearbyF
         .map(|(map_id, feature)| NearbyFeature {
             map_id: *map_id,
             feature_id: feature.id,
-            space_id: feature.space_id.clone(),
+            space_id: feature.space_id,
             name: feature.name.clone().unwrap_or_else(|| feature.kind.clone()),
             kind: feature.kind.clone(),
             distance: distance(centre, &feature.geometry),

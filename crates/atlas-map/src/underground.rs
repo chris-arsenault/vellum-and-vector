@@ -75,7 +75,7 @@ fn layer(
 ) -> MapLayer {
     MapLayer {
         id: id.into(),
-        space_id: space.id.clone(),
+        space_id: space.id,
         name: name.into(),
         bounds: space.bounds,
         attribution: Vec::new(),

@@ -495,10 +495,11 @@ pub fn size_from(parts: [Option<f64>; 4], round: Option<bool>) -> Option<KindSiz
         _ => None,
     }
 }
+/// A category's surface appearance as its stored columns: bathymetric, tint, system and
+/// system name.
+pub type SurfaceParts = (Option<bool>, Option<f64>, Option<String>, Option<String>);
 /// A category's surface appearance as its stored parts.
-pub fn surface_parts(
-    surface: Option<&SurfaceAppearance>,
-) -> (Option<bool>, Option<f64>, Option<String>, Option<String>) {
+pub fn surface_parts(surface: Option<&SurfaceAppearance>) -> SurfaceParts {
     surface.map_or((None, None, None, None), |s| {
         (
             Some(s.bathymetric),

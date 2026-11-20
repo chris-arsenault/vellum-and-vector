@@ -42,7 +42,7 @@ impl EditStore for PostgresMaps {
         let (map_id, revision) = (uuid(r.map_id), uuid(r.revision));
         self.transaction(|| {
             self.lock(r.map_id)?;
-            self.remove_features(r, &write.removed)?;
+            self.remove_features(r, write.removed)?;
             self.replace_description(write.map)?;
             self.write_features(&super::records::Open::new(write.map.clone()), write.features)?;
             match write.step {
