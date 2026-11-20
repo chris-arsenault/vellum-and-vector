@@ -239,6 +239,17 @@ simulations.
 - [ ] **25. Store presentation attribute discovery.** The presentation catalog
       discovers feature attributes with a JSON scan per request; derive them once
       per record revision like the other stored products.
+- [ ] **35. Keep buildings off a street's full width.** Authoring clearance
+      (`atlas-gis/src/authoring/clearance.rs`, `around`) finds nearby features by the
+      building's bounds and tests streets by their centre line, so a building may
+      stand on a street by up to about half its width before it is refused. Test the
+      street's width as the town process does.
+- [ ] **36. Read rock columns without copying their cargo.** Coastal erosion reads
+      whole rock columns with each layer's cargo list for every cell; its profile is
+      dominated by cargo copies and allocation. Read the layers a process needs and
+      move cargo only where material moves. Water evolution and ancestral fluvial
+      erosion need a profile on a city chain before their change is chosen
+      ([ADR 0017](adr/0017-gis-native-storage-and-rust-native-data.md)).
 
 ## Hosted workspace
 
