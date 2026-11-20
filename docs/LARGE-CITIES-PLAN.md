@@ -1,177 +1,215 @@
-# Large cities: a city map refined into district maps
+# Large cities: city refinement, then district maps
 
-Working copy of a proposed plan (owner direction 2026-11-19). Nothing here is built. The
-last milestone moves its durable content into an ADR and the backlog and deletes this file.
+Working copy of a proposed plan (owner direction 2026-11-19 and 2026-11-20). Nothing here is
+built. The last milestone moves its durable content into an ADR and the backlog and deletes
+this file.
 
 ## Outcome
 
-A large city is made the way every other layer is made: refined from larger to smaller.
-First a city map is generated completely. It covers the whole city, coarser than streets
-and buildings, and shows:
-- the city's land and water;
-- its walls, gates and main roads;
-- its major landmarks;
-- six or seven districts, each with its own population, density, wealth, specializations
-  and occupations.
+A large city is made the way every other layer is made: refined from larger to smaller. A
+city refinement turns the city and its surroundings into a city map, the city overview of
+Baldur's Gate or Neverwinter Nights. It shows:
+- the city's land and water, walls and main roads;
+- its districts with their population, density, wealth, specializations and occupations;
+- its major works and other prominent places, drawn at their rough location.
 
-Then any district can be refined into its own map, where streets, plots and buildings grow
-from the district's character. This follows the city maps of Baldur's Gate and Neverwinter
-Nights: one map of the city and its districts, each district a map of its own. District
-outlines follow the city: rivers, walls, roads, ridges and the edges of older growth, not
-rectangles.
+It shows no ordinary streets or houses. Any district can then be refined into its own map,
+where streets, plots and buildings grow from the district's character. District outlines
+follow the city, not rectangles.
 
-## User requirements (owner, 2026-11-19)
+## User requirements (owner)
 
+2026-11-19:
 1. Cities refine like every other layer, larger to smaller, then subdivide.
-2. A city map comes first, generated completely, with its own features and major
-   landmarks. It is not as fine-grained as streets and buildings. It holds districts with
-   their density, specializations and occupations.
-3. After the city map is complete, individual districts (wards) are refined as their own
-   maps.
-4. Districts are not forced to be rectangular. They follow arbitrary, organic boundaries.
-   Generation areas stop being rectangles.
+2. A city map comes first and is generated completely, with its own features and major
+   landmarks. It is coarser than streets and buildings, and holds districts with their
+   density, specializations and occupations.
+3. Districts (wards) are refined afterwards as their own maps.
+4. Districts are not forced to be rectangular; generation areas follow arbitrary, organic
+   boundaries.
 5. Lattice sizes follow the scale contract: a child of about a seventh of its parent's area
    has about the parent's triangle count (Draft about 15k, Standard about 60k).
 
-Standing direction: towns grow through processes, never stamped layouts; a child captures
-its parent's context and writes only itself; parent and child owe each other landmark
-agreement; regions are indexed polygons.
+2026-11-20:
+
+6. Rough agreement between maps remains enough, including between neighbouring districts.
+7. The city map shows some buildings: major works for certain, and other prominent POIs at
+   their rough location.
+8. City generation is a hybrid process.
+   - From regional refinement: a city refinement takes the city's surroundings and the
+     parent's numerical fields and refines them to a smaller grid.
+   - The refinement focuses on the social representation.
+   - From the graph-based town and works system: at hot spots in that social
+     representation it runs small development iterations that place major POIs.
+9. Major works are POIs that happen to appear on the bigger map. The city map reaches into
+   the POI catalogue, which is extended with how its places appear on a large-scale map.
+
+Standing direction: towns grow through processes, never stamped layouts; people live on the
+land's layers ([ADR 0012](adr/0012-people-live-on-the-lands-layers.md)); the POI
+catalogue is the one definition of places and a missing concept becomes a contract slot;
+refinement writes only the child; regions are indexed polygons.
 
 ## How the research informs generation
 
 The research pass of 2026-11-19, from the sources it opened:
 
-- **Real cities nest in parts of a few to tens of square kilometres.** Paris's 20
+- **Real cities nest in parts of a few to tens of square kilometres.** Paris's
   arrondissements run 2–16 km², New York's community districts 4–59 km², Tokyo's wards
   10–60 km². Each level splits into 4 to 18 parts, so six or seven districts per city map
   fits real cities and the scale contract.
-- **City-wide decisions belong to the city map.** Hillier's space syntax describes a
-  foreground network of main roads linking centres and other towns, set in a background of
-  residential streets. Main roads, centres and their ranking, landmarks and district
-  identity are therefore decided once, on the city map, and inherited by districts.
-- **District edges form on rivers, walls and main roads.** Conzen and Whitehand's fringe
-  belts form against walls and in building slumps, and survive inside the grown city. The
-  city map draws district outlines along those features, which makes them organic and puts
-  seams where streets change anyway.
-- **Large cities absorb villages that keep their identity.** London and Paris both grew
-  this way. On the city map, an absorbed village becomes a district with its own older
-  centre.
-- **Coarse to fine is the established pattern.** Parish and Müller go from highways to
+- **Main roads and centres form a city-wide foreground network** (Hillier's space syntax).
+  The city refinement therefore decides them once, and districts inherit them as starting
+  conditions.
+- **Centres grow from seed intersections that reinforce each other.** Where several
+  pressures meet, new centres seed and older ones grow. These are the hot spots in the
+  social fields where the city refinement runs its small development iterations.
+- **District edges form on rivers, walls and main roads; fringe belts form against walls
+  and in slumps and persist** (Conzen, Whitehand). District outlines follow those edges and
+  the boundaries between social character in the refined fields.
+- **Large cities absorb villages that keep their identity** (London, Paris). An absorbed
+  village shows as its own centre and district.
+- **Coarse to fine.** Parish and Müller go from population and land maps to highways,
   streets, lots and buildings. Chen et al. trace major roads first, then fill the regions
-  between and seed their streets from the major roads' ends.
+  between.
 
 ## Proposed design
 
 Agent-derived and revisable; owner decisions are marked.
 
-**Scale ladder.** Using the real-scale hex ladder, each step from city to district is a
-third of the hex size, about a ninth of the area: close to the scale contract's seventh.
+**City refinement is a regional refinement focused on people.**
+- It is opened at a settlement from the district map that holds it.
+- Like every refinement, it captures the city and its surroundings and the parent's
+  numerical fields, and refines them on a finer lattice sized by the scale contract: about
+  the parent's triangle count over the city's surroundings.
+- The physical processes run as in regional refinement.
+- The social representation is the focus. People's bands are refined at the finer grid
+  through the people pass:
+  - population and density;
+  - shares built on and under crops;
+  - how long built places have stood;
+  - the identity column: tongue, faith, custom, allegiance, craft.
 
-| Map | Hex | Area at ~15k Draft triangles | Real-world match |
-|---|---|---|---|
-| City map | 300 m | ~16 × 12 km, ~200 km² | A historic capital, or Paris inside its walls |
-| District map | 100 m | ~5 × 4 km, ~20–30 km² | A Paris arrondissement, a New York district |
+  From these the city reads districts of distinct population, wealth, specialization and
+  occupation.
 
-A metropolis larger than one city map (New York, Tokyo) needs one more level: its city
-map's districts are themselves cities with district maps. **Owner:** confirm the ladder
-and the step.
+**Hot spots run small development iterations.**
+- Where the social fields concentrate (dense, long-standing, at a crossing of ways, a
+  harbour, a seat of power, a shrine), the city refinement runs a few rounds of the
+  graph-based town and works system on that spot.
+- Those rounds decide what major works and prominent places stand there, and roughly
+  where.
+- They do not grow the whole city's streets.
+- What they place is published on the city map at its rough location and size:
+  - major works (a cathedral, a harbour mole, a palace, walls and gates);
+  - other prominent places (a great market, a guildhall, a temple precinct).
 
-**City map.**
-- A ground map opened at a settlement from its region, sized to the settlement's
-  footprint.
-- Its generation runs the land at city scale, then a city stage:
-  - main roads continuing the region's ways, river crossings and the harbour;
-  - walls and gates;
-  - centres and their ranking, major landmarks and absorbed villages;
-  - six or seven districts, cut along rivers, walls, main roads and fringe belts;
-  - each district's population, density, wealth, specializations (docks, markets,
-    temples, crafts, noble quarter) and occupations, drawn from the city's census and
-    position.
-- It publishes:
-  - the main roads, walls and landmarks as features;
-  - density and land-use as rasters;
-  - each district as a named region polygon with its character.
-- It shows no buildings.
+**The POI catalogue says how a place appears on a large-scale map.**
+- Each catalogue entry gains a slot for its large-scale appearance:
+  - whether it shows on a city map;
+  - the social and physical conditions that raise it there;
+  - its rough footprint and symbol;
+  - what it seeds when a district map is refined from it.
+- Major works become catalogue places that show at that scale, not a separate kind.
+- Entries without the slot do not appear on city maps; the slot is filled kind by kind as
+  open work.
 
-**District map.**
-- Opened from a district polygon on a complete city map.
-- Generated over the district's own outline, not a rectangle.
-- It captures:
-  - the city map's land;
-  - the main roads, walls, gates and landmarks inside and along its outline, as fixed
-    features;
-  - its character, as the census and conditions its town rounds start from.
-- The existing town processes grow its streets, plots, buildings and occupations, with
-  minor streets starting from the main roads.
+**Districts.**
+- The city refinement cuts six or seven districts.
+- Outlines follow the refined social fields' boundaries, rivers, walls, main roads and
+  fringe belts.
+- Each district is published as a named region polygon with its population, density,
+  wealth, specializations and occupations.
 
-**Neighbouring districts.**
-- Outlines run along main roads, rivers and walls that the city map has already fixed, so
-  two districts meet on the same feature, generated in either order.
-- **Owner:** this is a new agreement between maps: sibling districts share their boundary
-  features exactly. Until now maps owe each other only landmark agreement.
+**District maps.**
+- A district opens from its polygon as a real-scale map over its own outline.
+- It captures the city map's land, main roads, walls and the major POIs inside it as
+  starting conditions, with rough agreement as today.
+- The existing town processes grow its streets, plots, buildings and occupations from the
+  district's character.
+- The major POIs the city map placed seed the district's development where they stand.
 
-**Non-rectangular generation.**
+**Generation over arbitrary outlines.**
 - Today a refined child's lattice is built over the bounding rectangle of the selected
   outline plus a margin (`atlas-host/src/generation_frame.rs`, `regional_frame`).
 - The change:
   - Build the frame over the outline itself, with a band of context outside it.
-  - Grow and publish only inside the outline.
-  - Publish rasters and features clipped to the outline.
-- This applies to every refinement, not only districts. A region can then follow a coast,
-  a valley or a border.
+  - Grow inside the outline, and publish only inside it.
+- This applies to every refinement, not only districts.
+
+**Scale.** **Owner:** confirm the sizes.
+- Example: a city of about 16 × 12 km refined at about 15k Draft triangles has cells of
+  about a hundred metres, enough for districts, main roads and the rough place of major
+  works.
+- Its districts at a seventh of that, about 5 × 4 km, each fit one real-scale map at
+  100 m hexes.
+- A metropolis larger than one city refinement needs one more level, where its districts
+  are themselves cities.
 
 ## Milestones
 
 ### M1 — Generation over arbitrary outlines
 Scope: refinement and real-scale generation build their frame, capture, processes and
-publication over the selected outline instead of its bounding rectangle, keeping a context
-band outside it.
+publication over the selected outline, keeping a context band outside it.
 Acceptance: a region selected as an organic outline (a valley, a coast) is generated and
 published inside that outline, with no rectangular edge.
 Evidence: frame and capture unit tests on supplied polygons; one organic region in the
 reference chain.
 
-### M2 — The city map [depends on M1]
-Scope: a city map kind opened at a settlement. A city stage generates main roads,
-crossings, walls and gates, centres, landmarks and absorbed villages, then cuts six or
-seven organic districts with their population, density, wealth, specializations and
-occupations, published as region polygons.
-Acceptance: the reference chain's largest city shows a readable city with districts that
-follow its rivers, walls and roads, each with a distinct character.
-Evidence: unit tests of each city-stage process on small fields; one city map.
+### M2 — The large-scale appearance slot in the POI catalogue
+Scope: the catalogue contract gains the large-scale appearance slot (conditions, rough
+footprint, symbol, what it seeds). Major works become catalogue places with the slot
+filled; other prominent kinds are filled first, the rest stubbed as open work.
+Acceptance: the catalogue lists, for every kind, whether and how it appears on a city map.
+Evidence: catalogue contract tests.
 
-### M3 — District maps [depends on M1, M2]
-Scope: a district opens from its polygon as a district map over its own outline. It
-captures the city map's land, main roads, walls and landmarks as fixed, and grows its
-fabric from its character.
-Acceptance: a dock district and a temple district of the same city look like those
-districts, and their main roads are the city map's.
+### M3 — City refinement and its social fields [depends on M1]
+Scope: a city refinement opened at a settlement refines the city's surroundings and the
+parent's fields on a finer lattice, with the people pass refining the social bands. It
+publishes density, land-use and character rasters and the main roads.
+Acceptance: the reference chain's largest city refines into a city map whose density and
+character vary across it as its census, roads and water suggest.
+Evidence: unit tests on small fields; one city map.
+
+### M4 — Hot spots place major POIs [depends on M2, M3]
+Scope: hot spots in the refined social fields run small town and works iterations that
+place major works and prominent POIs at their rough location on the city map.
+Acceptance: the city map shows its palace, temples, harbour works, walls and markets where
+the city's people and ways concentrate, and nowhere else.
+Evidence: hot-spot and iteration unit tests; the reference city map.
+
+### M5 — Districts [depends on M3]
+Scope: the city refinement cuts six or seven organic districts along its social
+boundaries, rivers, walls, main roads and fringe belts, each published as a region polygon
+with its character.
+Acceptance: districts tile the city, follow its features and differ in character.
+Evidence: geometry unit tests; the reference city's districts.
+
+### M6 — District maps [depends on M1, M4, M5]
+Scope: a district opens as a real-scale map over its outline. It captures the city map's
+land, main roads, walls and major POIs, and grows its fabric from its character and the
+POIs it holds.
+Acceptance: a harbour district and a temple district of the same city look like those
+districts, around the major POIs the city map placed.
 Evidence: town development unit tests with supplied city context; two district maps.
 
-### M4 — Neighbouring districts meet [depends on M3]
-Scope: districts generated in either order agree exactly on their shared roads, rivers
-and walls; plots stop at their side of the shared street.
-Acceptance: two neighbouring districts, opened side by side, continue each other without
-a step or gap.
-Evidence: a seam test over two supplied districts; two neighbouring district maps.
-
-### M5 — Navigating the city [depends on M3]
-Scope: the viewer goes from the region to the city map, from the city map into a district,
-across to a neighbouring district and back; the city map finds a district's streets and
-addresses.
+### M7 — Navigating the city [depends on M6]
+Scope: the viewer goes from the region to the city map, into a district and across to a
+neighbouring one.
 Acceptance: the Baldur's Gate pattern in the viewer: city overview, then districts.
 Evidence: browser UI wiring tests on fixture maps.
 
-### M6 — Integrate and record [depends on M1–M5]
+### M8 — Integrate and record [depends on M1–M7]
 Scope: an ADR for cities and organic outlines; backlog entries; this file deleted.
 
 ## Assumptions to check
 
-- The 300 m hex resolves walls, main roads and district edges well enough for a city map.
-- Town processes accept fixed main roads and a supplied character as starting conditions
-  without a second road network authority. The town plan's network ownership decides this.
-- A district's town rounds stay within today's single-map town run times at its census.
+- The people pass refines meaningfully at city resolution: its steps are sized by area and
+  years, not by a cell size tuned to regions.
+- A few town and works rounds at a hot spot can place major POIs without growing the
+  surrounding streets, given the town plan's network ownership.
+- A district's town rounds, seeded with its major POIs, stay within today's single-map town
+  run times.
 
 ## Sulion mapping
 
-To be published when work starts, as a root plan with M1–M6 as phases.
+To be published when work starts, as a root plan with M1–M8 as phases.
