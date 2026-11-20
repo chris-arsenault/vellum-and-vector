@@ -387,3 +387,26 @@ Execution authorized 2026-11-20 ("execute all phases of the plan").
   the city map.
 - **M7 built.** The viewer offers "Open a city map" on a settlement and "Open this
   district" on a city map's district (`frontend/src/CityOpen.tsx`, `cityMaps.ts`).
+
+Run evidence, 2026-11-20, kept world, Draft:
+
+- `Rivassanrema-city` (M3 only, no growth): 26 km city map, about 128 m cells, 21 minutes.
+- `Rivassanrema-city-planned` (M3–M5b): one city wall, six districts, two major works,
+  one hot-spot place, no gates.
+- `Rivassanrema-district-map` (M6), the central part of the "Religious house quarter":
+  6.5 × 5.8 km, a town of 70 buildings and 12 streets, one inherited major work.
+
+Open, against the milestone acceptance:
+
+- **M3:** refining three levels at once from the district map leaves parent-cell blocks
+  in the people fields; the map's people layers hold far fewer people than the city's
+  census of 530,000. Every later step inherits this.
+- **M4:** hot spots raise one place; the readings (craft, faith, crossings) rarely reach
+  the raising threshold.
+- **M3c:** the wall opens no gates; its run does not meet the maintained ways strongly
+  enough.
+- **M5:** districts are unbalanced; one covers most of the city.
+- **M6:** a district town is far smaller than its district's share of the city.
+- A resumed city job fails with "Existing output resource belongs to a different scope";
+  unverified whether the outline frame causes it.
+- M8 waits on these; the plan file stays.
