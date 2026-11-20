@@ -50,9 +50,14 @@ follow the city, not rectangles.
 11. City walls get their own phase. Not every city has walls, and a city's walls are not
     always at its outskirts; some cities have several. Most processes need to know whether
     a place is inside or outside a wall.
-12. Correction: hot spots are not major works. A district has at least one major work, and
-    in addition some hot-spot POIs that come from the other POIs in the catalogue.
-13. Settlement templates are extended to support a district mode and an overall city mode.
+12. Correction: hot spots are not major works. Hot spots place POIs that come from the
+    other POIs in the catalogue. Major works keep the older ruling ("keep the older 3-5
+    major work ruling"): the population-band expectation in `settlement-major-works.md`,
+    with no per-district minimum.
+13. Each template provides guidance at the city level and at the district level. A large
+    city selects a template for both levels; a smaller city uses only the district level.
+    The city and district guidance give similar layouts, tailored to their size and
+    fidelity.
 
 Standing direction: towns grow through processes, never stamped layouts; people live on the
 land's layers ([ADR 0012](adr/0012-people-live-on-the-lands-layers.md)); the POI
@@ -152,32 +157,32 @@ Agent-derived and revisable; owner decisions are marked.
 - Hot spots do not place major works.
 - They do not grow the whole city's streets.
 
-**Every district has at least one major work (owner correction 2026-11-20).**
+**A city's major works follow the population-band expectation (owner 2026-11-20).**
 
-- Major works come from the existing major-work contract: work types with their own
-  siting, construction and sponsorship rules (`town/major_works.rs`,
-  `catalogue/works.rs`), sited where the work's own requirements meet in the district.
-- They are published on the city map at their rough location and size, with the
-  hot-spot POIs.
-- [DECISION] owner: today's major-work expectation by population (roughly two or three for
-  a capital, five or six for a million-plus city, in `settlement-major-works.md`) is lower
-  than six or seven districts each holding one. Either the per-district rule replaces that
-  expectation for cities with district maps, or a city has fewer districts. Blocking at M5b.
+- The count follows the existing ruling in `settlement-major-works.md`: a size-weighted
+  draw at founding, rare organic works during growth, and one shared expectation by
+  population band. There is no per-district minimum.
+- Each work is sited by its type's own siting, construction and sponsorship rules
+  (`town/major_works.rs`, `catalogue/works.rs`) where its requirements meet in the city.
+- Works are published on the city map at their rough location and size, with the hot-spot
+  POIs. A district map captures the works that stand inside it.
 
-**Templates work at city and district scale (owner direction 2026-11-20).**
+**Every template guides both the city and the district level (owner 2026-11-20).**
 
 - Today a template is chosen once per settlement from founding-site evidence, and its
   policy (tenure, where uses prefer to build, ground level, connectors, enclosure,
-  alignment, proposed streets) is read by founding and the recurring town processes.
-- City mode: the city refinement chooses one template for the whole city from the city's
-  evidence. City growth rounds read its policy at city scale: where centres seed, how main
-  roads align, who holds land, which enclosures and walls it implies.
-- District mode: each district chooses its own template from its character, within what the
-  city template allows (a guild quarter, a sanctuary precinct, a treaty-market quarter, a
-  walled household compound). The district map's town rounds read that policy.
-- The template contract gains the mode; each template states which modes it supports and
-  what its policy means in each. A template that has no city meaning offers only district
-  mode.
+  alignment, proposed streets) is read by founding and the recurring town processes. That
+  is district-level guidance: it works on plots, frontages and streets.
+- Each template gains city-level guidance with a similar layout at the city map's size
+  and fidelity: where centres and gates sit, how main roads align, which ground is held
+  and by whom, where enclosures and walls run, and how levels or banks connect. A
+  surveyors' ring is a ring of main roads on the city map and a ring of frontages on a
+  district map; a walled household state is a walled compound and its dependent quarters
+  on the city map and the same arrangement in plots on a district map.
+- A large city selects one template from its site evidence, by the existing weighted draw.
+  The city refinement's growth rounds read
+  its city-level guidance; each district map reads its district-level guidance.
+- A smaller city, with no city map, uses only the district level, as towns do today.
 
 **The POI catalogue says how a place appears on a large-scale map.**
 
@@ -204,7 +209,7 @@ Agent-derived and revisable; owner decisions are marked.
 - It captures the city map's land, main roads, walls, the district's major works and its
   hot-spot POIs as starting conditions, with rough agreement as today.
 - The existing town processes grow its streets, plots, buildings and occupations from the
-  district's character, under its district-mode template.
+  district's character, under the city template's district-level guidance.
 - The major works and hot-spot POIs the city map placed seed the district's development
   where they stand.
 
@@ -259,8 +264,8 @@ Evidence: unit tests on small fields; one city map.
 
 Scope: city growth runs as a repeated pass in the city refinement's schedule. It extends
 the built extent, seeds and strengthens centres and shifts district character; the next
-refinement round reads what it changed. The city refinement chooses a city-mode template,
-and growth reads its policy (the template contract gains its modes here).
+refinement round reads what it changed. The city refinement selects the city's template,
+and growth reads its city-level guidance; the template contract gains that level here.
 Acceptance: a city's extent, centres and density change across rounds in response to its
 ways, water and people, and the refined fields respond to the growth.
 Evidence: unit tests of the growth pass on small fields; a removal run showing the city
@@ -295,23 +300,22 @@ with its character.
 Acceptance: districts tile the city, follow its features and differ in character.
 Evidence: geometry unit tests; the reference city's districts.
 
-### M5b — Major works and templates per district [depends on M2, M3b, M5]
+### M5b — Major works on the city map [depends on M2, M3b]
 
-Scope: each district receives at least one major work, sited by the work type's own
-rules, and chooses a district-mode template from its character within the city template.
-Acceptance: every district of the reference city holds a major work standing where its
-requirements meet, and districts of one city carry different templates where their
-characters differ.
-Evidence: major-work siting and template selection unit tests on supplied districts; the
-reference city map.
+Scope: the city's major works, counted by the population-band expectation, are sited by
+their types' own rules on the city map and published at their rough location and size.
+Acceptance: the reference city carries the number of works its population band expects,
+each standing where its requirements meet.
+Evidence: major-work siting unit tests on supplied city fields; the reference city map.
 
-### M6 — District maps [depends on M1, M4, M5b]
+### M6 — District maps [depends on M1, M4, M5, M5b]
 
 Scope: a district opens as a real-scale map over its outline. It captures the city map's
-land, main roads, walls, major works and hot-spot POIs, and grows its fabric from its
-character under its district-mode template.
+land, main roads, walls, the major works inside it and its hot-spot POIs, and grows its
+fabric from its character under the city template's district-level guidance.
 Acceptance: a harbour district and a temple district of the same city look like those
-districts, around the major POIs the city map placed.
+districts, around the works and POIs the city map placed, and a district's layout reads
+as the city template at district fidelity.
 Evidence: town development unit tests with supplied city context; two district maps.
 
 ### M7 — Navigating the city [depends on M6]
@@ -331,8 +335,10 @@ Scope: an ADR for cities and organic outlines; backlog entries; this file delete
   years, not by a cell size tuned to regions.
 - A few town rounds at a hot spot can place prominent POIs without growing the surrounding
   streets, given the town plan's network ownership.
-- Each template's policy has a meaning at city scale or at district scale, or both; the
-  fourteen templates are read one by one at M3b and M5b to confirm which.
+- Every one of the fourteen templates has a city-level layout similar to its district
+  layout. Each is written out at M3b; a template whose rule has no city-scale form (for
+  example a moored flotilla's hulls) gets the nearest city-scale arrangement, recorded
+  there.
 - The town fabric's existing walls (`town/founding.rs` kernel walls) and the city's walls
   are one representation at two scales; district maps capture the city's walls rather than
   founding their own.
