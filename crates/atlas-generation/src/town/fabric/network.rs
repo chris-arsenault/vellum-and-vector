@@ -117,7 +117,7 @@ impl Town {
             .filter(|(_, area)| *area > 0.0001)
         {
             let holding = &self.holdings[i];
-            if holding.public || holding.claim > load.value {
+            if holding.public || holding.land_claim() > load.value {
                 return Ok(false);
             }
             let Some(shape) = spatial
@@ -229,7 +229,7 @@ impl Town {
             if overlap <= 0.0001 {
                 continue;
             }
-            if holding.claim > priority {
+            if holding.land_claim() > priority {
                 return Ok(false);
             }
             let Some(outline) = spatial
@@ -299,6 +299,7 @@ impl Town {
             return false;
         }
         holding.kind = kind;
+        holding.operation_tier = 1;
         holding.ties.clear();
         holding.craft = None;
         holding.cause = "Existing premises adapted to a new use".into();

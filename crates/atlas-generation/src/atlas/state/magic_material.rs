@@ -166,6 +166,22 @@ impl State {
             .executor
             .run_with(&magic::exchange_water(), &RefCell::new(workspace.get_mut()))
     }
+
+    pub(crate) fn work_town_material(&mut self, uses: &[magic::TownUse]) -> ExecutionResult<()> {
+        if uses.is_empty() {
+            return Ok(());
+        }
+        let Some(workspace) = &mut self.physical.magic else {
+            return Ok(());
+        };
+        self.physical.executor.run_with(
+            &magic::town_material_use(),
+            &magic::TownMaterialUses {
+                workspace: RefCell::new(workspace.get_mut()),
+                uses,
+            },
+        )
+    }
     pub fn transport_retained_magic(&mut self) -> ExecutionResult<()> {
         let Some(workspace) = &mut self.physical.magic else {
             return Ok(());

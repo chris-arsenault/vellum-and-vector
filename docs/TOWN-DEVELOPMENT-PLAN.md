@@ -36,13 +36,87 @@ describe possible places.
 
 ## Feedback among settlement processes
 
+The [neighborhood-effects specification](settlement-neighborhood-effects-spec.md) defines the media, verbs and proposed catalogue. The [settlement feedback design](settlement-feedback-design.md) follows those effects across development rounds and describes productive traditions. Existing development owners use the resulting conditions to change occupied places, streets and grounds. Judge the result by whether readers can recognize a neighborhood from the mix and form of actual places on an unlabeled color-coded map.
+
 Sulion subplan `b4b77d1a-e3ef-4e90-b60c-eba5878b419e`. Design how the recurring processes should influence one another before measuring their effects. This work applies across templates. A template can constrain a placement or change a rule while the participating processes retain ownership of the interaction.
 
 1. **Design the loops in domain terms.** Start from the existing process and POI catalogs. Explain which actions by households, livelihoods, institutions and practitioners change a later choice by another participant. For each consequential loop, describe where it acts, what persists between rounds, what reinforces it and what can weaken or reverse it. For example, shared journeys can support a crossing, access can attract livelihoods, and new occupations can sustain more journeys. The design must explain what happens if those occupations leave. Cover ordinary economic and civic activity alongside the distinct practices of the seven magic systems.
-2. **Express the intended economy and interactions outside the code.** Use the geology and society design as the reference. For each chain, identify the state owner, the small set of typed messages, keys or questions crossing ownership boundaries, and the decision each consumer makes differently. Use stocks for things that accumulate or are spent. Represent access, obligations and spatial relationships according to what they do. Keep POI-specific behavior with its POI and craft-specific responses with the relevant system. A process has meaningful representation when it can influence a consequential choice under the conditions where it matters.
+2. **Express local interactions outside the code.** Use the geology and society design as the reference. For each chain, identify the state owner, the small set of typed messages, keys or questions crossing ownership boundaries, and the physical change each consumer can choose differently. Retain economic links when their origins, routes or loss matter to settlement form. Keep POI-specific behavior with its POI and craft-specific responses with the relevant system.
 3. **Compare implementation to the design.** Trace the proposed chains through current producers, owners and consumers. Prioritize breaks that cut off a whole class of decisions. For a disputed link, specify a small constructed case that changes one causal input and exercises the downstream decision. Reserve a capital run for interactions whose combined spatial effect genuinely needs a full town. Equal process representation carries no frequency, feature-count or map-area quota.
 
 The deliverable is a causal design and a prioritized account of what existing contracts can express and what needs to change. The catalog and feedback design can proceed independently and meet at the rules ordinary development reads after founding.
+
+### Implement settlement feedback
+
+Sulion branch `4609bc8a-cb84-4f51-9c5a-2ee0dcc7cb73` under town phase 17, `42bad93c-07c5-48c2-9645-2ec4c98b8047`.
+
+**Outcome.** A new or operating POI can change the physical development of its neighbors. Productive relationships give towns distinct specializations and let the same trade develop differently across sites. The two models work together as occupation, routes and partners change. Their consequences accumulate in the building forms, uses, routes and open ground of the published map.
+
+**Scope and authority.** The implementation covers both models from the [settlement feedback design](settlement-feedback-design.md). For Model 1, use the full [neighborhood-effects specification](settlement-neighborhood-effects-spec.md), including its catalogue, magic relationships and owner corrections. Eases reduces a named requirement for a later placement of a building family or another placement class. Raises takes effect when its source is placed and applies to a compatible building already present. Model 2 implements authored productive relationships with substitute suppliers, complementary activities and alternative outlets. These relationships make work viable in different places and forms. They do not prescribe a building sequence or require exact production recipes. Ordinary development processes recur across roughly eighteen rounds, with multiple changes possible in a round.
+
+**Ownership.** Keep family-specific rules in the POI declaration. Receiving owners compose typed answers and make decisions through their existing operations. For instance, the movement owner resolves a connection and the fabric owner applies an upgrade. Separate derived presence, actual site constraints and authored contributions. Preserve the identity, carriers and interference of all seven magical systems. Where a lore example needs a new response, specify the particular operation and the ordinary rule it breaks before wiring that response to a town decision.
+
+**Current seams.** `town/influence.rs` discounts demand for competitors and exposes local conditions. `atlas/town/providers.rs` contributes service reach, premises effects and patronage. `town/signals.rs` retains exchange and waste across steps. `town/siting.rs` checks physical suitability and `processes/town/construction.rs` selects and fits proposals. `town/fabric/projects.rs` commits project edits, including a vertical Raise used by land competition. `town/fabric.rs` retains condition, occupation, means and storeys separately. Reuse the vertical edit for families where it represents the upgrade. The implementation proposal is to add a family-specific tier only where an existing improvement operation and state cannot express the distinct geometry or function. For production, `OpportunitySource` already identifies local and external counterparties but describes demand and capability by broad activity. Livelihoods resolve reachable sources into retained operating ties. Extend those seams so an actual offer can answer a specific productive need and the tie can carry that meaning to later decisions.
+
+#### M0 — Establish ownership and typed contracts
+
+Sulion `dcc60b32-1ef4-478c-a9f0-c93b20e4dc96`.
+
+This milestone changes interfaces only. Trace the normal entry points for establishment, siting, service, movement, occupation and upgrade. For Model 1, define the consumer-owned inputs and outputs for media, named placement requirements and placement-time upgrades. Identify the source, origin, eligible target, lifetime and composition of each contribution. For Model 2, define how a productive offer, its operation, counterparty and access requirements enter a site or livelihood query and become a retained tie. Give substitute offers a shared opportunity identity and complementary offers distinct meanings. Route existing callers through both sets of interfaces, carrying their existing behavior. Compilation and focused architecture checks establish caller adoption.
+
+#### M1 — Compose town media through real access and exposure
+
+Sulion `80b1a5eb-2a91-4be4-a643-e03f6686e44c`. [depends on M0]
+
+Implement Attracts, Burdens, Serves, Dignifies and Teaches in the normal town reads. Share patronage among reachable offers by clientele, route and purpose. Let resulting journeys inform movement and passing trade. Decide at this milestone, using an explicit newcomer case, how candidate providers are compared with incumbent offers. Compose nuisance by kind and relevant counter. Read service once per recipient and respect provider capacity. Compose prestige by frontage or enclosure and learning by reachable diversity and tenure. Keep carrier-specific reach separate from the composition rules. Migrate existing producers at their source so exchange, nuisance and services each contribute once. Use spatial and network indexes and batch reads through the established boundaries. Supplied-input cases establish that a route closure, source closure or change of occupation reaches the affected decision, including at existing premises.
+
+#### M2 — Develop and protect actual places
+
+Sulion `38f9917a-222e-4ebf-911c-2d9b086d05cf`. [depends on M0 and M1]
+
+Implement Connects, Eases, Bars, Holds and Raises through the existing movement, siting, construction, investment and competition owners. Eases must admit a later proposal that otherwise misses its named requirement. Physical feasibility still governs the result and Bars prevails where applicable. Holds contributes a contested claim to preserve ground. Connects changes a usable route or its cost through the route owner. On successful establishment, resolve Raises against premises already present at that placement. Use the target family's applicable improvement and commit it through the existing fabric transaction. A failed placement changes no target, an ineligible or absent target leaves the source placeable, and reading the source in later rounds does not raise the target again. Confirm that the committed improvement alters a physical form or effective function and that later development reads it. Use supplied questions and small explicit fabric-operation cases for these checks.
+
+#### M3 — Adopt catalogue and seven system responses
+
+Sulion `9bba016e-1fab-4a21-a089-443d6f9b7286`. [depends on M1 and M2]
+
+Adopt the full family catalogue by grouping families around real differences in what they do to other places. Use the spec's gather, space and keep-apart behaviors to reason about each family and keep plain premises that act through derived presence. Use each magical system's existing media and craft responses to realize the spec's town interactions, including custody, access, practice costs and interference where they affect development. Any missing craft response belongs beside its system and needs its own explicit inputs and effects. Check representative supplied cases for closure, competition and overlapping sources, then use an independent review to trace whether adding a POI or a craft requires changing its consumers. Resolve missing consumer adoption and duplicated sources before map assessment.
+
+#### M4 — Implement productive relationships and operating ties
+
+Sulion `b688f04d-e6c8-495b-a450-8919ca265ad8`. [depends on M0]
+
+Publish offers from operating holdings and identifiable external connections. Match them to the operations that can use them. Resolve local and external substitutes against actual access, handling and site conditions. Multiple usable routes to the same partner are alternate routes to one offer. Independent opportunities such as an input and a commission can both affect the same operation. Feed the selected relationships into livelihood, construction, investment and movement through their existing decisions. A lost partner can change the operating ties and the future of an occupied holding. On supplied inputs, close a route and show that an existing operation can switch to an equivalent offer by another mode. Remove the equivalent offer and show that a use able to work with a different input can persist while the original operation loses support.
+
+#### M5 — Adopt productive traditions and combine both models
+
+Sulion `06912c92-cf18-4bab-9f04-4481d672a130`. [depends on M3 and M4]
+
+Author multiple distinct productive traditions from the design. Choose relationships that have different consequences for work with bulky freight, shared facilities, portable skills or specialized clients. The clothworking, stonework, vessel repair and metalworking examples illustrate this range. A tradition can develop in one shared holding, spread across working yards, or split between a freight edge and customer-facing streets. Its shape follows viable operations and the site. Close the loop through both models. A working yard supplies a productive opportunity to a partner and burdens its surroundings through Model 1. The partner's journeys can change a route, which can change who can use the yard and whether it grows, converts or moves. A magical practice can change a specific operation's viability through its own craft response. Use explicit partner, access and fabric cases to check this handoff before inspecting maps.
+
+#### M6 — Inspect representative district histories
+
+Sulion `312d34e7-93b2-4d88-8197-a6cd331f91bc`. [depends on M5]
+
+Use the existing [native local atlas](local-atlas.md) to compare early, intermediate and mature development on representative sites with different access or exposure. Include ordinary and magical interactions where their preconditions exist. Inspect realized buildings, approaches and open ground with district names and influence overlays off. A readable district should have a characteristic mixture and form. A related tradition in a contrasting town should be recognizable even where work gathers or splits differently. Follow why the source and existing premises change through later rounds. Examine a realized placement concession, an immediate upgrade where eligible and a change in productive partners or viable operations. Compare representative run cost. Focus any repairs on causal breaks that affect a class of places. Move lasting documentation to the existing durable guides on close.
+
+#### Implementation resume
+
+Execution direction on 2026-11-20 authorizes implementing both models. The follow-up authorizes focused testing and native generation of settlements with a few thousand people from kept parent maps.
+
+M0 expansion `cd1c1ff2-286b-489d-9e43-774574262ab3`.
+
+1. Define both contracts in `town/effects.rs`, `town/production.rs` and the catalogue. Media use typed source declarations and receiving conditions. Productive offers carry a typed opportunity and physical access requirements. Step `6d43d525-0df7-4c82-ab09-8c160f8d81d1`.
+2. Adopt the contracts at the existing producer, access, siting, livelihood and fabric boundaries. The old source and tie constructors express their ordinary operation explicitly, with productive detail added by providers in M4. Verify the contracts through caller adoption before judging the resulting town behavior. Step `a434fbcc-4ca1-4f53-bdcc-91e688d08573`.
+
+M0 is complete at the interface boundary. The remaining implementation and evidence are tracked below.
+
+- **M1**, expansion `56efa250-4390-48f2-8ed5-3a2de659fdb4`. The POI catalogue supplies typed media. Service capacity, access, carrier exposure, neighborhood membership and source diversity govern the receiving reads. Clientele journeys contribute to actual traffic and remembered exchange. Supplied cases confirm directional exposure, usable service reach and a newcomer's response to clientele already served by incumbents.
+- **M2**, expansion `e4971971-87b2-47fc-a821-eed0bb9c52cc`. Placement evaluates typed concessions and restrictions. Fabric commits Raises against an existing target when the source lands. A later project step can still fail while earlier steps stand, as required by the 2026-11-20 project rule. Explicit placement and upgrade cases pass.
+- **M3**, expansion `b0686095-7bbd-41e4-baed-d44036518c96`. The catalogue carries the distinct effects. The craft registry binds local practice responses and upkeep costs for all seven systems. Occupied sacred premises build local consecration and keepers affect existing door links. Working heat draws held Fire cores into the forge reservoir at the user. Healers can obtain spring water from a Greenwood keeper, and withdrawals use the aquifer owner's existing overdraw and collapse rule. New roads can sever existing Greenwood root paths in town conditions. Established town plantings still need to feed back into Greenwood's own sources and carriers. Keep this part of the material work open.
+- **M4**, expansion `ed029f4b-651c-4b6f-8aa1-e98af2c3b9cc`. Productive offers bind through actual entrance and transport rules for both candidates and existing uses. Mixed holdings can retain inputs for both uses. A named approach reads the built counterpart's portable offers where available. Where only a captured destination name exists, the current implementation infers a portable cargo for that destination. The supplied-input case passes for a closed route, a substitute and an unsuitable product.
+- **M5**, expansion `f35300f6-f0d0-4a04-b3a5-4cba9391e83a`. Cloth, stone, vessel and metal relationships are authored beside their places and enter ordinary siting, occupation, traffic and investment. The small-town trials show local supplier ties and new clusters of civic and commercial premises. The tested clusters still have mixed uses, with no clear specialist production district.
+- **M6**, small-town trial `ec92131d-5366-4eee-9307-5798f1c664d7`. The focused checks passed. Novo Luniacia (1,835) and Emondo (4,807) ran eighteen town rounds after site preparation and published from kept parents. Both maps expose a shared publication defect. The town writer uses a different identifier rule for local relationship targets from the one used to create the published plots. Keep map acceptance open until the same-map relationships resolve and the productive traditions can be followed on representative sites.
 
 ## Independent building sites
 

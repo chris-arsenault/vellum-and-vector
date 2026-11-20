@@ -127,12 +127,17 @@ pub fn advance(town: &mut Town, context: &mut Frontage<'_>) -> io::Result<()> {
             let kind = project
                 .as_ref()
                 .map(|(p, _)| p.0)
-                .or_else(|| choose(town, candidate, sample, &demand, &[]))?;
+                .or_else(|| choose(town, candidate, sample, &demand, &[], context.spatial))?;
             let support = candidate
                 .opportunities
                 .for_activity(kind.definition().activity);
             let fit = location(town, candidate).attraction(kind.definition());
+            let production = candidate
+                .opportunities
+                .production
+                .support(kind.definition().roles.production.needs);
             let score = frontage_priority(support, candidate.conditions, fit, sample)
+                + production
                 + project
                     .as_ref()
                     .map_or(0., |(p, _)| project_pull(p, candidate.slot.front));
@@ -275,18 +280,24 @@ fn participant_offers<'a>(
                 candidate.slot.front[0],
                 candidate.slot.front[1],
             );
-            let Some(kind) = choose(town, candidate, sample, demand, activities) else {
+            let Some(kind) = choose(town, candidate, sample, demand, activities, context.spatial)
+            else {
                 continue;
             };
             let support = candidate
                 .opportunities
                 .for_activity(kind.definition().activity);
-            let score = frontage_priority(
-                support,
-                candidate.conditions,
-                location(town, candidate).attraction(kind.definition()),
-                sample,
-            );
+            let production = candidate
+                .opportunities
+                .production
+                .support(kind.definition().roles.production.needs);
+            let score = production
+                + frontage_priority(
+                    support,
+                    candidate.conditions,
+                    location(town, candidate).attraction(kind.definition()),
+                    sample,
+                );
             if let Ok(edit) = proposal(town, candidate, kind, sample, None, context) {
                 choices.push((
                     weighted_order(score, site_draw(town, candidate, 0x47cc)),
@@ -570,7 +581,7 @@ fn site_affinity(town: &Town, candidate: &super::Candidate, kind: Kind) -> f64 {
 fn resources(candidate: &super::Candidate) -> f64 {
     let support = candidate.opportunities.for_activity(Activity::Household);
     let income = (support.demand + support.capability) / (1. + support.burden);
-    let patronage = candidate.conditions.patronage;
+    let patronage = candidate.conditions.patronage + candidate.conditions.effects.prestige;
     let endowment =
         crate::noise::hash_unit(0x4312, candidate.slot.front[0], candidate.slot.front[1]);
     let local = candidate.conditions;
@@ -585,7 +596,10 @@ fn choose(
     sample: f64,
     demand: &Demand,
     activities: &[Activity],
+    spatial: &dyn crate::spatial::SpatialKernel,
 ) -> Option<Kind> {
+    use crate::town::effects::{Placement, Requirement};
+    let influence = town.placement_at(candidate.slot.front, spatial).ok()?;
     let activity = candidate.opportunities.for_activity(Activity::Trade).demand;
     let local = candidate.conditions;
     let means = resources(candidate);
@@ -594,18 +608,44 @@ fn choose(
     let mut best = None;
     let location = location(town, candidate);
     for (i, kind) in PLACES.iter().copied().enumerate() {
+        let kind = crate::town::catalogue::productive_variant(
+            kind,
+            sample,
+            &candidate.opportunities.production,
+        );
         let definition = kind.definition();
+        let target = Placement::Premises(kind);
         if kind.open()
             || definition.roles.household
             || demand.space.working <= 0.
             || !eligible(kind, local, candidate.slot.street)
+            || !influence.permitted(target)
             || (!activities.is_empty() && !activities.contains(&definition.activity))
         {
             continue;
         }
         let support = candidate.opportunities.for_activity(definition.activity);
+        let custom = if definition.roles.effects.attracts.is_empty() {
+            support.demand
+        } else {
+            candidate
+                .opportunities
+                .custom(definition.roles.effects.attracts)
+        };
+        let productive = candidate
+            .opportunities
+            .production
+            .support(definition.roles.production.needs);
         let audience =
-            (support.demand + support.capability) / (1. + definition.demand + support.burden);
+            (custom + support.capability + productive) / (1. + definition.demand + support.burden);
+        let required = influence.requirement(
+            target,
+            Requirement::Support,
+            definition.roles.effects.minimum_support,
+        );
+        if audience < required {
+            continue;
+        }
         let fit = location.attraction(definition);
         let cost =
             (1. + (definition.typical_means - means).max(0.) * 3.) * (1. + demand.families[i]);
@@ -630,7 +670,7 @@ fn choose(
         if (!activities.is_empty() && !activities.contains(&Activity::Household))
             || site_draw(town, candidate, 0x40a6) * (business + residential) < business
         {
-            return Some(crate::town::catalogue::palette(kind, sample));
+            return Some(kind);
         }
     }
     let distance = crate::town::geometry::distance(candidate.slot.front, town.seat.centre);
@@ -713,6 +753,8 @@ mod tests {
         let land = Conditions::default();
         let frontage = |activity, travel_cost| {
             let source = OpportunitySource {
+                productive: None,
+                clientele: None,
                 endpoint: crate::town::fabric::Endpoint::External(atlas_map::Id::from_name(
                     "source",
                 )),

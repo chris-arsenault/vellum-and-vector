@@ -404,6 +404,8 @@ impl OutlyingSite {
         town.bind(
             job_id,
             vec![OperatingTie {
+                productive: None,
+                clientele: None,
                 purpose,
                 destination: self.source.endpoint.clone(),
                 entrance: self.source.position,

@@ -126,6 +126,11 @@ impl Template {
     pub fn name(self) -> &'static str {
         self.policy().name
     }
+    pub fn from_name(name: &str) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|template| template.name() == name)
+    }
     fn candidate(self, site: &SiteEvidence) -> Candidate {
         let reasons = (self.policy().matches)(site);
         let weight = 1 + reasons

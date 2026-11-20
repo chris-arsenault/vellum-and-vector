@@ -8,6 +8,7 @@ pub mod byway;
 )]
 pub mod catalogue;
 pub mod edits;
+pub mod effects;
 pub mod fabric;
 pub mod founding;
 pub mod geometry;
@@ -21,6 +22,7 @@ pub mod major_works;
 pub mod neighbourhood;
 pub mod network;
 pub mod plots;
+pub mod production;
 pub mod roofs;
 pub mod seat;
 pub mod settings;

@@ -435,6 +435,8 @@ fn holding_records(
             ("tradingSupport", json!(holding.support)),
             ("condition", json!(holding.condition)),
             ("occupation", json!(holding.occupation)),
+            ("operatingTier", json!(holding.operation_tier)),
+            ("consecration", json!(holding.consecration)),
             ("openOccupation", json!(holding.outdoor)),
             ("crowding", json!(holding.crowding)),
             ("ward", json!(neighbourhood.ward)),

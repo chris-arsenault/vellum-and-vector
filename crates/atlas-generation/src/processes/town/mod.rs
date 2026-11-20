@@ -5,6 +5,7 @@ mod crossroads;
 pub mod economy;
 pub mod investment;
 pub mod movement;
+mod patronage;
 pub mod sanitation;
 mod walks;
 use crate::{

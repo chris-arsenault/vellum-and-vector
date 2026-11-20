@@ -122,11 +122,31 @@ pub fn advance(town: &mut Town, context: &Livelihood<'_>) -> io::Result<()> {
         .iter()
         .map(|h| Operation::ALL.map(|purpose| h.mode_for(purpose)))
         .collect();
+    let productive = town
+        .holdings()
+        .iter()
+        .map(|holding| {
+            std::iter::once(holding.kind)
+                .chain(holding.secondary)
+                .flat_map(|kind| holding.production_as(kind).needs.iter().copied())
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
     let graphs = [AccessUse::Foot, AccessUse::Freight, AccessUse::Waterborne]
         .into_iter()
-        .filter(|m| modes.iter().any(|needs| needs.contains(&Some(*m))))
+        .filter(|m| {
+            modes.iter().any(|needs| needs.contains(&Some(*m)))
+                || productive
+                    .iter()
+                    .any(|needs| needs.iter().any(|need| need.access.contains(m)))
+        })
         .map(|mode| Ok((mode, network.bind(&locations, mode, context.spatial)?)))
         .collect::<io::Result<Vec<_>>>()?;
+    let mut visits = graphs
+        .iter()
+        .find(|(mode, _)| *mode == AccessUse::Foot)
+        .map(|(_, graph)| super::patronage::visits(town, context.sources, graph))
+        .unwrap_or_else(|| vec![Vec::new(); n]);
     let reach = crate::town::settings::DAILY_REACH;
     let mut queries: Vec<_> = graphs
         .iter()
@@ -158,15 +178,18 @@ pub fn advance(town: &mut Town, context: &Livelihood<'_>) -> io::Result<()> {
             .definition()
             .activity;
         let own_source = Endpoint::Premises {
-            town: town.seat.key.clone(),
+            town: town.seat.key,
             holding: holding.id,
         };
-        let mut ties = Vec::new();
+        let mut ties = std::mem::take(&mut visits[i]);
+        let patronage = ties.iter().map(|tie| tie.strength).sum::<f64>();
         let mut opportunity = crate::town::influence::Support::default();
-        for (mode, routes, sources) in queries
-            .iter_mut()
-            .filter(|(mode, ..)| needs.contains(&Some(*mode)))
-        {
+        let mut partners: Vec<Option<crate::town::fabric::OperatingTie>> =
+            vec![None; productive[i].len()];
+        for (mode, routes, sources) in queries.iter_mut().filter(|(mode, ..)| {
+            needs.contains(&Some(*mode))
+                || productive[i].iter().any(|need| need.access.contains(mode))
+        }) {
             routes.within(i, reach);
             let mut reached = Vec::new();
             routes.reached(sources, reach, |j, cost| reached.push((j, cost)));
@@ -184,6 +207,13 @@ pub fn advance(town: &mut Town, context: &Livelihood<'_>) -> io::Result<()> {
                             / (1. + source.demand + source.capability),
                 })
                 .collect();
+            crate::town::production::compare_partners(
+                &productive[i],
+                &paths,
+                *mode,
+                &holding.ties,
+                &mut partners,
+            );
             if *mode
                 == holding
                     .secondary
@@ -193,26 +223,32 @@ pub fn advance(town: &mut Town, context: &Livelihood<'_>) -> io::Result<()> {
             {
                 opportunity = support_for(activity, &paths, conditions);
             }
-            for (purpose, _) in Operation::ALL
-                .into_iter()
-                .zip(needs)
-                .filter(|(_, m)| **m == Some(*mode))
-            {
-                ties.extend(operating_tie(
-                    purpose,
-                    &paths,
-                    *mode,
-                    holding.ties.iter().find(|t| t.purpose == purpose),
-                    context.exposure,
-                ));
-            }
+            ties.extend(ordinary_ties(
+                holding,
+                &paths,
+                *mode,
+                needs,
+                context.exposure,
+            ));
         }
-        let desired = (opportunity.demand + opportunity.capability)
+        let demand = if holding.attracts_clients() {
+            patronage
+        } else {
+            opportunity.demand
+        };
+        let production = crate::town::production::retain_partners(partners, &mut ties);
+        let practice = practice_support(holding, conditions, town.round);
+        let desired = practice
+            * (demand
+                + opportunity.capability
+                + production
+                + place.roles.learns_from * conditions.effects.learning)
             / (1. + place.demand + opportunity.burden);
         let support = respond(holding.support, desired.max(0.), context.exposure * 0.7);
         let returns = support / (1. + support);
         let costs = conditions.density + opportunity.burden;
         let sheltered = holding.means * conditions.protection / (1. + conditions.protection);
+        let care = conditions.effects.care / (1. + conditions.effects.care);
         let mut income = returns / (1. + costs * (1. - sheltered));
         if holding.slot.tenure == crate::town::templates::Tenure::Dependent && !landlords.is_empty()
         {
@@ -222,23 +258,18 @@ pub fn advance(town: &mut Town, context: &Livelihood<'_>) -> io::Result<()> {
         }
         // Household means are retained resources; loss of a trading opportunity does not erase them in one round.
         let means = respond(holding.means, income, context.exposure * 0.035);
-        let occupation = if holding.established < town.round
-            && (!holding.buildings.is_empty() || holding.public || holding.outdoor)
-        {
-            respond(
-                holding.occupation,
-                occupancy(
-                    place.roles.dwelling,
-                    residential_use,
-                    support,
-                    opportunity.burden,
-                )
-                .clamp(0., 1.),
-                context.exposure * 1.6,
-            )
-        } else {
-            holding.occupation
-        };
+        let occupation = renew_occupation(
+            holding,
+            town.round,
+            practice,
+            occupancy(
+                place.roles.dwelling,
+                residential_use,
+                support,
+                opportunity.burden / (1. + care),
+            ),
+            context.exposure,
+        );
         let crowding = if place.roles.dwelling {
             let living_space = floor_areas[i].living;
             let neighbours = conditions.households / (1. + conditions.households);
@@ -269,6 +300,64 @@ pub fn advance(town: &mut Town, context: &Livelihood<'_>) -> io::Result<()> {
     }
     distribute_rents(town, &landlords, dues, context.exposure);
     Ok(())
+}
+
+fn ordinary_ties(
+    holding: &crate::town::fabric::Holding,
+    paths: &[Reachable<'_>],
+    mode: AccessUse,
+    modes: &[Option<AccessUse>; Operation::ALL.len()],
+    exposure: f64,
+) -> Vec<crate::town::fabric::OperatingTie> {
+    let attracts = holding.attracts_clients();
+    Operation::ALL
+        .into_iter()
+        .zip(modes)
+        .filter(|(purpose, expected)| {
+            **expected == Some(mode) && (*purpose != Operation::Customers || !attracts)
+        })
+        .filter_map(|(purpose, _)| {
+            let old = holding.ties.iter().find(|tie| {
+                tie.purpose == purpose && tie.productive.is_none() && tie.clientele.is_none()
+            });
+            operating_tie(purpose, paths, mode, old, exposure)
+        })
+        .collect()
+}
+
+fn practice_support(
+    holding: &crate::town::fabric::Holding,
+    conditions: crate::town::influence::Conditions,
+    round: u32,
+) -> f64 {
+    let Some(craft) = holding.practice() else {
+        return 1.;
+    };
+    let available = conditions.practices.available(craft.code);
+    if available <= 0. {
+        return 0.;
+    }
+    let tenure = f64::from(round.saturating_sub(holding.established));
+    let strain = (craft.town.strain)(tenure, conditions.effects.care, available).max(0.);
+    1. / (1. + strain)
+}
+
+fn renew_occupation(
+    holding: &crate::town::fabric::Holding,
+    round: u32,
+    practice: f64,
+    desired: f64,
+    exposure: f64,
+) -> f64 {
+    if practice <= 0. {
+        0.
+    } else if holding.established < round
+        && (!holding.buildings.is_empty() || holding.public || holding.outdoor)
+    {
+        respond(holding.occupation, desired.clamp(0., 1.), exposure * 1.6)
+    } else {
+        holding.occupation
+    }
 }
 
 fn distribute_rents(

@@ -1,4 +1,5 @@
 use super::*;
+use crate::town::effects::{Clientele, Contribution, Ease, Effects, Improvement, Nuisance};
 
 pub(super) fn inn() -> Definition {
     Definition {
@@ -21,10 +22,28 @@ pub(super) fn inn() -> Definition {
         frontage: MetresRange::frontage(20.),
         depth: MetresRange::depth(30.),
         typical_means: 0.6,
-        nuisance: 0.3,
         demand: 1.,
         prominence: 0.6,
-        roles: Roles::default(),
+        roles: Roles {
+            effects: Effects {
+                attracts: const {
+                    &[
+                        Contribution::new(Clientele::Travellers, 1.25),
+                        Contribution::new(Clientele::Wealthy, 0.52),
+                    ]
+                },
+                eases: const {
+                    &[
+                        Ease::premises(Kind(Identity::CarrierYard), 0.1, 42.),
+                        Ease::premises(Kind(Identity::Cookshop), 0.065, 33.),
+                    ]
+                },
+                minimum_support: 0.13,
+                improvement: Some(Improvement::ExpandedOperation),
+                ..Effects::EMPTY
+            },
+            ..Roles::default()
+        },
     }
 }
 
@@ -45,10 +64,22 @@ pub(super) fn tavern() -> Definition {
         frontage: MetresRange::frontage(10.),
         depth: MetresRange::depth(18.),
         typical_means: 0.4,
-        nuisance: 0.5,
         demand: 0.9,
         prominence: 0.35,
-        roles: Roles::default(),
+        roles: Roles {
+            effects: Effects {
+                attracts: const { &[Contribution::new(Clientele::Townsfolk, 0.92)] },
+                burdens: const {
+                    &[
+                        Contribution::new(Nuisance::Noise, 0.23),
+                        Contribution::new(Nuisance::Disorder, 0.46),
+                    ]
+                },
+                minimum_support: 0.12,
+                ..Effects::EMPTY
+            },
+            ..Roles::default()
+        },
     }
 }
 
@@ -69,10 +100,22 @@ pub(super) fn cookshop() -> Definition {
         frontage: MetresRange::frontage(7.),
         depth: MetresRange::depth(14.),
         typical_means: 0.3,
-        nuisance: 0.3,
         demand: 1.,
         prominence: 0.2,
-        roles: Roles::default(),
+        roles: Roles {
+            effects: Effects {
+                attracts: const {
+                    &[
+                        Contribution::new(Clientele::Townsfolk, 0.63),
+                        Contribution::new(Clientele::Travellers, 0.34),
+                    ]
+                },
+                burdens: const { &[Contribution::new(Nuisance::Smoke, 0.24)] },
+                minimum_support: 0.07,
+                ..Effects::EMPTY
+            },
+            ..Roles::default()
+        },
     }
 }
 
@@ -93,9 +136,26 @@ pub(super) fn entertainment() -> Definition {
         frontage: MetresRange::frontage(12.),
         depth: MetresRange::depth(20.),
         typical_means: 0.4,
-        nuisance: 0.55,
         demand: 0.5,
         prominence: 0.4,
-        roles: Roles::default(),
+        roles: Roles {
+            effects: Effects {
+                attracts: const {
+                    &[
+                        Contribution::new(Clientele::Townsfolk, 0.76),
+                        Contribution::new(Clientele::Travellers, 0.71),
+                    ]
+                },
+                burdens: const {
+                    &[
+                        Contribution::new(Nuisance::Noise, 0.64),
+                        Contribution::new(Nuisance::Disorder, 0.42),
+                        Contribution::new(Nuisance::Stigma, 0.31),
+                    ]
+                },
+                ..Effects::EMPTY
+            },
+            ..Roles::default()
+        },
     }
 }

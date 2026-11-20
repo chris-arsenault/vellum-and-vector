@@ -8,10 +8,13 @@ use crate::{
     field::{poi::values::Benefit, refinement::courses::cell_at},
     town::{
         catalogue::Activity,
+        effects::Clientele,
         influence::{OpportunitySource, SourceId, Sources},
+        production::{Offer, Origin, TRADABLE},
     },
 };
 use std::io;
+mod places;
 pub fn approaches() -> Query<State, Sources> {
     Query::new("town.sources.approaches", vec![], |state: &State, _| {
         let mut sources = Vec::new();
@@ -19,6 +22,12 @@ pub fn approaches() -> Query<State, Sources> {
             for (i, arm) in town.seat.arms.iter().enumerate() {
                 if let Some(position) = arm.points.last() {
                     sources.push(OpportunitySource {
+                        productive: None,
+                        clientele: Some(if arm.destination.is_some() {
+                            Clientele::Travellers
+                        } else {
+                            Clientele::Countryfolk
+                        }),
                         endpoint: Endpoint::Catchment {
                             town: town.seat.key,
                             arm: i as u32,
@@ -36,20 +45,94 @@ pub fn approaches() -> Query<State, Sources> {
                         demand: town.seat.story.people.sqrt() * 0.12,
                         capability: 0.5,
                     });
+                    if let Some(destination) = &arm.destination {
+                        let base = sources
+                            .last()
+                            .expect("approach source was just inserted")
+                            .clone();
+                        sources.extend(imports(state, &base, town.seat.key, i as u32, destination));
+                    }
                 }
             }
         }
         Ok(Sources(sources))
     })
 }
-pub fn kept_links(state: &State) -> io::Result<Vec<crate::links::Link>> {
-    let mut offers = crate::links::Offers::default();
-    if let Some(magic) = &state.physical.magic {
-        for field in &magic.borrow().fields {
-            crate::field::people::crafts::offer_doors(&mut offers, field.doors().to_vec());
+fn imports(
+    state: &State,
+    base: &OpportunitySource,
+    town: atlas_map::Id,
+    arm: u32,
+    destination: &str,
+) -> Vec<OpportunitySource> {
+    let counterpart = state
+        .town
+        .towns
+        .iter()
+        .find(|other| other.seat.key != town && other.seat.name == destination);
+    let Some(exporter) = counterpart else {
+        // A captured route without an explicit exporter has an inferred cargo.
+        let supplier = atlas_map::Id::from_name(destination).0;
+        let offer = TRADABLE[(supplier % TRADABLE.len() as u128) as usize];
+        return vec![productive(base, town, Origin::Approach(arm), offer, 1.)];
+    };
+    let mut exports = Vec::new();
+    for holding in exporter.holdings().iter().filter(|h| h.occupation > 0.) {
+        for kind in std::iter::once(holding.kind).chain(holding.secondary) {
+            let production = holding.production_as(kind);
+            exports.extend(
+                production
+                    .offers
+                    .iter()
+                    .filter(|offer| {
+                        can_supply(holding, **offer)
+                            && TRADABLE.iter().any(|p| p.opportunity == offer.opportunity)
+                    })
+                    .map(|offer| {
+                        productive(
+                            base,
+                            town,
+                            Origin::Approach(arm),
+                            *offer,
+                            holding.occupation * holding.condition,
+                        )
+                    }),
+            );
         }
     }
-    offers.links(state.field())
+    exports
+}
+pub fn kept_links(state: &State) -> io::Result<Vec<crate::links::Link>> {
+    let Some(magic) = &state.physical.magic else {
+        return Ok(Vec::new());
+    };
+    // hpc-exempt: sparse occupied or abandoned keeper locations condition known door endpoints.
+    let mut keepers = std::collections::BTreeMap::<usize, f64>::new();
+    let mesh = state.field().mesh();
+    for h in state.town.towns.iter().flat_map(|t| t.holdings()) {
+        if h.practice().is_some_and(|craft| craft.town.maintains_door) {
+            if let Some(cell) = cell_at(mesh, h.slot.front) {
+                let current = keepers.entry(cell).or_default();
+                *current = current.max(h.occupation * h.condition);
+            }
+        }
+    }
+    let mut links = Vec::new();
+    for world in &magic.borrow().fields {
+        links.extend(crate::field::people::crafts::kept_doors_with(
+            state.field(),
+            world.doors(),
+            |cell| {
+                let direct = keepers.get(&cell).copied();
+                let nearby = (0..3).filter_map(|edge| {
+                    mesh.neighbor(cell, edge)
+                        .and_then(|c| keepers.get(&c).copied())
+                });
+                direct.into_iter().chain(nearby).max_by(f64::total_cmp)
+            },
+        )?);
+    }
+    Ok(links)
 }
 pub fn institutions() -> Query<State, Sources> {
     Query::new("town.sources.places", vec![], |state: &State, _| {
@@ -87,6 +170,8 @@ pub fn institutions() -> Query<State, Sources> {
                     Benefit::Defence | Benefit::Water => (Activity::Service, 0., value),
                 };
                 sources.push(OpportunitySource {
+                    productive: None,
+                    clientele: matches!(benefit, Benefit::Trade).then_some(Clientele::Travellers),
                     endpoint: Endpoint::External(feature.id),
                     id: SourceId::External {
                         feature: feature.id,
@@ -109,7 +194,7 @@ pub(super) fn contextual_features(state: &State) -> io::Result<Vec<crate::featur
     if let Some(source) = state.records.source_features.as_deref() {
         for feature in source.values(FeatureSelection::default())? {
             let feature = feature?;
-            records.insert(feature.id.clone(), feature);
+            records.insert(feature.id, feature);
         }
     }
     for feature in state.records.features.values(FeatureSelection {
@@ -117,12 +202,14 @@ pub(super) fn contextual_features(state: &State) -> io::Result<Vec<crate::featur
         ..Default::default()
     })? {
         let feature = feature?;
-        records.insert(feature.id.clone(), feature);
+        records.insert(feature.id, feature);
     }
     Ok(records.into_values().collect())
 }
 pub fn occupation() -> Query<State, Sources> {
     Query::new("town.sources.occupation", vec![], |state: &State, _| {
+        let magic = state.physical.magic.as_ref().map(|m| m.borrow());
+        let systems = magic.as_ref().map_or(&[][..], |m| m.fields.as_slice());
         let mut sources = Vec::new();
         for town in &state.town.towns {
             for holding in town
@@ -135,11 +222,41 @@ pub fn occupation() -> Query<State, Sources> {
                     .enumerate()
                 {
                     let definition = kind.definition();
+                    let mut supplied = true;
+                    let active = if definition.roles.keeps {
+                        let field = state.field();
+                        if let Some((craft, cell)) = holding
+                            .practice()
+                            .zip(cell_at(field.mesh(), holding.slot.front))
+                        {
+                            supplied = crate::field::people::crafts::working_material(
+                                field, craft, systems, cell,
+                            )?;
+                            crate::field::people::crafts::practised(field, craft, cell)? > 0.
+                                || craft.town.effects.consecrates > 0.
+                        } else {
+                            false
+                        }
+                    } else {
+                        true
+                    };
+                    if !active {
+                        continue;
+                    }
                     let occupation =
                         holding.occupation / (1. + f64::from(holding.secondary.is_some()));
                     sources.push(OpportunitySource {
+                        productive: None,
+                        clientele: definition
+                            .roles
+                            .household
+                            .then_some(if holding.means >= 0.6 {
+                                Clientele::Wealthy
+                            } else {
+                                Clientele::Townsfolk
+                            }),
                         endpoint: Endpoint::Premises {
-                            town: town.seat.key.clone(),
+                            town: town.seat.key,
                             holding: holding.id,
                         },
                         id: SourceId::Holding {
@@ -157,11 +274,56 @@ pub fn occupation() -> Query<State, Sources> {
                             0.
                         },
                     });
+                    let base = sources
+                        .last()
+                        .expect("holding source was just inserted")
+                        .clone();
+                    sources.extend(
+                        holding
+                            .production_as(kind)
+                            .offers
+                            .iter()
+                            .filter(|offer| supplied && can_supply(holding, **offer))
+                            .map(|offer| {
+                                productive(
+                                    &base,
+                                    town.seat.key,
+                                    Origin::Holding(holding.id.0, i as u32),
+                                    *offer,
+                                    occupation * holding.condition * holding.operation_scale(),
+                                )
+                            }),
+                    );
                 }
             }
         }
         Ok(Sources(sources))
     })
+}
+fn can_supply(holding: &crate::town::fabric::Holding, offer: Offer) -> bool {
+    offer
+        .uses
+        .is_none_or(|need| holding.ties.iter().any(|tie| tie.productive == Some(need)))
+}
+fn productive(
+    owner: &OpportunitySource,
+    town: atlas_map::Id,
+    origin: Origin,
+    offer: Offer,
+    scale: f64,
+) -> OpportunitySource {
+    OpportunitySource {
+        id: SourceId::Productive {
+            town,
+            origin,
+            opportunity: offer.opportunity,
+        },
+        demand: 0.,
+        capability: offer.strength * scale,
+        productive: Some(offer.opportunity),
+        clientele: None,
+        ..owner.clone()
+    }
 }
 pub fn agriculture() -> Query<State, Sources> {
     Query::new("town.sources.agriculture", vec![], |state: &State, _| {
@@ -182,6 +344,8 @@ pub fn agriculture() -> Query<State, Sources> {
                 .map_err(io::Error::other)?
                 .coordinates();
             sources.push(OpportunitySource {
+                productive: None,
+                clientele: Some(Clientele::Countryfolk),
                 endpoint: Endpoint::Field(fields[0].id),
                 id: SourceId::Estate(estate),
                 label: "Working fields and pasture".into(),
@@ -193,6 +357,41 @@ pub fn agriculture() -> Query<State, Sources> {
         }
         Ok(Sources(sources))
     })
+}
+
+pub(super) fn material_uses(state: &State) -> Vec<crate::field::magic::TownUse> {
+    let mesh = state.field().mesh();
+    state
+        .town
+        .towns
+        .iter()
+        .flat_map(|town| {
+            town.holdings()
+                .iter()
+                .filter(|h| h.occupation > 0.)
+                .flat_map(move |receiver| {
+                    receiver.ties.iter().filter_map(move |tie| {
+                        let product = tie.productive?;
+                        let Endpoint::Premises { town: key, holding } = tie.destination else {
+                            return None;
+                        };
+                        let provider = (key == town.seat.key)
+                            .then(|| town.holdings().get(holding.0 as usize))
+                            .flatten()?;
+                        let craft = provider.practice()?;
+                        if provider.occupation <= 0. || craft.town.material?.offered_as != product {
+                            return None;
+                        }
+                        Some(crate::field::magic::TownUse {
+                            craft,
+                            source: cell_at(mesh, provider.slot.front)?,
+                            receiver: cell_at(mesh, receiver.slot.front)?,
+                            work: receiver.occupation * tie.strength,
+                        })
+                    })
+                })
+        })
+        .collect()
 }
 // owner-direction(2026-11-17): support these kinds of effects in a generic extensible manner.
 pub fn compose<S: 'static>(providers: Vec<Query<S, Sources>>) -> Query<S, Sources> {
@@ -228,44 +427,24 @@ pub fn use_exposure() -> Query<State, crate::town::influence::SiteConditions> {
                     condition.cultivated = state.town.fields[i].worked / (1. + distance / 60.);
                 }
             }
-            use crate::town::catalogue::ServiceRole;
-            let providers: Vec<_> = town
-                .holdings()
-                .iter()
-                .filter(|h| h.kind.definition().roles.service != ServiceRole::None)
-                .collect();
-            let origins: Vec<_> = providers.iter().map(|h| h.slot.front).collect();
-            if !origins.is_empty() {
-                crate::town::access::Access::for_town(town, state.spatial.as_ref())?
-                    .on_ground(&requests.2)
-                    .reached_within(
-                        &origins,
-                        points,
-                        crate::town::settings::DAILY_REACH,
-                        state.spatial.as_ref(),
-                        |p, site, cost| {
-                            let holding = providers[p];
-                            let provision = holding.occupation
-                                * (0.2 + holding.means)
-                                * crate::town::influence::within_reach(cost)
-                                / (1. + cost / 100.);
-                            let condition = &mut services[site];
-                            match holding.kind.definition().roles.service {
-                                ServiceRole::Clearance => condition.clearance += provision,
-                                ServiceRole::Protection => condition.protection += provision,
-                                ServiceRole::None => {}
-                            }
-                        },
-                    )?;
-            }
             let shapes: Vec<_> = town.holdings().iter().map(|h| h.outline.clone()).collect();
             let areas = shapes
                 .iter()
                 .map(|s| state.spatial.area(s).map_err(io::Error::other))
                 .collect::<io::Result<Vec<_>>>()?;
             let index = state.spatial.index(&shapes).map_err(io::Error::other)?;
-            let mut conditions = Vec::new();
-            for (p, mut condition) in points.iter().zip(services) {
+            let carriers = town
+                .holdings()
+                .iter()
+                .map(|h| places::Carrier::at(state.field(), h.slot.front))
+                .collect::<io::Result<Vec<_>>>()?;
+            let mut sites = Vec::with_capacity(points.len());
+            for (site, &p) in points.iter().enumerate() {
+                let mut local = places::LocalSite::new(
+                    p,
+                    requests.3[results.len()][site],
+                    places::Carrier::at(state.field(), p)?,
+                );
                 for (i, distance) in index
                     .distances(
                         atlas_map::Bounds(p[0] - 100., p[1] - 100., p[0] + 100., p[1] + 100.),
@@ -274,10 +453,22 @@ pub fn use_exposure() -> Query<State, crate::town::influence::SiteConditions> {
                     .map_err(io::Error::other)?
                 {
                     let holding = &town.holdings()[i];
-                    premises_effect(holding, areas[i], distance, &mut condition);
+                    premises_effect(holding, areas[i], distance, &mut services[site]);
+                    local.receive(holding, carriers[i], distance, &mut services[site]);
                 }
-                conditions.push(condition);
+                sites.push(local);
             }
+            places::accessible(
+                town,
+                points,
+                &requests.2,
+                state.spatial.as_ref(),
+                &mut services,
+            )?;
+            for (site, condition) in sites.into_iter().zip(&mut services) {
+                site.finish(condition);
+            }
+            let conditions = services;
             results.push(conditions);
         }
         Ok(SiteConditions(results))
@@ -302,7 +493,6 @@ fn premises_effect(
             Activity::Production => condition.workshops += exposure,
             _ => {}
         }
-        condition.nuisance += definition.nuisance * exposure;
     }
     condition.patronage += holding.means * exposure;
     if holding.kind.definition().activity == Activity::Agriculture && !holding.buildings.is_empty()
@@ -320,6 +510,8 @@ mod tests {
         fn provider(name: &'static str, multiplier: f64) -> Query<f64, Sources> {
             Query::new(name, vec![], move |state: &f64, _| {
                 Ok(Sources(vec![OpportunitySource {
+                    productive: None,
+                    clientele: None,
                     endpoint: Endpoint::External(atlas_map::Id::from_name(name)),
                     id: SourceId::Named(atlas_map::Id::from_name(name)),
                     label: name.into(),

@@ -1,4 +1,5 @@
 //! Local conditions shared by proposals evaluating where to establish premises.
+use super::effects::{Placement, Requirement};
 use super::{
     catalogue::{AccessUse, Definition, Kind, PlaceRules, Site},
     influence::Conditions,
@@ -19,13 +20,93 @@ pub fn feasible(kind: Kind, land: Conditions, street: Option<usize>) -> bool {
     (kind.definition().premises.site != Site::RequireStreet || street.is_some())
         && suitable_ground(kind, land)
 }
+
+#[derive(Default)]
+pub(crate) struct PlacementInfluence {
+    bars: Vec<Placement>,
+    policies: Vec<fn(Placement) -> bool>,
+    concessions: Vec<(Placement, Requirement, f64)>,
+}
+impl PlacementInfluence {
+    pub(crate) fn permitted(&self, target: Placement) -> bool {
+        !self.bars.iter().any(|bar| bar.matches(target))
+            && self.policies.iter().all(|permit| permit(target))
+    }
+
+    pub(crate) fn requirement(&self, target: Placement, name: Requirement, regular: f64) -> f64 {
+        // owner-direction(2026-11-19): Eases reduces a placement requirement for a class of later placements
+        let offered = self
+            .concessions
+            .iter()
+            .filter(|(placement, requirement, _)| placement.matches(target) && *requirement == name)
+            .map(|(_, _, relief)| *relief)
+            .fold(0., f64::max);
+        (regular - offered).max(0.)
+    }
+}
+
+impl super::fabric::Town {
+    pub(crate) fn placement_at(
+        &self,
+        point: super::geometry::Point,
+        spatial: &dyn crate::spatial::SpatialKernel,
+    ) -> std::io::Result<PlacementInfluence> {
+        use super::{geometry::distance, settings::PREMISES_REACH};
+        let [x, y] = point;
+        let reach = PREMISES_REACH;
+        let nearby = self.nearby_holdings(
+            atlas_map::Bounds(x - reach, y - reach, x + reach, y + reach),
+            spatial,
+        )?;
+        let mut answers = PlacementInfluence::default();
+        for i in nearby {
+            let h = &self.holdings()[i];
+            if h.occupation <= 0. || h.condition <= 0.2 {
+                continue;
+            }
+            let distance = distance(point, h.slot.front);
+            if distance <= h.slot.depth && h.consecration >= crate::magic::hallowed::WARD_SEALS {
+                answers
+                    .policies
+                    .push(crate::field::people::crafts::permits_on_consecrated_ground);
+            }
+            for kind in std::iter::once(h.kind).chain(h.secondary) {
+                let effects = h.effects_as(kind);
+                if distance <= h.slot.depth {
+                    answers.policies.extend(effects.placement_policy);
+                }
+                answers.bars.extend(
+                    effects
+                        .bars
+                        .iter()
+                        .filter(|bar| distance <= bar.reach)
+                        .map(|bar| bar.target),
+                );
+                answers.concessions.extend(
+                    effects
+                        .eases
+                        .iter()
+                        .filter(|ease| distance <= ease.reach)
+                        .map(|ease| {
+                            (
+                                ease.target,
+                                ease.requirement,
+                                ease.relief * h.occupation * h.condition,
+                            )
+                        }),
+                );
+            }
+        }
+        Ok(answers)
+    }
+}
 pub(super) fn suitable_ground(kind: Kind, land: Conditions) -> bool {
     match kind.definition().premises.site {
         Site::WorkingLand => land.cultivated > 0.,
         Site::RootedGround => land.rooted,
         Site::FlowingWater => land.flowing,
         Site::Waterfront => land.bank,
-        Site::PractisedGround => land.craft.is_some(),
+        Site::PractisedGround => land.practices.preferred().is_some(),
         Site::RequireStreet | Site::PreferStreet | Site::OpenGround => true,
     }
 }
@@ -67,5 +148,29 @@ impl Location {
             _ => 1.,
         };
         access * frontage * (0.1 + (definition.attraction)(self))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::town::catalogue::PLACES;
+
+    #[test]
+    fn a_concession_changes_only_its_named_placement_requirement() {
+        let target = Placement::Premises(PLACES[0]);
+        let other = Placement::Premises(PLACES[1]);
+        let mut influence = PlacementInfluence {
+            concessions: vec![(target, Requirement::Support, 0.25)],
+            ..Default::default()
+        };
+        assert!(influence.permitted(target));
+        assert_eq!(
+            influence.requirement(target, Requirement::Support, 0.5),
+            0.25
+        );
+        assert_eq!(influence.requirement(other, Requirement::Support, 0.5), 0.5);
+        influence.bars.push(target);
+        assert!(!influence.permitted(target));
     }
 }

@@ -172,6 +172,8 @@ pub struct Access<'a> {
     links: Vec<(Point, Point, f64)>,
     ground: Option<&'a super::ground::Ground>,
     paths: &'a [Footpath],
+    connections: Vec<[f64; 3]>,
+    water_stages: Vec<(Point, f64)>,
 }
 fn lines(value: Geometry) -> Vec<Vec<Position>> {
     match value {
@@ -194,6 +196,21 @@ impl<'a> Access<'a> {
     pub fn for_town(town: &'a Town, spatial: &dyn SpatialKernel) -> io::Result<Self> {
         let mut network = Self::over(town.noded_streets(spatial)?);
         network.paths = town.footpaths();
+        network.connections.resize(town.streets().len(), [0.; 3]);
+        for h in town.holdings().iter().filter(|h| h.occupation > 0.) {
+            for kind in std::iter::once(h.kind).chain(h.secondary) {
+                for connection in h.effects_as(kind).connects {
+                    let strength = h.occupation * h.condition * connection.strength;
+                    if connection.kind == AccessUse::Waterborne {
+                        network.water_stages.push((h.slot.front, strength));
+                    } else if let Some(on_street) =
+                        h.slot.street.and_then(|i| network.connections.get_mut(i))
+                    {
+                        on_street[connection.kind as usize] += strength;
+                    }
+                }
+            }
+        }
         for transfer in town.kernel_links() {
             network.add_link(transfer.ends[0], transfer.ends[1], transfer.cost, spatial)?;
         }
@@ -261,6 +278,8 @@ impl<'a> Access<'a> {
             links: vec![],
             ground: None,
             paths: &[],
+            connections: Vec::new(),
+            water_stages: Vec::new(),
         }
     }
     /// The streets noded at their crossings into legs, each kept with the street it is part of.
@@ -414,7 +433,11 @@ impl<'a> Access<'a> {
     ) -> io::Result<BoundNetwork> {
         let mut graph = BoundNetwork::default();
         let mut entries = places.to_vec();
-        for (a, b, _) in &self.links {
+        let mut links = self.links.clone();
+        if let Some(ground) = self.ground.filter(|_| mode == AccessUse::Waterborne) {
+            self.water_connections(ground, spatial, &mut links)?;
+        }
+        for (a, b, _) in &links {
             entries.extend([Entrance::external(*a), Entrance::external(*b)]);
         }
         let retained = self
@@ -447,7 +470,7 @@ impl<'a> Access<'a> {
         {
             walking::connect(ground, &entries, &mut graph, spatial)?;
         }
-        self.connect_links(places, &mut graph);
+        Self::connect_links(&links, places, &mut graph);
         for path in retained {
             let [a, b] = path.points;
             let start = graph.vertex(a);
@@ -457,11 +480,11 @@ impl<'a> Access<'a> {
         }
         Ok(graph)
     }
-    fn connect_links(&self, places: &[Entrance], graph: &mut BoundNetwork) {
+    fn connect_links(links: &[(Point, Point, f64)], places: &[Entrance], graph: &mut BoundNetwork) {
         // Link landings are genuine entrance vertices even on water or where
         // no ordinary street is present. Only an exact landing can board.
         let mut landings = BTreeMap::new();
-        for (i, (start, finish, cost)) in self.links.iter().enumerate() {
+        for (i, (start, finish, cost)) in links.iter().enumerate() {
             let end = places.len() + 2 * i;
             let a = graph.vertex(*start);
             let b = graph.vertex(*finish);
@@ -569,9 +592,52 @@ impl<'a> Access<'a> {
                 }
                 let a = graph.vertex(pair[0].1);
                 let b = graph.vertex(pair[1].1);
-                graph.connect(a, b, stretch.length(), Course::Street(stretch));
+                let assistance = self
+                    .connections
+                    .get(leg.street)
+                    .map_or(0., |s| s[mode as usize]);
+                graph.connect(
+                    a,
+                    b,
+                    stretch.length() / (1. + assistance),
+                    Course::Street(stretch),
+                );
             }
         }
+    }
+    fn water_connections(
+        &self,
+        ground: &super::ground::Ground,
+        spatial: &dyn SpatialKernel,
+        links: &mut Vec<(Point, Point, f64)>,
+    ) -> io::Result<()> {
+        let positions: Vec<_> = self
+            .water_stages
+            .iter()
+            .map(|(point, _)| pos(*point))
+            .collect();
+        if positions.len() < 2 {
+            return Ok(());
+        }
+        let mut edges = spatial
+            .delaunay_edges(&positions)
+            .map_err(io::Error::other)?;
+        if edges.is_empty() && positions.len() == 2 {
+            edges.push([0, 1]);
+        }
+        for [a, b] in edges {
+            let (from, first) = self.water_stages[a];
+            let (to, second) = self.water_stages[b];
+            let span = distance(from, to);
+            if span > ground.cell
+                && ground.wet_runs(&[from, to]).iter().any(|&(start, end)| {
+                    start <= 2. * ground.cell && span - end <= 2. * ground.cell
+                })
+            {
+                links.push((from, to, span / (1. + first.min(second))));
+            }
+        }
+        Ok(())
     }
     fn door_connection(
         &self,

@@ -1,6 +1,5 @@
 //! Binds pure settlement mechanisms to current field answers, source providers and owner commands.
 use super::{site, Settings};
-use crate::town::catalogue::PlaceRules;
 use crate::{
     atlas::{physical::Physical, state::State},
     execution::{Command, CommandKind, Projection, Query},
@@ -48,10 +47,9 @@ fn frontage_candidates(
     // Every attachment can contribute traversable geometry, even when no score is read there.
     let places = sources
         .iter()
-        .map(|s| s.position)
-        .chain(town.holdings().iter().map(|h| h.slot.front))
-        .chain(slots.iter().map(|s| s.front))
-        .map(Entrance::external)
+        .map(|s| Entrance::source(town, &s.endpoint, s.position))
+        .chain(town.holdings().iter().map(|h| Entrance::holding(town, h)))
+        .chain(slots.iter().map(|s| Entrance::slot(town, s)))
         .collect::<Vec<_>>();
     let mut access = Access::for_town(town, travel.spatial)?.on_ground(travel.ground);
     for &(a, b, cost) in travel.links {
@@ -61,9 +59,16 @@ fn frontage_candidates(
     let mut queries = graph.distance_queries();
     // hpc-exempt: operating premises identify their counterparties by retained endpoint.
     let mut customers = std::collections::BTreeMap::new();
+    // hpc-exempt: patronage is already shared out by the livelihood owner per origin and clientele.
+    let mut served = std::collections::BTreeMap::new();
     for holding in town.holdings() {
         for (tie, share) in holding.operating_shares() {
             *customers.entry(&tie.destination).or_insert(0.) += holding.occupation * share;
+            if let Some(group) = tie.clientele {
+                *served
+                    .entry((&tie.destination, group as usize))
+                    .or_insert(0.) += tie.strength;
+            }
         }
     }
     let offset = sources.len() + town.holdings().len();
@@ -72,6 +77,12 @@ fn frontage_candidates(
         .map(|(i, _)| conditions[*i])
         .collect::<Vec<_>>();
     let competitors = |s: &OpportunitySource| customers.get(&s.endpoint).copied().unwrap_or(0.);
+    let served = |s: &OpportunitySource| {
+        s.clientele
+            .and_then(|group| served.get(&(&s.endpoint, group as usize)))
+            .copied()
+            .unwrap_or(0.)
+    };
     let reach = crate::town::settings::DAILY_REACH;
     let sites = queries.destinations(
         targets
@@ -88,7 +99,20 @@ fn frontage_candidates(
     } else {
         FrontageRead::Construction
     };
-    let opportunities = frontage_support(sources, competitors, read, &conditions, distances);
+    let mut opportunities =
+        frontage_support(sources, competitors, served, read, &conditions, distances);
+    if !movement {
+        for (site, productive) in opportunities.iter_mut().zip(productive_frontages(
+            &access,
+            &graph,
+            &places,
+            sources,
+            offset,
+            travel.spatial,
+        )?) {
+            site.production = productive;
+        }
+    }
     Ok(targets
         .into_iter()
         .zip(conditions)
@@ -100,6 +124,46 @@ fn frontage_candidates(
         })
         .collect())
 }
+fn productive_frontages(
+    access: &Access<'_>,
+    foot: &crate::town::access::BoundNetwork,
+    places: &[Entrance],
+    sources: &[OpportunitySource],
+    offset: usize,
+    spatial: &dyn crate::spatial::SpatialKernel,
+) -> io::Result<Vec<crate::town::production::Available>> {
+    use crate::town::production::Available;
+    let mut available = vec![Available::default(); places.len() - offset];
+    if !sources.iter().any(|source| source.productive.is_some()) {
+        return Ok(available);
+    }
+    let reach = crate::town::settings::DAILY_REACH;
+    for mode in [AccessUse::Foot, AccessUse::Freight, AccessUse::Waterborne] {
+        let bound;
+        let network = if mode == AccessUse::Foot {
+            foot
+        } else {
+            bound = access.bind(places, mode, spatial)?;
+            &bound
+        };
+        let mut paths = network.distance_queries();
+        let sites = paths.destinations(
+            (offset..places.len())
+                .enumerate()
+                .map(|(i, site)| (site, i)),
+        );
+        for (i, source) in sources.iter().enumerate() {
+            if let Some(offer) = source.productive {
+                paths.within(i, reach);
+                paths.reached(&sites, reach, |site, cost| {
+                    available[site].receive(offer, mode, source.capability, cost);
+                });
+            }
+        }
+    }
+    Ok(available)
+}
+pub(super) type Membership = (Option<usize>, Option<crate::town::fabric::HoldingId>);
 pub struct EnvironmentAnswers {
     travel: crate::storage::ReadBand<f64>,
     building: crate::storage::ReadBand<f64>,
@@ -113,6 +177,7 @@ pub struct SiteRequests(
     pub Vec<Vec<Point>>,
     pub Rc<EnvironmentAnswers>,
     pub Rc<crate::town::ground::Ground>,
+    pub Vec<Vec<Membership>>,
 );
 
 /// Long inter-settlement ways can cross empty land. New frontage is occupied
@@ -309,15 +374,23 @@ fn settle(
                 rooted: rooted_ground(state.field(), cell)?,
                 bank: shore(state.field(), cell, false)?,
                 flowing: shore(state.field(), cell, true)?,
-                craft: strongest_craft(state.field(), cell)?,
+                practices: crate::field::people::crafts::PracticeReads::at(state.field(), cell)?,
                 slope: state.field().shared().scalar(Scalar::Slope).get(cell)?,
                 ..Conditions::default()
             }))
         };
         let (site, inherited) = context.survey(state, &candidate, seat_index, ground)?;
         let selection = crate::town::templates::Selection::choose(site, draw);
+        if settings.template.is_some_and(|requested| {
+            !selection
+                .ranked
+                .iter()
+                .any(|candidate| candidate.template == requested)
+        }) {
+            continue;
+        }
         let mut excluded = Vec::new();
-        let mut next = Some(selection.selected);
+        let mut next = Some(settings.template.unwrap_or(selection.selected));
         while let Some(template) = next {
             let mut town = Town::new(candidate.clone(), settings.layout);
             town.template = selection.clone();
@@ -326,8 +399,14 @@ fn settle(
                 town.template
                     .ranked
                     .retain(|c| !excluded.contains(&c.template));
+                if let Some(work) = settings.major_work {
+                    crate::town::major_works::commission_requested(&mut town, settings.seed, work)?;
+                }
                 crate::town::major_works::commission(&mut town, settings.seed, &inherited);
                 return Ok(town);
+            }
+            if settings.template.is_some() {
+                break;
             }
             excluded.push(template);
             let retry = crate::field::poi::true_sizes::roll_bytes(
@@ -337,10 +416,15 @@ fn settle(
             next = selection.draw_remaining(retry, &excluded);
         }
     }
-    Err(io::Error::other(format!(
-        "No habitable founding site for {}",
-        seat.name
-    )))
+    let template = settings.template.map_or("", |template| template.name());
+    Err(io::Error::other(if template.is_empty() {
+        format!("No habitable founding site for {}", seat.name)
+    } else {
+        format!(
+            "No eligible and habitable {template} founding site for {}",
+            seat.name
+        )
+    }))
 }
 pub struct Operations {
     pub initialize: Command<State, Settings>,
@@ -410,16 +494,6 @@ fn environment(
         },
     )
 }
-fn strongest_craft(field: &Field, cell: usize) -> io::Result<Option<i32>> {
-    let mut best = (0., None);
-    for craft in crate::field::people::crafts::CRAFTS {
-        let share = crate::field::people::crafts::practised(field, craft, cell)?;
-        if share > best.0 {
-            best = (share, Some(craft.code));
-        }
-    }
-    Ok(best.1)
-}
 pub(super) fn shore(field: &Field, cell: usize, running: bool) -> io::Result<bool> {
     let water = field.water();
     for c in std::iter::once(cell).chain((0..3).filter_map(|e| field.mesh().neighbor(cell, e))) {
@@ -443,6 +517,14 @@ fn samples() -> Query<State, SiteConditions> {
             let building = &request.1.building;
             let harm = &request.1.harm;
             let field = state.field();
+            let magic = state.physical.magic.as_ref().map(|m| m.borrow());
+            let systems = magic.as_ref().map_or(&[][..], |m| m.fields.as_slice());
+            let mut roots = crate::field::people::crafts::RootReach::bind(
+                field.mesh(),
+                systems,
+                state.town.towns.iter().flat_map(|town| town.streets()),
+                state.spatial.as_ref(),
+            )?;
             let slope = field.shared().scalar(Scalar::Slope);
             let waste = field.town_signals().read().map(|(_, b)| b);
             // Neighbouring doors and frontage proposals often sample the same lattice cell.
@@ -460,10 +542,18 @@ fn samples() -> Query<State, SiteConditions> {
                         values.push(sampled[index]);
                         continue;
                     }
+                    let mut practices =
+                        crate::field::people::crafts::PracticeReads::at(field, cell)?;
+                    let rooted = rooted_ground(field, cell)?;
+                    let cut = rooted
+                        && roots.as_mut().map(|r| r.connected(cell)).transpose()? == Some(false);
+                    if cut {
+                        practices = practices.with_cut_roots();
+                    }
                     let conditions = Conditions {
                         bank: shore(field, cell, false)?,
                         flowing: shore(field, cell, true)?,
-                        craft: strongest_craft(field, cell)?,
+                        practices,
                         clearance: 0.,
                         exchange: field
                             .town_signals()
@@ -476,7 +566,7 @@ fn samples() -> Query<State, SiteConditions> {
                         forgetting: request.1.forgetting.get(cell)?,
                         presence: request.1.presence.get(cell)?,
                         cultivated: site::worked_shares(field, cell)?.0,
-                        rooted: rooted_ground(field, cell)?,
+                        rooted: rooted && !cut,
                         rural_service: 0.,
                         density: 0.,
                         slope: slope.get(cell)?,
@@ -544,6 +634,10 @@ impl Operations {
                                 households: b.households,
                                 institutions: b.institutions,
                                 workshops: b.workshops,
+                                effects: b.effects,
+                                practices: a
+                                    .practices
+                                    .with_local_consecration(b.effects.consecration),
                                 density: a.density + b.density,
                                 clearance: a.clearance + b.clearance,
                                 protection: a.protection + b.protection,
@@ -718,6 +812,28 @@ impl Operations {
                                 .collect(),
                             environment,
                             walking_ground.clone(),
+                            scope
+                                .state()
+                                .town
+                                .towns
+                                .iter()
+                                .zip(&candidates)
+                                .zip(&outlying)
+                                .map(|((town, candidates), outlying)| {
+                                    town.holdings()
+                                        .iter()
+                                        .map(|h| {
+                                            (h.slot.street, h.institution.or(h.slot.participant))
+                                        })
+                                        .chain(candidates.iter().map(|s| (s.street, s.participant)))
+                                        .chain(
+                                            outlying.iter().flat_map(|site| {
+                                                site.samples().map(|_| (None, None))
+                                            }),
+                                        )
+                                        .collect()
+                                })
+                                .collect(),
                         ));
                         let conditions = scope.query_with_context(&samples, requests)?;
                         let state = scope.state_mut();
@@ -813,6 +929,10 @@ impl Operations {
                                 town.round += 1;
                             }
                         }
+                        if step.id == "town.maintenance" {
+                            let material_uses = super::providers::material_uses(state);
+                            state.work_town_material(&material_uses)?;
+                        }
                         let removals = removals
                             .into_iter()
                             .filter_map(|(point, amount)| {
@@ -842,20 +962,14 @@ impl Operations {
                 let field = scope.state().field();
                 let mut sources = Vec::new();
                 for town in &scope.state().town.towns {
+                    sources.extend(town.passing_trade().filter_map(|(point, activity)| {
+                        cell_at(field.mesh(), point).map(|cell| (cell, activity / 100., 0.))
+                    }));
                     for holding in town.holdings() {
                         if let Some(cell) = cell_at(field.mesh(), holding.slot.front) {
-                            let activity = holding.occupation * holding.kind.definition().demand;
-                            let mut local = activity;
-                            for (tie, share) in holding.operating_shares() {
-                                if let Some(destination) = cell_at(field.mesh(), tie.entrance) {
-                                    let amount = activity * share * 0.5;
-                                    sources.push((destination, amount, 0.));
-                                    local -= amount;
-                                }
-                            }
                             sources.push((
                                 cell,
-                                local,
+                                0.,
                                 holding.occupation * (0.02 + holding.crowding * 0.1),
                             ));
                         }

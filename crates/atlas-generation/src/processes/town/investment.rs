@@ -39,6 +39,38 @@ pub fn advance(town: &mut Town, context: &Exposure<'_>) -> io::Result<()> {
             investments.extend(finance(town, edit).map(|funded| (value, funded)));
         }
     }
+    investments.extend(town.holdings().iter().zip(context.conditions).filter_map(
+        |(holding, local)| {
+            let use_ = holding.secondary.unwrap_or(holding.kind);
+            let definition = use_.definition();
+            if !matches!(
+                definition.roles.effects.improvement,
+                Some(crate::town::effects::Improvement::ExpandedOperation)
+            ) || holding.operation_tier >= 2
+                || holding.occupation < 0.5
+                || holding.established + 2 > town.round
+            {
+                return None;
+            }
+            let support = holding.support
+                * (1.
+                    + local.patronage
+                    + local.effects.prestige
+                    + definition.roles.learns_from * local.effects.learning);
+            (support > definition.demand)
+                .then(|| {
+                    finance(
+                        town,
+                        FabricEdit::Improve {
+                            premises: holding.id,
+                            use_,
+                        },
+                    )
+                    .map(|edit| (support, edit))
+                })
+                .flatten()
+        },
+    ));
     invest_together(town, investments, context.spatial)?;
     Ok(())
 }
@@ -236,7 +268,13 @@ fn premises(
         })
         .map(|(h, c)| {
             let distance = crate::town::geometry::distance(h.slot.front, site);
-            let returns = h.condition * (1. + c.households + c.protection);
+            let learning = kind.definition().roles.learns_from;
+            let returns = h.condition
+                * (1.
+                    + c.households
+                    + c.protection
+                    + c.effects.prestige
+                    + learning * c.effects.learning);
             let cost = (1. + distance / kind.definition().depth.high)
                 * (1. + h.occupation * h.claim + c.waste);
             (returns / cost, h.id)

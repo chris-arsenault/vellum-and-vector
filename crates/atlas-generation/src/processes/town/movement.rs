@@ -650,10 +650,16 @@ fn traffic(town: &mut Town, context: &Frontage<'_>) -> io::Result<Traffic> {
             .filter(|(_, t, _)| t.access == mode)
         {
             let Some(source) = by_endpoint.get(&tie.destination).and_then(|sources| {
-                sources
-                    .iter()
-                    .copied()
-                    .find(|s| tie.purpose.offered_by(s.activity) && s.demand + s.capability > 0.)
+                sources.iter().copied().find(|s| {
+                    s.demand + s.capability > 0.
+                        && if tie.productive.is_some() {
+                            s.productive == tie.productive
+                        } else if let Some(group) = tie.clientele {
+                            s.clientele == Some(group)
+                        } else {
+                            s.productive.is_none() && tie.purpose.offered_by(s.activity)
+                        }
+                })
             }) else {
                 continue;
             };
@@ -678,7 +684,11 @@ fn traffic(town: &mut Town, context: &Frontage<'_>) -> io::Result<Traffic> {
             travellers.entry(origin).or_default().push((
                 target,
                 h.id,
-                h.occupation * share * (1. + h.kind.definition().demand),
+                if tie.clientele.is_some() {
+                    tie.strength
+                } else {
+                    h.occupation * share * (1. + h.kind.definition().demand)
+                },
                 h.slot.front,
                 source.position,
             ));
@@ -964,10 +974,20 @@ fn invest<'a>(
         });
     };
     const MINIMUM_ROUTE: f64 = 20.;
-    if town.access_effort < street_cost(MINIMUM_ROUTE) {
+    let minimum = connection_cost(
+        town,
+        &project.points,
+        project.class,
+        street_cost(MINIMUM_ROUTE),
+        context.spatial,
+    )?;
+    let Some(minimum) = minimum else {
+        return Ok(Decision::Claim);
+    };
+    if town.access_effort < minimum {
         decision(
             "insufficient effort for minimum corridor",
-            Some(street_cost(MINIMUM_ROUTE)),
+            Some(minimum),
             town.access_effort,
         );
         return Ok(Decision::Unfunded);
@@ -1031,7 +1051,17 @@ fn build(
     street: crate::town::network::Street,
     benefit: f64,
 ) -> io::Result<RoadInvestment> {
-    let cost = street_cost(street.length());
+    let ordinary = street_cost(street.length());
+    let Some(cost) = connection_cost(
+        town,
+        &street.points,
+        street.class,
+        ordinary,
+        context.spatial,
+    )?
+    else {
+        return Ok(RoadInvestment::Declined(ordinary));
+    };
     if cost > town.access_effort {
         return Ok(RoadInvestment::TooExpensive(cost));
     }
@@ -1063,6 +1093,30 @@ fn build(
     );
     town.access_effort -= cost;
     Ok(RoadInvestment::Built(cost))
+}
+
+fn connection_cost(
+    town: &Town,
+    points: &[Point],
+    class: Class,
+    ordinary: f64,
+    spatial: &dyn crate::spatial::SpatialKernel,
+) -> io::Result<Option<f64>> {
+    use crate::town::effects::{Placement, Requirement};
+    let target = Placement::Access(if class == Class::Lane {
+        AccessUse::Foot
+    } else {
+        AccessUse::Freight
+    });
+    let mut cost = ordinary;
+    for &endpoint in points.first().into_iter().chain(points.last()) {
+        let influence = town.placement_at(endpoint, spatial)?;
+        if !influence.permitted(target) {
+            return Ok(None);
+        }
+        cost = cost.min(influence.requirement(target, Requirement::ConnectionCost, ordinary));
+    }
+    Ok(Some(cost.max(street_cost(1.))))
 }
 fn street_cost(length: f64) -> f64 {
     length * 0.5

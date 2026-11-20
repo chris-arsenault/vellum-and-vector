@@ -21,6 +21,11 @@ pub enum SourceId {
     Estate(u32),
     /// A source a process names itself.
     Named(atlas_map::Id),
+    Productive {
+        town: atlas_map::Id,
+        origin: super::production::Origin,
+        opportunity: super::production::Opportunity,
+    },
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct OpportunitySource {
@@ -31,6 +36,8 @@ pub struct OpportunitySource {
     pub activity: Activity,
     pub demand: f64,
     pub capability: f64,
+    pub productive: Option<super::production::Opportunity>,
+    pub clientele: Option<super::effects::Clientele>,
 }
 pub struct Sources(pub Vec<OpportunitySource>);
 impl QueryValue for Sources {}
@@ -39,7 +46,7 @@ pub struct Conditions {
     pub clearance: f64,
     pub bank: bool,
     pub flowing: bool,
-    pub craft: Option<i32>,
+    pub practices: crate::field::people::crafts::PracticeReads,
     pub yielding: f64,
     pub forgetting: f64,
     pub presence: f64,
@@ -60,6 +67,7 @@ pub struct Conditions {
     pub protection: f64,
     pub building: f64,
     pub travel: f64,
+    pub effects: super::effects::Received,
 }
 pub struct SiteConditions(pub Vec<Vec<Conditions>>);
 impl QueryValue for SiteConditions {}
@@ -70,13 +78,29 @@ pub struct Support {
     pub burden: f64,
     pub source: Option<String>,
 }
+#[derive(Default)]
+pub struct Opportunities {
+    activities: [Support; 7],
+    audience: [f64; super::effects::Clientele::ALL.len()],
+    pub(crate) production: super::production::Available,
+}
+impl Opportunities {
+    pub fn custom(
+        &self,
+        attracts: &[super::effects::Contribution<super::effects::Clientele>],
+    ) -> f64 {
+        attracts
+            .iter()
+            .map(|offer| self.audience[offer.kind as usize] * offer.strength)
+            .sum()
+    }
+}
 /// Paths to a source are alternatives, not duplicate demand. Costs are supplied by access.
 pub struct Reachable<'a> {
     pub source: &'a OpportunitySource,
     pub cost: f64,
     pub competitors: f64,
 }
-pub struct Opportunities([Support; 7]);
 #[derive(Clone, Copy, Default)]
 struct Totals<'a> {
     demand: f64,
@@ -125,6 +149,7 @@ struct Offer<'a> {
     origin: usize,
     source: &'a OpportunitySource,
     competitors: f64,
+    unserved: f64,
 }
 /// Read one source's distances across sites at a time. Alternatives with the same identity
 /// compete for each compatible activity, with equal-cost paths retaining provider order.
@@ -137,6 +162,7 @@ pub(crate) enum FrontageRead {
 pub(crate) fn frontage_support(
     sources: &[OpportunitySource],
     competitors: impl Fn(&OpportunitySource) -> f64,
+    served: impl Fn(&OpportunitySource) -> f64,
     read: FrontageRead,
     sites: &[Conditions],
     distances: impl FnMut(usize, &mut dyn FnMut(usize, f64)),
@@ -144,7 +170,7 @@ pub(crate) fn frontage_support(
     match read {
         FrontageRead::HouseholdDemand => batch(
             sources,
-            competitors,
+            (competitors, |_| 0.),
             &[Activity::Household],
             sites,
             distances,
@@ -154,7 +180,7 @@ pub(crate) fn frontage_support(
         ),
         FrontageRead::Construction => batch(
             sources,
-            competitors,
+            (competitors, served),
             &Activity::ALL,
             sites,
             distances,
@@ -164,7 +190,10 @@ pub(crate) fn frontage_support(
 }
 fn batch<'a, const N: usize>(
     sources: &'a [OpportunitySource],
-    competitors: impl Fn(&OpportunitySource) -> f64,
+    demand: (
+        impl Fn(&OpportunitySource) -> f64,
+        impl Fn(&OpportunitySource) -> f64,
+    ),
     activities: &[Activity; N],
     sites: &[Conditions],
     mut distances: impl FnMut(usize, &mut dyn FnMut(usize, f64)),
@@ -173,16 +202,20 @@ fn batch<'a, const N: usize>(
     let mut order: Vec<_> = sources
         .iter()
         .enumerate()
-        .filter(|(_, s)| activities.iter().any(|&a| compatible(a, s.activity)))
+        .filter(|(_, s)| {
+            s.productive.is_none() && activities.iter().any(|&a| compatible(a, s.activity))
+        })
         .map(|(origin, source)| Offer {
             origin,
             source,
-            competitors: competitors(source),
+            competitors: demand.0(source),
+            unserved: (source.demand - demand.1(source)).max(0.),
         })
         .collect();
     // hpc-exempt: group retained counterparty identities in stable provider order.
-    order.sort_by(|a, b| a.source.id.cmp(&b.source.id));
+    order.sort_by_key(|offer| offer.source.id);
     let mut totals = vec![[Totals::default(); N]; sites.len()];
+    let mut audience = vec![[0.; super::effects::Clientele::ALL.len()]; sites.len()];
     // (site, offer within its identity's group, travel cost) for each site a group reaches.
     let mut reached: Vec<(usize, usize, f64)> = Vec::new();
     for group in order.chunk_by(|a, b| a.source.id == b.source.id) {
@@ -196,6 +229,9 @@ fn batch<'a, const N: usize>(
         }
         // hpc-exempt: one identity's alternative paths meet per site; ties keep provider order.
         reached.sort_unstable_by_key(|&(site, member, _)| (site, member));
+        if N > 1 {
+            collect_custom(group, &reached, &mut audience);
+        }
         for (a, &activity) in activities.iter().enumerate() {
             for paths in reached.chunk_by(|x, y| x.0 == y.0) {
                 let cheapest = paths
@@ -211,23 +247,46 @@ fn batch<'a, const N: usize>(
     totals
         .into_iter()
         .zip(sites)
-        .map(|(t, &cond)| {
-            let mut answers = Opportunities(Default::default());
+        .zip(audience)
+        .map(|((t, &cond), audience)| {
+            let mut answers = Opportunities {
+                audience,
+                ..Default::default()
+            };
             for (&activity, total) in activities.iter().zip(t) {
-                answers.0[activity as usize] = total.finish(cond);
+                answers.activities[activity as usize] = total.finish(cond);
             }
             answers
         })
         .collect()
 }
+fn collect_custom(
+    group: &[Offer<'_>],
+    reached: &[(usize, usize, f64)],
+    audience: &mut [[f64; super::effects::Clientele::ALL.len()]],
+) {
+    for paths in reached.chunk_by(|x, y| x.0 == y.0) {
+        let Some(&(site, member, cost)) = paths.iter().min_by(|a, b| a.2.total_cmp(&b.2)) else {
+            continue;
+        };
+        let offer = &group[member];
+        let Some(clientele) = offer.source.clientele.filter(|_| offer.unserved > 0.) else {
+            continue;
+        };
+        let draw = clientele.draw(1., cost);
+        audience[site][clientele as usize] +=
+            offer.unserved * draw / (1. + draw * offer.unserved / offer.source.demand);
+    }
+}
 impl Opportunities {
     pub fn new(paths: &[Reachable<'_>], conditions: Conditions) -> Self {
-        Self(std::array::from_fn(|i| {
-            support_for(Activity::ALL[i], paths, conditions)
-        }))
+        Self {
+            activities: std::array::from_fn(|i| support_for(Activity::ALL[i], paths, conditions)),
+            ..Default::default()
+        }
     }
     pub fn for_activity(&self, activity: Activity) -> &Support {
-        &self.0[activity as usize]
+        &self.activities[activity as usize]
     }
 }
 /// Households seek livelihoods; occupied households supply an audience for workplaces.
@@ -258,7 +317,11 @@ pub fn operating_tie(
     use super::fabric::OperatingTie;
     let offers = paths
         .iter()
-        .filter(|p| p.cost.is_finite() && purpose.offered_by(p.source.activity))
+        .filter(|p| {
+            p.source.productive.is_none()
+                && p.cost.is_finite()
+                && purpose.offered_by(p.source.activity)
+        })
         .map(|p| {
             let strength =
                 (p.source.demand + p.source.capability) * pull(p.cost) / (1. + p.competitors);
@@ -270,6 +333,8 @@ pub fn operating_tie(
         .filter(|(_, s, _)| *s > 0.);
     if let Some((path, desired, _)) = offers.max_by(|a, b| a.2.total_cmp(&b.2)) {
         return Some(OperatingTie {
+            productive: None,
+            clientele: None,
             purpose,
             destination: path.source.endpoint.clone(),
             entrance: path.source.position,
@@ -295,7 +360,7 @@ fn support_from<'a, 'b: 'a>(
 ) -> Support {
     // hpc-exempt: sparse source identities select alternative geographic paths, not lattice values.
     let mut seen = std::collections::BTreeMap::<SourceId, &Reachable<'_>>::new();
-    for path in paths.filter(|p| p.cost.is_finite()) {
+    for path in paths.filter(|p| p.source.productive.is_none() && p.cost.is_finite()) {
         seen.entry(path.source.id)
             .and_modify(|current| {
                 if path.cost < current.cost {
@@ -318,6 +383,43 @@ pub fn respond(previous: f64, desired: f64, exposure: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_new_place_reads_reachable_country_custom_after_incumbents_have_drawn_on_it() {
+        use crate::town::effects::{Clientele, Contribution};
+        let id = atlas_map::Id::from_name("market visitors");
+        let group = OpportunitySource {
+            endpoint: super::super::fabric::Endpoint::External(id),
+            id: SourceId::Named(id),
+            label: "Country visitors".into(),
+            position: [0., 0.],
+            activity: Activity::Agriculture,
+            demand: 20.,
+            capability: 0.,
+            productive: None,
+            clientele: Some(Clientele::Countryfolk),
+        };
+        let attraction = [Contribution::new(Clientele::Countryfolk, 1.)];
+        let read = |already_served| {
+            frontage_support(
+                std::slice::from_ref(&group),
+                |_| 0.,
+                |_| already_served,
+                FrontageRead::Construction,
+                &[Conditions::default(); 2],
+                |_, visit| {
+                    visit(0, 30.);
+                    visit(1, f64::INFINITY);
+                },
+            )
+        };
+        let open = read(0.);
+        let competing = read(12.);
+        assert!(competing[0].custom(&attraction) > 0.);
+        assert!(competing[0].custom(&attraction) < open[0].custom(&attraction));
+        assert_eq!(competing[1].custom(&attraction), 0.);
+        assert_eq!(competing[0].for_activity(Activity::Trade).demand, 0.);
+    }
     fn named(name: &str) -> SourceId {
         SourceId::Named(atlas_map::Id::from_name(name))
     }
@@ -325,6 +427,8 @@ mod tests {
     fn lost_access_redirects_operating_work_to_a_reachable_counterparty() {
         use super::super::{catalogue::AccessUse, fabric::Endpoint};
         let first = OpportunitySource {
+            productive: None,
+            clientele: None,
             endpoint: Endpoint::External(atlas_map::Id::from_name("port")),
             id: named("port"),
             label: "Port".into(),
@@ -334,6 +438,8 @@ mod tests {
             capability: 0.,
         };
         let other = OpportunitySource {
+            productive: None,
+            clientele: None,
             endpoint: Endpoint::Field(7),
             id: named("fields"),
             label: "Fields".into(),
@@ -376,6 +482,8 @@ mod tests {
             fabric::Endpoint,
         };
         let fields = OpportunitySource {
+            productive: None,
+            clientele: None,
             endpoint: Endpoint::Field(8),
             id: named("estate"),
             position: [0., 0.],
@@ -385,6 +493,8 @@ mod tests {
             capability: 0.,
         };
         let healer = OpportunitySource {
+            productive: None,
+            clientele: None,
             endpoint: Endpoint::External(atlas_map::Id::from_name("physic")),
             id: named("healer"),
             activity: Activity::Service,
@@ -411,6 +521,8 @@ mod tests {
     #[test]
     fn alternative_paths_do_not_duplicate_a_sources_demand() {
         let source = OpportunitySource {
+            productive: None,
+            clientele: None,
             endpoint: super::super::fabric::Endpoint::External(atlas_map::Id::from_name(
                 "pilgrims",
             )),
@@ -438,6 +550,8 @@ mod tests {
     #[test]
     fn blocked_access_and_competition_have_distinct_effects() {
         let source = OpportunitySource {
+            productive: None,
+            clientele: None,
             endpoint: super::super::fabric::Endpoint::External(atlas_map::Id::from_name("road")),
             id: named("road"),
             label: "Road traffic".into(),
@@ -494,6 +608,8 @@ mod tests {
     #[test]
     fn customers_and_livelihoods_are_different_activity_requests() {
         let home = OpportunitySource {
+            productive: None,
+            clientele: None,
             endpoint: super::super::fabric::Endpoint::External(atlas_map::Id::from_name("home")),
             id: named("home"),
             label: "Households".into(),
@@ -503,6 +619,8 @@ mod tests {
             capability: 0.,
         };
         let shop = OpportunitySource {
+            productive: None,
+            clientele: None,
             endpoint: super::super::fabric::Endpoint::External(atlas_map::Id::from_name("shop")),
             id: named("shop"),
             label: "Trading workplaces".into(),
@@ -527,6 +645,8 @@ mod tests {
         assert_eq!(answers.for_activity(Activity::Household).demand, 2.);
         assert_eq!(answers.for_activity(Activity::Trade).demand, 14.);
         let alternate = OpportunitySource {
+            productive: None,
+            clientele: None,
             id: home.id,
             label: "Warehouse".into(),
             ..shop.clone()
@@ -534,6 +654,7 @@ mod tests {
         let sources = [home, alternate, shop];
         let sites = frontage_support(
             &sources,
+            |_| 0.,
             |_| 0.,
             FrontageRead::Construction,
             &[Conditions::default(); 2],
@@ -554,6 +675,7 @@ mod tests {
         let mut origins = Vec::new();
         let street = frontage_support(
             &sources,
+            |_| 0.,
             |_| 0.,
             FrontageRead::HouseholdDemand,
             &[Conditions::default()],

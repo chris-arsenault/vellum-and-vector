@@ -207,6 +207,7 @@ fn usage(harness: &Harness) -> String {
   raster <map folder> <layer id>...
   real --at x,y|Settlement [--hex 100m] [--across 50] [--kind ground|structure]
        [--detail draft|standard|fine] [--name name] [--parent map folder]
+       [--template template-name] [--major-work work-type]
        [--until \"<stage picture label, e.g. Initial regional detail>\"]
   region --at x,y|Settlement --width metres --name name [--parent map folder]
   cancel <jobId>
@@ -493,6 +494,11 @@ fn real_scale(harness: &Harness, options: &Options) -> io::Result<()> {
     save(harness, &captured)?;
     let mut developed: Value = harness.generation("configuration", json!(captured))?;
     developed["recipe"]["quality"] = json!(detail);
+    for (flag, choice) in [("template", "template"), ("major-work", "majorWork")] {
+        if let Some(value) = options.get(flag) {
+            developed["recipe"]["features"]["built.layout"]["configuration"][choice] = json!(value);
+        }
+    }
     let regeneration = json!({"reference": captured, "configuration": developed});
     let review: Value = harness.generation(
         "review",

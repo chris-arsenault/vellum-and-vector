@@ -95,18 +95,46 @@ pub fn collapse_overdrawn(
     field: &mut MagicField,
     context: Context,
 ) -> io::Result<()> {
-    let p = field.origin_parameters(context.origin);
     for cell in 0..env.mesh.len() {
-        let source = field.origins[context.origin].source.get(cell)?;
-        let drawn = field.drawn.get(cell)?;
-        if source <= 0.0 || drawn <= 0.0 || drawn < p.overdraw_share * source * env.mesh.area(cell)
-        {
-            continue;
+        collapse_overdrawn_cell(env, field, context.origin, cell)?;
+    }
+    Ok(())
+}
+pub(crate) type WithdrawalResponse =
+    fn(&mut Environment<'_>, &mut MagicField, usize) -> io::Result<()>;
+
+pub(crate) fn collapse_used_spring(
+    env: &mut Environment<'_>,
+    field: &mut MagicField,
+    cell: usize,
+) -> io::Result<()> {
+    use crate::magic::configuration::Source;
+    for i in 0..field.definition().origins.len() {
+        if matches!(field.definition().origins[i].source, Source::Aquifer) {
+            collapse_overdrawn_cell(env, field, i, cell)?;
         }
-        field.channels.band_mut(C::Sealed).set(cell, 1.0)?;
-        if p.sink_depth <= 0.0 {
-            continue;
-        }
+    }
+    Ok(())
+}
+
+fn collapse_overdrawn_cell(
+    env: &mut Environment<'_>,
+    field: &mut MagicField,
+    origin: usize,
+    cell: usize,
+) -> io::Result<()> {
+    let p = field.origin_parameters(origin);
+    let source = field.origins[origin].source.get(cell)?;
+    let drawn = field.drawn.get(cell)?;
+    if source <= 0.0
+        || drawn <= 0.0
+        || drawn < p.overdraw_share * source * env.mesh.area(cell)
+        || field.channels.band(C::Sealed).get(cell)? > 0.
+    {
+        return Ok(());
+    }
+    field.channels.band_mut(C::Sealed).set(cell, 1.0)?;
+    if p.sink_depth > 0.0 {
         let subsided = field.channels.band_mut(C::Subsided);
         subsided.set(cell, subsided.get(cell)? + p.sink_depth)?;
         env.ground

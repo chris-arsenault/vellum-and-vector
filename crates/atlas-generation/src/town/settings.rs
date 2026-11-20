@@ -9,6 +9,17 @@ pub const DEVELOPMENT_ROUNDS: usize = 18;
 /// draw across: about twenty minutes on foot. A draw fades over the second half of this
 /// distance and is gone at it, so a town's far side no longer pulls on every door.
 pub const DAILY_REACH: f64 = 1_600.0;
+/// Characteristic walking cost for public services around their entrance.
+pub const SERVICE_REACH: f64 = 100.;
+/// Characteristic walking cost for consultation and instruction.
+pub const LEARNING_REACH: f64 = 180.;
+/// Local frontage and nuisance exposure neighborhood in metres.
+pub const PREMISES_REACH: f64 = 100.;
+/// Units of local occupation one fully active service site can support.
+pub const SERVICE_CAPACITY: f64 = 36.;
+/// Walking costs for ordinary visits from the house and from the countryside.
+pub const TOWNSFOLK_REACH: f64 = 360.;
+pub const COUNTRYFOLK_REACH: f64 = 720.;
 
 // The plan's working grid.
 

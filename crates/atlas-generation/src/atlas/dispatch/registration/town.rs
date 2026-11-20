@@ -2,6 +2,7 @@ use super::super::{Input, Process, Registry, Specification};
 use crate::{
     atlas::town::{self, story::Layout, Settings},
     execution::ExecutionResult,
+    town::{major_works::WorkFamily, templates::Template},
 };
 use std::io;
 
@@ -22,13 +23,30 @@ fn settings(input: &Input) -> ExecutionResult<Settings> {
             .get("layout")
             .and_then(serde_json::Value::as_str)
             .and_then(Layout::parse),
+        template: input
+            .parameters
+            .get(town::TEMPLATE)
+            .and_then(serde_json::Value::as_str)
+            .and_then(Template::from_name),
+        major_work: input
+            .parameters
+            .get(town::MAJOR_WORK)
+            .and_then(serde_json::Value::as_str)
+            .and_then(WorkFamily::from_key),
     })
+}
+fn initialization() -> io::Result<Specification> {
+    let mut spec = specification()?;
+    spec.contract.id = "town.initialize".into();
+    spec.parameters.extend(serde_json::from_value::<crate::parameters::Definitions>(serde_json::json!({
+        (town::TEMPLATE): {"type":"enum","required":false,"choices":Template::ALL.map(Template::name)},
+        (town::MAJOR_WORK): {"type":"enum","required":false,"choices":WorkFamily::ALL.iter().map(|family| family.key()).collect::<Vec<_>>()}
+    }))?);
+    Ok(spec)
 }
 pub fn specifications() -> io::Result<Vec<Specification>> {
     let mut result = vec![specification()?];
-    let mut initialize = specification()?;
-    initialize.contract.id = "town.initialize".into();
-    result.push(initialize);
+    result.push(initialization()?);
     result.extend(
         crate::processes::town::STEPS
             .iter()
@@ -56,10 +74,8 @@ pub fn register(
         Specification::new("town.cultivation", "atlas:workspace", "", true),
         town::cultivation(),
     ))?;
-    let mut initialize = specification()?;
-    initialize.contract.id = "town.initialize".into();
     registry.register(Process::command(
-        initialize,
+        initialization()?,
         operations.initialize.clone(),
         settings,
     ))?;

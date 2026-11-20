@@ -263,20 +263,34 @@ pub fn commission(town: &mut Town, seed: i32, inherited: &[InheritedWork]) {
         .take(needed)
         .collect::<Vec<_>>()
     {
-        let design = family.definition().design(
-            &town.template.site,
-            anchor,
-            &[],
-            seed.wrapping_add(family as i32),
-        );
-        town.works.start(
-            family,
-            WorkOrigin::Commissioned,
-            anchor,
-            &town.template.site,
-            design,
-        );
+        start_commission(town, seed, family, anchor);
     }
+}
+pub fn commission_requested(
+    town: &mut Town,
+    seed: i32,
+    requested: WorkFamily,
+) -> std::io::Result<()> {
+    let (_, anchor, _) = offers(&town.template.site, &town.seat.story, seed)
+        .into_iter()
+        .find(|(family, _, _)| *family == requested)
+        .ok_or_else(|| {
+            std::io::Error::other(format!(
+                "No site for a {} in {}",
+                requested.label(),
+                town.seat.name
+            ))
+        })?;
+    start_commission(town, seed, requested, anchor);
+    Ok(())
+}
+fn start_commission(town: &mut Town, seed: i32, family: WorkFamily, anchor: Point) {
+    let site = &town.template.site;
+    let design = family
+        .definition()
+        .design(site, anchor, &[], seed.wrapping_add(family as i32));
+    town.works
+        .start(family, WorkOrigin::Commissioned, anchor, site, design);
 }
 fn offers(site: &SiteEvidence, story: &Story, seed: i32) -> Vec<(WorkFamily, Point, f64)> {
     let mut offers = WorkFamily::ALL

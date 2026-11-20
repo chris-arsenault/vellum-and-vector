@@ -17,6 +17,18 @@ import { realScaleDirections, type OwnerDirection } from "./ownerDirections.real
  */
 const directions: readonly OwnerDirection[] = [
   {
+    direction: "raise an existing building on placement",
+    given: "2026-11-19",
+    marks: ["crates/atlas-generation/src/town/fabric/projects.rs"],
+    test: "crates/atlas-generation/src/town/fabric/projects.rs",
+  },
+  {
+    direction: "Eases reduces a placement requirement for a class of later placements",
+    given: "2026-11-19",
+    marks: ["crates/atlas-generation/src/town/siting.rs"],
+    test: "crates/atlas-generation/src/town/siting.rs",
+  },
+  {
     direction:
       "great works are meta types only, with significant variation per type and no set proper name",
     given: "2026-11-19",

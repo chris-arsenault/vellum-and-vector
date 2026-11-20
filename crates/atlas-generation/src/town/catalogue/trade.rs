@@ -1,4 +1,6 @@
 use super::*;
+use crate::town::effects::{Clientele, Contribution, Ease, Effects, Nuisance};
+use crate::town::production::{Need, Offer, Opportunity, Production};
 use crate::town::{
     fabric::{Anchor, Relationship},
     story::Size,
@@ -21,10 +23,26 @@ pub(super) fn market() -> Definition {
         frontage: MetresRange::frontage(28.),
         depth: MetresRange::depth(40.),
         typical_means: 0.5,
-        nuisance: 0.2,
         demand: 2.,
         prominence: 1.,
         roles: Roles {
+            effects: Effects {
+                attracts: const {
+                    &[
+                        Contribution::new(Clientele::Townsfolk, 1.7),
+                        Contribution::new(Clientele::Countryfolk, 0.9),
+                    ]
+                },
+                holds: 1.4,
+                eases: const {
+                    &[
+                        Ease::premises(Kind(Identity::Provision), 0.16, 36.),
+                        Ease::premises(Kind(Identity::Retail(Retail::Bookseller)), 0.08, 26.),
+                    ]
+                },
+                burdens: const { &[Contribution::new(Nuisance::Noise, 0.38)] },
+                ..Effects::EMPTY
+            },
             gathering_space: true,
             indoor_sharing: true,
             // owner-direction(2026-11-18): the town square is an open area surrounded by businesses.
@@ -82,10 +100,29 @@ pub(super) fn exchange_hall() -> Definition {
         frontage: MetresRange::frontage(22.),
         depth: MetresRange::depth(18.),
         typical_means: 0.7,
-        nuisance: 0.1,
         demand: 1.5,
         prominence: 0.8,
-        roles: Roles::default(),
+        roles: Roles {
+            effects: Effects {
+                attracts: const {
+                    &[
+                        Contribution::new(Clientele::Wealthy, 1.25),
+                        Contribution::new(Clientele::Travellers, 1.15),
+                    ]
+                },
+                dignifies: 0.72,
+                eases: const {
+                    &[Ease::premises(
+                        Kind(Identity::Retail(Retail::Bookseller)),
+                        0.14,
+                        48.,
+                    )]
+                },
+                minimum_support: 0.15,
+                ..Effects::EMPTY
+            },
+            ..Roles::default()
+        },
     }
 }
 
@@ -106,10 +143,15 @@ pub(super) fn provision() -> Definition {
         frontage: MetresRange::frontage(8.),
         depth: MetresRange::depth(18.),
         typical_means: 0.4,
-        nuisance: 0.2,
         demand: 1.3,
         prominence: 0.2,
         roles: Roles {
+            effects: Effects {
+                attracts: const { &[Contribution::new(Clientele::Townsfolk, 0.9)] },
+                burdens: const { &[Contribution::new(Nuisance::Foulness, 0.12)] },
+                minimum_support: 0.08,
+                ..Effects::EMPTY
+            },
             founding: Some(|_| 0.2),
             ..Roles::default()
         },
@@ -133,10 +175,37 @@ pub(super) fn retail(v: Retail) -> Definition {
         frontage: MetresRange::frontage(8.),
         depth: MetresRange::depth(17.),
         typical_means: 0.6,
-        nuisance: 0.05,
         demand: 0.7,
         prominence: 0.3,
         roles: Roles {
+            production: if v == Retail::Clothier {
+                Production {
+                    needs: const {
+                        &[
+                            Need::new(
+                                Opportunity::PreparedCloth,
+                                Operation::Supply,
+                                &[AccessUse::Foot, AccessUse::Freight],
+                                13.,
+                            ),
+                            Need::new(
+                                Opportunity::TextileCommission,
+                                Operation::Customers,
+                                &[AccessUse::Foot],
+                                4.,
+                            ),
+                        ]
+                    },
+                    ..Production::default()
+                }
+            } else {
+                Production::default()
+            },
+            effects: Effects {
+                attracts: const { &[Contribution::new(Clientele::Wealthy, 0.82)] },
+                minimum_support: 0.14,
+                ..Effects::EMPTY
+            },
             variants: &[
                 Kind(Identity::Retail(Retail::Bookseller)),
                 Kind(Identity::Retail(Retail::Clothier)),
@@ -165,10 +234,21 @@ pub(super) fn storehouse() -> Definition {
         frontage: MetresRange::frontage(18.),
         depth: MetresRange::depth(25.),
         typical_means: 0.7,
-        nuisance: 0.1,
         demand: 0.7,
         prominence: 0.3,
-        roles: Roles::default(),
+        roles: Roles {
+            effects: Effects {
+                eases: const {
+                    &[Ease::premises(
+                        Kind(Identity::Retail(Retail::Bookseller)),
+                        0.09,
+                        65.,
+                    )]
+                },
+                ..Effects::EMPTY
+            },
+            ..Roles::default()
+        },
     }
 }
 
@@ -189,10 +269,31 @@ pub(super) fn landing() -> Definition {
         frontage: MetresRange::frontage(20.),
         depth: MetresRange::depth(14.),
         typical_means: 0.4,
-        nuisance: 0.3,
         demand: 1.2,
         prominence: 0.5,
         roles: Roles {
+            production: Production {
+                offers: const { &[Offer::new(Opportunity::VesselWork, 0.89)] },
+                needs: const {
+                    &[Need::new(
+                        Opportunity::Soundings,
+                        Operation::Service,
+                        &[AccessUse::Foot, AccessUse::Waterborne],
+                        8.,
+                    )]
+                },
+            },
+            effects: Effects {
+                connects: const {
+                    &[
+                        Contribution::new(AccessUse::Waterborne, 0.65),
+                        Contribution::new(AccessUse::Freight, 0.45),
+                    ]
+                },
+                attracts: const { &[Contribution::new(Clientele::Travellers, 1.1)] },
+                burdens: const { &[Contribution::new(Nuisance::Disorder, 0.3)] },
+                ..Effects::EMPTY
+            },
             intention: Some(landing_access),
             landside_access: Some(AccessUse::Freight),
             founding: Some(|s| f64::from(s.bank) * (0.5 + s.exchange)),
@@ -225,10 +326,25 @@ pub(super) fn fairground() -> Definition {
         frontage: MetresRange::frontage(36.),
         depth: MetresRange::depth(45.),
         typical_means: 0.5,
-        nuisance: 0.2,
         demand: 0.5,
         prominence: 0.5,
         roles: Roles {
+            effects: Effects {
+                attracts: const {
+                    &[
+                        Contribution::new(Clientele::Countryfolk, 1.35),
+                        Contribution::new(Clientele::Travellers, 0.55),
+                    ]
+                },
+                holds: 1.1,
+                burdens: const {
+                    &[
+                        Contribution::new(Nuisance::Noise, 0.64),
+                        Contribution::new(Nuisance::Disorder, 0.39),
+                    ]
+                },
+                ..Effects::EMPTY
+            },
             gathering_space: true,
             civic_need: Some(|town| town.audience > 15000.),
             ..Roles::default()

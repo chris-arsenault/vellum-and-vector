@@ -15,6 +15,28 @@ use story::Layout;
 pub struct Settings {
     pub layout: Option<Layout>,
     pub seed: i32,
+    pub template: Option<crate::town::templates::Template>,
+    pub major_work: Option<crate::town::major_works::WorkFamily>,
+}
+
+pub(super) const TEMPLATE: &str = "template";
+pub(super) const MAJOR_WORK: &str = "majorWork";
+
+pub(super) fn validate_choices(choices: &crate::parameters::Values) -> std::io::Result<()> {
+    use crate::town::{major_works::WorkFamily, templates::Template};
+    for (key, value) in choices {
+        let valid = value.as_str().is_some_and(|value| match key.as_str() {
+            TEMPLATE => Template::from_name(value).is_some(),
+            MAJOR_WORK => WorkFamily::from_key(value).is_some(),
+            _ => false,
+        });
+        if !valid {
+            return Err(std::io::Error::other(format!(
+                "Invalid settlement choice {key}: {value}"
+            )));
+        }
+    }
+    Ok(())
 }
 /// The layout setting's choices; `story` lets each settlement's own story decide.
 pub const LAYOUTS: [&str; 6] = ["story", "organic", "grid", "radial", "linear", "walled"];

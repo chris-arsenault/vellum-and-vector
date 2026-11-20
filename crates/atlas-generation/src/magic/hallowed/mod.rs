@@ -8,6 +8,14 @@ use super::{
 use crate::{scale::RelativeMeasure, storage::ReadBand};
 use std::io;
 pub const WARD_SEALS: f64 = 0.5;
+
+/// Occupied institutions build local consecration gradually. Abandoned
+/// ground retains a remnant that fades over later maintenance passes.
+pub(crate) fn maintain_consecration(previous: f64, care: f64) -> f64 {
+    let rate: f64 = if care > previous { 0.18 } else { 0.11 };
+    previous + (care.clamp(0., 1.) - previous) * (-(-rate).exp_m1())
+}
+
 pub struct Seat {
     pub id: String,
     pub cell: usize,
@@ -135,4 +143,18 @@ pub fn propagate(
             .set(cell, intensity.min(1000.0))?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod town_tests {
+    use super::maintain_consecration;
+
+    #[test]
+    fn inhabited_sacred_ground_builds_consecration_and_abandonment_leaves_a_remnant() {
+        let first = maintain_consecration(0., 0.8);
+        let mature = maintain_consecration(first, 0.8);
+        let abandoned = maintain_consecration(mature, 0.);
+        assert!(mature > first && first > 0.);
+        assert!(abandoned > 0. && abandoned < mature);
+    }
 }

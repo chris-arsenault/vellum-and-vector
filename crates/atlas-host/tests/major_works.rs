@@ -37,7 +37,7 @@ fn site_conditions() -> Conditions {
         flowing: true,
         cultivated: 0.8,
         building: 1.,
-        craft: Some(2),
+        practices: [0., 1., 0., 0., 0., 0., 0.].into(),
         ..Default::default()
     }
 }

@@ -90,6 +90,87 @@ pub struct Elapsed<'a> {
     pub seed: i32,
     pub span: f64,
 }
+
+pub(crate) struct TownUse {
+    pub craft: super::people::crafts::Craft,
+    pub source: usize,
+    pub receiver: usize,
+    pub work: f64,
+}
+pub(crate) struct TownMaterialUses<'a> {
+    pub workspace: WorkspaceInput<'a>,
+    pub uses: &'a [TownUse],
+}
+
+pub(crate) fn town_material_use<'a>() -> Command<Field, TownMaterialUses<'a>> {
+    use crate::magic::state::DrawRequest;
+    Command::with_inputs(
+        "magic.town-material-use",
+        CommandKind::Work,
+        vec![],
+        |scope, input: &TownMaterialUses<'_>| {
+            let mut workspace = input.workspace.borrow_mut();
+            scope.state_mut().with_magic(|env, _, _, loads, _| {
+                for work in input.uses {
+                    let Some(material) = work.craft.town.material else {
+                        continue;
+                    };
+                    let Some(system) = workspace
+                        .fields
+                        .iter_mut()
+                        .find(|f| f.definition().id == work.craft.system)
+                    else {
+                        continue;
+                    };
+                    let share = material.release * work.work / (1. + work.work);
+                    let cells = std::iter::once(work.source)
+                        .chain((0..3).filter_map(|edge| env.mesh.neighbor(work.source, edge)));
+                    for cell in cells {
+                        if system
+                            .channel(crate::magic::channels::Channel::Sealed)
+                            .get(cell)?
+                            > 0.
+                        {
+                            continue;
+                        }
+                        let stock =
+                            system.reservoir_amount(env.ground, material.reservoir, cell)?;
+                        if stock <= 0. {
+                            continue;
+                        }
+                        let released = system.draw_reservoir(
+                            env.ground,
+                            loads.ground,
+                            env.mesh,
+                            DrawRequest {
+                                reservoir: material.reservoir,
+                                cell,
+                                amount: share * stock,
+                            },
+                        )?;
+                        if released > 0. {
+                            if let Some(reservoir) = material.worked_reservoir {
+                                system.deposit_reservoir(
+                                    env.ground,
+                                    env.mesh,
+                                    reservoir,
+                                    work.receiver,
+                                    released,
+                                )?;
+                            }
+                            if let Some(consumed) = material.after_use {
+                                consumed(env, system, cell)?;
+                            }
+                            break;
+                        }
+                    }
+                }
+                Ok(())
+            })?;
+            Ok(())
+        },
+    )
+}
 impl Field {
     fn with_magic<T>(
         &mut self,

@@ -1,6 +1,10 @@
 use super::*;
 use crate::town::siting::feasible;
-use crate::town::{access::Access, catalogue::ServiceRole, geometry::distance};
+use crate::town::{
+    access::Access,
+    effects::{Improvement, Placement, Service},
+    geometry::distance,
+};
 
 impl Town {
     pub fn access_destinations(&self, kind: Kind) -> impl Iterator<Item = Point> + '_ {
@@ -74,7 +78,12 @@ impl Relationship {
                     && spatial.area(&h.outline).map_err(io::Error::other)?
                         >= size.frontage.low * size.depth.low
             }
-            Self::Protection { .. } => h.kind.definition().roles.service == ServiceRole::Protection,
+            Self::Protection { .. } => h
+                .kind
+                .definition()
+                .services()
+                .iter()
+                .any(|s| s.kind == Service::Protection),
             Self::Access { .. } => false,
         })
     }
@@ -227,9 +236,11 @@ impl FabricOwner for Town {
                     return Ok(EditOutcome::Declined);
                 };
                 let tie = OperatingTie {
+                    productive: None,
+                    clientele: None,
                     purpose,
                     destination: Endpoint::Premises {
-                        town: self.seat.key.clone(),
+                        town: self.seat.key,
                         holding: partner,
                     },
                     entrance: target.slot.front,
@@ -266,6 +277,7 @@ impl FabricOwner for Town {
                 h.cause = "Households added an upper storey on their occupied frontage".into();
                 Ok(EditOutcome::Premises(premises))
             }
+            FabricEdit::Improve { premises, use_ } => self.improve(premises, use_, spatial),
             FabricEdit::ExtendFrontage {
                 premises,
                 host,
@@ -278,7 +290,11 @@ impl FabricOwner for Town {
                 outdoor,
                 purpose,
             } => {
-                if !feasible(proposal.kind, conditions, proposal.slot.street) {
+                if !feasible(proposal.kind, conditions, proposal.slot.street)
+                    || !self
+                        .placement_at(proposal.slot.front, spatial)?
+                        .permitted(Placement::Premises(proposal.kind))
+                {
                     return Ok(EditOutcome::Declined);
                 }
                 let Some(id) = self.establish(proposal, spatial)? else {
@@ -312,18 +328,21 @@ impl FabricOwner for Town {
                 {
                     self.holdings[id.0 as usize].storeys.fill(2);
                 }
-                Ok(self.established(kind, id, conditions))
+                self.established(kind, id, conditions, spatial)
             }
             FabricEdit::Share {
                 premises,
                 use_,
                 conditions,
             } => {
-                let Some(h) = self.holdings.get_mut(premises.0 as usize) else {
+                let Some(h) = self.holdings.get(premises.0 as usize) else {
                     return Ok(EditOutcome::Declined);
                 };
                 if h.secondary.is_some()
                     || !feasible(use_, conditions, h.slot.street)
+                    || !self
+                        .placement_at(h.slot.front, spatial)?
+                        .permitted(Placement::Premises(use_))
                     || !h
                         .kind
                         .definition()
@@ -334,30 +353,33 @@ impl FabricOwner for Town {
                 {
                     return Ok(EditOutcome::Declined);
                 }
+                let h = &mut self.holdings[premises.0 as usize];
                 h.secondary = Some(use_);
                 h.cause = format!(
                     "{} adapted to share {}",
                     h.kind.definition().label,
                     use_.definition().label
                 );
-                Ok(self.established(use_, premises, conditions))
+                self.established(use_, premises, conditions, spatial)
             }
             FabricEdit::Reuse {
                 premises,
                 use_,
                 conditions,
-            } => Ok(
-                if self
-                    .holdings
-                    .get(premises.0 as usize)
-                    .is_some_and(|h| feasible(use_, conditions, h.slot.street))
-                    && self.repurpose(premises, use_)
+            } => {
+                let Some(h) = self.holdings.get(premises.0 as usize) else {
+                    return Ok(EditOutcome::Declined);
+                };
+                if !feasible(use_, conditions, h.slot.street)
+                    || !self
+                        .placement_at(h.slot.front, spatial)?
+                        .permitted(Placement::Premises(use_))
+                    || !self.repurpose(premises, use_)
                 {
-                    self.established(use_, premises, conditions)
-                } else {
-                    EditOutcome::Declined
-                },
-            ),
+                    return Ok(EditOutcome::Declined);
+                }
+                self.established(use_, premises, conditions, spatial)
+            }
             FabricEdit::Enclose {
                 institution,
                 premises,
@@ -377,7 +399,7 @@ impl FabricOwner for Town {
                         .permits_neighbor_claim(subject.occupation, subject.condition)
                     || sponsor.kind.definition().activity
                         != super::super::catalogue::Activity::Institution
-                    || sponsor.claim <= subject.claim
+                    || sponsor.land_claim() <= subject.land_claim()
                 {
                     return Ok(EditOutcome::Declined);
                 }
@@ -400,6 +422,22 @@ impl FabricOwner for Town {
                 Ok(EditOutcome::Premises(premises))
             }
             FabricEdit::Connect { street, priority } => {
+                let target =
+                    Placement::Access(if street.class == crate::town::network::Class::Lane {
+                        crate::town::catalogue::AccessUse::Foot
+                    } else {
+                        crate::town::catalogue::AccessUse::Freight
+                    });
+                for &endpoint in street
+                    .points
+                    .first()
+                    .into_iter()
+                    .chain(street.points.last())
+                {
+                    if !self.placement_at(endpoint, spatial)?.permitted(target) {
+                        return Ok(EditOutcome::Declined);
+                    }
+                }
                 let index = self.streets.len();
                 Ok(if self.connect_route(street, priority, spatial)? {
                     EditOutcome::Route(index)
@@ -419,7 +457,11 @@ impl FabricOwner for Town {
                 let Some(original) = self.holdings.get(premises.0 as usize).cloned() else {
                     return Ok(EditOutcome::Declined);
                 };
-                if !self.subdivide(premises, &[front, rear], spatial)? {
+                if !self
+                    .placement_at(slot.front, spatial)?
+                    .permitted(Placement::Premises(use_))
+                    || !self.subdivide(premises, &[front, rear], spatial)?
+                {
                     return Ok(EditOutcome::Declined);
                 }
                 let child = self.holdings.last_mut().unwrap();
@@ -434,6 +476,8 @@ impl FabricOwner for Town {
                 child.slot.habitat = original.slot.habitat;
                 child.established = self.round;
                 child.occupation = 0.;
+                child.operation_tier = 1;
+                child.consecration = 0.;
                 child.crowding = 0.;
                 child.cause = "Crowding divided a rear garden, retaining a shared passage".into();
                 let id = child.id;
@@ -453,7 +497,7 @@ impl FabricOwner for Town {
                 }
                 self.passages.push(passage);
                 self.holdings[premises.0 as usize].crowding *= 0.6;
-                Ok(self.established(use_, id, conditions))
+                self.established(use_, id, conditions, spatial)
             }
         }
     }
@@ -518,7 +562,7 @@ impl Town {
                 .slot
                 .tenure
                 .permits_neighbor_claim(space.occupation, space.condition)
-            || h.claim * h.occupation <= space.claim * (1. + space.occupation)
+            || h.claim * h.occupation <= space.land_claim() * (1. + space.occupation)
             || h.public
         {
             return Ok(EditOutcome::Declined);
@@ -564,11 +608,83 @@ impl Town {
         kind: Kind,
         id: HoldingId,
         conditions: crate::town::influence::Conditions,
-    ) -> EditOutcome {
+        spatial: &dyn SpatialKernel,
+    ) -> io::Result<EditOutcome> {
         if let Some(after) = kind.definition().roles.on_established {
             after(self, id, conditions);
         }
-        EditOutcome::Premises(id)
+        // owner-direction(2026-11-19): raise an existing building on placement
+        for raise in kind.definition().roles.effects.raises {
+            self.raise_neighbour(id, *raise, spatial)?;
+        }
+        Ok(EditOutcome::Premises(id))
+    }
+
+    fn raise_neighbour(
+        &mut self,
+        source: HoldingId,
+        effect: crate::town::effects::Raise,
+        spatial: &dyn SpatialKernel,
+    ) -> io::Result<()> {
+        let point = self.holdings[source.0 as usize].slot.front;
+        let [x, y] = point;
+        let r = effect.reach;
+        let nearby = self.nearby_holdings(Bounds(x - r, y - r, x + r, y + r), spatial)?;
+        let target = nearby
+            .into_iter()
+            .filter_map(|i| {
+                let h = &self.holdings[i];
+                let receiver = std::iter::once(h.kind)
+                    .chain(h.secondary)
+                    .find(|kind| effect.target.same_family(*kind))?;
+                receiver.definition().roles.effects.improvement?;
+                let gap = distance(h.slot.front, point);
+                (h.id != source
+                    && !h.buildings.is_empty()
+                    && h.condition > 0.35
+                    && h.operation_tier < 2
+                    && gap <= r)
+                    .then_some((gap, h.id, receiver))
+            })
+            .min_by(|a, b| a.0.total_cmp(&b.0).then(a.1 .0.cmp(&b.1 .0)));
+        let Some((_, premises, use_)) = target else {
+            return Ok(());
+        };
+        self.apply(FabricEdit::Improve { premises, use_ }, spatial)?;
+        Ok(())
+    }
+
+    fn improve(
+        &mut self,
+        premises: HoldingId,
+        use_: Kind,
+        spatial: &dyn SpatialKernel,
+    ) -> io::Result<EditOutcome> {
+        let Some(holding) = self.holdings.get(premises.0 as usize) else {
+            return Ok(EditOutcome::Declined);
+        };
+        let Some(improvement) = use_.definition().roles.effects.improvement else {
+            return Ok(EditOutcome::Declined);
+        };
+        if (holding.kind != use_ && holding.secondary != Some(use_))
+            || holding.buildings.is_empty()
+            || holding.condition <= 0.35
+            || holding.operation_tier >= 2
+        {
+            return Ok(EditOutcome::Declined);
+        }
+        if matches!(improvement, Improvement::UpperStorey)
+            && matches!(
+                self.apply(FabricEdit::Raise { premises }, spatial)?,
+                EditOutcome::Declined
+            )
+        {
+            return Ok(EditOutcome::Declined);
+        }
+        let target = &mut self.holdings[premises.0 as usize];
+        target.operation_tier = 2;
+        target.cause = "A supported use expanded its premises or operating capacity".into();
+        Ok(EditOutcome::Premises(premises))
     }
 }
 /// Reuse a sound hull at another berth. Its premises, fittings and history
@@ -726,6 +842,8 @@ mod tests {
             support: 0.5,
             condition: 0.8,
             occupation: 1.,
+            operation_tier: 1,
+            consecration: 0.,
             crowding: 1.,
             established: 0,
             public: false,
@@ -761,5 +879,55 @@ mod tests {
         town.apply(FabricEdit::Project(vec![skipped, raise()]), &spatial)
             .unwrap();
         assert_eq!(town.holdings()[0].storeys, vec![3]);
+    }
+
+    #[test]
+    fn raising_source_improves_an_existing_building_when_it_is_placed() {
+        let spatial = atlas_gis::geometry::NativeGeos::new(1e-6).unwrap();
+        let source = crate::town::catalogue::PLACES
+            .into_iter()
+            .find(|kind| kind.open() && !kind.definition().roles.effects.raises.is_empty())
+            .unwrap();
+        let mut town = town_with_a_house();
+        town.holdings[0].kind = source.definition().roles.effects.raises[0].target;
+        let establish = |x| {
+            let front = [x, 0.];
+            let slot = Slot {
+                habitat: Default::default(),
+                tenure: Default::default(),
+                participant: None,
+                street: None,
+                side: Side::Left,
+                along: 0.,
+                front,
+                direction: [1., 0.],
+                inward: [0., 1.],
+                frontage: 10.,
+                depth: 10.,
+                corners: crate::town::geometry::rectangle(front, [1., 0.], [0., 1.], 10., 10.),
+            };
+            FabricEdit::Establish {
+                conditions: crate::town::influence::Conditions {
+                    cultivated: 1.,
+                    ..Default::default()
+                },
+                proposal: Proposal {
+                    kind: source,
+                    slot,
+                    means: 0.6,
+                    priority: 1.,
+                    cause: String::new(),
+                },
+                buildings: Vec::new(),
+                outdoor: true,
+                purpose: None,
+            }
+        };
+        let result = town.apply(establish(5.), &spatial).unwrap();
+        assert!(matches!(result, EditOutcome::Declined));
+        assert_eq!(town.holdings[0].storeys, vec![1]);
+        let result = town.apply(establish(23.), &spatial).unwrap();
+        assert!(matches!(result, EditOutcome::Premises(_)));
+        assert_eq!(town.holdings[0].storeys, vec![2]);
     }
 }

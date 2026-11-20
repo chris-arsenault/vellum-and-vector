@@ -177,8 +177,14 @@ pub(super) fn features() -> Vec<Feature> {
             .into_iter()
             .map(str::to_owned),
     );
-    built.contribute = Rc::new(|slot, _| match slot {
-        "town.initialize" => operations(&["town.initialize"]),
+    built.contribute = Rc::new(|slot, context| match slot {
+        "town.initialize" => vec![invoke(
+            "town.initialize",
+            context.selection["built.layout"]
+                .configuration
+                .clone()
+                .unwrap_or_default(),
+        )],
         "town.develop" => {
             let mut ids = vec!["town.cultivation"];
             ids.extend(crate::processes::town::operation_ids());

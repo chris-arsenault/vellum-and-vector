@@ -1,4 +1,5 @@
 use super::*;
+use crate::town::effects::Effects;
 
 fn farming_household(site: &development::HousingSite) -> bool {
     let local = site.conditions;
@@ -25,10 +26,13 @@ pub(super) fn common() -> Definition {
         frontage: MetresRange::frontage(36.),
         depth: MetresRange::depth(40.),
         typical_means: 0.4,
-        nuisance: 0.,
         demand: 0.5,
         prominence: 0.4,
         roles: Roles {
+            effects: Effects {
+                holds: 1.12,
+                ..Effects::EMPTY
+            },
             gathering_space: true,
             ground_cover: Some("grass"),
             civic_need: Some(|town| town.audience > 3500.),
@@ -54,7 +58,6 @@ pub(super) fn farmstead() -> Definition {
         frontage: MetresRange::frontage(24.),
         depth: MetresRange::depth(38.),
         typical_means: 0.45,
-        nuisance: 0.2,
         demand: 0.8,
         prominence: 0.2,
         roles: Roles {
@@ -83,6 +86,10 @@ pub(super) fn grove() -> Definition {
             shares_with: &[Activity::Agriculture, Activity::Institution],
         },
         roles: Roles {
+            effects: Effects {
+                holds: 0.8,
+                ..Effects::EMPTY
+            },
             gathering_space: true,
             ground_cover: Some("woodland"),
             ..Roles::default()
@@ -113,7 +120,6 @@ pub(super) fn outbuilding() -> Definition {
         frontage: MetresRange::frontage(12.),
         depth: MetresRange::depth(20.),
         typical_means: 0.3,
-        nuisance: 0.1,
         demand: 0.5,
         prominence: 0.1,
         roles: Roles::default(),

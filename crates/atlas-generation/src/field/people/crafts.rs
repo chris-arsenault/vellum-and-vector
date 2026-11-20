@@ -12,6 +12,11 @@ use crate::{
     scale::{LengthUnit, MapScale, RelativeMeasure},
 };
 use std::{io, rc::Rc};
+mod roots;
+mod town;
+pub(crate) use roots::RootReach;
+pub(crate) use town::vow as permits_on_consecrated_ground;
+pub use town::{PracticeReads, TownMaterial, TownPractice};
 
 #[derive(Clone, Copy)]
 pub struct Craft {
@@ -19,6 +24,7 @@ pub struct Craft {
     pub code: i32,
     pub name: &'static str,
     pub medium: S,
+    pub town: TownPractice,
 }
 // Arconis: docs/architecture/subsystems.arconis#item=pp_crafts — the seven magic crafts, each learned where its medium lies.
 pub const CRAFTS: [Craft; 7] = [
@@ -27,44 +33,83 @@ pub const CRAFTS: [Craft; 7] = [
         code: 1,
         name: "hearth-keeping",
         medium: S::Quickening,
+        town: town::FIRE,
     },
     Craft {
         system: "aurora",
         code: 2,
         name: "reading",
         medium: S::Stillness,
+        town: town::AURORA,
     },
     Craft {
         system: "pressure",
         code: 3,
         name: "diving",
         medium: S::FogForcing,
+        town: town::PRESSURE,
     },
     Craft {
         system: "greenwood",
         code: 4,
         name: "tending",
         medium: S::Verdure,
+        town: town::GREENWOOD,
     },
     Craft {
         system: "salt",
         code: 5,
         name: "raking",
         medium: S::Salting,
+        town: town::SALT,
     },
     Craft {
         system: "hallowed",
         code: 6,
         name: "the vow",
         medium: S::Warding,
+        town: town::HALLOWED,
     },
     Craft {
         system: "veil",
         code: 7,
         name: "door-keeping",
         medium: S::Tearing,
+        town: town::VEIL,
     },
 ];
+pub fn by_code(code: i32) -> Option<Craft> {
+    CRAFTS.iter().copied().find(|craft| craft.code == code)
+}
+
+pub(crate) fn working_material(
+    field: &Field,
+    craft: Craft,
+    systems: &[crate::magic::state::MagicField],
+    cell: usize,
+) -> io::Result<bool> {
+    let Some(material) = craft.town.material else {
+        return Ok(true);
+    };
+    let Some(system) = systems
+        .iter()
+        .find(|system| system.definition().id == craft.system)
+    else {
+        return Ok(false);
+    };
+    let ground = field.ground();
+    let sealed = system.channel(crate::magic::channels::Channel::Sealed);
+    for source in
+        std::iter::once(cell).chain((0..3).filter_map(|edge| field.mesh.neighbor(cell, edge)))
+    {
+        if sealed.get(source)? <= 0.
+            && system.reservoir_amount(&ground, material.reservoir, source)? > 0.
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
 pub fn medium_at(field: &Field, craft: Craft, cell: usize) -> io::Result<f64> {
     let value = field.shared.scalar(craft.medium).get(cell)?;
     Ok(if value > 0.0 { value.min(1.0) } else { 0.0 })
@@ -232,9 +277,23 @@ pub fn kept_doors(
     field: &Field,
     doors: &[crate::magic::state::Door],
 ) -> io::Result<Vec<crate::links::Link>> {
+    kept_doors_with(field, doors, |_| None)
+}
+
+/// Local holdings stand in for their own keepers once a town has placed them.
+/// Unrepresented entrances still read the surrounding world's practitioners.
+pub(crate) fn kept_doors_with(
+    field: &Field,
+    doors: &[crate::magic::state::Door],
+    keeper: impl Fn(usize) -> Option<f64>,
+) -> io::Result<Vec<crate::links::Link>> {
+    let keeping_at = |cell| -> io::Result<f64> {
+        let natural = nearby(field, CRAFTS[6], cell)?;
+        Ok(keeper(cell).map_or(natural, |holding| natural.min(holding)))
+    };
     let mut links = Vec::new();
     for door in doors {
-        let keeping = nearby(field, CRAFTS[6], door.a)?.min(nearby(field, CRAFTS[6], door.b)?);
+        let keeping = keeping_at(door.a)?.min(keeping_at(door.b)?);
         if keeping > 0.0 {
             links.push(crate::links::Link {
                 a: door.a,

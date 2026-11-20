@@ -190,6 +190,8 @@ fn distant_custom_can_fund_an_occupied_centre_before_a_connecting_road_exists() 
     let sponsor = town.establish(proposal(10.), &spatial).unwrap().unwrap();
     town.occupy(sponsor, 1., 1., 1., 0.);
     let source = OpportunitySource {
+        productive: None,
+        clientele: None,
         endpoint: Endpoint::Field(1),
         id: atlas_generation::town::influence::SourceId::Named(atlas_map::Id::from_name("orchard")),
         label: "Orchard".into(),
@@ -207,6 +209,8 @@ fn distant_custom_can_fund_an_occupied_centre_before_a_connecting_road_exists() 
     town.bind(
         sponsor,
         vec![OperatingTie {
+            productive: None,
+            clientele: None,
             purpose: Operation::Work,
             destination: source.endpoint.clone(),
             entrance: source.position,
@@ -376,7 +380,7 @@ fn a_practice_sharing_premises_retains_the_local_craft() {
                 premises,
                 use_: practice,
                 conditions: Conditions {
-                    craft: Some(7),
+                    practices: [0., 0., 0., 0., 0., 0., 1.].into(),
                     ..Default::default()
                 },
             },
@@ -1209,6 +1213,8 @@ fn a_shared_hall_publishes_its_two_uses_ward_and_street_to_gis() {
     ]
     .into_iter()
     .map(|(purpose, partner, access)| OperatingTie {
+        productive: None,
+        clientele: None,
         purpose,
         access,
         strength: 1.,
@@ -1378,7 +1384,7 @@ fn a_shared_hall_publishes_its_two_uses_ward_and_street_to_gis() {
 }
 
 #[test]
-fn shared_sponsors_finance_distant_institutions_only_when_the_required_sites_fit() {
+fn shared_sponsors_pay_for_built_institutions_and_keep_successful_project_steps() {
     use atlas_generation::town::fabric::{EditOutcome, FabricEdit, FabricOwner};
     let spatial = NativeGeos::new(0.001).unwrap();
     let mut town = town();
@@ -1414,25 +1420,43 @@ fn shared_sponsors_finance_distant_institutions_only_when_the_required_sites_fit
             }),
         }
     };
-    let required = FabricEdit::Project(vec![build(-500.), build(-500.)]);
+    let mut single = town.clone();
+    assert!(matches!(
+        single.apply(build(-500.), &spatial).unwrap(),
+        EditOutcome::Premises(_)
+    ));
+    let required = FabricEdit::Project(vec![build(-500.), build(-500.), build(-700.)]);
     assert!(matches!(
         town.apply(required, &spatial).unwrap(),
-        EditOutcome::Declined
+        EditOutcome::Project(ref steps) if steps.len() == 1
     ));
-    assert_eq!(town.holdings().len(), 2);
-    assert!(town.holdings().iter().all(|h| h.means == 1.));
+    assert_eq!(town.holdings().len(), 3);
+    assert_sponsorship_only(&town.holdings()[2..], &sponsors);
+    assert!(town.holdings()[..2]
+        .iter()
+        .zip(&single.holdings()[..2])
+        .all(|(actual, expected)| actual.means == expected.means && actual.means < 1.));
 
+    assert_optional_step_keeps_project_going(&mut town, &sponsors, &spatial, build);
+}
+fn assert_optional_step_keeps_project_going(
+    town: &mut Town,
+    sponsors: &[atlas_generation::town::fabric::HoldingId],
+    spatial: &NativeGeos,
+    build: impl Fn(f64) -> atlas_generation::town::fabric::FabricEdit,
+) {
+    use atlas_generation::town::fabric::{EditOutcome, FabricEdit, FabricOwner};
     let connected = FabricEdit::Project(vec![
-        build(-500.),
         build(500.),
         FabricEdit::Optional(Box::new(build(500.))),
+        build(700.),
     ]);
     assert!(matches!(
-        town.apply(connected, &spatial).unwrap(),
+        town.apply(connected, spatial).unwrap(),
         EditOutcome::Project(_)
     ));
-    assert_eq!(town.holdings().len(), 4);
-    assert_sponsorship_only(&town.holdings()[2..], &sponsors);
+    assert_eq!(town.holdings().len(), 5);
+    assert_sponsorship_only(&town.holdings()[2..], sponsors);
     assert!(town.holdings()[..2].iter().all(|h| h.means < 1.));
 }
 fn assert_sponsorship_only(

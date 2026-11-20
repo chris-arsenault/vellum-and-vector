@@ -89,6 +89,10 @@ and `real` capture a child, then generate it using its captured configuration. `
 uses the completed map in that result folder; without it, the kept world is the parent.
 Settlement names are resolved on that parent, so subsequent selections follow its geography.
 `--name` sets the result folder; choose a new name for each run to preserve earlier results.
+For a controlled settlement comparison, `real --template surveyors-ring` selects that
+template from the site's eligible alternatives. `--major-work library` starts a commission
+whose site, design and construction follow the usual major-work rules. Use the same parent,
+settlement and hex settings for each comparison.
 A finished map is saved to the server library and reported in
 `.artifacts/local-atlas/maps/<name>/`:
 

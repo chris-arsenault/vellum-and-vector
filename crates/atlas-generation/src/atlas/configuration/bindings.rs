@@ -105,6 +105,12 @@ pub fn configuration(
     supplied: Option<Values>,
     settings: &Settings,
 ) -> io::Result<Option<Values>> {
+    if id == "built.layout" {
+        if let Some(choices) = &supplied {
+            crate::atlas::town::validate_choices(choices)?;
+        }
+        return Ok(supplied);
+    }
     let Some(mut result) = defaults(id, settings)? else {
         return if supplied.is_some() {
             Err(error(

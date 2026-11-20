@@ -28,13 +28,6 @@ pub enum Form {
     Open,
     WaterEdge,
 }
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum ServiceRole {
-    #[default]
-    None,
-    Clearance,
-    Protection,
-}
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum AccessUse {
     Foot,
@@ -172,7 +165,6 @@ pub struct Definition {
     pub depth: MetresRange,
     pub prominence: f64,
     pub typical_means: f64,
-    pub nuisance: f64,
     pub demand: f64,
     pub legacy_use: Use,
     pub attraction: fn(&Location) -> f64,
@@ -190,7 +182,6 @@ pub struct Roles {
     pub ground_cover: Option<&'static str>,
     pub furnishing: Option<Furnishing>,
     pub attached_range: bool,
-    pub service: ServiceRole,
     pub dwelling: bool,
     pub household: bool,
     pub works_fields: bool,
@@ -202,6 +193,10 @@ pub struct Roles {
     pub subdivision_use: Option<Kind>,
     pub civic_need: Option<fn(&development::CivicConditions) -> bool>,
     pub outbuilding: Option<Kind>,
+    pub effects: super::effects::Effects,
+    pub production: super::production::Production,
+    pub keeps: bool,
+    pub learns_from: f64,
     variants: &'static [Kind],
     intention: Option<Intention>,
 }
@@ -218,6 +213,9 @@ pub(crate) fn founding_work(site: Conditions) -> Kind {
         .1
 }
 impl Definition {
+    pub fn services(&self) -> &'static [super::effects::Contribution<super::effects::Service>] {
+        self.roles.effects.serves
+    }
     pub(crate) fn investment_cost(&self) -> f64 {
         0.12 + self.prominence * 0.18
     }
@@ -324,6 +322,27 @@ pub fn palette(kind: Kind, sample: f64) -> Kind {
     }
     let index = (sample.clamp(0., 1.) * variants.len() as f64) as usize;
     variants[index.min(variants.len() - 1)]
+}
+
+/// A reachable productive opportunity can favour a particular expression of a
+/// family. The ordinary palette choice breaks ties.
+pub(crate) fn productive_variant(
+    kind: Kind,
+    sample: f64,
+    available: &super::production::Available,
+) -> Kind {
+    let preferred = palette(kind, sample);
+    let advantages = |k: Kind| available.support(k.definition().roles.production.needs);
+    let mut best = preferred;
+    let mut value = advantages(preferred);
+    for &variant in kind.definition().roles.variants {
+        let advantage = advantages(variant);
+        if advantage > value {
+            best = variant;
+            value = advantage;
+        }
+    }
+    best
 }
 
 #[cfg(test)]

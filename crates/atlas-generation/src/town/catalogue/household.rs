@@ -1,4 +1,5 @@
 use super::*;
+use crate::town::effects::{Effects, Improvement, Raise};
 
 pub(super) fn rear_household() -> Kind {
     Kind(Identity::Residence(Residence::Incremental))
@@ -64,10 +65,18 @@ pub(super) fn garden() -> Definition {
         frontage: MetresRange::frontage(20.),
         depth: MetresRange::depth(26.),
         typical_means: 0.8,
-        nuisance: 0.,
         demand: 0.3,
         prominence: 0.3,
         roles: Roles {
+            effects: Effects {
+                holds: 0.76,
+                dignifies: 0.61,
+                raises: &[Raise {
+                    target: Kind(Identity::Residence(Residence::Croft)),
+                    reach: 33.,
+                }],
+                ..Effects::EMPTY
+            },
             civic_need: Some(|town| town.audience > 6000.),
             ..Roles::default()
         },
@@ -85,6 +94,10 @@ pub(super) fn park() -> Definition {
             shares_with: &[],
         },
         roles: Roles {
+            effects: Effects {
+                holds: 0.96,
+                ..Effects::EMPTY
+            },
             ground_cover: Some("grass"),
             civic_need: Some(|town| town.audience > 1800.),
             ..Roles::default()
@@ -124,10 +137,13 @@ pub(super) fn residence(variant: Residence) -> Definition {
         frontage: MetresRange::residential(width),
         depth: MetresRange::residential(depth),
         typical_means: means,
-        nuisance: 0.06,
         demand: 1.,
         prominence: 0.1,
         roles: Roles {
+            effects: Effects {
+                improvement: Some(Improvement::UpperStorey),
+                ..Effects::EMPTY
+            },
             household: true,
             attached_range: matches!(
                 variant,

@@ -37,6 +37,8 @@ pub struct OperatingTie {
     pub entrance: Point,
     pub access: super::catalogue::AccessUse,
     pub strength: f64,
+    pub productive: Option<super::production::Opportunity>,
+    pub clientele: Option<super::effects::Clientele>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Holding {
@@ -56,6 +58,8 @@ pub struct Holding {
     pub support: f64,
     pub condition: f64,
     pub occupation: f64,
+    pub operation_tier: u8,
+    pub consecration: f64,
     pub crowding: f64,
     pub established: u32,
     pub public: bool,
@@ -64,6 +68,45 @@ pub struct Holding {
     pub claim: f64,
 }
 impl Holding {
+    pub fn operation_scale(&self) -> f64 {
+        f64::from(self.operation_tier.max(1))
+    }
+
+    pub fn practice(&self) -> Option<crate::field::people::crafts::Craft> {
+        self.craft.and_then(crate::field::people::crafts::by_code)
+    }
+
+    pub fn effects_as(&self, kind: Kind) -> super::effects::Effects {
+        let roles = kind.definition().roles;
+        if roles.keeps {
+            if let Some(craft) = self.practice() {
+                return craft.town.effects;
+            }
+        }
+        roles.effects
+    }
+
+    pub fn attracts_clients(&self) -> bool {
+        std::iter::once(self.kind)
+            .chain(self.secondary)
+            .any(|kind| !self.effects_as(kind).attracts.is_empty())
+    }
+
+    pub fn production_as(&self, kind: Kind) -> super::production::Production {
+        let roles = kind.definition().roles;
+        if roles.keeps {
+            if let Some(craft) = self.practice() {
+                return craft.town.production;
+            }
+        }
+        roles.production
+    }
+
+    pub(crate) fn land_claim(&self) -> f64 {
+        let grounds = self.effects_as(self.kind).holds;
+        self.claim + grounds * self.condition
+    }
+
     pub(crate) fn pledge(&self) -> f64 {
         if self.slot.tenure == super::templates::Tenure::Dependent {
             return 0.;
@@ -176,6 +219,10 @@ pub enum FabricEdit {
     Raise {
         premises: HoldingId,
     },
+    Improve {
+        premises: HoldingId,
+        use_: Kind,
+    },
     ExtendFrontage {
         premises: HoldingId,
         host: HoldingId,
@@ -226,9 +273,9 @@ impl FabricEdit {
     pub(crate) fn accommodation(&self) -> Option<(Kind, Option<HoldingId>)> {
         match self {
             Self::Establish { proposal, .. } => Some((proposal.kind, None)),
-            Self::Share { premises, use_, .. } | Self::Reuse { premises, use_, .. } => {
-                Some((*use_, Some(*premises)))
-            }
+            Self::Share { premises, use_, .. }
+            | Self::Reuse { premises, use_, .. }
+            | Self::Improve { premises, use_ } => Some((*use_, Some(*premises))),
             _ => None,
         }
     }
@@ -394,6 +441,43 @@ impl Town {
             .map(|load| load.value)
             .fold(0., f64::max)
     }
+
+    pub fn passing_trade(&self) -> impl Iterator<Item = (Point, f64)> + '_ {
+        let streets = self
+            .traffic
+            .chunk_by(|a, b| a.street == b.street)
+            .flat_map(|loads| {
+                let mut legs = self.streets[loads[0].street].points.windows(2);
+                let mut leg = legs.next();
+                let mut before = 0.;
+                loads.iter().filter_map(move |load| {
+                    let centre = (load.start + load.end) * 0.5;
+                    while let Some(pair) = leg {
+                        let span = super::geometry::distance(pair[0], pair[1]);
+                        if span > 0. && centre <= before + span {
+                            let point = super::geometry::add(
+                                pair[0],
+                                super::geometry::scale(
+                                    super::geometry::sub(pair[1], pair[0]),
+                                    (centre - before) / span,
+                                ),
+                            );
+                            return Some((point, load.value * (load.end - load.start)));
+                        }
+                        before += span;
+                        leg = legs.next();
+                    }
+                    None
+                })
+            });
+        streets.chain(self.footpaths.iter().map(|path| {
+            let [a, b] = path.points;
+            (
+                super::geometry::scale(super::geometry::add(a, b), 0.5),
+                path.wear * super::geometry::distance(a, b),
+            )
+        }))
+    }
     pub fn register_traffic(&mut self, loads: Vec<super::access::StreetLoad>, exposure: f64) {
         let retained = (-exposure.max(0.)).exp();
         let mut events = vec![Vec::new(); self.streets.len()];
@@ -443,6 +527,15 @@ impl Town {
     }
     pub fn maintain(&mut self, id: HoldingId, condition: f64, claim: f64, occupation: f64) {
         let holding = &mut self.holdings[id.0 as usize];
+        let observance = holding.effects_as(holding.kind).consecrates.max(
+            holding
+                .secondary
+                .map_or(0., |kind| holding.effects_as(kind).consecrates),
+        );
+        holding.consecration = crate::magic::hallowed::maintain_consecration(
+            holding.consecration,
+            observance * condition * occupation,
+        );
         holding.condition = condition;
         holding.claim = claim;
         holding.occupation = occupation;
@@ -612,6 +705,8 @@ impl Town {
             support: 0.5,
             condition: 0.8,
             occupation: 0.,
+            operation_tier: 1,
+            consecration: 0.,
             crowding: 0.,
             established: self.round,
             public,
