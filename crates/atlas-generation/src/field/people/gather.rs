@@ -3,6 +3,7 @@ use super::{
     facts::{CONCENTRATION, PRESSURE},
     land::WorkInput,
     questions::Questions,
+    reach::{passed_over, ranges_of, REACH_SWEEPS},
     work::{habitable, km2, working, Work},
 };
 use crate::{
@@ -19,6 +20,16 @@ use std::{io, rc::Rc};
 struct Leaving {
     targets: Band<i32>,
     share: Band<f64>,
+    /// The journeys of this move that pass through other cells on their way.
+    journeys: Vec<Journey>,
+}
+/// A move beyond the next cell: where it set out, the people who could go, and the cells it
+/// passes through, which its travellers wear into ways.
+struct Journey {
+    from: usize,
+    residents: f64,
+    through: Vec<usize>,
+    crossed: bool,
 }
 impl Leaving {
     fn request(
@@ -49,17 +60,123 @@ impl Leaving {
         Ok(())
     }
 }
+/// Where a route stops: once the going has passed on less than this share of a journey.
+const ROUTE_PASSED: f64 = 0.1;
+/// How much of a journey one step from `cell` along `edge` passes on, from 0 to 1.
+fn step_passed(work: &Work, cell: usize, edge: usize) -> io::Result<f64> {
+    Ok(work.going.passed.get(cell * work.going.stride + edge)? * work.going.stride as f64)
+}
+/// Somewhere a mover could settle, the share of the journey that reaches it, how many cells
+/// of the route lie before it, and whether the route crossed water to reach it.
+#[derive(Clone, Copy)]
+struct Destination {
+    cell: usize,
+    passed: f64,
+    along: usize,
+    crossed: bool,
+}
+/// The places a mover from `from` could settle, and the route that reaches the far ones: its
+/// dry neighbours, then every dry cell along the route that climbs `guide` (pull, or spare
+/// food felt over the reach) across any ground travel allows, water and worn ways included.
+/// A route's steps add their costs before decaying, as one journey of that length would, and
+/// it ends where the going passes on too little.
+fn destinations(
+    field: &Field,
+    work: &Work,
+    guide: &Band<f64>,
+    from: usize,
+) -> io::Result<(Vec<Destination>, Vec<usize>)> {
+    let mut found = Vec::new();
+    for edge in 0..3 {
+        if let Some(to) = field.mesh.neighbor(from, edge) {
+            if habitable(field, to)? {
+                found.push(Destination {
+                    cell: to,
+                    passed: step_passed(work, from, edge)?,
+                    along: 0,
+                    crossed: false,
+                });
+            }
+        }
+    }
+    let (mut at, mut ranges, mut crossed) = (from, 0.0, false);
+    let mut route = Vec::new();
+    for _ in 0..REACH_SWEEPS {
+        let mut next = None;
+        let mut highest = guide.get(at)?;
+        for edge in 0..3 {
+            let Some(to) = field.mesh.neighbor(at, edge) else {
+                continue;
+            };
+            let through = step_passed(work, at, edge)?;
+            if through > 0.0 && guide.get(to)? > highest {
+                highest = guide.get(to)?;
+                next = Some((to, through));
+            }
+        }
+        let Some((to, through)) = next else {
+            break;
+        };
+        ranges += ranges_of(through);
+        let passed = passed_over(ranges);
+        if passed < ROUTE_PASSED {
+            break;
+        }
+        at = to;
+        if !habitable(field, at)? {
+            crossed = true;
+        } else if found.iter().all(|d| d.cell != at) {
+            found.push(Destination {
+                cell: at,
+                passed,
+                along: route.len(),
+                crossed,
+            });
+        }
+        route.push(at);
+    }
+    Ok((found, route))
+}
+/// The people arriving beyond the next cell and across water in one move, written to the
+/// server log when `ATLAS_TRACE_PEOPLE` is set.
+fn trace_journeys(leaving: &Leaving, moved: f64) -> io::Result<()> {
+    if std::env::var_os("ATLAS_TRACE_PEOPLE").is_none() {
+        return Ok(());
+    }
+    let (mut beyond, mut crossed) = (0.0, 0.0);
+    for journey in &leaving.journeys {
+        let going = journey.residents * leaving.share.get(journey.from)?;
+        beyond += going;
+        if journey.crossed {
+            crossed += going;
+        }
+    }
+    eprintln!(
+        "{}",
+        serde_json::json!({"event": "people.journeys", "details": {
+            "moved": moved.round(), "beyondTheNextCell": beyond.round(),
+            "acrossWater": crossed.round()}})
+    );
+    Ok(())
+}
+/// The going a pass moves people along, and the field its routes climb.
+struct Routes<'a> {
+    work: &'a Work,
+    guide: &'a Band<f64>,
+}
 fn choose(
     context: &CommandContext<'_, Field>,
-    work: &Work,
+    routes: &Routes<'_>,
     q: &Questions,
     leaving: &mut Leaving,
     score: impl Fn(usize, usize, f64) -> io::Result<f64>,
     going: impl Fn(usize, usize, f64) -> io::Result<f64>,
 ) -> ExecutionResult<Band<f64>> {
+    let (work, guide) = (routes.work, routes.guide);
     let moving = context.query(&q.moving)?.values();
     let field = context.state();
     let mut arriving = working(field);
+    leaving.journeys.clear();
     for cell in 0..field.mesh.len() {
         leaving.targets.set(cell, -1)?;
         leaving.share.set(cell, 0.0)?;
@@ -67,52 +184,66 @@ fn choose(
             continue;
         }
         let mut best = 0.0;
-        let mut target = None;
-        let mut through = 0.0;
-        for edge in 0..3 {
-            let Some(to) = field.mesh.neighbor(cell, edge) else {
-                continue;
-            };
-            if !habitable(field, to)? {
-                continue;
-            }
-            let passed =
-                work.going.passed.get(cell * work.going.stride + edge)? * work.going.stride as f64;
-            let scored = score(cell, to, passed)?;
+        let mut chosen = None;
+        let (found, route) = destinations(field, work, guide, cell)?;
+        for destination in found {
+            let scored = score(cell, destination.cell, destination.passed)?;
             if scored > best {
                 best = scored;
-                target = Some(to);
-                through = passed;
+                chosen = Some(destination);
             }
         }
-        if let Some(target) = target {
-            let share = work.facts.mobility * moving.get(cell)? * going(cell, target, through)?;
-            leaving.request(
-                cell,
-                target,
-                share,
-                field.people.people(cell)? * km2(field, cell),
-                &mut arriving,
-            )?;
+        if let Some(chosen) = chosen {
+            let share =
+                work.facts.mobility * moving.get(cell)? * going(cell, chosen.cell, chosen.passed)?;
+            let residents = field.people.people(cell)? * km2(field, cell);
+            leaving.request(cell, chosen.cell, share, residents, &mut arriving)?;
+            if chosen.along > 0 {
+                leaving.journeys.push(Journey {
+                    from: cell,
+                    residents,
+                    through: route[..chosen.along].to_vec(),
+                    crossed: chosen.crossed,
+                });
+            }
         }
     }
     Ok(arriving)
 }
+/// Moves the admitted share of each cell's people, and wears the cells far journeys pass
+/// through into ways: a move's ends are worn by the move itself.
 fn move_people(
     context: &mut CommandContext<'_, Field>,
     work: &Work,
     owner: &operations::Operations<Field>,
     leaving: &Leaving,
 ) -> ExecutionResult<()> {
+    let years = work.facts.years / work.facts.sweeps as f64;
+    let field = context.state();
+    let mut worn = working(field);
+    let mut moved = 0.0;
+    for cell in 0..field.mesh.len() {
+        if leaving.targets.get(cell)? >= 0 {
+            moved += leaving.share.get(cell)? * field.people.people(cell)? * km2(field, cell);
+        }
+    }
+    for journey in &leaving.journeys {
+        let travellers = journey.residents * leaving.share.get(journey.from)?;
+        for &cell in &journey.through {
+            worn.set(cell, worn.get(cell)? + travellers * years)?;
+        }
+    }
+    trace_journeys(leaving, moved)?;
     context.run(
         &owner.move_layer,
         &Move {
             kind: LayerId::Population,
             targets: leaving.targets.read_only(),
             share: leaving.share.read_only(),
-            years: work.facts.years / work.facts.sweeps as f64,
+            years,
         },
-    )
+    )?;
+    context.run(&owner.travel, &worn.read_only())
 }
 fn spill(
     context: &mut CommandContext<'_, Field>,
@@ -124,9 +255,24 @@ fn spill(
     let support = context.query(&q.support)?.values();
     let field = context.state();
     let fed = |cell| Ok::<_, io::Error>(support.get(cell)? + work.imports.get(cell)?);
+    // Spare food felt over the travel reach guides people across water to empty country.
+    let mut room = working(field);
+    for cell in 0..field.mesh.len() {
+        if habitable(field, cell)? {
+            room.set(
+                cell,
+                (fed(cell)? - field.people.people(cell)?).max(0.0) * km2(field, cell),
+            )?;
+        }
+    }
+    let mut room_felt = working(field);
+    work.reach(field, &room, &mut room_felt)?;
     let arriving = choose(
         context,
-        work,
+        &Routes {
+            work,
+            guide: &room_felt,
+        },
         q,
         leaving,
         |_, to, passed| {
@@ -175,7 +321,7 @@ fn drain(
     };
     let arriving = choose(
         context,
-        work,
+        &Routes { work, guide: &pull },
         q,
         leaving,
         |from, to, passed| {
@@ -185,7 +331,7 @@ fn drain(
         },
         |from, to, passed| {
             let rise = 1.0 - pull.get(from)? / pull.get(to)?;
-            let of_range = (1.0 / passed - 1.0).sqrt();
+            let of_range = ranges_of(passed);
             Ok(if rise > 0.0 {
                 let willing = (rise / of_range.max(1e-9)).min(1.0);
                 supported_share(willing, spare(to)?, crowd.get(from)?)
@@ -285,6 +431,7 @@ pub fn operation(
             let mut leaving = Leaving {
                 targets,
                 share: working(field),
+                journeys: Vec::new(),
             };
             for _ in 0..work.facts.sweeps {
                 spill(context, &work, &q, &owner, &mut leaving)?;
@@ -312,6 +459,7 @@ mod tests {
         let mut leaving = super::Leaving {
             targets: fields.allocate(-1),
             share: fields.allocate(0.0),
+            journeys: Vec::new(),
         };
         let mut arrivals = fields.allocate(0.0);
         leaving.request(0, 3, 0.5, 600.0, &mut arrivals).unwrap();

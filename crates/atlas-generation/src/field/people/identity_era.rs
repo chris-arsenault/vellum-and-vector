@@ -2,7 +2,7 @@ use super::{
     country,
     identity_reads::{leading_all, Leading},
     questions::Questions,
-    reach::Passage,
+    reach::{Passage, REACH_SWEEPS},
     traditions::{self, Founding, Kind, Position},
     travel::Travel,
     work::{habitable, km2, working},
@@ -191,7 +191,7 @@ fn found(
         },
     )
 }
-/// Contacts have at most the lattice's three distinct neighbouring traditions per cell.
+/// Contacts hold at most the three strongest other traditions a cell feels over the reach.
 struct Contacts {
     code: Vec<i32>,
     taking: Vec<f64>,
@@ -208,6 +208,62 @@ fn order_contacts(codes: &mut [i32; 3], press: &mut [f64; 3], count: usize) {
         }
     }
 }
+/// How many other traditions' pressures a cell carries on through the reach.
+const OTHERS: usize = 3;
+/// The tradition pressures a cell feels over the travel reach: its own tradition's, which
+/// always keeps its place and is what the cell resists with, and the strongest others.
+#[derive(Clone, Copy)]
+pub struct Pressures {
+    own: (i32, f64),
+    others: [(i32, f64); OTHERS],
+}
+impl Pressures {
+    fn new(own: i32, mass: f64) -> Self {
+        Self {
+            own: (own, if own == 0 { 0.0 } else { mass.max(0.0) }),
+            others: [(0, 0.0); OTHERS],
+        }
+    }
+    /// Adds `value` of tradition `code`: to the cell's own, or to the strongest others.
+    pub fn carry(&mut self, code: i32, value: f64) {
+        if code == 0 || value <= 0.0 {
+            return;
+        }
+        if code == self.own.0 {
+            self.own.1 += value;
+            return;
+        }
+        if let Some(slot) = self.others.iter_mut().find(|(c, _)| *c == code) {
+            slot.1 += value;
+            return;
+        }
+        let weakest = (0..OTHERS).fold(0, |w, i| {
+            if self.others[i].1 < self.others[w].1 {
+                i
+            } else {
+                w
+            }
+        });
+        if self.others[weakest].0 == 0 || value > self.others[weakest].1 {
+            self.others[weakest] = (code, value);
+        }
+    }
+    fn take(&mut self, from: &Self, passed: f64) {
+        self.carry(from.own.0, from.own.1 * passed);
+        for &(code, value) in &from.others {
+            self.carry(code, value * passed);
+        }
+    }
+}
+/// Each tradition's pressure, as people carry it along the going: every crowd's leading
+/// tradition, passed on over the travel reach through any ground travel allows, so tongues and
+/// faiths reach across straits and along ways and not only between touching cells.
+fn carried(field: &Field, going: &Passage, leading: &Leading) -> io::Result<Vec<Pressures>> {
+    let source: Vec<Pressures> = (0..field.mesh.len())
+        .map(|cell| Pressures::new(leading.code[cell], leading.people[cell] * km2(field, cell)))
+        .collect();
+    going.reach_each(&field.mesh, &source, REACH_SWEEPS, Pressures::take)
+}
 fn felt(field: &Field, going: &Passage, leading: &Leading, rate: f64) -> io::Result<Contacts> {
     let mut result = Contacts {
         code: vec![0; field.mesh.len() * 3],
@@ -215,35 +271,25 @@ fn felt(field: &Field, going: &Passage, leading: &Leading, rate: f64) -> io::Res
         counts: vec![0; field.mesh.len()],
         most: 0,
     };
-    for cell in 0..field.mesh.len() {
+    let reached = carried(field, going, leading)?;
+    for (cell, carried_here) in reached.iter().enumerate() {
         let people = field.people.people(cell)?;
-        let own = people * km2(field, cell);
-        if own <= 0.0 {
+        if people * km2(field, cell) <= 0.0 {
             continue;
         }
+        // A cell resists with its own tradition as felt over the same reach as its contacts,
+        // so a crowd deep in its own country is not swamped by its neighbours' sum.
+        let own = carried_here.own.1.max(people * km2(field, cell));
         let mut codes = [0; 3];
         let mut press = [0.0; 3];
         let mut count = 0;
-        for edge in 0..3 {
-            let Some(next) = field.mesh.neighbor(cell, edge) else {
-                continue;
-            };
-            let code = leading.code[next];
-            if code == 0 || code == leading.code[cell] {
+        for &(code, value) in &carried_here.others {
+            if code == 0 || value <= 0.0 {
                 continue;
             }
-            let value = leading.people[next]
-                * km2(field, next)
-                * going.passed.get(cell * going.stride + edge)?
-                * going.stride as f64;
-            let at = if let Some(at) = codes[..count].iter().position(|&c| c == code) {
-                at
-            } else {
-                codes[count] = code;
-                count += 1;
-                count - 1
-            };
-            press[at] += value;
+            codes[count] = code;
+            press[count] = value;
+            count += 1;
         }
         let all: f64 = press.iter().sum();
         if all <= 0.0 {
@@ -366,4 +412,35 @@ pub fn operation(
             )
         },
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Pressures;
+
+    #[test]
+    fn a_cell_keeps_its_own_tradition_and_the_three_strongest_others() {
+        let mut felt = Pressures::new(5, 10.0);
+        felt.carry(7, 2.0);
+        felt.carry(7, 1.0);
+        assert_eq!(
+            felt.others.iter().find(|(c, _)| *c == 7).map(|s| s.1),
+            Some(3.0)
+        );
+        for (code, value) in [(1, 50.0), (2, 40.0), (3, 0.5)] {
+            felt.carry(code, value);
+        }
+        // A weak newcomer cannot displace the three strongest; a stronger one takes the weakest.
+        assert!(!felt.others.iter().any(|(c, _)| *c == 3));
+        felt.carry(9, 4.0);
+        assert!(felt.others.iter().any(|(c, _)| *c == 9));
+        assert!(!felt.others.iter().any(|(c, _)| *c == 7));
+        felt.carry(4, 0.1);
+        assert!(!felt.others.iter().any(|(c, _)| *c == 4));
+        // Its own tradition is never pushed out, however strong the others.
+        felt.carry(5, 1.0);
+        assert_eq!(felt.own, (5, 11.0));
+        felt.carry(0, 100.0);
+        assert!(!felt.others.iter().any(|(c, _)| *c == 0));
+    }
 }

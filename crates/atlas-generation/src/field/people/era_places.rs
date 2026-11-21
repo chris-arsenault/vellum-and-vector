@@ -58,14 +58,14 @@ pub fn surrounding_density(
             &mut coverage,
             &area.read_only(),
             &mut reached_area,
-            48,
+            super::reach::REACH_SWEEPS,
         )?;
         going.reach(
             &field.mesh,
             &mut coverage,
             &mass.read_only(),
             &mut reached_mass,
-            48,
+            super::reach::REACH_SWEEPS,
         )?;
     }
     for cell in 0..field.mesh.len() {

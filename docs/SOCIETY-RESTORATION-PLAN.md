@@ -480,6 +480,42 @@ Sulion: milestone `5f5b0f89-b8f7-4307-8038-366ca1c2dc12`; expansion
   apart overland with no way between them;
 - ways carry identity between towns that do not touch.
 
+#### M2 record
+
+**What was built:**
+
+- **Movers choose along a route.** From each inhabited cell, a route climbs a guide field
+  across any ground travel allows, water and worn ways included: pull for the drain, spare
+  food felt over the reach for the spill. Every dry cell on it is a candidate beside the
+  neighbours.
+  - A route's steps add their costs in ranges before decaying, as one journey of that length
+    would (`reach::ranges_of`, `passed_over`). It ends where the going passes on less than a
+    tenth.
+  - Arrivals are admitted at the actual far target.
+  - The cells between a journey's ends are worn into ways by its admitted travellers.
+- **Tradition pressure spreads over the same reach.** Tongue, faith and custom spread
+  through `Passage::reach_each`, the shared reach for values that are not one number. Each
+  cell keeps its own tradition in a reserved slot and resists with it, felt over the same
+  reach. It feels the three strongest others.
+- **One sweep count.** `REACH_SWEEPS` replaces the literal 48 in food, crowds, places,
+  contact and routes.
+
+**Evidence:**
+
+- Unit tests on route decay and carried pressures.
+- Clippy, and the architecture checks.
+- A full draft world: in one move, 5,763 of 7,290 arrivals came from beyond the next cell
+  and 4,695 crossed water (`people.journeys`, counted after admission). The largest town is
+  a capital at Rivassanrema's old spot, 733k.
+
+**Deviation:** links that skip cells (Veil doors) are not yet in the going. Backlog 12
+already lists doors carrying tongues and faiths as open. They join with the catalogue's
+road and boat costs in M7, where Movement costs reach travel.
+
+**Not observed:** whether a particular emptied island was resettled, or whether coastal
+places across a strait share traditions more than overland ones. The traces show the
+journeys and contact happening; no named island or strait was followed.
+
 ### M3 — Ground that harms or refuses people [depends on M0]
 
 **Scope:**

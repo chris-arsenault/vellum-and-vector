@@ -61,7 +61,7 @@ impl Work {
             &mut field.coverage.borrow_mut(),
             &area.read_only(),
             &mut land,
-            48,
+            super::reach::REACH_SWEEPS,
         )?;
         Ok(Self {
             facts,
@@ -81,7 +81,7 @@ impl Work {
             &mut field.coverage.borrow_mut(),
             &source.read_only(),
             result,
-            48,
+            super::reach::REACH_SWEEPS,
         )
     }
 }
