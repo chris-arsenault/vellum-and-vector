@@ -2,22 +2,18 @@
 //! the word its name ends in, and whether it still holds what it claims. The old society
 //! cycle named a realm by a magic practice a third of its people kept, else a livelihood half
 //! of them lived by, else the breadth of its tongues.
-use super::{crafts, places::Place, work::km2};
+use super::{
+    crafts,
+    facts::{CONCORD, CRAFT_KEPT, IN_COMMON, LIVING_BY},
+    places::Place,
+    work::km2,
+};
 use crate::{
     field::Field,
     human::identity::{held, Tradition},
     storage::ReadBand,
 };
 use std::io;
-
-/// The share of a realm's people who must keep a craft for the realm to be named by it.
-const CRAFT_KEPT: f64 = 1.0 / 3.0;
-/// The share who must live by a livelihood for the realm to be named by it.
-const LIVING_BY: f64 = 0.5;
-/// The share who must speak or know a tongue for it to count among the realm's tongues.
-const IN_COMMON: f64 = 0.1;
-/// How many tongues in common make a realm a concord.
-const CONCORD: usize = 3;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Livelihood {

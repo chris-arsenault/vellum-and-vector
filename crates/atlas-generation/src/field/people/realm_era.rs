@@ -1,5 +1,6 @@
 use super::{
     country,
+    facts::{CONTESTED, KEEPING, RUIN_HOLD},
     identity_reads::leading_of,
     places::Places,
     questions::Questions,
@@ -79,17 +80,11 @@ fn found(field: &Field, era: &Era) -> io::Result<()> {
     }
     Ok(())
 }
-/// How close a runner-up's hold must come to the holder's for a town to be contested: the
-/// old society cycle's runner-up above four fifths of the leader.
-const CONTESTED: f64 = 0.8;
 /// Each cell's realm, and the realm that nearly holds it as firmly, where one does.
 struct Falling {
     code: Vec<i32>,
     rival: Vec<i32>,
 }
-/// How much of a realm's hold full ruin leaves: the old society cycle reached ruined
-/// communities at a quarter.
-const RUIN_HOLD: f64 = 0.25;
 /// How many times harder a realm holds ground `crowding` times fuller than its land feeds, of
 /// which `ruined` of the built ground lies in ruin: the old society cycle divided reach by
 /// crowding and cut it to a quarter over ruins.
@@ -180,9 +175,6 @@ fn falling(
 pub fn holding_cost(going: f64, hard: f64, strength: f64, suited: f64) -> f64 {
     going * hard / (strength * suited).max(f64::EPSILON)
 }
-/// How much more cheaply a challenger must hold ground than the realm already holding it to
-/// take it: a realm keeps what it holds unless another holds it far more cheaply.
-const KEEPING: f64 = 0.6;
 /// Who holds a cell, and who contests it, from each reaching realm's cost of holding it
 /// (`normals`, by realm index) and the realm that held it before, if any: the cheapest, unless
 /// the realm before still holds it within reach of that, and the cheapest other whose cost comes

@@ -364,9 +364,7 @@ fn share(
     }
     forget(context, era, owner)
 }
-/// The share of the people a tongue reaches who learn it as a second tongue; the rest take it
-/// up as their own and keep the one they spoke as a tongue they know.
-const LEARNING: f64 = 2.0 / 3.0;
+use super::facts::{FORGETTING_YEARS, KEPT_BY_USE, LEARNING};
 /// People who meet a tongue learn it before they speak it: most come to know it beside their
 /// own, the rest take it up and keep their old tongue as one they know.
 fn learn(
@@ -411,11 +409,6 @@ fn learning(field: &Field, codes: &Band<i32>, reached: &Band<f64>) -> io::Result
         },
     ])
 }
-/// The share of the people on and around a cell who must speak a tongue for those who know it
-/// there to keep it.
-const KEPT_BY_USE: f64 = 0.01;
-/// How long an unused tongue takes to fade, in years: the old society cycle's 300.
-const FORGETTING_YEARS: f64 = 300.0;
 /// A tongue known where almost no one around speaks it fades over the years.
 fn forget(
     context: &mut CommandContext<'_, Field>,

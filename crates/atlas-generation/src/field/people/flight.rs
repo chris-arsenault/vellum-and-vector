@@ -3,6 +3,7 @@
 //! room. The owner's move operation carries them.
 use super::{
     country,
+    facts::{FLEEING, FLIGHT},
     places::Place,
     travel::{self, Travel},
     work::{habitable, km2, working},
@@ -18,13 +19,6 @@ use crate::{
     storage::{Band, ReadBand},
 };
 use std::io;
-
-/// The share of a struck place's survivors who flee, at full severity.
-const FLEEING: f64 = 0.6;
-/// How far survivors go looking for room, as a share of the map's span over open ground: a
-/// few days' walk, beyond their own town to the country and towns beside it, as the old
-/// society cycle moved them to a neighbouring community.
-const FLIGHT: f64 = 0.05;
 
 /// Where a strike's survivors went: how many, and the cell they fled to.
 pub struct Fled {

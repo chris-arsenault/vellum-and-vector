@@ -10,8 +10,10 @@
 //! their makers up toward the crowds that want them, wearing the ways they take; trade draws
 //! people and their food, and raises the wealth a built place gathers toward. No price or stock
 //! is kept: each pass reads the trade from the land as it stands.
+pub use super::facts::{TRADING, WEALTH};
 use super::{
     crafts::{self, CRAFTS},
+    facts::{CARRIED, MADE, MAKERS, WANTED_CRAFTED, WANTED_MATERIALS, WANTED_WARES, WORKABLE},
     feed::offer_per_request,
     seeking,
     work::{habitable, km2, working, Work},
@@ -33,22 +35,15 @@ pub const WARES: usize = 1;
 /// counted in.
 fn wanted(kind: usize) -> f64 {
     match kind {
-        MATERIALS | WARES => 0.05,
+        MATERIALS => WANTED_MATERIALS,
+        WARES => WANTED_WARES,
         // A people wants a little of every craft's goods.
-        _ => 0.02 / CRAFTS.len() as f64,
+        _ => WANTED_CRAFTED / CRAFTS.len() as f64,
     }
 }
 fn all_wanted() -> f64 {
     (0..KINDS).map(wanted).sum()
 }
-/// The share of a cell's people who make goods for others, where the means suffice.
-const MAKERS: f64 = 0.2;
-/// How many makers a km² of fully offered means employs: a mine, a salt pan or a mill gives
-/// work to so many and no more, however many people live around it. A town of a thousand to
-/// the km² over a full mine can then send half its makers' goods away.
-const WORKABLE: f64 = 100.0;
-/// How much a maker makes a year, in goods: enough of materials or wares for twenty people.
-const MADE: f64 = 1.0;
 
 /// How much of each kind a cell's people make a year, per km²: as many of them as make goods,
 /// as far as the means their land offers employ them. Materials and wares follow the
@@ -181,12 +176,6 @@ pub fn from_trade(turnover: f64, full: f64) -> f64 {
     let t = turnover.max(0.0);
     full * t / (1.0 + t)
 }
-/// How much more a trading cell pulls people than its offers alone would, at full trade.
-pub const TRADING: f64 = 0.6;
-/// How much more wealth a trading built place gathers toward, at full trade.
-pub const WEALTH: f64 = 1.0;
-/// How many goods one traveller carries on a trip, by pack and cart.
-const CARRIED: f64 = 100.0;
 /// The goods trade of one pass: each cell's turnover, and the goods carried a year through
 /// each cell on their way, which wear it as their carriers' journeys do.
 pub struct Trade {

@@ -77,8 +77,7 @@ pub struct Tradition {
     #[serde(default)]
     pub livelihoods: [f64; 4],
 }
-/// The health a successor realm begins with: the old society cycle's 0.65.
-const SUCCESSOR_HEALTH: f64 = 0.65;
+use super::facts::SUCCESSOR_HEALTH;
 fn whole() -> f64 {
     1.0
 }

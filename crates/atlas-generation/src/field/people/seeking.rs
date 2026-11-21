@@ -2,15 +2,15 @@
 //! far the movers' practices found their medium there: between half and one and a half, one
 //! for a people with no practice. Here the movers are a cell's people, each craft weighs by
 //! the share who keep it, and those who keep none are indifferent.
-use super::crafts::{self, Craft};
+use super::{
+    crafts::{self, Craft},
+    facts::SEEKING,
+};
 use crate::{
     field::Field,
     human::identity::{held, Tradition},
 };
 use std::io;
-
-/// How much draw a craft's whole people add or take where its medium is full or absent.
-const SEEKING: f64 = 0.5;
 
 /// The draw factor for a people keeping each craft by its share of them, where each craft
 /// finds the given offer of its medium (0 to 1): one for a people with no craft, down to one

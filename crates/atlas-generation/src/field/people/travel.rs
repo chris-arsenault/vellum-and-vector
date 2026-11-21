@@ -32,9 +32,8 @@ pub fn length(field: &Field, fraction: f64) -> io::Result<f64> {
         .map_err(io::Error::other)?
         .value())
 }
-/// How much easier people's country is to cross where all of them understand the tongue
-/// spoken around them.
-const SHARED_SPEECH: f64 = 0.3;
+pub use super::facts::WORN;
+use super::facts::{GRADING, SHARED_SPEECH};
 /// The share of a cell's people who speak or know the tongue most spoken on and around it:
 /// all of them deep in one tongue's country, few at a frontier where no one has learned the
 /// neighbours' speech. Empty ground has no one to understand and is neither.
@@ -132,11 +131,6 @@ pub fn respond(
         },
     )
 }
-/// The traffic, in traveller-years, over which a way wears its ground most of the way it
-/// will, and at which people grade its climbs.
-pub const WORN: f64 = 50_000.0;
-/// How much of a climb's cost and steepness a graded road takes away.
-const GRADING: f64 = 0.5;
 /// Whether a way carrying `traffic` is graded where it climbs: cut and terraced over its cols
 /// and slopes, so it climbs at half the cost and twice the steepness.
 pub fn graded(traffic: f64) -> bool {

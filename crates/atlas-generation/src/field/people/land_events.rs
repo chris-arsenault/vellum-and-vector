@@ -1,7 +1,7 @@
 // Arconis: docs/architecture/subsystems.arconis#item=pp_events — applies famine, disaster and siege while keeping frontiers.
 use super::{
     events::{dead_on, rounded, Event, Events},
-    facts::PEOPLE_PER_BUILT_KM2,
+    facts::{MEETING_WEAR, PEOPLE_PER_BUILT_KM2, SIEGE_FALLEN, SIEGE_STANDING, SIEGE_WEAR},
     flight::{Fled, Flight, Going},
     frontiers,
     hazards::Hazard,
@@ -70,15 +70,10 @@ struct Strike<'a> {
     owner: &'a operations::Operations<Field>,
     effects: &'a Command<Field, Struck>,
 }
-/// How hard a siege wears the place it takes. With the magnitude's six to nine tenths, the
-/// old society cycle's siege magnitudes, it kills about a fifth of an unbuilt town; a town's
-/// standing holds its people against the wear as it holds them against any blow, so walls
-/// count once.
-const SIEGE_WEAR: f64 = 0.5;
-/// A siege's magnitude, from six tenths where the losing realm still holds together to nine
-/// where it has collapsed, as the old society cycle struck fragmented and collapsed realms.
+/// A siege's magnitude, from where the losing realm still holds together to where it has
+/// collapsed, as the old society cycle struck fragmented and collapsed realms.
 pub fn siege_magnitude(loser_health: f64) -> f64 {
-    0.6 + 0.3 * (1.0 - loser_health.clamp(0.0, 1.0))
+    SIEGE_FALLEN - (SIEGE_FALLEN - SIEGE_STANDING) * loser_health.clamp(0.0, 1.0)
 }
 /// Writes where a strike's survivors went onto its event and its account.
 fn fled_to(era: &Era, event: &mut Event, fled: &Fled) {
@@ -283,10 +278,6 @@ fn siege_mix() -> crate::human::catalogue::CompiledLayerMix {
     taking[LayerMode::Shake as usize] = 0.4;
     compile(taking)
 }
-/// How hard a meeting at full severity wears the living ground it strikes. Through the
-/// shake-and-burn mix this takes about a fifth of the people there, as the old society
-/// cycle's hazards killed a fifth of a community at full severity.
-const MEETING_WEAR: f64 = 0.5;
 /// How a magic meeting wears the people it strikes: by shaking and burning, as the land's
 /// own upheavals do, until a meeting's hazard states its own way of harming.
 fn threat_mix() -> crate::human::catalogue::CompiledLayerMix {

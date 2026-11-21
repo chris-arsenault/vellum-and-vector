@@ -1016,8 +1016,10 @@ and bounded.
   wreck, caravan routes, water stops, field lanes, ditches, dams, gorges, deltas, quays, shores,
   waterless ground and magic fields.
 - **Livelihoods from yields** were done in M9.
-- **Not done:** society settings gathered into one table. They stay as named, documented
-  constants in the module that owns each rule.
+- **The society's settings live in the people's facts** (`field/people/facts.rs`), grouped by
+  the rule that reads each: flight, strikes and sieges, tongues, ways, realms, a realm's
+  character, seeking and goods. This follows the boundary "constants in contracts, not process
+  files". The rules' modules hold no settings of their own.
 
 #### Verdicts closed
 

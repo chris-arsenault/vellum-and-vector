@@ -1,5 +1,6 @@
 // Arconis: docs/architecture/subsystems.arconis#item=pp_realms — spreads realm allegiance outward from seats.
 use super::{
+    facts::{HEALTH_YEARS, INFLUENCE, SEAT_INERTIA},
     identity_era::{apart, place},
     identity_reads::leading_of,
     places::{Place, Places},
@@ -106,9 +107,6 @@ pub fn seats(field: &Field, era: &Era) -> io::Result<Vec<Seat>> {
     }
     Ok(found)
 }
-/// How much a full temple or academy in a realm's town adds to the realm's strength: the old
-/// society cycle's institutional influence.
-const INFLUENCE: f64 = 0.1;
 /// A realm's strength: its seat's crowd (in least towns), its health, and the learning its
 /// towns' temples and academies give its people.
 pub fn strength(capacity: f64, seat_towns: f64, health: f64, taught: f64) -> f64 {
@@ -126,8 +124,6 @@ fn taught(field: &Field, towns: &[Place], allegiance: &[i32], realm: i32) -> io:
     }
     Ok(given)
 }
-/// How much larger than its seat a town of the realm must grow to draw the seat to itself.
-const SEAT_INERTIA: f64 = 1.5;
 /// The largest of a realm's other towns, if it has grown well past the seat's `seat_people`.
 pub fn outgrown(seat_people: f64, towns: &[Place]) -> Option<&Place> {
     towns
@@ -173,8 +169,6 @@ pub fn follow_the_crowd(field: &Field, era: &Era, realm: &Tradition) -> io::Resu
     }
     Ok(())
 }
-/// How fast a realm's health follows its holding, in years.
-const HEALTH_YEARS: f64 = 80.0;
 /// The share of the people of each realm in `realms` that their own ground feeds, counting
 /// each cell's people only as far as its land supports them, as the old society cycle did:
 /// a hungry province weakens its realm, and plenty elsewhere does not make up for it. A realm
