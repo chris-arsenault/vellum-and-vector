@@ -88,10 +88,13 @@ processes it changes.
   publishes as places.
 - **Geology always runs.** Every world has generated land. Magic and people stay selectable.
 - **A finer map inherits and goes on.** A regional map inherits the layers and the places its
-  parent named. People's history is captured as the land's is: no pass grows, starves, moves or
-  drowns them on the child, as no plate moves there. The child draws them in finer detail once,
-  sharing each parent cell's fields, herds and people among the child cells beneath it by how
-  well each feeds or houses them. Its places, ways and crossings are read by
+  parent named. Its people roughly match its parent's, and that agreement comes from people's
+  refinement processes, which produce roughly equal counts the way the other domains'
+  refinement processes do; nothing copies, conserves or fits the parent's number. The child
+  starts by sharing each parent cell's fields, herds and people among the child cells beneath
+  it by how well each feeds or houses them. In each development round its people then meet
+  the round's water and ice and live a settled pass over the round's exposure on the finer
+  land, as the child's ecology does. Its places, ways and crossings are read by
   the same classifiers and published by the same catalogue. Nothing is written to the parent,
   and no era is lived again. A round's redrawing of relief is not an event in the land's
   history: soil and what grows in it stay on the surface as it is redrawn.
@@ -116,8 +119,8 @@ processes it changes.
 - Counts are not kept by group. What a creator edits on a settlement is reconciled on its
   record; the layers stay what generation made.
 - A coarse value is a share of the ground beneath it. A finer map moves people to where its land
-  suits them, so a town gains a shape there. Built ground and remains inherited as an even
-  share do not yet gather the same way.
+  suits them, so a town gains a shape there. Built ground starts with the same shares as its
+  people, and remains as an even share; neither gathers on its own.
 - Rust visibility and the compile-fail checks in `crates/atlas-generation/src/human/storage.rs`
   keep one writer of the human layers. `rustFoundations.architecture.ts` requires every human
   owner mutation to pass through the registered command boundary.

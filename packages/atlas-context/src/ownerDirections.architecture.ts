@@ -577,7 +577,7 @@ const directions: readonly OwnerDirection[] = [
   },
   {
     direction:
-      "refinement does not run processes that change population, as it does not run plate advection",
+      "people on finer maps roughly match the parent's because people's refinement processes produce roughly equal counts, as other refinement processes do",
     given: "2026-11-21",
     marks: ["crates/atlas-generation/src/field/refinement/people.rs"],
   },

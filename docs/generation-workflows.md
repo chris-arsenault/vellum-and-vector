@@ -432,10 +432,14 @@ that craft. Magic fields are evaluated again at the end of each era from the
 land as people left it, without supplying or ageing any stock, and magic is
 published again after the last era.
 
-A refined map inherits its parent's layers and named places. In each development
-round its people first meet the round's water and ice, then live one pass in
-which they farm, build and move on the finer land while their number stays the
-parent's. At the end the parent's settlements and ruins are known places on the
+A refined map inherits its parent's layers and named places. Its people start as
+each parent cell's people shared among the child cells beneath it by how well
+each feeds or houses them. In each development round they first meet the round's
+water and ice, then live one settled pass over the round's exposure in which
+they farm, trade, build, move, grow and starve on the finer land. Their number
+roughly matches the parent's because these refinement processes produce roughly
+equal counts, as the other domains' refinement processes do; nothing holds it to
+the parent's. At the end the parent's settlements and ruins are known places on the
 ground the parent's cell covered, and every other crowd is read by the world's
 classifier and published by the same catalogue entry. A finer map shows smaller
 places, down to a hamlet, while rank is still judged against the World town

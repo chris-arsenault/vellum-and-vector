@@ -281,7 +281,7 @@ frame r_regional "Regional refinement" region z 309 jump in-layer regional badge
     node rg_refresh "Refresh reads" / "climate, water, media" water z 323 source "crates/atlas-generation/src/atlas/regional/sequence.rs" anchor "refresh" at 1690,3810 size 230,100 edited "CLI (agent)" at 1794725631725
     node rg_develop "Develop material" / "erosion, ice, sediment, coast" phys z 324 source "crates/atlas-generation/src/atlas/regional/sequence.rs" anchor "DEVELOPMENT" at 1950,3810 size 230,100 edited "CLI (agent)" at 1794725631725
     node rg_refresh2 "Refresh reads" / "after the land changed" water z 325 at 2210,3810 size 230,100 edited "CLI (agent)" at 1794725631725
-    node rg_people "People live one pass" / "headcount kept from the parent" people z 326 source "crates/atlas-generation/src/atlas/regional/people.rs" anchor "effects" at 2470,3810 size 240,100 edited "CLI (agent)" at 1794725631725
+    node rg_people "People live one pass" / "counts roughly match the parent's" people z 326 source "crates/atlas-generation/src/atlas/regional/people.rs" anchor "effects" at 2470,3810 size 240,100 edited "CLI (agent)" at 1794725631725
     text rg_round_note "Rounds relax the captured present. They are not world time and replay no epoch or era." caption z 327 at 1690,4010 size 1020,70 edited "CLI (agent)" at 1794725631725
   }
   node rg_parent "Pinned parent map" / "its revision is fixed" database store z 310 source "crates/atlas-host/src/regional_capture.rs" anchor "Selection" at 40,3800 size 240,130 edited "CLI (agent)" at 1794725631725
@@ -411,7 +411,7 @@ p_watch.top ..> e2.bottom as pl_watch peoplelink z 217 in-layer people_links edi
 p_loose.top ..> e7.bottom as pl_loose peoplelink z 218 in-layer people_links edited "CLI (agent)" at 1794725519246
 p_loose.left ..> pp_loose.top "same pass" as pl_same peoplelink z 219 in-layer people_links via 1542,1865 1542,2148 28,2148 28,2588 200,2588 edited "CLI (agent)" at 1794725519246
 eras.bottom ..> pp_era.top "settled passes" as pl_eras peoplelink z 220 in-layer people_links via 3030,1946 2816,1946 2816,2144 24,2144 24,2744 200,2744 edited "CLI (agent)" at 1794725519246
-rg_people.top ..> pp_meet.bottom "same pass, headcount kept" as pl_regional peoplelink z 376 in-layer people_links via 2590,3416 24,3416 24,2866 384,2866 384,2796 555,2796 edited "CLI (agent)" at 1794725631725
+rg_people.top ..> pp_meet.bottom "same pass, over the round's exposure" as pl_regional peoplelink z 376 in-layer people_links via 2590,3416 24,3416 24,2866 384,2866 384,2796 555,2796 edited "CLI (agent)" at 1794725631725
 q_register.right -> q_book.left "sign up" as q_e1 flow z 274 in r_questions edited "CLI (agent)" at 1794725593361
 q_book.right -> q_compose.left "per question" as q_e2 flow z 275 in r_questions edited "CLI (agent)" at 1794725593361
 q_kinds.left -> q_compose.right "in this order" as q_e3 flow z 276 in r_questions edited "CLI (agent)" at 1794725593361

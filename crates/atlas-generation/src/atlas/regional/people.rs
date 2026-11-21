@@ -9,7 +9,7 @@ use crate::{
 };
 use std::rc::Rc;
 
-// Arconis: docs/architecture/subsystems.arconis#item=rg_people — runs one people pass, keeping the parent's headcount.
+// Arconis: docs/architecture/subsystems.arconis#item=rg_people — runs people's refinement processes each round: meet, then one settled pass.
 pub(super) fn effects(
     input: Rc<Inputs>,
     reads: &Reads,
@@ -65,6 +65,7 @@ pub(super) fn publish(
                 scope,
                 &field,
                 RegionalRecording {
+                    land: &work.land,
                     record: &work.record,
                     settings: &work.settings,
                     context: Rc::new(step.physical),
