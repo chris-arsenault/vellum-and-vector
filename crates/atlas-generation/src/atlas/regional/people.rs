@@ -28,12 +28,15 @@ pub(super) fn effects(
                 parent: work.parent.as_deref(),
                 context: Rc::new(step.physical),
             });
+            super::city::trace_people(scope.state(), "before people pass")?;
+            crate::field::people::yields::trace_food(scope.state().field(), "before people pass")?;
             if let Some(readout) =
                 State::regional_place_effects(scope, &field, &input.causes, living)?
             {
                 (input.progress)(1.0, &readout.land);
                 (input.progress)(1.0, &readout.message());
             }
+            super::city::trace_people(scope.state(), "after people pass")?;
             Ok(())
         },
     )
@@ -62,7 +65,6 @@ pub(super) fn publish(
                 scope,
                 &field,
                 RegionalRecording {
-                    land: &work.land,
                     record: &work.record,
                     settings: &work.settings,
                     context: Rc::new(step.physical),

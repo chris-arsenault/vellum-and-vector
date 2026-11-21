@@ -5,9 +5,7 @@ use crate::{
     features::{FeatureReader, FeatureSelection},
     field::{
         people::{
-            era_places,
-            facts::Facts,
-            land_processes, place_country,
+            era_places, land_processes, place_country,
             places::{Adopted, History, Places},
             questions::Questions,
         },
@@ -52,7 +50,6 @@ fn parent_groups(field: &Field, parent: &Grid) -> io::Result<Band<i32>> {
 pub struct PopulationReadout {
     pub land: String,
     pub before: f64,
-    pub met: f64,
     pub after: f64,
     pub supported: f64,
     pub crops: f64,
@@ -61,8 +58,8 @@ pub struct PopulationReadout {
 }
 impl PopulationReadout {
     pub fn message(&self) -> String {
-        format!("People on the map: {} before the round, {} after its water and ice, {} after living it; the land as now used feeds {}; all under crops it would feed {}, under herds {}, left wild {}",
-            self.before, self.met, self.after, (self.supported + 0.5).floor(), (self.crops + 0.5).floor(), (self.herds + 0.5).floor(), (self.wild + 0.5).floor())
+        format!("People on the map: {} before the round, {} after it; the land as now used feeds {}; all under crops it would feed {}, under herds {}, left wild {}",
+            self.before, self.after, (self.supported + 0.5).floor(), (self.crops + 0.5).floor(), (self.herds + 0.5).floor(), (self.wild + 0.5).floor())
     }
 }
 pub fn live(
@@ -80,22 +77,16 @@ pub fn live(
     if before == 0.0 {
         return Ok(None);
     }
+    // owner-direction(2026-11-16): the agreement clause is that major landmarks in a parent map must appear and roughly agree with a child map; that is it
+    // owner-direction(2026-11-21): refinement does not run processes that change population, as it does not run plate advection
+    // People's history is captured like the land's: a finer map draws the parent's people in
+    // finer detail once, and no pass grows, starves, moves or drowns them again.
     if round == 1 {
         if let Some(parent) = parent {
             let groups = parent_groups(executor.state(), parent)?;
             executor.run(&operations.inherited, &groups.read_only())?;
         }
     }
-    executor.run(&operations.meet, &())?;
-    let met = (people_on(executor.state())? + 0.5).floor();
-    let years = round
-        .checked_sub(1)
-        .and_then(|at| DEVELOPMENT_EXPOSURE.get(at))
-        .copied()
-        .unwrap_or(0.0);
-    // owner-direction(2026-11-16): the agreement clause is that major landmarks in a parent map must appear and roughly agree with a child map; that is it
-    // The parent's people are starting conditions: regional people grow, starve and move like any settled pass.
-    executor.run(&operations.pass, &Facts::settled(years, 1.0))?;
     let season = executor.query(&questions.season)?.values();
     let land = format!(
         "Land on the map: {}",
@@ -109,7 +100,6 @@ pub fn live(
     Ok(Some(PopulationReadout {
         land,
         before,
-        met,
         after: (people_on(field)? + 0.5).floor(),
         supported: feeds(field, &support)?,
         crops: feeds(field, &crop)?,
@@ -210,7 +200,6 @@ pub struct PlaceRecords {
 }
 pub fn record_places(
     executor: &mut CommandContext<'_, Field>,
-    land: &land_processes::Operations,
     record: &Command<Field, era_places::Setting>,
     settings: &PlaceSettings,
     records: PlaceRecords,
@@ -218,7 +207,6 @@ pub fn record_places(
     if people_on(executor.state())? <= 0.0 {
         return Ok(());
     }
-    executor.run(&land.meet, &())?;
     let range = executor
         .state()
         .scale

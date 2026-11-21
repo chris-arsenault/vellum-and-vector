@@ -22,7 +22,6 @@ pub struct RegionalLiving<'a> {
     pub context: Rc<PhysicalContext>,
 }
 pub struct RegionalRecording<'a> {
-    pub land: &'a land_processes::Operations,
     pub record: &'a Command<Field, era_places::Setting>,
     pub settings: &'a PlaceSettings,
     pub context: Rc<PhysicalContext>,
@@ -157,7 +156,7 @@ impl State {
             links: scope.state().travel_links(),
         };
         scope.project(field).with_context(work.context, |executor| {
-            people::record_places(executor, work.land, work.record, work.settings, records)
+            people::record_places(executor, work.record, work.settings, records)
         })
     }
     pub fn publish_people_places(

@@ -25,7 +25,7 @@ processes it changes.
   how many live there, the shares of ground under crops, under herds and built on, how long a
   built place has stood, what remains of places that are gone, and an identity column. The
   column holds a few layers of people per cell, each with the tongue, faith, custom, allegiance
-  and craft it holds, how firmly, and for how long. Traditions are named entities; the column
+  and craft it holds, a second tongue it knows, how firmly, and for how long. Traditions are named entities; the column
   refers to them by code. One owner writes these bands, through registered operations. No
   record says where people are.
 - **One pass, repeated.** People act in passes. A pass puts land to feeding them, grows them
@@ -45,8 +45,40 @@ processes it changes.
   grows, shrinks and moves. Inspection reads a place's record and the records that name it.
 - **Identity is carried by people.** Tongues, faiths and customs move with the people who hold
   them, spread by contact along the going, drift apart in isolation and set harder the longer
-  they are held. A realm is an allegiance founded at a seat and spread by reach; it never
-  rewrites what its people speak or believe.
+  they are held. Contact teaches a second tongue before it replaces the first, and a known
+  tongue fades where no one around speaks it. A tongue in common eases the going, so
+  frontiers between tongues slow contact and reach. A realm is an allegiance founded at a seat
+  and spread by reach; it never rewrites what its people speak or believe.
+- **Places speak a vocabulary; people value it.** A catalogue entry declares what a place
+  offers people as benefits, whom each benefit serves (a tradition and its code), what it
+  threatens, and which distant cells it joins and at what cost. Once each era a facade reads
+  the places standing on the map into bands: benefits, threat, links and the magic meetings
+  that strike. People's processes read only these. A needs table
+  values the benefits on the `draw` question, and people move toward draw along journeys that
+  climb it beyond the next cell, across water, worn ways and links. No people's process names a
+  place kind, and no place declares that it draws people.
+- **Realms rise and fall with their people.** A realm's strength is its seat's crowd times its
+  health and the learning its towns' temples and academies give its people. Health follows the
+  share of its people their own ground feeds. A realm holds crowded and ruined ground harder,
+  and country its seat's crafts suit more easily. Ground beyond every realm's reach forgets its
+  realm. A seat follows its realm's crowd, a close rival contests a town, and a town taken from
+  a living realm is besieged, the harder the further that realm has fallen.
+- **Survivors flee.** After a disaster, a magic meeting's strike or a siege, a share of the
+  survivors moves along the going to the nearest ground with room, and the event records
+  how many fled and where.
+- **The living land keeps changing through the human eras.** The ecology's development runs in
+  each era over the era's years. It asks people how much ground they clear and graze and how
+  much game and fish they take, through shared questions, and people's food reads cover per
+  share of wild ground.
+- **Goods are traded as food is.** People make goods where the land's places offer the means,
+  and every people wants them. Each kind clears through the same market rule as food. The goods
+  travel routes toward those who want them and wear those routes into ways. What a place sends
+  or carries draws people and raises its wealth. No price or stock is kept.
+- **Crafts seek their medium.** A mover weighs each destination by how well its media suit the
+  crafts the mover's people keep, so crafts cluster where their medium lies and follow it.
+- **Busy ways are graded.** Where a way carries enough traffic, people grade its climbs: a
+  responder on the `climbing` question, so the way climbs cheaper and steeper. A graded way
+  over a pass the map shows publishes as a cut pass.
 - **Magic breaks a rule.** Each magic system offers people a craft, learned where its medium
   lies under them and held as a tradition in the column. A craft does not add to a yield. It
   breaks a rule some existing process obeys: a responder on a shared question that replaces the
@@ -55,8 +87,10 @@ processes it changes.
   publishes as places.
 - **Geology always runs.** Every world has generated land. Magic and people stay selectable.
 - **A finer map inherits and goes on.** A regional map inherits the layers and the places its
-  parent named. Its people live the same pass once in each round of development, with one fact
-  changed: their number stays what the parent says. Its places, ways and crossings are read by
+  parent named. People's history is captured as the land's is: no pass grows, starves, moves or
+  drowns them on the child, as no plate moves there. The child draws them in finer detail once,
+  sharing each parent cell's fields, herds and people among the child cells beneath it by how
+  well each feeds or houses them. Its places, ways and crossings are read by
   the same classifiers and published by the same catalogue. Nothing is written to the parent,
   and no era is lived again. A round's redrawing of relief is not an event in the land's
   history: soil and what grows in it stay on the surface as it is redrawn.

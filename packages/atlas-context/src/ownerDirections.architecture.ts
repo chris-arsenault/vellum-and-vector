@@ -576,6 +576,12 @@ const directions: readonly OwnerDirection[] = [
     marks: ["crates/atlas-generation/src/field/refinement/people.rs"],
   },
   {
+    direction:
+      "refinement does not run processes that change population, as it does not run plate advection",
+    given: "2026-11-21",
+    marks: ["crates/atlas-generation/src/field/refinement/people.rs"],
+  },
+  {
     direction: "on a topo map, ice fields must not block everything else out",
     given: "2026-11-16",
     marks: ["frontend/src/rasterStyles.ts"],
