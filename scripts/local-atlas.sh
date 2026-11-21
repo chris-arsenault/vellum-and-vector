@@ -75,6 +75,16 @@ server_down() {
     done
     rm -f "$home/server.pid"
   fi
+  # The supervisor writes the exit record after the server ends; the next log starts after it.
+  if [[ -f "$home/supervisor.pid" ]]; then
+    local supervisor
+    supervisor="$(cat "$home/supervisor.pid")"
+    for _ in $(seq 10); do
+      kill -0 "$supervisor" 2>/dev/null || break
+      sleep 1
+    done
+    rm -f "$home/supervisor.pid"
+  fi
 }
 
 # Kibibytes of one /proc status or meminfo field, or 0.
@@ -101,6 +111,7 @@ supervise() {
   "$@" &
   local child=$! peak=0 step=0 rss hwm status
   echo "$child" >"$home/server.pid"
+  echo "$$" >"$home/supervisor.pid"
   trap 'kill "$child" 2>/dev/null' TERM
   while kill -0 "$child" 2>/dev/null; do
     rss=$(kib "/proc/$child/status" VmRSS)

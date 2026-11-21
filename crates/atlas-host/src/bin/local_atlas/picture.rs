@@ -220,6 +220,33 @@ impl Canvas {
             None,
         );
     }
+    /// Marks each point of a geometry with a ringed dot `pixels` across, whatever the scale.
+    pub fn mark(&mut self, geometry: &Geometry, pixels: f64, hex: &str) {
+        for point in parts(geometry).into_iter().flatten() {
+            let (x, y) = self.pixel(point);
+            let Some(dot) = PathBuilder::from_circle(x, y, (pixels / 2.) as f32) else {
+                continue;
+            };
+            self.pixmap.fill_path(
+                &dot,
+                &Self::paint(hex),
+                FillRule::Winding,
+                Transform::identity(),
+                None,
+            );
+            let stroke = Stroke {
+                width: 1.,
+                ..Stroke::default()
+            };
+            self.pixmap.stroke_path(
+                &dot,
+                &Self::paint("#ffffff"),
+                &stroke,
+                Transform::identity(),
+                None,
+            );
+        }
+    }
     /// Places another picture with its top left corner at `(x, y)` pixels.
     pub fn place(&mut self, other: &Canvas, x: i32, y: i32) {
         self.pixmap.draw_pixmap(

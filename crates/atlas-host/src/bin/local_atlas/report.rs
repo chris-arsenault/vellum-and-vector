@@ -53,10 +53,26 @@ enum Layer {
     Water,
     River,
     Field,
+    /// A city block, coloured by its use.
+    Block,
     Plot,
     Square,
     Way,
+    Wall,
+    /// A district's outline, over the blocks and ways it parts.
+    District,
     Building,
+    /// A point place: a landmark or major work, marked at a fixed size in pixels.
+    Mark,
+}
+/// A city block's colour by its use; the rest of a city map's kinds are drawn by kind.
+fn block_colour(use_: &str) -> &'static str {
+    match use_ {
+        "residential" => "#d9a77f",
+        "business" => "#c2553f",
+        "civic" => "#7a68b0",
+        _ => "#c8c08a",
+    }
 }
 struct Drawn {
     layer: Layer,
@@ -83,6 +99,23 @@ fn drawn(feature: &MapFeature) -> Option<Drawn> {
         "street" | "lane" => (Layer::Way, mean_width(6.), STREET),
         "trail" => (Layer::Way, mean_width(2.5), "#a08f6a"),
         "footpath" => (Layer::Way, mean_width(1.5), FOOTPATH),
+        "road" => (Layer::Way, 8., "#8a7350"),
+        "thoroughfare" => (Layer::Way, mean_width(12.), "#5b4a36"),
+        "cityBlock" => (
+            Layer::Block,
+            0.,
+            block_colour(
+                feature
+                    .attributes
+                    .get("use")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default(),
+            ),
+        ),
+        "cityWall" => (Layer::Wall, 8., "#3b2f28"),
+        "district" => (Layer::District, 6., "#2f5d8a"),
+        "majorWork" => (Layer::Mark, 14., "#1d1d1d"),
+        "cityPlace" => (Layer::Mark, 9., "#b0306a"),
         "building" => (
             Layer::Building,
             0.,
@@ -110,6 +143,11 @@ fn draw(canvas: &mut Canvas, things: &[Drawn]) {
             Layer::River | Layer::Way => {
                 canvas.outline(&thing.geometry, thing.width, 0.7, thing.colour)
             }
+            Layer::Wall | Layer::District => {
+                canvas.outline(&thing.geometry, thing.width, 2., thing.colour)
+            }
+            Layer::Block => canvas.fill(&thing.geometry, thing.colour, Some((PLOT.1, 0.6))),
+            Layer::Mark => canvas.mark(&thing.geometry, thing.width, thing.colour),
             Layer::Field => canvas.fill(&thing.geometry, thing.colour, Some((FIELD.1, 0.6))),
             Layer::Plot | Layer::Square => {
                 canvas.fill(&thing.geometry, thing.colour, Some((PLOT.1, 0.6)))
@@ -131,6 +169,38 @@ struct Town {
 }
 
 /// Writes `map.json`, `summary.txt` and the map pictures into `directory`.
+/// A realm or an event the people suffered, as one line for reading a world's history at a
+/// glance.
+fn annal(feature: &MapFeature) -> Option<String> {
+    let attribute = |name: &str| feature.attributes.get(name);
+    let text = |name: &str| attribute(name).and_then(Value::as_str);
+    let number = |name: &str| attribute(name).and_then(Value::as_f64).unwrap_or(0.);
+    match feature.kind.as_str() {
+        "sovereignty" => Some(format!(
+            "  realm {}{}",
+            feature.name.as_deref().unwrap_or("unnamed"),
+            text("status").map_or_else(String::new, |s| format!(" ({s})"))
+        )),
+        "settlement" if number("goodsTradedPerYear") > 0.0 => Some(format!(
+            "  town {} trades {} goods a year",
+            feature.name.as_deref().unwrap_or("unnamed"),
+            number("goodsTradedPerYear")
+        )),
+        "societyEvent" => Some(format!(
+            "  {} at {}: {} died, {} fled{}",
+            text("eventKind").unwrap_or("event"),
+            text("era").unwrap_or("?"),
+            number("casualties"),
+            number("displaced"),
+            if attribute("refugeAt").is_some_and(|r| !r.is_null()) {
+                " to a town"
+            } else {
+                ""
+            }
+        )),
+        _ => None,
+    }
+}
 pub fn report(server: &Server, reference: &MapRef, directory: &Path) -> io::Result<()> {
     fs::create_dir_all(directory)?;
     let map: Value = server.call("maps/read", &json!({"method": "open", "args": [reference]}))?;
@@ -152,6 +222,9 @@ pub fn report(server: &Server, reference: &MapRef, directory: &Path) -> io::Resu
     // hpc-exempt: towns by name, in first-seen order of their buildings.
     let mut towns = Vec::<(String, Town)>::new();
     let mut things = Vec::new();
+    let mut annals = Vec::new();
+    // A city map's blocks and districts, for a picture framed on the city.
+    let mut city: Option<Extent> = None;
     for space in &spaces {
         let id = text(&space["id"]);
         features(server, reference, &id, None, |feature| {
@@ -165,7 +238,12 @@ pub fn report(server: &Server, reference: &MapRef, directory: &Path) -> io::Resu
             if id != primary {
                 return;
             }
+            if matches!(feature.kind.as_str(), "cityBlock" | "district") {
+                city.get_or_insert_with(Extent::default)
+                    .include_geometry(&feature.geometry);
+            }
             let attribute = |name: &str| feature.attributes.get(name);
+            annals.extend(annal(&feature));
             if let (true, Some(settlement), true) = (
                 feature.kind == "building",
                 attribute("settlement").and_then(Value::as_str),
@@ -227,6 +305,10 @@ pub fn report(server: &Server, reference: &MapRef, directory: &Path) -> io::Resu
             }
         }
     }
+    if !annals.is_empty() {
+        lines.push("\nRealms and events:".into());
+        lines.extend(annals);
+    }
     let summary = lines.join("\n");
     fs::write(directory.join("summary.txt"), summary.clone() + "\n")?;
     println!("{summary}");
@@ -237,6 +319,14 @@ pub fn report(server: &Server, reference: &MapRef, directory: &Path) -> io::Resu
         directory,
         "map.png",
     )?];
+    if let Some(city) = &city {
+        written.push(picture(
+            &things,
+            Frame::around(city.0, 4. / 3., 0.05, CENTRE),
+            directory,
+            "city.png",
+        )?);
+    }
     // The town with the most occupied buildings, whole and at its centre.
     if let Some((_, town)) = towns.iter().max_by_key(|(_, town)| town.buildings) {
         let centre: Point = [

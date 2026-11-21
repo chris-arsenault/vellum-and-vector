@@ -54,6 +54,7 @@ pub(super) fn growth(input: Rc<Inputs>, field: &Projection<State, Field>) -> Ope
                 }
             };
             scope.project(&field).run(&operation, &guidance)?;
+            trace_people(scope.state(), "after city growth")?;
             let round = scope.state().regional.as_ref().map_or(0, |r| r.round);
             raise_walls(scope.state_mut(), &selection, seed, round)?;
             Ok(())
@@ -292,6 +293,115 @@ pub(super) fn trace(event: &str, details: serde_json::Value) {
     }
 }
 
+/// Where a city map's people stand at one stage, traced as `city.people`: how many, inside
+/// the published outline and in the context band; their centre of mass from the settlement's
+/// centre; their shares by distance in built radii and by compass quarter; the share on the
+/// outline's edge cells; the most crowded cells; and the map's extent about the centre.
+pub(super) fn trace_people(state: &State, stage: &str) -> io::Result<()> {
+    if std::env::var_os("ATLAS_TRACE_CITY").is_none() || state.scope.city.is_none() {
+        return Ok(());
+    }
+    let Some(settlement) = settlement(state)? else {
+        return Ok(());
+    };
+    let field = state.field();
+    let mesh = field.mesh();
+    let [ox, oy] = mesh.origin();
+    let n = mesh.len();
+    let [cx, cy] = settlement.centre;
+    let at: Vec<[f64; 2]> = (0..n)
+        .map(|cell| {
+            let [x, y] = mesh.position(cell);
+            [x + ox - cx, y + oy - cy]
+        })
+        .collect();
+    let positions: Vec<atlas_map::Position> = at
+        .iter()
+        .map(|&[x, y]| atlas_map::Position::xy(x + cx, y + cy))
+        .collect();
+    let outline = state
+        .scope
+        .outline
+        .as_ref()
+        .unwrap_or(&state.scope.footprint);
+    let inside = state
+        .spatial
+        .covers_points(outline, &positions)
+        .map_err(io::Error::other)?;
+    let mut count = Vec::with_capacity(n);
+    for cell in 0..n {
+        count.push(field.people().people(cell)?.max(0.) * mesh.area(cell) / 1e6);
+    }
+    let edge = |cell: usize| {
+        inside[cell] && (0..3).any(|e| mesh.neighbor(cell, e).is_none_or(|next| !inside[next]))
+    };
+    let (mut total, mut within, mut on_edge) = (0., 0., 0.);
+    let (mut sx, mut sy) = (0., 0.);
+    let mut rings = [0.; 4];
+    // East, north, west, south of the settlement's centre.
+    let mut quarters = [0.; 4];
+    for cell in 0..n {
+        let people = count[cell];
+        total += people;
+        if !inside[cell] {
+            continue;
+        }
+        within += people;
+        let [x, y] = at[cell];
+        sx += people * x;
+        sy += people * y;
+        let radii = x.hypot(y) / settlement.built_radius;
+        rings[(radii as usize).min(3)] += people;
+        let angle = y.atan2(x).to_degrees();
+        let quarter = match angle {
+            a if (-45. ..45.).contains(&a) => 0,
+            a if (45. ..135.).contains(&a) => 1,
+            a if (-135. ..-45.).contains(&a) => 3,
+            _ => 2,
+        };
+        quarters[quarter] += people;
+        if edge(cell) {
+            on_edge += people;
+        }
+    }
+    let share = |v: f64| (v / within.max(f64::EPSILON) * 1000.).round() / 1000.;
+    let mut crowded: Vec<usize> = (0..n).filter(|&c| inside[c]).collect();
+    crowded.sort_by(|&a, &b| count[b].total_cmp(&count[a]));
+    let top: Vec<_> = crowded
+        .iter()
+        .take(5)
+        .map(|&c| {
+            serde_json::json!({"at":[at[c][0].round(), at[c][1].round()],
+            "people":count[c].round(), "perKm2":field.people().people(c).unwrap_or(0.).round(),
+            "edge":edge(c)})
+        })
+        .collect();
+    let extent = at
+        .iter()
+        .fold([f64::MAX, f64::MAX, f64::MIN, f64::MIN], |e, &[x, y]| {
+            [e[0].min(x), e[1].min(y), e[2].max(x), e[3].max(y)]
+        });
+    trace(
+        "city.people",
+        serde_json::json!({
+            "stage": stage,
+            "round": state.regional.as_ref().map_or(0, |r| r.round),
+            "total": total.round(),
+            "inside": within.round(),
+            "band": (total - within).round(),
+            "census": settlement.people,
+            "builtRadius": settlement.built_radius.round(),
+            "centreOfMass": [(sx / within.max(f64::EPSILON)).round(), (sy / within.max(f64::EPSILON)).round()],
+            "byRadii": rings.map(share),
+            "eastNorthWestSouth": quarters.map(share),
+            "edgeShare": share(on_edge),
+            "crowded": top,
+            "extentAboutCentre": extent.map(f64::round),
+        }),
+    );
+    Ok(())
+}
+
 /// Where the city's prominent places and works stand, as each cell's draw on growth: 1 at the
 /// place, a half beside it.
 fn places_at(state: &State, n: usize) -> Vec<f64> {
@@ -359,7 +469,9 @@ pub(super) fn places_step(input: Rc<Inputs>, field: &Projection<State, Field>) -
             let selection = template(scope.state_mut(), seed)?;
             spots::record(scope.state_mut(), &selection)?;
             let quarters = spots::quarters(scope.state(), &selection)?;
+            trace_people(scope.state(), "before quarters")?;
             scope.project(&field).run(&operation, &quarters)?;
+            trace_people(scope.state(), "after quarters")?;
             Ok(())
         },
     )
