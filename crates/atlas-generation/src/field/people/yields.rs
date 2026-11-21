@@ -48,6 +48,7 @@ fn shore_catch(field: &Field, cell: usize) -> io::Result<f64> {
     let mut seas = 0;
     let mut fauna = 0.0;
     let mut upwelling = 0.0f64;
+    let mut safe = 0.0;
     let water = field.water.borrow().kinds();
     for edge in 0..3 {
         let Some(next) = field.mesh.neighbor(cell, edge) else {
@@ -57,14 +58,109 @@ fn shore_catch(field: &Field, cell: usize) -> io::Result<f64> {
             continue;
         }
         seas += 1;
-        fauna += read(field, S::AquaticFauna, next)?;
-        upwelling = upwelling.max(read(field, S::Upwelling, next)? / 1000.0);
+        // Perilous waters, a crush zone or a reef of rogue waves, give little to the boats
+        // that dare them.
+        let dared = field
+            .place_offers()
+            .map_or(Ok(0.0), |offers| offers.perilous(next))?
+            .clamp(0.0, 1.0);
+        fauna += read(field, S::AquaticFauna, next)? * (1.0 - dared);
+        safe += 1.0 - dared;
+        upwelling = upwelling.max(read(field, S::Upwelling, next)? * (1.0 - dared) / 1000.0);
     }
     Ok(if seas > 0 {
-        0.5 + 4.0 * fauna / f64::from(seas) + 2.0 * upwelling
+        let seas = f64::from(seas);
+        0.5 * safe / seas + 4.0 * fauna / seas + 2.0 * upwelling
     } else {
         0.0
     })
+}
+fn season(field: &Field, cell: usize) -> io::Result<f64> {
+    Ok(
+        (-((read(field, S::Temperature, cell)? - 480.0) / 200.0).powi(2)).exp()
+            * ice_free(field, cell)?,
+    )
+}
+/// What makes a dry cell's crops, each from 0 to 1 but `quickened`, which magic raises above
+/// 1: the cultivated yield is `cultivated_yield(suitability) * quickened`.
+#[derive(Clone, Copy, Default, serde::Serialize)]
+pub struct CropFactors {
+    pub season: f64,
+    pub soil: f64,
+    pub wet: f64,
+    pub slope: f64,
+    pub woods: f64,
+    pub quickened: f64,
+}
+impl CropFactors {
+    pub fn suitability(&self) -> f64 {
+        self.season * self.soil * self.wet * self.slope * self.woods
+    }
+}
+/// A dry cell's crop factors, given how strongly a river waters it.
+pub fn crop_factors(field: &Field, cell: usize, river: f64) -> io::Result<CropFactors> {
+    let stored = field.water.borrow().store(Store::Soil);
+    let filled = soil::filled(stored.held(cell)?, stored.capacity(cell)?);
+    Ok(CropFactors {
+        season: season(field, cell)?,
+        soil: (field.ground().view(GroundField::SoilDepth).get(cell)? / length(field, 1.25e-7)?)
+            .min(1.0),
+        wet: (read(field, S::Moisture, cell)? / 1000.0)
+            .max(river)
+            .max(filled)
+            .min(1.0),
+        slope: (-12.0 * read(field, S::Slope, cell)?).exp(),
+        woods: 1.0 - 0.8 * read(field, S::TreeCover, cell)?,
+        quickened: quickened(field, cell, 0.8)?,
+    })
+}
+/// The mean crop factors over a map's dry cells, with the land the people layers farm and the
+/// people they hold, written to the server log when `ATLAS_TRACE_PEOPLE` is set. Rivers are
+/// left out, so `wet` is the least a river would raise it to.
+pub fn trace_food(field: &Field, stage: &str) -> io::Result<()> {
+    if std::env::var_os("ATLAS_TRACE_PEOPLE").is_none() {
+        return Ok(());
+    }
+    let farmland = field.people.view(HumanField::Layer(LayerId::Farmland));
+    let (mut dry, mut km2, mut people, mut farmed, mut fed_full) = (0., 0., 0., 0., 0.);
+    let mut sum = CropFactors::default();
+    let mut suitable = [0.; 4];
+    for cell in 0..field.mesh.len() {
+        let area = field.mesh.area(cell) / 1e6;
+        people += field.people.people(cell)? * area;
+        if field.water.borrow().kind_at(cell)? != 0 {
+            continue;
+        }
+        let f = crop_factors(field, cell, 0.0)?;
+        dry += 1.;
+        km2 += area;
+        farmed += farmland.get(cell)? * area;
+        fed_full += cultivated_yield(f.suitability()) * f.quickened * area;
+        sum.season += f.season;
+        sum.soil += f.soil;
+        sum.wet += f.wet;
+        sum.slope += f.slope;
+        sum.woods += f.woods;
+        sum.quickened += f.quickened;
+        suitable[((f.suitability() * 4.) as usize).min(3)] += 1.;
+    }
+    let mean = |v: f64| (v / f64::max(dry, 1.) * 1000.).round() / 1000.;
+    eprintln!(
+        "{}",
+        serde_json::json!({"event":"people.food","details":{
+            "stage": stage,
+            "cells": dry,
+            "dryKm2": km2.round(),
+            "people": people.round(),
+            "farmedKm2": (farmed * 10.).round() / 10.,
+            "fedUnderCropsPerKm2": (fed_full / km2.max(f64::EPSILON) * 10.).round() / 10.,
+            "meanFactors": {"season": mean(sum.season), "soil": mean(sum.soil), "wet": mean(sum.wet),
+                "slope": mean(sum.slope), "woods": mean(sum.woods), "quickened": mean(sum.quickened)},
+            "suitabilityQuarters": suitable.map(mean),
+            "soilReferenceM": length(field, 1.25e-7)?,
+        }})
+    );
+    Ok(())
 }
 pub fn respond(
     book: &mut QuestionBook<Field, &'static str>,
@@ -76,12 +172,7 @@ pub fn respond(
         Responder {
             by: "climate and ice".into(),
             queries: dependencies.clone(),
-            kind: ResponseKind::Base(Box::new(|field, cell, _| {
-                Ok(
-                    (-((read(field, S::Temperature, cell)? - 480.0) / 200.0).powi(2)).exp()
-                        * ice_free(field, cell)?,
-                )
-            })),
+            kind: ResponseKind::Base(Box::new(|field, cell, _| Ok(season(field, cell)?))),
         },
     )?;
     let mut water_reads = dependencies.clone();
@@ -96,25 +187,9 @@ pub fn respond(
                 if field.water.borrow().kind_at(cell)? != 0 {
                     return Ok(0.0);
                 }
-                let soil_depth = (field.ground().view(GroundField::SoilDepth).get(cell)?
-                    / length(field, 1.25e-7)?)
-                .min(1.0);
-                let stored = field.water.borrow().store(Store::Soil);
-                let filled = soil::filled(stored.held(cell)?, stored.capacity(cell)?);
-                let wet = (read(field, S::Moisture, cell)? / 1000.0)
-                    .max(river(
-                        field,
-                        cell,
-                        answers.queries().get(&crop_rivers)?.as_ref(),
-                    )?)
-                    .max(filled)
-                    .min(1.0);
-                let suitability = answers.ask("season")?
-                    * soil_depth
-                    * wet
-                    * (-12.0 * read(field, S::Slope, cell)?).exp()
-                    * (1.0 - 0.8 * read(field, S::TreeCover, cell)?);
-                Ok(cultivated_yield(suitability) * quickened(field, cell, 0.8)?)
+                let watered = river(field, cell, answers.queries().get(&crop_rivers)?.as_ref())?;
+                let factors = crop_factors(field, cell, watered)?;
+                Ok(cultivated_yield(factors.suitability()) * factors.quickened)
             })),
         },
     )?;

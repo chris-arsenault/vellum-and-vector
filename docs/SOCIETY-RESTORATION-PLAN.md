@@ -528,6 +528,52 @@ journeys and contact happening; no named island or strait was followed.
 Stillness. People thin near magic meetings that threaten them, and their record names the
 cause.
 
+#### M3 record
+
+**What was built:**
+
+- **`livable`.** A shared question whose base is dry ground. Fire (Quickening) and Aurora
+  (Stillness) take it away as their medium passes 0.6, and all of it at full
+  (`magic::responders::left_to_the_living`). It is read by founding, growth, spill, drain and
+  the inherited placement on refined maps.
+- **Magic meetings strike.** A meeting with hazard settings strikes the living places on the
+  ground it covers, at its own yearly rate and severity, scaled by how much of the place it
+  covers. The strike is recorded as an event of the meeting's own kind and cause. The map
+  state gains `meeting_hazards()` to read them.
+- **Pressure's crush cuts the catch.** Where the Pressure system's intensity reaches 360
+  thousandths, boats keep three tenths of the shore catch: the old society cycle's rule.
+
+**Deviations, with their reasons:**
+
+- **Catalogue place threats raise the defence need but do not strike.** Most of them
+  describe a hazard the land already strikes: a peak's avalanche, a harbour's tsunami, a
+  river's flood. Disaster sites also threaten from the events they record, so striking with
+  them counted dangers twice and fed back each era. That first version raised events from 14
+  to 271 and cut settlements from 25 to 20. The old cycle struck with the land's hazards and
+  the magic meetings, and so does this.
+- **No `harm` responder for threats.** `harm` is a vulnerability multiplier that also
+  deepens hunger, so a threat added there would starve people near every hazard. Strikes
+  carry the danger instead.
+- **Harm modes stay unbuilt.** Meeting strikes wear through one shake-and-burn mix, as the
+  land's upheavals do, until a meeting's hazard states its own way of harming. `Hazard`
+  gains modes when a consumer needs to tell them apart.
+- **Ice is left to the harvests,** which already shrink under it. Counting it again in
+  `livable` starved icy margins twice.
+- **The crush cut reads the Pressure system's intensity, not "dangerous sea" places.** A
+  first version cut the catch under every sea-group place's hazard, headland wrecks and
+  strait races included; settlements fell from 24 to 20.
+- **City growth on city maps does not read `livable`.** City maps are part of the paused
+  refinement work.
+
+**Evidence:**
+
+- Unit test of the refusal curve; clippy; the generation test suite.
+- A full draft world with this milestone alone (ecology ablated):
+  - 23 settlements, 14 ruins, 18 events.
+  - Two meetings strike per era (thermal fracture over 3 cells, a Pressure ice breach over
+    1).
+  - 19 dry cells are fully refused, with no one left on them.
+
 ### M4 — Living land through the human eras [depends on M0; DECISION R2]
 
 **Scope:**

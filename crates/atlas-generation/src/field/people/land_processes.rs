@@ -1,7 +1,8 @@
 use super::{
-    facts::{passes_for, Facts},
+    facts::{passes_for, Facts, PEOPLE_PER_BUILT_KM2},
     history, pass,
     questions::Questions,
+    work::{habitable, working},
 };
 use crate::{
     execution::{Command, CommandKind, Query},
@@ -9,11 +10,29 @@ use crate::{
     human::{
         catalogue::LayerId,
         operations::{self, Apportion},
+        HumanField,
     },
-    storage::ReadBand,
+    storage::{Band, ReadBand},
 };
-use std::rc::Rc;
+use std::{io, rc::Rc};
 
+/// The people a dry cell holds: those its land feeds as now used, and those its built ground
+/// houses, on the share of it people can live on. Town people stay on the houses they came
+/// with instead of moving onto the fields.
+fn room(field: &Field, support: &ReadBand<f64>, livable: &ReadBand<f64>) -> io::Result<Band<f64>> {
+    let built = field.people.view(HumanField::Layer(LayerId::BuiltUp));
+    let mut room = working(field);
+    for cell in 0..field.mesh.len() {
+        if habitable(field, cell)? {
+            room.set(
+                cell,
+                (support.get(cell)?.max(0.0) + built.get(cell)? * PEOPLE_PER_BUILT_KM2)
+                    * livable.get(cell)?,
+            )?;
+        }
+    }
+    Ok(room)
+}
 pub struct Era {
     pub years: f64,
     pub mobility: f64,
@@ -77,20 +96,30 @@ impl Operations {
                     Ok(())
                 },
             ),
+            // A finer map draws its parent's people in finer detail and lives no history: each
+            // parent cell's fields, herds and people are shared among the child cells beneath
+            // it by how well each suits them.
             inherited: Command::with_inputs(
                 "human.land-inherit",
                 CommandKind::Work,
                 vec![],
                 move |context, groups: &ReadBand<i32>| {
                     for (kinds, question) in [
-                        (vec![LayerId::Farmland], &questions.crop),
-                        (vec![LayerId::Pasture], &questions.herd),
+                        (vec![LayerId::Farmland], Some(&questions.crop)),
+                        (vec![LayerId::Pasture], Some(&questions.herd)),
                         (
                             vec![LayerId::Population, LayerId::BuiltUp, LayerId::Standing],
-                            &questions.support,
+                            None,
                         ),
                     ] {
-                        let weight = context.query(question)?.values();
+                        let weight = match question {
+                            Some(question) => context.query(question)?.values(),
+                            None => {
+                                let support = context.query(&questions.support)?.values();
+                                let livable = context.query(&questions.livable)?.values();
+                                room(context.state(), &support, &livable)?.read_only()
+                            }
+                        };
                         context.run(
                             &owner.apportion,
                             &Apportion {

@@ -16,20 +16,48 @@ use crate::{
 use std::io;
 
 /// Benefit and threat bands, per cell, as the places standing at the start of an era offer
-/// them. A benefit's value is its strength where the place's people gather, times the share of
-/// the cell's people it serves; a threat's is its severity over the cells within its reach.
+/// them, the waters the Pressure system makes perilous, and the magic meetings that strike.
+/// A benefit's value is its strength where the place's people gather, times the share of the
+/// cell's people it serves; a threat's is its severity over the cells within its reach.
 pub struct PlaceOffers {
     benefits: Vec<ReadBand<f64>>,
     threatened: ReadBand<f64>,
+    perilous: ReadBand<f64>,
+    meetings: Vec<Meeting>,
 }
 impl PlaceOffers {
     pub fn benefit(&self, benefit: Benefit, cell: usize) -> io::Result<f64> {
         self.benefits[benefit as usize].get(cell)
     }
+    /// How threatened a cell is by the dangers its places declare: what makes people there
+    /// want walls. The land's own hazards and magic meetings strike; these do not.
     pub fn threatened(&self, cell: usize) -> io::Result<f64> {
         self.threatened.get(cell)
     }
+    /// How much of a water cell's catch its peril takes: the old society cycle's rule that
+    /// Pressure's crush cuts coastal catch to three tenths.
+    pub fn perilous(&self, cell: usize) -> io::Result<f64> {
+        self.perilous.get(cell)
+    }
+    /// The magic meetings that endanger people this era, for the events that strike them.
+    pub fn meetings(&self) -> &[Meeting] {
+        &self.meetings
+    }
 }
+/// A magic meeting that strikes the ground it covers: its hazard, cause, how often a year it
+/// strikes, how badly, and how much of each cell it covers.
+#[derive(Clone)]
+pub struct Meeting {
+    pub kind: String,
+    pub cause: String,
+    pub cells: Vec<(usize, f64)>,
+    pub severity: f64,
+    pub yearly: f64,
+}
+/// The Pressure intensity, in thousandths, at which the old society cycle cut coastal catch.
+const CRUSHING: f64 = 360.0;
+/// The share of the catch Pressure's crush takes from boats that dare it.
+const CRUSHED: f64 = 0.7;
 /// The share of a cell's people `benefits` serves with `benefit`: everyone, or those holding
 /// its beneficiary's tradition.
 fn served(field: &Field, benefits: &Benefits, benefit: Benefit, cell: usize) -> io::Result<f64> {
@@ -112,6 +140,9 @@ fn lay_offers(
 fn usable(value: f64) -> bool {
     value.is_finite() && value > 0.0
 }
+/// A place's declared dangers, over the cells within each one's reach: how threatened the
+/// ground is, which sets how much its people want walls. They do not strike; the land's own
+/// hazards strike, and a place's danger mostly describes one of them.
 fn lay_threats<S>(
     field: &Field,
     state: &S,
@@ -128,6 +159,59 @@ fn lay_threats<S>(
         }
     }
     Ok(())
+}
+/// Magic meetings that endanger people, over the ground each covers. They raise how
+/// threatened that ground is and strike the living places on it.
+fn meetings<S: super::state::State>(
+    field: &Field,
+    state: &S,
+    threatened: &mut Band<f64>,
+) -> io::Result<Vec<Meeting>> {
+    let mut found = Vec::new();
+    for meeting in state.meeting_hazards() {
+        if !usable(meeting.severity) || !usable(meeting.rate) {
+            continue;
+        }
+        let mut cells = Vec::new();
+        for cell in 0..field.mesh.len() {
+            let covered = meeting.coverage.get(cell)?;
+            if usable(covered) {
+                let share = covered.min(1.0);
+                cells.push((cell, share));
+                threatened.set(cell, threatened.get(cell)? + meeting.severity * share)?;
+            }
+        }
+        if !cells.is_empty() {
+            found.push(Meeting {
+                kind: meeting.kind,
+                cause: meeting.cause,
+                cells,
+                severity: meeting.severity,
+                yearly: meeting.rate,
+            });
+        }
+    }
+    Ok(found)
+}
+/// The waters the Pressure system's crush makes perilous: where its intensity reaches the old
+/// society cycle's crushing strength, boats keep three tenths of the catch.
+fn perilous<S: super::state::State>(field: &Field, state: &S) -> io::Result<Band<f64>> {
+    let mut band = field.coverage.borrow_mut().allocate(0.0);
+    for cell in 0..field.mesh.len() {
+        if field.water.borrow().kind_at(cell)? == 0 {
+            continue;
+        }
+        let pressure = super::reads::magic_value(
+            state,
+            "pressure",
+            crate::magic::channels::Channel::Intensity,
+            cell,
+        )?;
+        if pressure >= CRUSHING {
+            band.set(cell, CRUSHED)?;
+        }
+    }
+    Ok(band)
 }
 /// The places of one entry standing on this map, published here or left to finer maps.
 fn standing<S: PublicationState<Schedule>, Schedule>(
@@ -180,10 +264,13 @@ pub fn offered<S: PublicationState<Schedule>, Schedule>(
         }
         trace.kind(entry.id.as_str(), places.len(), given);
     }
-    trace.write(field, &benefits)?;
+    let meetings = meetings(field, state, &mut threatened)?;
+    trace.write(field, &benefits, &meetings)?;
     Ok(PlaceOffers {
         benefits: benefits.iter().map(Band::read_only).collect(),
         threatened: threatened.read_only(),
+        perilous: perilous(field, state)?.read_only(),
+        meetings,
     })
 }
 /// What the era's places offered, written to the server log when `ATLAS_TRACE_PEOPLE` is set:
@@ -214,10 +301,14 @@ impl Trace {
         self.kinds
             .push(serde_json::json!({"kind": kind, "places": places, "offered": offered}));
     }
-    fn write(&self, field: &Field, benefits: &[Band<f64>]) -> io::Result<()> {
+    fn write(&self, field: &Field, benefits: &[Band<f64>], meetings: &[Meeting]) -> io::Result<()> {
         if !Self::on() {
             return Ok(());
         }
+        let meetings: Vec<serde_json::Value> = meetings
+            .iter()
+            .map(|m| serde_json::json!({"kind": m.kind, "cells": m.cells.len()}))
+            .collect();
         let mut felt = serde_json::Map::new();
         for benefit in Benefit::ALL {
             let band = &benefits[benefit as usize];
@@ -236,7 +327,7 @@ impl Trace {
         eprintln!(
             "{}",
             serde_json::json!({"event": "people.place-offers", "details": {
-                "kinds": self.kinds, "peopleWeightedOffer": felt}})
+                "kinds": self.kinds, "peopleWeightedOffer": felt, "meetings": meetings}})
         );
         Ok(())
     }

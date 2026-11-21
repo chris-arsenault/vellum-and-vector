@@ -253,8 +253,11 @@ fn spill(
     leaving: &mut Leaving,
 ) -> ExecutionResult<()> {
     let support = context.query(&q.support)?.values();
+    let livable = context.query(&q.livable)?.values();
     let field = context.state();
-    let fed = |cell| Ok::<_, io::Error>(support.get(cell)? + work.imports.get(cell)?);
+    let fed = |cell| {
+        Ok::<_, io::Error>((support.get(cell)? + work.imports.get(cell)?) * livable.get(cell)?)
+    };
     // Spare food felt over the travel reach guides people across water to empty country.
     let mut room = working(field);
     for cell in 0..field.mesh.len() {
@@ -313,9 +316,12 @@ fn drain(
     trace_draw(field, &draw)?;
     let pull = concentrated_pull(field, work, &drawing)?;
     let support = context.query(&q.support)?.values();
+    let livable = context.query(&q.livable)?.values();
     let spare = |cell| {
         Ok::<_, io::Error>(
-            (support.get(cell)? + work.imports.get(cell)? - field.people.people(cell)?).max(0.0)
+            ((support.get(cell)? + work.imports.get(cell)?) * livable.get(cell)?
+                - field.people.people(cell)?)
+            .max(0.0)
                 * km2(field, cell),
         )
     };

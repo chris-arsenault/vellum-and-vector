@@ -51,6 +51,29 @@ impl poi::state::State for State {
     fn places_recorded(&self) -> bool {
         self.people.places.borrow().recorded()
     }
+    fn meeting_hazards(&self) -> Vec<poi::state::MeetingHazard> {
+        let Some(magic) = self.physical.magic.as_ref() else {
+            return Vec::new();
+        };
+        let magic = magic.borrow();
+        let meetings = &magic.meetings;
+        meetings
+            .states
+            .iter()
+            .filter_map(|state| {
+                let definition = meetings.definitions.get(state.definition)?;
+                let hazard = definition.hazard.as_ref()?;
+                definition.enabled.then(|| poi::state::MeetingHazard {
+                    kind: hazard.kind.clone(),
+                    cause: hazard.cause.clone(),
+                    rate: hazard.rate,
+                    severity: hazard.severity,
+                    floor: definition.floor,
+                    coverage: state.coverage.read_only(),
+                })
+            })
+            .collect()
+    }
 }
 impl poi::map_records::MapState for State {
     fn geometry_precision(&self) -> f64 {

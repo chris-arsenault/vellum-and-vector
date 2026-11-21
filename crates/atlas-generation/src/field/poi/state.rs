@@ -46,4 +46,19 @@ pub trait State {
         self.physical()
             .ok_or_else(|| io::Error::other("This place requires generated land"))
     }
+    /// The hazards of magic systems meeting, with the ground each meeting covers. A map with
+    /// no magic has none.
+    fn meeting_hazards(&self) -> Vec<MeetingHazard> {
+        Vec::new()
+    }
+}
+/// A magic meeting that endangers people: its hazard, how often a year it strikes covered
+/// ground, how badly, and the share of each cell it covers above its floor.
+pub struct MeetingHazard {
+    pub kind: String,
+    pub cause: String,
+    pub rate: f64,
+    pub severity: f64,
+    pub floor: f64,
+    pub coverage: crate::storage::ReadBand<f64>,
 }

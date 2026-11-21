@@ -67,11 +67,12 @@ fn found(
         }
     }
     let wild = context.query(&q.wild)?.values();
+    let livable = context.query(&q.livable)?.values();
     let field = context.state();
     let mut amount = working(field);
     for cell in 0..field.mesh.len() {
         if habitable(field, cell)? {
-            amount.set(cell, FOUNDERS * wild.get(cell)?)?;
+            amount.set(cell, FOUNDERS * wild.get(cell)? * livable.get(cell)?)?;
         }
     }
     context.run(
@@ -93,14 +94,17 @@ fn grow(
     }
     let support = context.query(&q.support)?.values();
     let harm = context.query(&q.harm)?.values();
+    let livable = context.query(&q.livable)?.values();
     let field = context.state();
+    trace_refused(field, &livable)?;
     let mut born = working(field);
     let mut starved = working(field);
     let filling = (-GROWTH_RATE * work.facts.years).exp();
     let lasting = (-work.facts.years / HUNGER_YEARS).exp();
     for cell in 0..field.mesh.len() {
         let living = field.people.people(cell)?;
-        let room = support.get(cell)? + work.imports.get(cell)?;
+        // Ground people cannot live on holds nobody, however well it is fed.
+        let room = (support.get(cell)? + work.imports.get(cell)?) * livable.get(cell)?;
         if living <= 0.0 {
             continue;
         }
@@ -130,6 +134,27 @@ fn grow(
             intensity: starved.read_only(),
         },
     )
+}
+/// The dry ground that refuses people and the people still on it, written to the server log
+/// when `ATLAS_TRACE_PEOPLE` is set.
+fn trace_refused(field: &Field, livable: &crate::storage::ReadBand<f64>) -> std::io::Result<()> {
+    if std::env::var_os("ATLAS_TRACE_PEOPLE").is_none() {
+        return Ok(());
+    }
+    let (mut cells, mut people) = (0, 0.0);
+    for cell in 0..field.mesh.len() {
+        // Ground a medium refuses outright: no one should remain on it.
+        if habitable(field, cell)? && livable.get(cell)? <= 0.0 {
+            cells += 1;
+            people += field.people.people(cell)? * super::work::km2(field, cell);
+        }
+    }
+    eprintln!(
+        "{}",
+        serde_json::json!({"event": "people.refused", "details": {
+            "dryCellsRefused": cells, "peopleOnThem": people.round()}})
+    );
+    Ok(())
 }
 fn harden(
     context: &mut CommandContext<'_, Field>,

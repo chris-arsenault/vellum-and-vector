@@ -20,6 +20,7 @@ pub struct Questions {
     pub yielding: Query<Field, AnswerBand>,
     pub presence: Query<Field, AnswerBand>,
     pub draw: Query<Field, AnswerBand>,
+    pub livable: Query<Field, AnswerBand>,
 }
 pub fn built_hold(
     book: &mut QuestionBook<Field, &'static str>,
@@ -69,6 +70,7 @@ impl Questions {
             yielding: query("yielding"),
             presence: query("presence"),
             draw: query("draw"),
+            livable: query("livable"),
         }
     }
     pub fn select(&self, executor: &mut crate::execution::Executor<Field>) {
@@ -90,6 +92,7 @@ impl Questions {
             &self.yielding,
             &self.presence,
             &self.draw,
+            &self.livable,
         ] {
             executor.select(question);
         }
@@ -119,6 +122,20 @@ pub fn rules(book: &mut QuestionBook<Field, &'static str>) -> ExecutionResult<()
             by: "the living".into(),
             queries: vec![],
             kind: ResponseKind::Base(Box::new(|field, cell, _| Ok(field.people.people(cell)?))),
+        },
+    )?;
+    book.respond(
+        "livable",
+        Responder {
+            // Ice already starves the people on it through the harvest it stops, so only water
+            // refuses them here; magic media refuse them through their own responders.
+            by: "dry ground".into(),
+            queries: vec![],
+            kind: ResponseKind::Base(Box::new(|field, cell, _| {
+                Ok(f64::from(u8::from(
+                    field.water.borrow().kind_at(cell)? == 0,
+                )))
+            })),
         },
     )
 }
