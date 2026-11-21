@@ -39,7 +39,9 @@ const SHARED_SPEECH: f64 = 0.3;
 /// all of them deep in one tongue's country, few at a frontier where no one has learned the
 /// neighbours' speech. Empty ground has no one to understand and is neither.
 fn understood(field: &Field, cell: usize) -> io::Result<f64> {
-    Ok(super::speech::understood(&super::speech::around(field, cell)?))
+    Ok(super::speech::understood(&super::speech::around(
+        field, cell,
+    )?))
 }
 pub fn respond(
     book: &mut QuestionBook<Field, &'static str>,
@@ -88,8 +90,7 @@ pub fn respond(
                 Ok(if field.water().column.kind.get(cell)? == 0 {
                     1.0 - 0.5
                         * (1.0
-                            - (-field.people.view(HumanField::WalkedRoute).get(cell)? / WORN)
-                                .exp())
+                            - (-field.people.view(HumanField::WalkedRoute).get(cell)? / WORN).exp())
                 } else {
                     1.0
                 })
@@ -175,5 +176,71 @@ impl<'a> Travel<'a> {
         } else {
             going + 30.0 * rise * held
         })
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::{graded, Travel, GRADING, WORN};
+    use crate::{
+        field::people::fixture::*,
+        rock::ground::GroundField,
+        scale::{LengthUnit, MapScale},
+    };
+    use std::rc::Rc;
+
+    #[test]
+    fn a_graded_way_climbs_a_col_too_steep_for_a_track() {
+        assert!(graded(WORN) && !graded(WORN / 2.0));
+        let (mut foot, mut col) = (0, 0);
+        let field = land(|seed, mesh| {
+            foot = point(mesh, 500.0, 500.0);
+            col = (0..3).find_map(|e| mesh.neighbor(foot, e)).unwrap();
+            let [ax, ay] = mesh.position(foot);
+            let [bx, by] = mesh.position(col);
+            // A climb of nine tenths of the step's length.
+            let rise = 0.9 * mesh.delta_x(ax - bx).hypot(ay - by);
+            let native = rise / MapScale::metres(1.0, LengthUnit::Native);
+            // The ground projects its surface from its bedrock when the field is made.
+            seed.ground
+                .storage
+                .initialize(GroundField::BedrockElevation, col, native)
+                .unwrap();
+        });
+        let rivers = || {
+            let band = field.coverage.borrow_mut().allocate(0u32);
+            Rc::new(band.read_only())
+        };
+        let track = Travel::new(
+            &field,
+            band(&field, |_| 1.0),
+            band(&field, |_| 1.0),
+            rivers(),
+        )
+        .unwrap();
+        let road = Travel::new(
+            &field,
+            band(&field, |_| 1.0),
+            band(&field, |_| 1.0 - GRADING),
+            rivers(),
+        )
+        .unwrap();
+        let height = field
+            .ground()
+            .view(GroundField::Elevation)
+            .get(col)
+            .unwrap();
+        assert!(height > 0.0, "the col stands {height} above its foot");
+        assert_eq!(track.step(foot, col).unwrap(), f64::INFINITY);
+        let graded_step = road.step(foot, col).unwrap();
+        assert!(graded_step.is_finite());
+        // On level ground the grading changes nothing.
+        let flat = (0..3)
+            .filter_map(|e| field.mesh.neighbor(foot, e))
+            .find(|&c| c != col)
+            .unwrap();
+        assert_eq!(
+            track.step(foot, flat).unwrap(),
+            road.step(foot, flat).unwrap()
+        );
     }
 }

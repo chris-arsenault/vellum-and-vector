@@ -164,7 +164,9 @@ pub fn institutions() -> Query<State, Sources> {
                 }
                 let (activity, demand, capability) = match benefit {
                     Benefit::Trade => (Activity::Trade, value, 0.),
-                    Benefit::Sanctity | Benefit::Rule => (Activity::Institution, value, 0.),
+                    Benefit::Sanctity | Benefit::Rule | Benefit::Learning => {
+                        (Activity::Institution, value, 0.)
+                    }
                     Benefit::Power | Benefit::Materials => (Activity::Production, 0., value),
                     Benefit::Food => (Activity::Agriculture, 0., value),
                     Benefit::Defence | Benefit::Water => (Activity::Service, 0., value),

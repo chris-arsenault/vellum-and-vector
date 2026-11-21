@@ -177,7 +177,11 @@ fn fire_core_offers(s: &impl State, p: &Place) -> io::Result<Benefits> {
     Ok([(Benefit::Power, v), (Benefit::Materials, v)]
         .into_iter()
         .collect::<Benefits>()
-        .serving(Benefit::Power, crate::human::identity::Tradition::Craft, fire))
+        .serving(
+            Benefit::Power,
+            crate::human::identity::Tradition::Craft,
+            fire,
+        ))
 }
 fn fate(kind: SourcePlace, s: &impl State, p: &Place) -> io::Result<Fate> {
     Ok(if kind == SourcePlace::FireCore {

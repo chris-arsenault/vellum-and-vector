@@ -93,11 +93,7 @@ impl Passage {
     /// The same going, also joining each link's ends by its cost over `range`, as one more
     /// edge of each end. A cell's edges then share what it can take in among all of them, so
     /// a door's end gathers no more than any other cell.
-    pub fn with_links(
-        mut self,
-        links: &[crate::links::Link],
-        range: f64,
-    ) -> io::Result<Self> {
+    pub fn with_links(mut self, links: &[crate::links::Link], range: f64) -> io::Result<Self> {
         let joined: Vec<_> = links
             .iter()
             .map(|link| (link.a, link.b, passed_on(link.cost, range)))
@@ -112,9 +108,8 @@ impl Passage {
                 }
             }
         }
-        let edges = |cell: usize| {
-            self.stride + ends.iter().find(|(c, _)| *c == cell).map_or(0, |e| e.1)
-        };
+        let edges =
+            |cell: usize| self.stride + ends.iter().find(|(c, _)| *c == cell).map_or(0, |e| e.1);
         self.linked = joined
             .iter()
             .map(|&(a, b, passed)| Joined {
@@ -159,8 +154,14 @@ impl Passage {
                 next.set(cell, amount.get(cell)? + arriving)?;
             }
             for link in &self.linked {
-                next.set(link.a, next.get(link.a)? + result.get(link.b)? * link.into_a)?;
-                next.set(link.b, next.get(link.b)? + result.get(link.a)? * link.into_b)?;
+                next.set(
+                    link.a,
+                    next.get(link.a)? + result.get(link.b)? * link.into_a,
+                )?;
+                next.set(
+                    link.b,
+                    next.get(link.b)? + result.get(link.a)? * link.into_b,
+                )?;
             }
             for cell in 0..mesh.len() {
                 result.set(cell, next.get(cell)?)?;
@@ -208,20 +209,100 @@ mod tests {
     fn a_link_carries_each_end_to_the_other_and_leaves_the_rest() {
         let result = [10.0, 0.0, 0.0, 4.0];
         let mut next = [10.0, 0.0, 0.0, 4.0];
-        let link = |a, b, into| Joined { a, b, into_a: into, into_b: into, passed: into };
-        carry_links(&[link(0, 3, 0.5), link(1, 9, 1.0)], &result, &mut next, &|into, from, passed| {
-            *into += from * passed;
-        });
+        let link = |a, b, into| Joined {
+            a,
+            b,
+            into_a: into,
+            into_b: into,
+            passed: into,
+        };
+        carry_links(
+            &[link(0, 3, 0.5), link(1, 9, 1.0)],
+            &result,
+            &mut next,
+            &|into, from, passed| {
+                *into += from * passed;
+            },
+        );
         assert_eq!(next, [12.0, 0.0, 0.0, 9.0]);
     }
+    /// The going over the plain test land, with a door between two distant cells.
+    fn doored() -> (crate::field::Field, usize, usize, usize) {
+        use crate::field::people::fixture::*;
+        let field = land(|_, _| {});
+        let (west, east, middle) = (
+            at(&field, 150.0, 500.0),
+            at(&field, 850.0, 500.0),
+            at(&field, 500.0, 800.0),
+        );
+        (field, west, east, middle)
+    }
+    fn going(field: &crate::field::Field, west: usize, east: usize) -> super::Passage {
+        use crate::field::people::{fixture::plain_travel, travel::length};
+        let travel = plain_travel(field);
+        let range = length(field, 0.03).unwrap();
+        let door = crate::links::Link {
+            a: west,
+            b: east,
+            cost: field.mesh.spacing(),
+        };
+        super::Passage::new(
+            &field.mesh,
+            &mut field.coverage.borrow_mut(),
+            |a, b| travel.step(a, b),
+            range,
+        )
+        .unwrap()
+        .with_links(&[door], range)
+        .unwrap()
+    }
+    fn reached(
+        field: &crate::field::Field,
+        going: &super::Passage,
+        amount: impl Fn(usize) -> f64,
+    ) -> Vec<f64> {
+        let amount = crate::field::people::fixture::band(field, amount);
+        let mut result = field.coverage.borrow_mut().scratch(field.mesh.len(), 0.0);
+        going
+            .reach(
+                &field.mesh,
+                &mut field.coverage.borrow_mut(),
+                &amount,
+                &mut result,
+                super::REACH_SWEEPS,
+            )
+            .unwrap();
+        (0..field.mesh.len())
+            .map(|c| result.get(c).unwrap())
+            .collect()
+    }
     #[test]
-    fn a_door_end_takes_in_no_more_than_any_cell() {
-        // Three neighbour edges and one link, each passing all it can: the end's edges and
-        // link together pass what three edges alone would.
-        let edges = 3.0 * (1.0 / 3.0) * shared_among(3, 1);
-        let link = 1.0 / 4.0;
-        assert!((edges + link - 1.0).abs() < 1e-12);
+    fn a_door_end_gathers_no_more_of_an_even_country_than_any_cell() {
+        let (field, west, east, middle) = doored();
+        let going = going(&field, west, east);
+        let even = reached(&field, &going, |_| 1.0);
+        for end in [west, east] {
+            assert!(
+                even[end] <= even[middle] * 1.000_001,
+                "door end {} against open country {}",
+                even[end],
+                even[middle]
+            );
+        }
         assert_eq!(shared_among(3, 0), 1.0);
+    }
+    #[test]
+    fn a_crowd_at_one_door_is_felt_at_the_other() {
+        let (field, west, east, middle) = doored();
+        let going = going(&field, west, east);
+        let crowd = reached(
+            &field,
+            &going,
+            |cell| if cell == west { 1000.0 } else { 0.0 },
+        );
+        assert!(crowd[east] > 0.0);
+        // Far from both ends, nothing of it arrives.
+        assert!(crowd[middle] < crowd[east] * 1e-3);
     }
 
     #[test]

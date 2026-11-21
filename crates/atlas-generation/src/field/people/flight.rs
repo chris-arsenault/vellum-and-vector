@@ -21,8 +21,10 @@ use std::io;
 
 /// The share of a struck place's survivors who flee, at full severity.
 const FLEEING: f64 = 0.6;
-/// How far survivors go looking for room, as a share of the map's span over open ground.
-const FLIGHT: f64 = 0.02;
+/// How far survivors go looking for room, as a share of the map's span over open ground: a
+/// few days' walk, beyond their own town to the country and towns beside it, as the old
+/// society cycle moved them to a neighbouring community.
+const FLIGHT: f64 = 0.05;
 
 /// Where a strike's survivors went: how many, and the cell they fled to.
 pub struct Fled {
@@ -100,15 +102,42 @@ impl Flight<'_> {
             if !going.cost.get(cell)?.is_finite() || hit.has(cell) || !habitable(field, cell)? {
                 continue;
             }
-            let spare = (self.room.get(cell)? - field.people.people(cell)?).max(0.0) * km2(field, cell);
+            let spare =
+                (self.room.get(cell)? - field.people.people(cell)?).max(0.0) * km2(field, cell);
             if spare > best.map_or(0.0, |(_, most)| most) {
                 best = Some((cell, spare));
             }
         }
         Ok(best)
     }
-    /// Survivors leave the struck ground by the share the strike's severity drives out, as far
-    /// as the refuge has room.
+    /// Where a strike's survivors go and what share of each struck cell's people leaves: the
+    /// share the strike's severity drives out, as far as the refuge has room.
+    pub fn plan(
+        &self,
+        field: &Field,
+        place: &Place,
+        struck: &[usize],
+        severity: f64,
+    ) -> ExecutionResult<Option<Plan>> {
+        let share = (FLEEING * severity).clamp(0.0, 1.0);
+        if share <= 0.0 || struck.is_empty() {
+            return Ok(None);
+        }
+        let Some((refuge, room)) = self.refuge(field, place, struck)? else {
+            return Ok(None);
+        };
+        let mut movers = 0.0;
+        for &cell in struck {
+            movers += field.people.people(cell)? * km2(field, cell) * share;
+        }
+        let taken = admitted(room, movers);
+        Ok(Some(Plan {
+            refuge,
+            leaving: share * taken,
+            people: movers * taken,
+        }))
+    }
+    /// Survivors leave the struck ground as `plan` says.
     pub fn flee(
         &self,
         context: &mut CommandContext<'_, Field>,
@@ -116,25 +145,18 @@ impl Flight<'_> {
         struck: &[usize],
         severity: f64,
     ) -> ExecutionResult<Fled> {
-        let share = (FLEEING * severity).clamp(0.0, 1.0);
-        let none = Fled { people: 0.0, refuge: None };
-        if share <= 0.0 || struck.is_empty() {
-            return Ok(none);
-        }
         let field = context.state();
-        let Some((refuge, room)) = self.refuge(field, place, struck)? else {
-            return Ok(none);
+        let Some(plan) = self.plan(field, place, struck, severity)? else {
+            return Ok(Fled {
+                people: 0.0,
+                refuge: None,
+            });
         };
-        let mut movers = 0.0;
-        for &cell in struck {
-            movers += field.people.people(cell)? * km2(field, cell) * share;
-        }
-        let taken = admitted(room, movers);
         let mut targets = field.coverage.borrow_mut().scratch(field.mesh.len(), -1i32);
         let mut leaving = working(field);
         for &cell in struck {
-            targets.set(cell, refuge as i32)?;
-            leaving.set(cell, share * taken)?;
+            targets.set(cell, plan.refuge as i32)?;
+            leaving.set(cell, plan.leaving)?;
         }
         context.run(
             &self.owner.move_layer,
@@ -146,14 +168,26 @@ impl Flight<'_> {
             },
         )?;
         Ok(Fled {
-            people: movers * taken,
-            refuge: Some(refuge),
+            people: plan.people,
+            refuge: Some(plan.refuge),
         })
     }
 }
+/// A strike's flight: the refuge, the share of each struck cell's people who leave for it,
+/// and how many people that is.
+#[derive(Debug)]
+pub struct Plan {
+    pub refuge: usize,
+    pub leaving: f64,
+    pub people: f64,
+}
 #[cfg(test)]
 mod tests {
-    use super::admitted;
+    use super::{admitted, Flight, Going, FLEEING};
+    use crate::{
+        field::people::{fixture::*, work::km2},
+        links::Offers,
+    };
 
     #[test]
     fn a_refuge_takes_everyone_while_it_has_room_and_an_even_part_after() {
@@ -161,5 +195,97 @@ mod tests {
         assert_eq!(admitted(100.0, 400.0), 0.25);
         assert_eq!(admitted(0.0, 400.0), 0.0);
         assert_eq!(admitted(100.0, 0.0), 0.0);
+    }
+    /// A town struck at the middle of the land, a dry neighbour with some room, a watery
+    /// neighbour and a far cell with endless room.
+    struct Strike {
+        field: crate::field::Field,
+        town: usize,
+        dry: usize,
+        wet: usize,
+        far: usize,
+    }
+    fn strike(room_beside: f64) -> (Strike, crate::storage::ReadBand<f64>) {
+        let mut town = 0;
+        let field = land(|seed, mesh| {
+            town = point(mesh, SIDE / 2.0, SIDE / 2.0);
+            people(seed, town, &[layer(1000.0, 1, 0, 0, 0)]);
+        });
+        let around = neighbours(&field, town);
+        let (dry, wet) = (around[0], around[1]);
+        water(&field, wet);
+        let far = at(&field, SIDE / 2.0 + 20.0 * field.mesh.spacing(), SIDE / 2.0);
+        let room = band(&field, |cell| {
+            if cell == dry {
+                room_beside
+            } else if cell == wet || cell == far {
+                1.0e9
+            } else {
+                0.0
+            }
+        });
+        (
+            Strike {
+                field,
+                town,
+                dry,
+                wet,
+                far,
+            },
+            room,
+        )
+    }
+    fn plan(
+        s: &Strike,
+        room: &crate::storage::ReadBand<f64>,
+        severity: f64,
+    ) -> Option<super::Plan> {
+        let going = Going::new(&s.field, &plain_travel(&s.field)).unwrap();
+        let owner = crate::field::Field::human_operations();
+        let links = Offers::default();
+        let flight = Flight {
+            going: &going,
+            links: &links,
+            room,
+            owner: &owner,
+        };
+        let town = place("town", s.town, vec![s.town], 1000.0);
+        flight.plan(&s.field, &town, &[s.town], severity).unwrap()
+    }
+
+    #[test]
+    fn survivors_flee_to_the_dry_ground_beside_them_not_across_water_or_out_of_reach() {
+        let (s, room) = strike(10_000.0);
+        let fled = plan(&s, &room, 1.0).expect("the dry neighbour has room");
+        assert_eq!(fled.refuge, s.dry);
+        assert_ne!(fled.refuge, s.wet);
+        assert_ne!(fled.refuge, s.far);
+        // All the strike drives out fit: six tenths of the town at full severity.
+        assert!((fled.leaving - FLEEING).abs() < 1e-12);
+        let movers = 1000.0 * km2(&s.field, s.town) * FLEEING;
+        assert!((fled.people - movers).abs() < 1e-6 * movers);
+    }
+    #[test]
+    fn a_refuge_with_little_room_takes_only_what_fits() {
+        let (s, _) = strike(0.0);
+        let movers = 1000.0 * km2(&s.field, s.town) * FLEEING * 0.5;
+        // Room for a quarter of the movers, in people per km² of the refuge.
+        let room = band(&s.field, |cell| {
+            if cell == s.dry {
+                0.25 * movers / km2(&s.field, s.dry)
+            } else {
+                0.0
+            }
+        });
+        let fled = plan(&s, &room, 0.5).unwrap();
+        assert!((fled.leaving - FLEEING * 0.5 * 0.25).abs() < 1e-9);
+        assert!((fled.people - 0.25 * movers).abs() < 1e-6 * movers);
+    }
+    #[test]
+    fn no_one_flees_a_harmless_strike_or_to_ground_without_room() {
+        let (s, room) = strike(10_000.0);
+        assert!(plan(&s, &room, 0.0).is_none());
+        let (s, room) = strike(0.0);
+        assert!(plan(&s, &room, 1.0).is_none());
     }
 }

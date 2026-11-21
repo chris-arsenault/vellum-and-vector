@@ -203,9 +203,12 @@ pub enum Benefit {
     Sanctity,
     /// Authority: the seat a realm is governed from. Power is mills, falls and furnaces.
     Rule,
+    /// What a temple, academy or archive keeps and teaches: a faith's or tongue's learning,
+    /// which holds a realm's people together.
+    Learning,
 }
 impl Benefit {
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 9] = [
         Self::Water,
         Self::Food,
         Self::Power,
@@ -214,6 +217,7 @@ impl Benefit {
         Self::Materials,
         Self::Sanctity,
         Self::Rule,
+        Self::Learning,
     ];
 }
 pub struct Hazard {

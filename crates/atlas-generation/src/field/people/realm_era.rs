@@ -87,7 +87,51 @@ struct Falling {
     code: Vec<i32>,
     rival: Vec<i32>,
 }
-fn falling(field: &Field, era: &Era, held: &[Seat]) -> io::Result<Falling> {
+/// How much of a realm's hold full ruin leaves: the old society cycle reached ruined
+/// communities at a quarter.
+const RUIN_HOLD: f64 = 0.25;
+/// How many times harder a realm holds ground `crowding` times fuller than its land feeds, of
+/// which `ruined` of the built ground lies in ruin: the old society cycle divided reach by
+/// crowding and cut it to a quarter over ruins.
+pub fn hard_to_hold(crowding: f64, ruined: f64) -> f64 {
+    let crowding = if crowding.is_finite() {
+        crowding.max(1.0)
+    } else {
+        1.0
+    };
+    crowding / (1.0 - (1.0 - RUIN_HOLD) * ruined.clamp(0.0, 1.0))
+}
+/// `hard_to_hold` on every cell: its people against what its land feeds, and the ruined
+/// share of its built ground.
+fn holding_costs(field: &Field, support: &crate::storage::ReadBand<f64>) -> io::Result<Vec<f64>> {
+    use crate::human::{catalogue::LayerId, HumanField};
+    let built = field.people.view(HumanField::Layer(LayerId::BuiltUp));
+    let ruined = field.people.view(HumanField::RuinedBuiltUp);
+    let mut costs = Vec::with_capacity(field.mesh.len());
+    for cell in 0..field.mesh.len() {
+        let fed = support.get(cell)?;
+        let crowding = if fed > 0.0 {
+            field.people.people(cell)? / fed
+        } else {
+            1.0
+        };
+        let (standing, gone) = (built.get(cell)?, ruined.get(cell)?);
+        let share = if standing + gone > 0.0 {
+            gone / (standing + gone)
+        } else {
+            0.0
+        };
+        costs.push(hard_to_hold(crowding, share));
+    }
+    Ok(costs)
+}
+fn falling(
+    field: &Field,
+    era: &Era,
+    held: &[Seat],
+    support: &crate::storage::ReadBand<f64>,
+) -> io::Result<Falling> {
+    let hold = holding_costs(field, support)?;
     let travel = era.travel(field)?;
     let mut costs = Vec::new();
     for seat in held {
@@ -111,7 +155,7 @@ fn falling(field: &Field, era: &Era, held: &[Seat]) -> io::Result<Falling> {
         for (at, cost) in costs.iter().enumerate() {
             let raw = cost.get(cell)?;
             if raw.is_finite() {
-                normals.push((at, raw / held[at].strength));
+                normals.push((at, raw * hold[cell] / held[at].strength));
             }
         }
         let Some(&(mut best, best_cost)) = normals.iter().min_by(|a, b| a.1.total_cmp(&b.1)) else {
@@ -119,7 +163,7 @@ fn falling(field: &Field, era: &Era, held: &[Seat]) -> io::Result<Falling> {
         };
         if let Some(incumbent) = held.iter().position(|s| s.code == leading.code[cell]) {
             let cost = costs[incumbent].get(cell)?;
-            if cost.is_finite() && best_cost > 0.6 * cost / held[incumbent].strength {
+            if cost.is_finite() && best_cost > 0.6 * cost * hold[cell] / held[incumbent].strength {
                 best = incumbent;
             }
         }
@@ -162,34 +206,37 @@ fn spread(
     }
     let yielding = context.query(&questions.yielding)?.values();
     let field = context.state();
-    let fell = falling(field, era, &held)?;
+    let fell = falling(field, era, &held, &support)?;
     for place in era.places.borrow_mut().known.iter_mut() {
         place.contested_by = (fell.rival[place.anchor] != 0).then_some(fell.rival[place.anchor]);
     }
-    let codes = fell.code;
+    let share = (0.5 * era.capacity * era.years / 100.0).min(1.0);
+    let overlay = allegiances(field, &fell.code, share, &yielding)?;
+    context.run(&owner.overlay, &overlay)
+}
+/// The overlay by which each cell's people take up the realm that holds them, `share` of them
+/// over the era as far as they yield to it, and by which ground no realm holds (`holders`
+/// zero there) forgets its realm at the same pace.
+fn allegiances(
+    field: &Field,
+    holders: &[i32],
+    share: f64,
+    yielding: &ReadBand<f64>,
+) -> io::Result<Overlay> {
     let mut code = field.coverage.borrow_mut().scratch(field.mesh.len(), 0i32);
     let mut people = working(field);
-    let share = (0.5 * era.capacity * era.years / 100.0).min(1.0);
-    for (cell, &held) in codes.iter().enumerate() {
-        // Ground no realm reaches forgets its realm at the pace held ground takes one up.
+    for (cell, &held) in holders.iter().enumerate() {
         code.set(cell, if held != 0 { held } else { -1 })?;
-        people.set(
-            cell,
-            field.people.people(cell)?
-                * share
-                * if held != 0 { yielding.get(cell)? } else { 1.0 },
-        )?;
+        let giving = if held != 0 { yielding.get(cell)? } else { 1.0 };
+        people.set(cell, field.people.people(cell)? * share * giving)?;
     }
     let mut traditions = std::array::from_fn(|_| None);
     traditions[Tradition::Allegiance as usize] = Some(code.read_only());
-    context.run(
-        &owner.overlay,
-        &Overlay {
-            traditions,
-            people: people.read_only(),
-            hardness: 0.0,
-        },
-    )
+    Ok(Overlay {
+        traditions,
+        people: people.read_only(),
+        hardness: 0.0,
+    })
 }
 pub fn operation(
     questions: Rc<Questions>,
@@ -216,4 +263,51 @@ pub fn operation(
             context.run(&spreading, era)
         },
     )
+}
+#[cfg(test)]
+mod tests {
+    use super::{allegiances, hard_to_hold, RUIN_HOLD};
+    use crate::{
+        execution::Executor,
+        field::{people::fixture::*, Field},
+        human::identity::{leading, Tradition},
+    };
+
+    #[test]
+    fn crowded_and_ruined_ground_is_harder_to_hold() {
+        assert_eq!(hard_to_hold(0.5, 0.0), 1.0);
+        assert_eq!(hard_to_hold(3.0, 0.0), 3.0);
+        assert!((hard_to_hold(1.0, 1.0) - 1.0 / RUIN_HOLD).abs() < 1e-12);
+        assert_eq!(hard_to_hold(f64::INFINITY, 0.0), 1.0);
+    }
+    #[test]
+    fn held_ground_takes_up_its_realm_and_unreached_ground_forgets_its_own() {
+        let (mut taken, mut lost) = (0, 0);
+        let field = land(|seed, mesh| {
+            taken = point(mesh, 300.0, 500.0);
+            lost = point(mesh, 700.0, 500.0);
+            people(seed, taken, &[layer(100.0, 1, 0, 4, 0)]);
+            people(seed, lost, &[layer(100.0, 1, 0, 4, 0)]);
+        });
+        let mut holders = vec![0; field.mesh.len()];
+        holders[taken] = 5;
+        let yielding = band(&field, |_| 0.5);
+        let overlay = allegiances(&field, &holders, 0.4, &yielding).unwrap();
+        let mut run = Executor::new(field);
+        run.run_with(&Field::human_operations().overlay, &overlay)
+            .unwrap();
+        let field = run.state();
+        // Four tenths of the era's people, as far as half of them yield: a fifth take realm 5.
+        let column = field.people.column(taken).unwrap();
+        assert_eq!(leading(&column, Tradition::Allegiance), (4, 80.0));
+        let fifth: f64 = column
+            .iter()
+            .filter(|l| l.traditions[Tradition::Allegiance as usize] == 5)
+            .map(|l| l.people)
+            .sum();
+        assert!((fifth - 20.0).abs() < 1e-9);
+        // Ground no realm holds forgets realm 4 by the same four tenths.
+        let column = field.people.column(lost).unwrap();
+        assert!((leading(&column, Tradition::Allegiance).1 - 60.0).abs() < 1e-9);
+    }
 }

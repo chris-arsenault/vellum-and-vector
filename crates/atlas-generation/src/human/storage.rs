@@ -267,8 +267,7 @@ impl HumanLayers {
                     return Ok(true);
                 }
             }
-            for (part, band) in Tradition::NAMES.into_iter().zip(&mut bands.traditions)
-            {
+            for (part, band) in Tradition::NAMES.into_iter().zip(&mut bands.traditions) {
                 if name == format!("Identity{part}{slot}") {
                     band.set(cell, (value + 0.5).floor() as i32)?;
                     return Ok(true);

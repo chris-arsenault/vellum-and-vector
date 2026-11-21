@@ -72,6 +72,36 @@ impl Events {
             displaced: 0.0, refuge: None });
         Ok(())
     }
+}
+/// A siege to strike: its event, and the health of the realm that lost the town.
+pub struct Siege {
+    pub event: Event,
+    pub loser_health: f64,
+}
+/// How a town's realm changed this era: the realm that led it before and now, whether the
+/// town still stands, whether the realm before has ended, and whether the town now seats the
+/// realm that leads it.
+pub struct Taking {
+    pub before: i32,
+    pub after: i32,
+    pub standing: bool,
+    pub ended: bool,
+    pub seats_it: bool,
+}
+impl Taking {
+    /// A standing town taken by one realm from another that still lives is besieged. A realm
+    /// that ended passed its towns on without a fight, and a town that rose to seat a realm of
+    /// its own was not taken.
+    pub fn besieged(&self) -> bool {
+        self.standing
+            && self.before != 0
+            && self.after != 0
+            && self.before != self.after
+            && !self.ended
+            && !self.seats_it
+    }
+}
+impl Events {
     /// The siege of a place that passed from one realm's hold to another's this era, for the
     /// caller to strike and then record; `None` where it did not change hands.
     pub fn siege(
@@ -80,18 +110,13 @@ impl Events {
         memory: &Context,
         place: &Place,
         era: &str,
-    ) -> io::Result<Option<Event>> {
+    ) -> io::Result<Option<Siege>> {
         let column = field.people.column(place.anchor)?;
-        let (realm, holding) = leading(&column, Tradition::Allegiance);
+        let (realm, _) = leading(&column, Tradition::Allegiance);
         let before = self.held.get(&place.id).copied().unwrap_or(0);
         if realm != 0 {
             self.held.insert(place.id.clone(), realm);
         }
-        if realm == 0 || before == 0 || before == realm || place.abandoned.is_some() {
-            return Ok(None);
-        }
-        // A realm that ended passed its towns on without a fight, and a town that rose to seat
-        // a realm of its own was not taken.
         let ended = memory
             .traditions
             .get(before)
@@ -100,7 +125,14 @@ impl Events {
             .traditions
             .get(realm)
             .is_some_and(|t| t.seat.as_ref() == Some(&place.id));
-        if ended || seats_it {
+        let taken = Taking {
+            before,
+            after: realm,
+            standing: place.abandoned.is_none(),
+            ended,
+            seats_it,
+        };
+        if !taken.besieged() {
             return Ok(None);
         }
         let name = |code| {
@@ -110,27 +142,26 @@ impl Events {
                 .and_then(|t| memory.entities.get(&t.entity))
                 .map_or("another realm", |e| e.name.as_str())
         };
-        let everyone: f64 = column.iter().map(|layer| layer.people).sum();
-        Ok(Some(Event {
-            id: String::new(),
-            kind: "siege".into(),
-            era: era.into(),
-            place: place.id.clone(),
-            cell: place.anchor,
-            casualties: 0.0,
-            townsfolk: rounded(place.town_people),
-            magnitude: if everyone > 0.0 {
-                holding / everyone
-            } else {
-                0.0
+        let loser_health = memory.traditions.get(before).map_or(1.0, |t| t.health);
+        Ok(Some(Siege {
+            loser_health,
+            event: Event {
+                id: String::new(),
+                kind: "siege".into(),
+                era: era.into(),
+                place: place.id.clone(),
+                cell: place.anchor,
+                casualties: 0.0,
+                townsfolk: rounded(place.town_people),
+                magnitude: 0.0,
+                causes: vec![format!(
+                    "{era}: this place passed from the hold of {} to {}.",
+                    name(before),
+                    name(realm)
+                )],
+                displaced: 0.0,
+                refuge: None,
             },
-            causes: vec![format!(
-                "{era}: this place passed from the hold of {} to {}.",
-                name(before),
-                name(realm)
-            )],
-            displaced: 0.0,
-            refuge: None,
         }))
     }
     pub fn count_dead(&mut self, field: &Field) -> io::Result<()> {
@@ -141,5 +172,44 @@ impl Events {
                 .collect::<io::Result<_>>()?,
         );
         Ok(())
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::Taking;
+
+    fn taking(before: i32, after: i32) -> Taking {
+        Taking {
+            before,
+            after,
+            standing: true,
+            ended: false,
+            seats_it: false,
+        }
+    }
+    #[test]
+    fn a_town_taken_from_a_living_realm_is_besieged() {
+        assert!(taking(3, 4).besieged());
+        assert!(!taking(3, 3).besieged());
+        assert!(!taking(0, 4).besieged());
+        assert!(!taking(3, 0).besieged());
+    }
+    #[test]
+    fn inheritance_and_breaking_away_are_not_sieges() {
+        assert!(!Taking {
+            ended: true,
+            ..taking(3, 4)
+        }
+        .besieged());
+        assert!(!Taking {
+            seats_it: true,
+            ..taking(3, 4)
+        }
+        .besieged());
+        assert!(!Taking {
+            standing: false,
+            ..taking(3, 4)
+        }
+        .besieged());
     }
 }

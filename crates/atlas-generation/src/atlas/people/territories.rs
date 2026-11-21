@@ -215,7 +215,9 @@ fn describe(state: &State, realm: &Tradition, anyone: &Band<f64>, leads: &[i32])
                 "term": character.term,
             }),
         );
-        entity.attributes.insert("status".into(), character.status.into());
+        entity
+            .attributes
+            .insert("status".into(), character.status.into());
     }
     Ok(())
 }

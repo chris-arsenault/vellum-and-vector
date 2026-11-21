@@ -32,7 +32,7 @@ pub struct Need {
 /// The needs table. Starting values follow the old society cycle's site draw, which
 /// multiplied a town's pull: a realm's seat ×2.5, a harbour ×1.6, a Fire seat ×1.4, a pass
 /// ×1.3 and a river node ×1.2.
-pub const NEEDS: [Need; 8] = [
+pub const NEEDS: [Need; 9] = [
     Need {
         benefit: Benefit::Rule,
         worth: 1.5,
@@ -72,6 +72,12 @@ pub const NEEDS: [Need; 8] = [
         benefit: Benefit::Water,
         worth: 0.5,
         felt: Felt::WhereUnfed,
+    },
+    // Scholars and pilgrims come to a temple or academy, as to a shrine.
+    Need {
+        benefit: Benefit::Learning,
+        worth: 0.3,
+        felt: Felt::Always,
     },
 ];
 /// How much defence is wanted where nothing threatens: walls still draw a little.

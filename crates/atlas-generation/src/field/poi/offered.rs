@@ -27,6 +27,30 @@ pub struct PlaceOffers {
     meetings: Vec<Meeting>,
 }
 impl PlaceOffers {
+    /// Offers of one benefit only, valued per cell, for tests of the processes that read them.
+    #[cfg(test)]
+    pub fn only(field: &Field, benefit: Benefit, value: impl Fn(usize) -> f64) -> io::Result<Self> {
+        let blank = || -> io::Result<ReadBand<f64>> {
+            Ok(field.coverage.borrow_mut().allocate(0.0).read_only())
+        };
+        let mut benefits = Vec::new();
+        for each in Benefit::ALL {
+            let mut band = field.coverage.borrow_mut().allocate(0.0);
+            if each == benefit {
+                for cell in 0..field.mesh.len() {
+                    band.set(cell, value(cell))?;
+                }
+            }
+            benefits.push(band.read_only());
+        }
+        Ok(Self {
+            benefits,
+            threatened: blank()?,
+            perilous: blank()?,
+            links: Vec::new(),
+            meetings: Vec::new(),
+        })
+    }
     /// The distant pairs the standing places join for walkers, such as a traversable door,
     /// each at the cost its place declares.
     pub fn links(&self) -> &[crate::links::Link] {

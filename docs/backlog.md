@@ -92,21 +92,9 @@ existing code.
       generated people, how it relates to tongue, faith and custom, how it
       travels and what a map shows because of it. No taxonomy, audio or playback
       is chosen.
-- [ ] **29. Exchange beyond food.** A pass brings food from where it is grown to
-      where people gather, and places' trade offers draw people. No goods or
-      materials move between places and nothing has a price. Hunting and fishing
-      now wear down the ecology's stocks. The owner decides what else is
-      exchanged before it is built.
-- [ ] **37. Realms favour country their crafts suit.** People's draw leans toward
-      their crafts' media; a realm's reach does not yet lean toward the country its
-      seat's people know how to hold, as the old society cycle's seeking did.
-- [ ] **38. Name administration districts after their towns.** Districts are
-      published before towns are named, so each takes its realm's name.
-- [ ] **39. Read a realm's livelihoods from what feeds it.** A realm's character
-      estimates fishing from coastal cells and gathering from unworked ground until
-      people's yields expose their sources.
-- [ ] **40. Count a town's walls once in a siege.** A siege's harm falls with the
-      place's defence offer, and its wear falls again with the town's standing.
+- [ ] **29. Exchange beyond food.** In progress under the society restoration plan
+      (`docs/SOCIETY-RESTORATION-PLAN.md`, M10): goods and materials will move
+      between places as food does.
 
 ## Magic
 

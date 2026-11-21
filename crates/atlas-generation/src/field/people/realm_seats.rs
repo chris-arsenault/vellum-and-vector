@@ -97,38 +97,32 @@ pub fn seats(field: &Field, era: &Era) -> io::Result<Vec<Seat>> {
         else {
             continue;
         };
-        let upheld = upheld(field, &towns, &allegiance.code, realm.code, seat.anchor)?;
+        let taught = taught(field, &towns, &allegiance.code, realm.code)?;
         found.push(Seat {
             code: realm.code,
             anchor: seat.anchor,
-            // A realm reaches as far as its seat's crowd, its own health and the houses its
-            // towns keep for it carry it.
-            strength: era.capacity
-                * (seat.town_people / least).sqrt()
-                * realm.health
-                * (1.0 + upheld),
+            strength: strength(era.capacity, seat.town_people / least, realm.health, taught),
         });
     }
     Ok(found)
 }
-/// The rule a realm's own towns give it beyond its seat: the meeting houses and other places
-/// that serve the realm, read as offers like any people's benefit. The seat's own crowd is
-/// already the strength's base.
-fn upheld(
-    field: &Field,
-    towns: &[Place],
-    allegiance: &[i32],
-    realm: i32,
-    seat: usize,
-) -> io::Result<f64> {
+/// How much a full temple or academy in a realm's town adds to the realm's strength: the old
+/// society cycle's institutional influence.
+const INFLUENCE: f64 = 0.1;
+/// A realm's strength: its seat's crowd (in least towns), its health, and the learning its
+/// towns' temples and academies give its people.
+pub fn strength(capacity: f64, seat_towns: f64, health: f64, taught: f64) -> f64 {
+    capacity * seat_towns.max(0.0).sqrt() * health * (1.0 + INFLUENCE * taught.max(0.0))
+}
+/// The learning a realm's towns receive from the temples and academies that teach their
+/// people, read as offers like any benefit.
+fn taught(field: &Field, towns: &[Place], allegiance: &[i32], realm: i32) -> io::Result<f64> {
     let Some(offers) = field.place_offers() else {
         return Ok(0.0);
     };
     let mut given = 0.0;
-    for town in towns {
-        if town.anchor != seat && allegiance[town.anchor] == realm {
-            given += offers.benefit(crate::field::poi::values::Benefit::Rule, town.anchor)?;
-        }
+    for town in towns.iter().filter(|t| allegiance[t.anchor] == realm) {
+        given += offers.benefit(crate::field::poi::values::Benefit::Learning, town.anchor)?;
     }
     Ok(given)
 }
@@ -165,61 +159,53 @@ pub fn follow_the_crowd(field: &Field, era: &Era, realm: &Tradition) -> io::Resu
     }
     Ok(())
 }
-/// How well a realm holds together, toward which its health moves over the years: the share
-/// of its people its land feeds, worn by how far its towns have fallen from their peak.
-pub fn holding(fed: f64, declined: f64) -> f64 {
-    fed.clamp(0.0, 1.0) * (1.0 - 0.75 * declined.clamp(0.0, 1.0))
-}
 /// How fast a realm's health follows its holding, in years.
 const HEALTH_YEARS: f64 = 80.0;
-/// Moves each realm's health toward its holding: what its land feeds of its people and how
-/// its towns stand.
-pub fn tend(field: &Field, era: &Era, support: &crate::storage::ReadBand<f64>) -> io::Result<()> {
-    let allegiance = leading_of(field, Held::Allegiance)?;
-    let realms = active(era);
-    let index = |code: i32| realms.iter().position(|r| r.code == code);
+/// The share of the people of each realm in `realms` that their own ground feeds, counting
+/// each cell's people only as far as its land supports them, as the old society cycle did:
+/// a hungry province weakens its realm, and plenty elsewhere does not make up for it. A realm
+/// with no people is whole.
+pub fn fed_shares(
+    field: &Field,
+    realms: &[i32],
+    leads: &[i32],
+    support: &crate::storage::ReadBand<f64>,
+) -> io::Result<Vec<f64>> {
     let (mut people, mut fed) = (vec![0.0; realms.len()], vec![0.0; realms.len()]);
-    for cell in 0..field.mesh.len() {
-        let Some(at) = index(allegiance.code[cell]) else {
+    for (cell, &lead) in leads.iter().enumerate().take(field.mesh.len()) {
+        let Some(at) = realms.iter().position(|&r| r == lead) else {
             continue;
         };
         let area = super::work::km2(field, cell);
-        people[at] += field.people.people(cell)? * area;
-        fed[at] += support.get(cell)?.max(0.0) * area;
+        let here = field.people.people(cell)?;
+        people[at] += here * area;
+        fed[at] += here.min(support.get(cell)?.max(0.0)) * area;
     }
-    let (mut now, mut peak) = (vec![0.0; realms.len()], vec![0.0; realms.len()]);
-    for place in era
-        .places
-        .borrow()
-        .known
+    Ok(people
         .iter()
-        .filter(|p| p.absorbed_by.is_none())
-    {
-        if let Some(at) = index(allegiance.code[place.anchor]) {
-            now[at] += place.town_people;
-            peak[at] += place.peak.max(place.town_people);
-        }
-    }
-    let settling = 1.0 - (-era.years / HEALTH_YEARS).exp();
+        .zip(&fed)
+        .map(|(&people, &fed)| if people > 0.0 { fed / people } else { 1.0 })
+        .collect())
+}
+/// A realm's health after `years` relaxing toward the share of its people it feeds.
+pub fn relaxed(health: f64, fed: f64, years: f64) -> f64 {
+    let settling = 1.0 - (-years.max(0.0) / HEALTH_YEARS).exp();
+    health + (fed.clamp(0.0, 1.0) - health) * settling
+}
+/// Moves each realm's health toward the share of its people its land feeds.
+pub fn tend(field: &Field, era: &Era, support: &crate::storage::ReadBand<f64>) -> io::Result<()> {
+    let allegiance = leading_of(field, Held::Allegiance)?;
+    let realms = active(era);
+    let codes: Vec<i32> = realms.iter().map(|r| r.code).collect();
+    let fed = fed_shares(field, &codes, &allegiance.code, support)?;
     let mut traced = Vec::new();
     let mut memory = era.memory.borrow_mut();
-    for (at, realm) in realms.iter().enumerate() {
-        let fed_share = if people[at] > 0.0 {
-            fed[at] / people[at]
-        } else {
-            1.0
-        };
-        let declined = if peak[at] > 0.0 {
-            1.0 - now[at] / peak[at]
-        } else {
-            0.0
-        };
+    for (realm, &fed) in realms.iter().zip(&fed) {
         let record = &mut memory.traditions.known[realm.code as usize - 1];
-        record.health += (holding(fed_share, declined) - record.health) * settling;
+        record.health = relaxed(record.health, fed, era.years);
         traced.push(serde_json::json!({
-            "realm": realm.code, "people": people[at].round(),
-            "fed": (fed_share * 100.0).round() / 100.0,
-            "declined": (declined * 100.0).round() / 100.0,
+            "realm": realm.code,
+            "fed": (fed * 100.0).round() / 100.0,
             "health": (record.health * 100.0).round() / 100.0,
         }));
     }
@@ -279,14 +265,84 @@ pub fn reseat(
 
 #[cfg(test)]
 mod tests {
-    use super::holding;
+    use super::{fed_shares, relaxed, strength, taught, HEALTH_YEARS};
+    use crate::field::{
+        people::fixture::*,
+        poi::{offered::PlaceOffers, values::Benefit},
+    };
+    use std::rc::Rc;
 
     #[test]
-    fn a_realm_holds_together_as_its_land_feeds_its_people_and_its_towns_stand() {
-        assert_eq!(holding(1.0, 0.0), 1.0);
-        assert!(holding(0.5, 0.0) < holding(1.0, 0.0));
-        assert!(holding(1.0, 0.6) < holding(1.0, 0.1));
-        assert!((holding(1.0, 1.0) - 0.25).abs() < 1e-12);
-        assert_eq!(holding(2.0, -1.0), 1.0);
+    fn a_temple_in_a_realms_town_strengthens_that_realm_and_no_other() {
+        let (mut ours, mut theirs) = (0, 0);
+        let mut field = land(|seed, mesh| {
+            ours = point(mesh, 300.0, 500.0);
+            theirs = point(mesh, 700.0, 500.0);
+            people(seed, ours, &[layer(100.0, 1, 0, 3, 0)]);
+            people(seed, theirs, &[layer(100.0, 1, 0, 4, 0)]);
+        });
+        let offers = PlaceOffers::only(&field, Benefit::Learning, |cell| {
+            if cell == ours {
+                0.8
+            } else {
+                0.0
+            }
+        })
+        .unwrap();
+        field.place_offers = Some(Rc::new(offers));
+        let towns = vec![
+            place("ours", ours, vec![ours], 100.0),
+            place("theirs", theirs, vec![theirs], 100.0),
+        ];
+        let mut leads = vec![0; field.mesh.len()];
+        leads[ours] = 3;
+        leads[theirs] = 4;
+        let ours_taught = taught(&field, &towns, &leads, 3).unwrap();
+        let theirs_taught = taught(&field, &towns, &leads, 4).unwrap();
+        assert!((ours_taught - 0.8).abs() < 1e-12);
+        assert_eq!(theirs_taught, 0.0);
+        assert!(strength(1.0, 4.0, 1.0, ours_taught) > strength(1.0, 4.0, 1.0, theirs_taught));
+        // A realm reaches with its seat's crowd and its health.
+        assert_eq!(strength(1.0, 4.0, 0.5, 0.0), 1.0);
+    }
+
+    #[test]
+    fn a_hungry_province_weakens_its_realm_and_plenty_elsewhere_does_not_hide_it() {
+        let (mut fat, mut lean, mut other) = (0, 0, 0);
+        let field = land(|seed, mesh| {
+            fat = point(mesh, 200.0, 500.0);
+            lean = point(mesh, 800.0, 500.0);
+            other = point(mesh, 500.0, 200.0);
+            people(seed, fat, &[layer(100.0, 1, 0, 7, 0)]);
+            people(seed, lean, &[layer(100.0, 1, 0, 7, 0)]);
+            people(seed, other, &[layer(100.0, 1, 0, 8, 0)]);
+        });
+        // The fat province grows four times what it eats; the lean one half.
+        let support = band(&field, |cell| {
+            if cell == fat {
+                400.0
+            } else if cell == lean {
+                50.0
+            } else {
+                100.0
+            }
+        });
+        let mut leads = vec![0; field.mesh.len()];
+        leads[fat] = 7;
+        leads[lean] = 7;
+        leads[other] = 8;
+        let fed = fed_shares(&field, &[7, 8, 9], &leads, &support).unwrap();
+        // Realm 7 feeds all of one province and half the other: three quarters of its people.
+        assert!((fed[0] - 0.75).abs() < 1e-9, "{}", fed[0]);
+        assert!((fed[1] - 1.0).abs() < 1e-9);
+        // A realm with no people is whole.
+        assert_eq!(fed[2], 1.0);
+    }
+    #[test]
+    fn health_follows_feeding_over_the_years_and_recovers_when_fed() {
+        let starved = relaxed(1.0, 0.4, HEALTH_YEARS);
+        assert!((starved - (1.0 - 0.6 * (1.0 - (-1.0f64).exp()))).abs() < 1e-12);
+        assert!(relaxed(starved, 1.0, 10.0 * HEALTH_YEARS) > 0.99);
+        assert_eq!(relaxed(0.7, 0.2, 0.0), 0.7);
     }
 }

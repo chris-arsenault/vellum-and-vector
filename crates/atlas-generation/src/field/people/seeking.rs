@@ -48,7 +48,47 @@ pub fn toward(field: &Field, keepers: &[(Craft, f64)], to: usize) -> io::Result<
 }
 #[cfg(test)]
 mod tests {
-    use super::factor;
+    use super::{factor, keepers, toward};
+    use crate::field::{
+        people::{crafts::CRAFTS, fixture::*},
+        shared::Scalar,
+    };
+
+    #[test]
+    fn hearth_keepers_lean_toward_quickened_ground_and_their_neighbours_do_not() {
+        let fire = CRAFTS[0];
+        assert_eq!(fire.medium, Scalar::Quickening);
+        let (mut home, mut hot, mut cold, mut plain) = (0, 0, 0, 0);
+        let field = land(|seed, mesh| {
+            home = point(mesh, 500.0, 500.0);
+            hot = point(mesh, 600.0, 500.0);
+            cold = point(mesh, 400.0, 500.0);
+            plain = point(mesh, 500.0, 300.0);
+            // Half of home keeps the Fire craft; the plain cell keeps none.
+            people(
+                seed,
+                home,
+                &[layer(50.0, 1, 0, 0, fire.code), layer(50.0, 1, 0, 0, 0)],
+            );
+            people(seed, plain, &[layer(100.0, 1, 0, 0, 0)]);
+            seed.shared
+                .scalar_mut(Scalar::Quickening)
+                .set(hot, 1.0)
+                .unwrap();
+        });
+        let movers = keepers(&field, home).unwrap();
+        assert_eq!(movers.len(), 1);
+        assert!((movers[0].1 - 0.5).abs() < 1e-12);
+        let warm = toward(&field, &movers, hot).unwrap();
+        let chill = toward(&field, &movers, cold).unwrap();
+        // Half keep the craft: they lean half as far as a whole people of keepers would.
+        assert!((warm - 1.25).abs() < 1e-12, "{warm}");
+        assert!((chill - 0.75).abs() < 1e-12, "{chill}");
+        // People who keep no craft weigh every destination alike.
+        let indifferent = keepers(&field, plain).unwrap();
+        assert_eq!(toward(&field, &indifferent, hot).unwrap(), 1.0);
+        assert_eq!(toward(&field, &indifferent, cold).unwrap(), 1.0);
+    }
 
     #[test]
     fn crafts_lean_their_people_toward_their_medium_and_others_are_indifferent() {

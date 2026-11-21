@@ -70,11 +70,16 @@ struct Strike<'a> {
     owner: &'a operations::Operations<Field>,
     effects: &'a Command<Field, Struck>,
 }
-/// How hard a siege wears the place it takes, before its walls. With the magnitude's six to
-/// nine tenths, the old society cycle's siege magnitudes, it kills about a fifth of the town.
+/// How hard a siege wears the place it takes. With the magnitude's six to nine tenths, the
+/// old society cycle's siege magnitudes, it kills about a fifth of an unbuilt town; a town's
+/// standing holds its people against the wear as it holds them against any blow, so walls
+/// count once.
 const SIEGE_WEAR: f64 = 0.5;
-/// How much a full offer of defence lessens a siege's toll.
-const DEFENDED: f64 = 1.0;
+/// A siege's magnitude, from six tenths where the losing realm still holds together to nine
+/// where it has collapsed, as the old society cycle struck fragmented and collapsed realms.
+pub fn siege_magnitude(loser_health: f64) -> f64 {
+    0.6 + 0.3 * (1.0 - loser_health.clamp(0.0, 1.0))
+}
 /// Writes where a strike's survivors went onto its event and its account.
 fn fled_to(era: &Era, event: &mut Event, fled: &Fled) {
     event.displaced = rounded(fled.people);
@@ -95,19 +100,17 @@ fn fled_clause(fled: f64) -> String {
     }
 }
 impl Strike<'_> {
-    /// A place taken by another realm is besieged: its people die and its works are worn by
-    /// how firmly the taker now holds it, less for the walls it offers, and its survivors
-    /// flee. The siege is then recorded with its toll.
+    /// A place taken by another realm is besieged: its people die and its works are worn the
+    /// harder the further the losing realm had fallen, and its survivors flee. The siege is
+    /// then recorded with its toll.
     fn siege(
         &self,
         context: &mut CommandContext<'_, Field>,
         place: &Place,
         event: &mut Event,
+        loser_health: f64,
     ) -> ExecutionResult<()> {
-        let defence = context.state().place_offers().map_or(Ok(0.0), |offers| {
-            offers.benefit(crate::field::poi::values::Benefit::Defence, place.anchor)
-        })?;
-        let magnitude = (0.6 + 0.3 * event.magnitude.clamp(0.0, 1.0)) / (1.0 + DEFENDED * defence);
+        let magnitude = siege_magnitude(loser_health);
         let before = dead_on(context.state(), place)?;
         let mut intensity = working(context.state());
         for &cell in &place.cells {
@@ -367,8 +370,8 @@ pub fn operation(
                     &era.era,
                 )?;
                 if let Some(mut siege) = taken {
-                    strike.siege(context, place, &mut siege)?;
-                    era.events.borrow_mut().record(siege);
+                    strike.siege(context, place, &mut siege.event, siege.loser_health)?;
+                    era.events.borrow_mut().record(siege.event);
                 }
             }
             era.events.borrow_mut().count_dead(context.state())?;
@@ -394,4 +397,15 @@ pub fn operation(
             )
         },
     )
+}
+#[cfg(test)]
+mod tests {
+    use super::siege_magnitude;
+
+    #[test]
+    fn a_falling_realm_loses_its_towns_harder() {
+        assert!((siege_magnitude(1.0) - 0.6).abs() < 1e-12);
+        assert!((siege_magnitude(0.0) - 0.9).abs() < 1e-12);
+        assert!(siege_magnitude(0.3) > siege_magnitude(0.7));
+    }
 }

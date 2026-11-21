@@ -375,39 +375,41 @@ fn learn(
     codes: &Band<i32>,
     reached: &Band<f64>,
 ) -> ExecutionResult<()> {
-    let field = context.state();
+    let [speaking, knowing] = learning(context.state(), codes, reached)?;
+    context.run(&owner.overlay, &speaking)?;
+    context.run(&owner.overlay, &knowing)
+}
+/// The two overlays a tongue's contact makes, to run in order: those who take up `codes` and
+/// keep the tongue their place spoke as one they know, then those who come to know it beside
+/// their own tongue. The second leaves the first's new speakers alone, so each of the people
+/// reached is counted once. `reached` is how many people per km² the contact reaches.
+fn learning(field: &Field, codes: &Band<i32>, reached: &Band<f64>) -> io::Result<[Overlay; 2]> {
     let spoken = leading_all(field)?;
     let mut old = field.coverage.borrow_mut().scratch(field.mesh.len(), 0i32);
-    let mut learning = working(field);
+    let mut knowing = working(field);
     let mut speaking = working(field);
     for cell in 0..field.mesh.len() {
-        // Those taking up the tongue their place already speaks keep no other.
-        let before = spoken[0].code[cell];
-        old.set(cell, if before == codes.get(cell)? { 0 } else { before })?;
-        learning.set(cell, reached.get(cell)? * LEARNING)?;
+        old.set(cell, spoken[0].code[cell])?;
+        knowing.set(cell, reached.get(cell)? * LEARNING)?;
         speaking.set(cell, reached.get(cell)? * (1.0 - LEARNING))?;
     }
     let mut known = std::array::from_fn(|_| None);
     known[Tradition::Known as usize] = Some(codes.read_only());
-    context.run(
-        &owner.overlay,
-        &Overlay {
-            traditions: known,
-            people: learning.read_only(),
-            hardness: 0.0,
-        },
-    )?;
     let mut taken_up = std::array::from_fn(|_| None);
     taken_up[Tradition::Tongue as usize] = Some(codes.read_only());
     taken_up[Tradition::Known as usize] = Some(old.read_only());
-    context.run(
-        &owner.overlay,
-        &Overlay {
+    Ok([
+        Overlay {
             traditions: taken_up,
             people: speaking.read_only(),
             hardness: 0.0,
         },
-    )
+        Overlay {
+            traditions: known,
+            people: knowing.read_only(),
+            hardness: 0.0,
+        },
+    ])
 }
 /// The share of the people on and around a cell who must speak a tongue for those who know it
 /// there to keep it.
@@ -420,8 +422,13 @@ fn forget(
     era: &Era,
     owner: &operations::Operations<Field>,
 ) -> ExecutionResult<()> {
-    let field = context.state();
-    let fading = 1.0 - (-era.years / FORGETTING_YEARS).exp();
+    let fading = forgetting(context.state(), era.years, &era.era)?;
+    context.run(&owner.overlay, &fading)
+}
+/// The overlay that fades, over `years`, the tongue each cell's people know where almost no
+/// one on and around the cell speaks it.
+fn forgetting(field: &Field, years: f64, era: &str) -> io::Result<Overlay> {
+    let fading = 1.0 - (-years / FORGETTING_YEARS).exp();
     let mut lost = field.coverage.borrow_mut().scratch(field.mesh.len(), 0i32);
     let mut people = working(field);
     let (mut cells, mut knowing, mut all) = (0, 0.0, 0.0);
@@ -444,20 +451,17 @@ fn forget(
         eprintln!(
             "{}",
             serde_json::json!({"event": "people.tongues", "details": {
-                "era": era.era, "cellsKnowingAnother": cells,
+                "era": era, "cellsKnowingAnother": cells,
                 "shareKnowingAnother": (knowing / all.max(f64::EPSILON) * 1000.0).round() / 1000.0}})
         );
     }
     let mut changes = std::array::from_fn(|_| None);
     changes[Tradition::Known as usize] = Some(lost.read_only());
-    context.run(
-        &owner.overlay,
-        &Overlay {
-            traditions: changes,
-            people: people.read_only(),
-            hardness: 0.0,
-        },
-    )
+    Ok(Overlay {
+        traditions: changes,
+        people: people.read_only(),
+        hardness: 0.0,
+    })
 }
 pub struct Operations {
     pub found: Command<Field, Era>,
@@ -515,7 +519,88 @@ pub fn operation(
 
 #[cfg(test)]
 mod tests {
-    use super::Pressures;
+    use super::{forgetting, learning, Pressures, FORGETTING_YEARS, LEARNING};
+    use crate::{
+        execution::Executor,
+        field::{people::fixture::*, Field},
+        human::{
+            identity::{held, Tradition},
+            operations::Overlay,
+        },
+    };
+
+    /// A frontier: speakers of tongue 1 at the middle of the land, beside a neighbour whose
+    /// people speak `beside`.
+    fn frontier(here: &[crate::human::identity::IdentityLayer], beside: i32) -> (Field, usize) {
+        let mut cell = 0;
+        let field = land(|seed, mesh| {
+            cell = point(mesh, SIDE / 2.0, SIDE / 2.0);
+            people(seed, cell, here);
+            let next = (0..3).find_map(|e| mesh.neighbor(cell, e)).unwrap();
+            people(seed, next, &[layer(300.0, beside, 0, 0, 0)]);
+        });
+        (field, cell)
+    }
+    fn applied(field: Field, overlays: Vec<Overlay>) -> Executor<Field> {
+        let owner = Field::human_operations();
+        let mut run = Executor::new(field);
+        for overlay in &overlays {
+            run.run_with(&owner.overlay, overlay).unwrap();
+        }
+        run
+    }
+    fn holding(field: &Field, cell: usize, tradition: Tradition, code: i32) -> f64 {
+        held(&field.people.column(cell).unwrap(), tradition)
+            .into_iter()
+            .find(|(c, _)| *c == code)
+            .map_or(0.0, |(_, people)| people)
+    }
+
+    #[test]
+    fn a_frontier_keeps_the_tongue_its_neighbours_still_speak() {
+        let (field, cell) = frontier(&[layer(100.0, 1, 2, 0, 0)], 2);
+        let fading = forgetting(&field, FORGETTING_YEARS, "test").unwrap();
+        let run = applied(field, vec![fading]);
+        assert!((holding(run.state(), cell, Tradition::Known, 2) - 100.0).abs() < 1e-9);
+    }
+    #[test]
+    fn a_tongue_no_one_around_speaks_fades_with_the_years() {
+        let (field, cell) = frontier(&[layer(100.0, 1, 2, 0, 0)], 3);
+        let fading = forgetting(&field, FORGETTING_YEARS, "test").unwrap();
+        let run = applied(field, vec![fading]);
+        let field = run.state();
+        let kept = 100.0 * (-1.0f64).exp();
+        assert!((holding(field, cell, Tradition::Known, 2) - kept).abs() < 1e-6);
+        // Forgetting a second tongue leaves the first.
+        assert!((holding(field, cell, Tradition::Tongue, 1) - 100.0).abs() < 1e-9);
+    }
+    #[test]
+    fn contact_teaches_most_a_second_tongue_and_brings_the_rest_to_speak_it() {
+        let (field, cell) = frontier(&[layer(100.0, 1, 0, 0, 0)], 2);
+        let codes = {
+            let mut band = field.coverage.borrow_mut().scratch(field.mesh.len(), 0i32);
+            band.set(cell, 2).unwrap();
+            band
+        };
+        let reached = {
+            let mut band = field.coverage.borrow_mut().scratch(field.mesh.len(), 0.0);
+            band.set(cell, 30.0).unwrap();
+            band
+        };
+        let overlays = learning(&field, &codes, &reached).unwrap();
+        let run = applied(field, overlays.into());
+        let field = run.state();
+        let knowing = holding(field, cell, Tradition::Known, 2);
+        let speaking = holding(field, cell, Tradition::Tongue, 2);
+        assert!((knowing - 30.0 * LEARNING).abs() < 1e-6, "{knowing}");
+        assert!(
+            (speaking - 30.0 * (1.0 - LEARNING)).abs() < 1e-6,
+            "{speaking}"
+        );
+        // Those who took up the new tongue keep the old one as known.
+        assert!((holding(field, cell, Tradition::Known, 1) - speaking).abs() < 1e-6);
+        assert!((holding(field, cell, Tradition::Tongue, 1) - (100.0 - speaking)).abs() < 1e-6);
+    }
 
     #[test]
     fn a_cell_keeps_its_own_tradition_and_the_three_strongest_others() {

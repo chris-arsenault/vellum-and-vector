@@ -133,7 +133,20 @@ pub fn arrive(column: &mut IdentityColumn, arriving: &[IdentityLayer]) {
     settle(column);
 }
 fn changed(traditions: [i32; TRADITIONS], changes: &TraditionChanges) -> [i32; TRADITIONS] {
-    std::array::from_fn(|index| changes[index].unwrap_or(traditions[index]))
+    let (tongue, known) = (Tradition::Tongue as usize, Tradition::Known as usize);
+    let mut next: [i32; TRADITIONS] =
+        std::array::from_fn(|index| changes[index].unwrap_or(traditions[index]));
+    // A second tongue is another people's: those who speak a tongue do not also "know" it.
+    // Teaching people the tongue they speak leaves what they know; people who take up the
+    // tongue they knew no longer know it as a second one.
+    if next[known] == next[tongue] {
+        next[known] = if changes[tongue].is_none() {
+            traditions[known]
+        } else {
+            0
+        };
+    }
+    next
 }
 pub fn overlay(
     column: &mut IdentityColumn,
@@ -276,5 +289,23 @@ mod tests {
         assert!((holding - 60.0).abs() < 1e-9);
         // Their tongue is untouched.
         assert!((leading(&column, Tradition::Tongue).1 - 100.0).abs() < 1e-9);
+    }
+    #[test]
+    fn people_never_know_their_own_tongue_as_a_second_one() {
+        // Speakers of tongue 1 reached by tongue 1 as a tongue to know learn nothing.
+        let mut column = vec![realm_of(4, 100.0)];
+        let mut teach = [None; TRADITIONS];
+        teach[Tradition::Known as usize] = Some(1);
+        overlay(&mut column, &teach, 50.0, 0.0, 0.0);
+        assert_eq!(leading(&column, Tradition::Known).0, 0);
+        // Taking up a tongue they already know clears it as known.
+        let mut taught = [None; TRADITIONS];
+        taught[Tradition::Known as usize] = Some(2);
+        overlay(&mut column, &taught, 100.0, 0.0, 0.0);
+        let mut speak = [None; TRADITIONS];
+        speak[Tradition::Tongue as usize] = Some(2);
+        overlay(&mut column, &speak, 100.0, 0.0, 0.0);
+        assert_eq!(leading(&column, Tradition::Tongue).0, 2);
+        assert_eq!(leading(&column, Tradition::Known).0, 0);
     }
 }
