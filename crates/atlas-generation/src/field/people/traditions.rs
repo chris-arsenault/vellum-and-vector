@@ -72,6 +72,10 @@ pub struct Tradition {
     /// people their land feeds and how many of its towns stand, over the years.
     #[serde(default = "whole")]
     pub health: f64,
+    /// For a realm: the shares of its food its people get by farming, herding, fishing and
+    /// gathering, in its last era.
+    #[serde(default)]
+    pub livelihoods: [f64; 4],
 }
 /// The health a successor realm begins with: the old society cycle's 0.65.
 const SUCCESSOR_HEALTH: f64 = 0.65;
@@ -196,6 +200,7 @@ impl Traditions {
             } else {
                 1.0
             },
+            livelihoods: [0.0; 4],
         });
         Ok(code)
     }
@@ -258,6 +263,7 @@ impl Traditions {
                 seat: None,
                 ended: None,
                 health: 1.0,
+                livelihoods: [0.0; 4],
             });
         }
         self.known = restored
@@ -274,6 +280,7 @@ impl Traditions {
                     seat: None,
                     ended: Some("forgotten".into()),
                     health: 1.0,
+                    livelihoods: [0.0; 4],
                 })
             })
             .collect();

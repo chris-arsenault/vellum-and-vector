@@ -50,6 +50,30 @@ fn wild_share(field: &Field, cell: usize) -> io::Result<f64> {
 fn on_share(cover: f64, share: f64) -> f64 {
     (cover / share.max(LEAST_WILD)).clamp(0.0, 1.0)
 }
+/// What each way of living gives on a cell, per km² of the cell: farming, herding, fishing and
+/// gathering, from the yields of its crops, herds, wild ground and catch as its ground is used.
+pub fn ways_of_living(field: &Field, cell: usize, yields: [f64; 4]) -> io::Result<[f64; 4]> {
+    let [crop, herd, wild, catch] = yields;
+    let farmed = worked_farmland(
+        human(field, LayerId::Farmland, cell)?,
+        field.people.people(cell)?,
+    );
+    let open = wild_share(field, cell)?;
+    Ok([
+        farmed * crop.max(0.0),
+        human(field, LayerId::Pasture, cell)? * herd.max(0.0),
+        open * catch.max(0.0),
+        open * (wild - catch).max(0.0),
+    ])
+}
+/// What the woods and game give per km² of wild ground, before ice.
+fn gathered(field: &Field, cell: usize) -> io::Result<f64> {
+    let wild = wild_share(field, cell)?;
+    Ok(2.0
+        * on_share(read(field, S::TreeCover, cell)?, wild)
+        * (3.0 * read(field, S::Productivity, cell)?.max(0.0) / wild.max(LEAST_WILD)).min(1.0)
+        + 2.0 * read(field, S::Herbivores, cell)? / wild.max(LEAST_WILD))
+}
 fn ice_free(field: &Field, cell: usize) -> io::Result<f64> {
     Ok(1.0 - (read(field, S::IceThickness, cell)? / length(field, 0.00025)?).min(1.0))
 }
@@ -238,6 +262,22 @@ pub fn respond(
         },
     )?;
     book.respond(
+        "catchYield",
+        Responder {
+            by: "rivers and shores".into(),
+            queries: water_reads.clone(),
+            kind: ResponseKind::Base(Box::new(move |field, cell, answers| {
+                if field.water.borrow().kind_at(cell)? != 0 {
+                    return Ok(0.0);
+                }
+                let fished = river(field, cell, answers.queries().get(&rivers)?.as_ref())?
+                    * (0.5 + 4.0 * read(field, S::AquaticFauna, cell)?)
+                    + shore_catch(field, cell)?;
+                Ok(fished * ice_free(field, cell)?)
+            })),
+        },
+    )?;
+    book.respond(
         "wildYield",
         Responder {
             by: "woods, game and water".into(),
@@ -247,17 +287,8 @@ pub fn respond(
                     return Ok(0.0);
                 }
                 // What the wild ground gives, per km² of wild ground: support counts only
-                // that share of the cell.
-                let wild = wild_share(field, cell)?;
-                let gathered = 2.0
-                    * on_share(read(field, S::TreeCover, cell)?, wild)
-                    * (3.0 * read(field, S::Productivity, cell)?.max(0.0) / wild.max(LEAST_WILD))
-                        .min(1.0)
-                    + 2.0 * read(field, S::Herbivores, cell)? / wild.max(LEAST_WILD);
-                let fished = river(field, cell, answers.queries().get(&rivers)?.as_ref())?
-                    * (0.5 + 4.0 * read(field, S::AquaticFauna, cell)?)
-                    + shore_catch(field, cell)?;
-                Ok((gathered + fished) * ice_free(field, cell)?)
+                // that share of the cell. Its rivers and shores add their catch.
+                Ok(gathered(field, cell)? * ice_free(field, cell)? + answers.ask("catchYield")?)
             })),
         },
     )?;

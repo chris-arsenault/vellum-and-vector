@@ -5,11 +5,7 @@
 use super::{crafts, places::Place, work::km2};
 use crate::{
     field::Field,
-    human::{
-        catalogue::LayerId,
-        identity::{held, Tradition},
-        HumanField,
-    },
+    human::identity::{held, Tradition},
     storage::ReadBand,
 };
 use std::io;
@@ -22,10 +18,6 @@ const LIVING_BY: f64 = 0.5;
 const IN_COMMON: f64 = 0.1;
 /// How many tongues in common make a realm a concord.
 const CONCORD: usize = 3;
-/// How much of a cell's living a fully coastal cell's people take from the sea, and how much of
-/// it unworked ground gives, beside its farmland and pasture.
-const FISHERS: f64 = 0.5;
-const GATHERERS: f64 = 0.05;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Livelihood {
@@ -101,27 +93,42 @@ pub fn renamed(name: &str, term: &str) -> String {
         None => format!("{name} {term}"),
     }
 }
-fn livelihoods(field: &Field, cell: usize) -> io::Result<[f64; 4]> {
-    let farmland = field
-        .people
-        .view(HumanField::Layer(LayerId::Farmland))
-        .get(cell)?;
-    let pasture = field
-        .people
-        .view(HumanField::Layer(LayerId::Pasture))
-        .get(cell)?;
-    let water = field.water.borrow().kinds();
-    let mut seas = 0.0;
-    for edge in 0..3 {
-        if let Some(next) = field.mesh.neighbor(cell, edge) {
-            if water.get(next)? == 1 {
-                seas += 1.0 / 3.0;
-            }
+/// The shares of the food of each realm in `realms` its people get by farming, herding,
+/// fishing and gathering, over the ground each leads, from the yields of its crops, herds,
+/// wild ground and catch. A realm that grows nothing has no shares.
+pub fn livelihood_shares(
+    field: &Field,
+    realms: &[i32],
+    leads: &[i32],
+    yields: [&ReadBand<f64>; 4],
+) -> io::Result<Vec<[f64; 4]>> {
+    let mut food = vec![[0.0; 4]; realms.len()];
+    for (cell, &lead) in leads.iter().enumerate().take(field.mesh.len()) {
+        let Some(at) = realms.iter().position(|&r| r == lead) else {
+            continue;
+        };
+        let here = [
+            yields[0].get(cell)?,
+            yields[1].get(cell)?,
+            yields[2].get(cell)?,
+            yields[3].get(cell)?,
+        ];
+        let ways = super::yields::ways_of_living(field, cell, here)?;
+        for (into, way) in food[at].iter_mut().zip(ways) {
+            *into += way * km2(field, cell);
         }
     }
-    let ways = [farmland, pasture, FISHERS * seas, GATHERERS];
-    let all: f64 = ways.iter().sum();
-    Ok(ways.map(|way| way / all))
+    Ok(food
+        .into_iter()
+        .map(|ways| {
+            let all: f64 = ways.iter().sum();
+            if all > 0.0 {
+                ways.map(|way| way / all)
+            } else {
+                [0.0; 4]
+            }
+        })
+        .collect())
 }
 fn keeping(field: &Field, claimed: &ReadBand<f64>) -> io::Result<(f64, Keeping)> {
     let mut people = 0.0;
@@ -156,20 +163,10 @@ fn keeping(field: &Field, claimed: &ReadBand<f64>) -> io::Result<(f64, Keeping)>
                 add(&mut tongues, code, weight * holding / everyone);
             }
         }
-        for (into, way) in keeping
-            .livelihoods
-            .iter_mut()
-            .zip(livelihoods(field, cell)?)
-        {
-            *into += weight * way;
-        }
     }
     let whole = people.max(f64::EPSILON);
     for entry in &mut keeping.crafts {
         entry.1 /= whole;
-    }
-    for way in &mut keeping.livelihoods {
-        *way /= whole;
     }
     keeping.tongues = tongues
         .iter()
@@ -185,8 +182,10 @@ pub fn character(
     claimed: &ReadBand<f64>,
     leads: &[i32],
     places: &[Place],
+    livelihoods: [f64; 4],
 ) -> io::Result<Character> {
-    let (people, keeping) = keeping(field, claimed)?;
+    let (people, mut keeping) = keeping(field, claimed)?;
+    keeping.livelihoods = livelihoods;
     let (mut controlled, mut claims) = (0, 0);
     for place in places
         .iter()
@@ -209,6 +208,80 @@ pub fn character(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{
+        field::people::fixture::*,
+        human::{catalogue::LayerId, HumanField},
+    };
+
+    /// A farming province held by realm 1, and a coast of fishers and gatherers held by 2.
+    fn provinces() -> (Field, usize, usize) {
+        let (mut farm, mut coast) = (0, 0);
+        let field = land(|seed, mesh| {
+            farm = point(mesh, 300.0, 500.0);
+            coast = point(mesh, 700.0, 500.0);
+            people(
+                seed,
+                farm,
+                &[layer(60.0, 1, 0, 1, 1), layer(40.0, 1, 0, 1, 0)],
+            );
+            people(seed, coast, &[layer(100.0, 2, 3, 2, 0)]);
+            seed.people
+                .initialize(HumanField::Layer(LayerId::Farmland), farm, 0.5)
+                .unwrap();
+        });
+        (field, farm, coast)
+    }
+    #[test]
+    fn a_realms_livelihoods_are_read_from_what_feeds_it() {
+        let (field, farm, coast) = provinces();
+        let yields = [
+            band(&field, |_| 100.0),
+            band(&field, |_| 50.0),
+            band(&field, |_| 40.0),
+            band(&field, |_| 30.0),
+        ];
+        let mut leads = vec![0; field.mesh.len()];
+        leads[farm] = 1;
+        leads[coast] = 2;
+        let shares = livelihood_shares(
+            &field,
+            &[1, 2, 3],
+            &leads,
+            [&yields[0], &yields[1], &yields[2], &yields[3]],
+        )
+        .unwrap();
+        // Half the farm is worked fields at 100; the open half fishes at 30 and gathers 10.
+        let farmed = [50.0 / 70.0, 0.0, 15.0 / 70.0, 5.0 / 70.0];
+        for (got, want) in shares[0].iter().zip(farmed) {
+            assert!((got - want).abs() < 1e-9, "{:?}", shares[0]);
+        }
+        // The coast is all open ground: three quarters of its food is caught.
+        assert!((shares[1][2] - 0.75).abs() < 1e-9);
+        assert_eq!(shares[2], [0.0; 4]);
+    }
+    #[test]
+    fn a_realms_name_follows_its_crafts_then_what_it_lives_by() {
+        let (field, farm, coast) = provinces();
+        let claimed = |at: usize| band(&field, move |cell| if cell == at { 1.0 } else { 0.0 });
+        let mut leads = vec![0; field.mesh.len()];
+        leads[farm] = 1;
+        leads[coast] = 2;
+        // Three fifths of the farm keep the Fire craft: its realm is a Hold whatever it eats.
+        let hold = character(&field, 1, &claimed(farm), &leads, &[], [0.7, 0.0, 0.2, 0.1]).unwrap();
+        assert_eq!(hold.term, "Hold");
+        let league = character(
+            &field,
+            2,
+            &claimed(coast),
+            &leads,
+            &[],
+            [0.0, 0.0, 0.75, 0.25],
+        )
+        .unwrap();
+        assert_eq!(league.term, "League");
+        // Holding no living place, the realm has collapsed.
+        assert_eq!(league.status, "collapsed");
+    }
 
     #[test]
     fn a_realm_is_named_by_a_craft_a_third_keep_before_its_livelihood_or_tongues() {

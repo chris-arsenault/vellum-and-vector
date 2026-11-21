@@ -197,6 +197,7 @@ fn describe(state: &State, realm: &Tradition, anyone: &Band<f64>, leads: &[i32])
         &anyone.read_only(),
         leads,
         &state.people.places.borrow().known,
+        realm.livelihoods,
     )?;
     if let Some(entity) = state
         .people

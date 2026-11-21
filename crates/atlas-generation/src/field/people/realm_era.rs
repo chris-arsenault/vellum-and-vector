@@ -158,30 +158,37 @@ fn falling(
                 normals.push((at, raw * hold[cell] / held[at].strength));
             }
         }
-        let Some(&(mut best, best_cost)) = normals.iter().min_by(|a, b| a.1.total_cmp(&b.1)) else {
+        let incumbent = held.iter().position(|s| s.code == leading.code[cell]);
+        let Some((best, close)) = decide(&normals, incumbent) else {
             continue;
         };
-        if let Some(incumbent) = held.iter().position(|s| s.code == leading.code[cell]) {
-            let cost = costs[incumbent].get(cell)?;
-            if cost.is_finite() && best_cost > 0.6 * cost * hold[cell] / held[incumbent].strength {
-                best = incumbent;
-            }
-        }
-        let holder = normals
-            .iter()
-            .find(|(at, _)| *at == best)
-            .map_or(best_cost, |n| n.1);
-        // A rival whose hold comes close to the holder's contests the ground.
-        if let Some(&(other, _)) = normals
-            .iter()
-            .filter(|(at, normal)| *at != best && holder >= CONTESTED * normal)
-            .min_by(|a, b| a.1.total_cmp(&b.1))
-        {
+        if let Some(other) = close {
             rival[cell] = held[other].code;
         }
         *code = held[best].code;
     }
     Ok(Falling { code, rival })
+}
+/// How much more cheaply a challenger must hold ground than the realm already holding it to
+/// take it: a realm keeps what it holds unless another holds it far more cheaply.
+const KEEPING: f64 = 0.6;
+/// Who holds a cell, and who contests it, from each reaching realm's cost of holding it
+/// (`normals`, by realm index) and the realm that held it before, if any: the cheapest, unless
+/// the realm before still holds it within reach of that, and the cheapest other whose cost comes
+/// close to the holder's.
+fn decide(normals: &[(usize, f64)], before: Option<usize>) -> Option<(usize, Option<usize>)> {
+    let &(cheapest, least) = normals.iter().min_by(|a, b| a.1.total_cmp(&b.1))?;
+    let kept = before.and_then(|b| normals.iter().find(|(at, _)| *at == b).copied());
+    let (holder, cost) = match kept {
+        Some((at, cost)) if least > KEEPING * cost => (at, cost),
+        _ => (cheapest, least),
+    };
+    let rival = normals
+        .iter()
+        .filter(|(at, other)| *at != holder && cost >= CONTESTED * other)
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|&(at, _)| at);
+    Some((holder, rival))
 }
 fn spread(
     context: &mut CommandContext<'_, Field>,
@@ -194,6 +201,7 @@ fn spread(
     }
     let support = context.query(&questions.support)?.values();
     realm_seats::tend(context.state(), era, &support)?;
+    record_livelihoods(context, era, questions)?;
     for realm in realm_seats::active(era) {
         realm_seats::follow_the_crowd(context.state(), era, &realm)?;
     }
@@ -238,6 +246,33 @@ fn allegiances(
         hardness: 0.0,
     })
 }
+/// Records on each realm what its people live by this era: the shares of its food from
+/// farming, herding, fishing and gathering.
+fn record_livelihoods(
+    context: &mut CommandContext<'_, Field>,
+    era: &Era,
+    questions: &Questions,
+) -> ExecutionResult<()> {
+    let crop = context.query(&questions.crop)?.values();
+    let herd = context.query(&questions.herd)?.values();
+    let wild = context.query(&questions.wild)?.values();
+    let catch = context.query(&questions.catch)?.values();
+    let field = context.state();
+    let leads = leading_of(field, Tradition::Allegiance)?;
+    let realms = realm_seats::active(era);
+    let codes: Vec<i32> = realms.iter().map(|r| r.code).collect();
+    let shares = super::realm_character::livelihood_shares(
+        field,
+        &codes,
+        &leads.code,
+        [&crop, &herd, &wild, &catch],
+    )?;
+    let mut memory = era.memory.borrow_mut();
+    for (code, shares) in codes.into_iter().zip(shares) {
+        memory.traditions.known[code as usize - 1].livelihoods = shares;
+    }
+    Ok(())
+}
 pub fn operation(
     questions: Rc<Questions>,
     owner: Rc<operations::Operations<Field>>,
@@ -266,7 +301,29 @@ pub fn operation(
 }
 #[cfg(test)]
 mod tests {
-    use super::{allegiances, hard_to_hold, RUIN_HOLD};
+    use super::{allegiances, decide, hard_to_hold, RUIN_HOLD};
+
+    #[test]
+    fn a_realm_keeps_its_ground_unless_another_holds_it_far_more_cheaply() {
+        // Realm 0 held the ground; realm 1 holds it a little more cheaply: 0 keeps it.
+        assert_eq!(decide(&[(0, 10.0), (1, 8.0)], Some(0)).unwrap().0, 0);
+        // Far more cheaply: 1 takes it.
+        assert_eq!(decide(&[(0, 10.0), (1, 5.0)], Some(0)).unwrap().0, 1);
+        // Unheld ground goes to the cheapest.
+        assert_eq!(decide(&[(0, 10.0), (1, 8.0)], None).unwrap().0, 1);
+        // A realm that held it but no longer reaches it keeps nothing.
+        assert_eq!(decide(&[(1, 8.0)], Some(0)).unwrap().0, 1);
+        assert!(decide(&[], Some(0)).is_none());
+    }
+    #[test]
+    fn a_close_runner_up_contests_the_ground() {
+        // The keeper at 10 and a rival at 8: within four fifths, so it is contested.
+        assert_eq!(decide(&[(0, 10.0), (1, 8.0)], Some(0)).unwrap().1, Some(1));
+        // A distant third does not contest it.
+        assert_eq!(decide(&[(0, 10.0), (2, 20.0)], Some(0)).unwrap().1, None);
+        // The new holder at 5 against the old at 10 is not close.
+        assert_eq!(decide(&[(0, 10.0), (1, 5.0)], Some(0)).unwrap().1, None);
+    }
     use crate::{
         execution::Executor,
         field::{people::fixture::*, Field},

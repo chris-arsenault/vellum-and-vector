@@ -128,6 +128,17 @@ fn taught(field: &Field, towns: &[Place], allegiance: &[i32], realm: i32) -> io:
 }
 /// How much larger than its seat a town of the realm must grow to draw the seat to itself.
 const SEAT_INERTIA: f64 = 1.5;
+/// The largest of a realm's other towns, if it has grown well past the seat's `seat_people`.
+pub fn outgrown(seat_people: f64, towns: &[Place]) -> Option<&Place> {
+    towns
+        .iter()
+        .filter(|town| town.town_people > SEAT_INERTIA * seat_people)
+        .max_by(|a, b| {
+            a.town_people
+                .total_cmp(&b.town_people)
+                .then(b.id.cmp(&a.id))
+        })
+}
 /// Moves a realm's seat to a town of its own allegiance that has grown well past it.
 pub fn follow_the_crowd(field: &Field, era: &Era, realm: &Tradition) -> io::Result<()> {
     let places = era.places.borrow();
@@ -139,12 +150,15 @@ pub fn follow_the_crowd(field: &Field, era: &Era, realm: &Tradition) -> io::Resu
         return Ok(());
     };
     let allegiance = leading_of(field, Held::Allegiance)?;
-    let grown = living(&places).into_iter().find(|town| {
-        allegiance.code[town.anchor] == realm.code
-            && town.id != seat.id
-            && !seated(era, &town.id)
-            && town.town_people > SEAT_INERTIA * seat.town_people
-    });
+    let candidates: Vec<Place> = living(&places)
+        .into_iter()
+        .filter(|town| {
+            allegiance.code[town.anchor] == realm.code
+                && town.id != seat.id
+                && !seated(era, &town.id)
+        })
+        .collect();
+    let grown = outgrown(seat.town_people, &candidates).cloned();
     if let Some(town) = grown {
         if std::env::var_os("ATLAS_TRACE_PEOPLE").is_some() {
             eprintln!(
@@ -265,7 +279,19 @@ pub fn reseat(
 
 #[cfg(test)]
 mod tests {
-    use super::{fed_shares, relaxed, strength, taught, HEALTH_YEARS};
+    use super::{fed_shares, outgrown, relaxed, strength, taught, HEALTH_YEARS};
+
+    #[test]
+    fn a_seat_moves_to_the_largest_town_that_has_grown_well_past_it() {
+        let towns = vec![
+            place("a", 1, vec![1], 1400.0),
+            place("b", 2, vec![2], 2000.0),
+            place("c", 3, vec![3], 3000.0),
+        ];
+        assert_eq!(outgrown(1000.0, &towns).map(|t| t.id.as_str()), Some("c"));
+        // Grown, but not well past it: the seat stays.
+        assert!(outgrown(2500.0, &towns).is_none());
+    }
     use crate::field::{
         people::fixture::*,
         poi::{offered::PlaceOffers, values::Benefit},
