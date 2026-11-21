@@ -386,8 +386,8 @@ fn learning(field: &Field, codes: &Band<i32>, reached: &Band<f64>) -> io::Result
     let mut old = field.coverage.borrow_mut().scratch(field.mesh.len(), 0i32);
     let mut knowing = working(field);
     let mut speaking = working(field);
-    for cell in 0..field.mesh.len() {
-        old.set(cell, spoken[0].code[cell])?;
+    for (cell, &code) in spoken[0].code.iter().enumerate().take(field.mesh.len()) {
+        old.set(cell, code)?;
         knowing.set(cell, reached.get(cell)? * LEARNING)?;
         speaking.set(cell, reached.get(cell)? * (1.0 - LEARNING))?;
     }
