@@ -163,6 +163,22 @@ fn across<S: CatalogueState<Schedule> + 'static, Schedule: 'static>(
 ) -> AcrossMaps<S, Schedule> {
     AcrossMaps { statement: Must::Value("Captured Fire sources stand while refined fields derive current strain. A name follows the nearest rule cell or goes when the finer field has none.".into()), stands_on: Slot::Unwritten, carry: Slot::Value(Rc::new(carry_rules::where_it_lands)), realize: Slot::NotApplicable("Current owner evaluation supplies source or strain without place-shaped ground."), counterpart: Slot::Value(Rc::new(move |s, c| counterpart(kind, s, c))), unrealized: Slot::Value(Rc::new(move |s, c| Ok(counterpart(kind, s, c)?.map_or(Unrealized::Drop, Unrealized::Move)))), settle: if kind == SourcePlace::Tear { Slot::Value(Rc::new(move |s, c| Ok(carry_rules::moves_to(counterpart(kind, s, c)?)))) } else { Slot::NotApplicable("A water round moves no Fire source.") }, schedule: Slot::NotApplicable("The owning system refreshes the field.") }
 }
+/// A Fire core's heat is power its craft's keepers can work, and its ore is anyone's. A
+/// sealed conduit is cold: it offers nothing, and the Fire people it held go elsewhere.
+fn fire_core_offers(s: &impl State, p: &Place) -> io::Result<Benefits> {
+    if reads::magic_value(s, "fire", Channel::Sealed, p.anchor)? > 0.0 {
+        return Ok(Benefits::default());
+    }
+    let v = SourcePlace::FireCore.magnitude(s, p)?;
+    let fire = crate::field::people::crafts::CRAFTS
+        .iter()
+        .find(|craft| craft.system == "fire")
+        .map_or(0, |craft| craft.code);
+    Ok([(Benefit::Power, v), (Benefit::Materials, v)]
+        .into_iter()
+        .collect::<Benefits>()
+        .serving(Benefit::Power, crate::human::identity::Tradition::Craft, fire))
+}
 fn fate(kind: SourcePlace, s: &impl State, p: &Place) -> io::Result<Fate> {
     Ok(if kind == SourcePlace::FireCore {
         if reads::magic_value(s, "fire", Channel::Sealed, p.anchor)? > 0.0 {
@@ -191,7 +207,7 @@ pub fn entry<S: CatalogueState<Schedule> + 'static, Schedule: 'static>(
         existence: Existence { statement: Must::Value("Heat maxima, impacts and forges establish cores; competing fields and their meetings establish tears.".into()), origins: Slot::Unwritten, way: Must::Value(ExistenceWay::Emerges), requires: Slot::Value(Rc::new(move |s, c| Ok(if kind == SourcePlace::FireCore { reads::magic_value(s, "fire", Channel::Source, c)? } else { anomaly::origin_source(s, "veil", "tear", c)? } > 0.0))), suitability: Slot::NotApplicable("The source and fields determine location."), places: Must::Value(Rc::new(move |s| kind.found(s))) },
         publication: Publication { delivery: Delivery::Landforms, statement: Must::Value("Publish the source site or strain coverage through the owning class.".into()), moment: Must::Value(Moment::Magic), record: Must::Value(Rc::new(move |s: &S, p: &Place| records::rule(s, p, system, rule))) }, across_maps: across(kind), event: None,
         roles: Roles { true_size: super::true_sizes::extent(), variety: Slot::Unwritten, appearance: Slot::Unwritten, account: super::true_sizes::account(id), fields: cover_shared::fields("Fire's thermal, living and rock feedback and Veil's current strain and moved share own their effects; the place duplicates none."), movement: movement(kind), others: others(kind),
-            people: People { statement: Must::Value("Cores supply dangerous heat and ore; tears draw keepers but forcing a crossing threatens travellers.".into()), offers: Slot::Value(Rc::new(move |s, p| Ok(if kind == SourcePlace::FireCore { let v = kind.magnitude(s, p)?; [(Benefit::Power, v), (Benefit::Materials, v)].into_iter().collect() } else { [(Benefit::Sanctity, anomaly::peak(p, |c| kind.read(s, c))? / 2.0)].into_iter().collect() }))), threatens: Slot::Value(Rc::new(move |s, p| Ok(vec![Hazard { hazard: if kind == SourcePlace::FireCore { "burning ground" } else { "forced crossing and shifting ground" }.into(), reach: measure(&s.field()?.scale, if kind == SourcePlace::FireCore { 0.00125 } else { 0.0005 }, 1, 1.0)?, severity: anomaly::peak(p, |c| kind.read(s, c))? / if kind == SourcePlace::FireCore { 1000.0 } else { 1.0 } }]))) },
+            people: People { statement: Must::Value("Cores supply dangerous heat and ore; tears draw keepers but forcing a crossing threatens travellers.".into()), offers: Slot::Value(Rc::new(move |s, p| Ok(if kind == SourcePlace::FireCore { fire_core_offers(s, p)? } else { [(Benefit::Sanctity, anomaly::peak(p, |c| kind.read(s, c))? / 2.0)].into_iter().collect() }))), threatens: Slot::Value(Rc::new(move |s, p| Ok(vec![Hazard { hazard: if kind == SourcePlace::FireCore { "burning ground" } else { "forced crossing and shifting ground" }.into(), reach: measure(&s.field()?.scale, if kind == SourcePlace::FireCore { 0.00125 } else { 0.0005 }, 1, 1.0)?, severity: anomaly::peak(p, |c| kind.read(s, c))? / if kind == SourcePlace::FireCore { 1000.0 } else { 1.0 } }]))) },
             time: ThroughTime { statement: Must::Value("Sealed cores leave ore for placers; living ground knits tears and shifting strain makes wild ground.".into()), fate: Slot::Value(Rc::new(move |s, p| fate(kind, s, p))) },
             visibility: Visibility { statement: Must::Value("Source or tearing strength combines with contrast and isolation; dependent towns can carry a lesser mark.".into()), magnitude: Slot::Value(Rc::new(move |s, p| kind.magnitude(s, p))), local_conditions: Slot::Value(Rc::new(move |s, p| kind.local(s, p))), isolation: Slot::Value(Rc::new(move |s, p| kind.isolation(s, p))), cultural: Slot::Value(Rc::new(move |s, p| kind.cultural(s, p))), importance: Must::Value(Rc::new(move |s, p| Ok((0.45 * kind.magnitude(s, p)? + 0.35 * kind.local(s, p)? + 0.2 * kind.isolation(s, p)?).max(kind.cultural(s, p)?)))) }, naming: naming(kind),
         },

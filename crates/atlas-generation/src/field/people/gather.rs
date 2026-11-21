@@ -66,6 +66,44 @@ const ROUTE_PASSED: f64 = 0.1;
 fn step_passed(work: &Work, cell: usize, edge: usize) -> io::Result<f64> {
     Ok(work.going.passed.get(cell * work.going.stride + edge)? * work.going.stride as f64)
 }
+/// The next step of a route from `at`: the neighbour, or the far end of a link such as a kept
+/// door, where `guide` climbs highest, and the share of the journey that step passes on.
+fn climb(
+    field: &Field,
+    work: &Work,
+    guide: &Band<f64>,
+    at: usize,
+) -> io::Result<Option<(usize, f64)>> {
+    let mut steps = Vec::new();
+    for edge in 0..3 {
+        if let Some(to) = field.mesh.neighbor(at, edge) {
+            steps.push((to, step_passed(work, at, edge)?));
+        }
+    }
+    steps.extend(linked_from(work, at));
+    let mut next = None;
+    let mut highest = guide.get(at)?;
+    for (to, through) in steps {
+        if through > 0.0 && guide.get(to)? > highest {
+            highest = guide.get(to)?;
+            next = Some((to, through));
+        }
+    }
+    Ok(next)
+}
+/// The far ends of the links that join `cell`, and the share of a journey each passes on.
+fn linked_from(work: &Work, cell: usize) -> impl Iterator<Item = (usize, f64)> + '_ {
+    work.going.linked.iter().filter_map(move |link| {
+        let far = if link.a == cell {
+            link.b
+        } else if link.b == cell {
+            link.a
+        } else {
+            return None;
+        };
+        Some((far, link.passed))
+    })
+}
 /// Somewhere a mover could settle, the share of the journey that reaches it, how many cells
 /// of the route lie before it, and whether the route crossed water to reach it.
 #[derive(Clone, Copy)]
@@ -102,19 +140,7 @@ fn destinations(
     let (mut at, mut ranges, mut crossed) = (from, 0.0, false);
     let mut route = Vec::new();
     for _ in 0..REACH_SWEEPS {
-        let mut next = None;
-        let mut highest = guide.get(at)?;
-        for edge in 0..3 {
-            let Some(to) = field.mesh.neighbor(at, edge) else {
-                continue;
-            };
-            let through = step_passed(work, at, edge)?;
-            if through > 0.0 && guide.get(to)? > highest {
-                highest = guide.get(to)?;
-                next = Some((to, through));
-            }
-        }
-        let Some((to, through)) = next else {
+        let Some((to, through)) = climb(field, work, guide, at)? else {
             break;
         };
         ranges += ranges_of(through);
@@ -186,8 +212,11 @@ fn choose(
         let mut best = 0.0;
         let mut chosen = None;
         let (found, route) = destinations(field, work, guide, cell)?;
+        // Movers lean toward country their own crafts suit.
+        let keepers = super::seeking::keepers(field, cell)?;
         for destination in found {
-            let scored = score(cell, destination.cell, destination.passed)?;
+            let scored = score(cell, destination.cell, destination.passed)?
+                * super::seeking::toward(field, &keepers, destination.cell)?;
             if scored > best {
                 best = scored;
                 chosen = Some(destination);

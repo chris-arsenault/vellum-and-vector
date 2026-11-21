@@ -151,6 +151,7 @@ where
         shrine::entry(),
         super::institutions::institution(),
         super::institutions::cultural_origin(),
+        super::cutting::entry(),
         historical_sites::entry(Historical::Battlefield),
         historical_sites::entry(Historical::Disaster),
         super::city_places::wall(),

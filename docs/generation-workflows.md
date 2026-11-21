@@ -268,8 +268,9 @@ People are layers on the land's own mesh, beside the ground: population, farmlan
 pasture, built-up ground and standing (the works and wealth a built place has
 gathered), each a value per area of ground, with the remains that built places
 leave. An identity column rides in the population: a bounded stack of layers,
-newest first, each naming a tongue, a faith, a custom, an allegiance and a craft
-by tradition code, with the people who hold it, how hard it has set and its age.
+newest first, each naming a tongue, a faith, a custom, an allegiance, a craft
+and a second tongue its people know, by tradition code, with the people who hold
+it, how hard it has set and its age.
 The map holds no society record. A run registry remembers what each tradition
 code is and which crowd is which named place; neither is the source of where
 people are or what they hold.
@@ -297,6 +298,18 @@ Inhabited suppliers offer the food left after feeding their residents. Places
 denser than their surrounding country also seek provisions for incoming
 households. Markets compete for that harvest across the travel surface.
 Migration reads the room left after those deliveries and local growth.
+
+People move toward draw. Once each era a facade reads the places standing on the
+map into bands: what they offer as benefits (food, water, trade, defence,
+sanctity, power, materials, rule) and to whom, what they threaten and which
+distant cells they join. A needs table values the benefits on the `draw`
+question; ground a magic medium holds too strongly refuses people through the
+`livable` question; and a mover weighs each destination by how well its media
+suit the crafts the mover's people keep. Movers follow journeys that climb the
+draw beyond the next cell, across water, worn ways and links such as kept
+doors, and wear the ways they take. The ecology's development runs in each era
+too: it asks people what they clear, graze, hunt and fish, and people's food
+reads cover per share of wild ground.
 After the settled eras, the population, land use and identity layers captured
 for refinement are refreshed from the same living field as the census.
 
@@ -343,11 +356,19 @@ another's tongue, faith and custom in proportion to their numbers and the travel
 between them; a people cut off from the heart of a tongue or custom begins a
 daughter of it; and what people hold ages and sets, hardest where a place has
 standing. An overlay names only the traditions it changes, so a faith spreads
-without replacing a tongue, and the older layer stays beneath. A realm is an
-allegiance with a seat at a known place. Its hold spreads from the seat along
-the travel surface, people within it take the allegiance up as an overlay, a
-town beyond every realm's reach founds its own, and a realm with no seat left
-ends.
+without replacing a tongue, and the older layer stays beneath. Contact with a
+tongue mostly teaches it as a second tongue; a known tongue fades where the
+people on and around a cell no longer speak it, and a tongue in common lowers
+the cost of crossing a cell. A realm is an allegiance with a seat at a known
+place. Its hold spreads from the seat along the travel surface, as far as the
+seat's crowd, the realm's health and the rule its towns' places give it carry.
+Health follows how well the realm's land feeds its people and how far its towns
+have fallen from their peak. People within the hold take the allegiance up as an
+overlay, and ground beyond every realm's reach forgets its realm. A seat follows
+the realm's crowd to a much larger town, a close rival contests a town, a town
+beyond every realm's reach founds its own, and a realm with no seat left ends.
+At publication a realm's name ends in its character: a craft many of its people
+keep, else the livelihood most live by, else the breadth of its tongues.
 
 Cultural regions and territories are read from the column. Each tongue, faith
 and custom publishes as the share of every cell's people who hold it, so regions
@@ -362,12 +383,19 @@ cell of its own ground; the water is worked out again with the dams marked, and
 a dam stands only where it makes a lake the map can show. A dam whose people
 have gone fails. A famine is recorded where a town's worth of people died on a
 place's ground within the era, a disaster where an avalanche, flood or tsunami
-struck it by the chance its ground gives, and a siege where a place passed from
-one realm's hold to another's. A hazard takes from the layers what the layer
-catalogue says they give up. A way whose two ends different realms hold is a
+struck it by the chance its ground gives or a magic meeting struck the ground it
+covers, and a siege where a living realm took a place from another. A hazard
+or siege takes from the layers what the layer catalogue says they give up, a
+siege less where the place offers defence, and a share of the survivors flees
+along the going to the nearest ground with room; the event records how many
+fled and where. A way whose two ends different realms hold is a
 frontier, and the places at its ends keep that line. Irrigation, harbours,
 forges, archives and shrines are sited by their catalogue entries from the
-ground near living places. After the last era the map's lakes and rivers are
+ground near living places. Large towns keep meeting houses that serve their
+faith, tongue and realm; each living tongue and faith has a hearth where it was
+founded; and people grade the climbs of their busiest ways through the
+`climbing` question, so a graded way over a pass the map shows publishes as a
+cut pass. After the last era the map's lakes and rivers are
 read again from the water as people left it.
 
 A craft is the magic system a people know how to work, held in the identity

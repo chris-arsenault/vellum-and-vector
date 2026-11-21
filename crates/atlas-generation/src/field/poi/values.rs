@@ -181,6 +181,8 @@ pub enum Carrier {
 pub struct Link {
     pub a: usize,
     pub b: usize,
+    /// What going through costs walkers, in steps of the map.
+    pub steps: f64,
 }
 pub enum Barrier {
     River,

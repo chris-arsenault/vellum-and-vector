@@ -58,12 +58,16 @@ impl Operations {
                     let field = context.state();
                     let travel =
                         Travel::new(field, friction.clone(), climbing.clone(), rivers.clone())?;
-                    let going = Rc::new(Passage::new(
-                        &field.mesh,
-                        &mut field.coverage.borrow_mut(),
-                        |a, b| travel.step(a, b),
-                        length(field, era.city_reach)?,
-                    )?);
+                    let range = length(field, era.city_reach)?;
+                    let going = Rc::new(
+                        Passage::new(
+                            &field.mesh,
+                            &mut field.coverage.borrow_mut(),
+                            |a, b| travel.step(a, b),
+                            range,
+                        )?
+                        .with_links(field.place_offers().map_or(&[], |o| o.links()), range)?,
+                    );
                     context.run(
                         &identity,
                         &identity_era::Era {

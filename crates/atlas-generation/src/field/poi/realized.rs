@@ -192,6 +192,13 @@ fn published_below_world(kind: Kind) -> bool {
 /// Whether a found place stands on this map at all, published or not: every realized place,
 /// and the works a world map leaves to finer maps. Landforms below this map's significance
 /// are not here, since at this scale there is no such landform.
+/// Whether the map shows a pass at `cell`: a col whose rise this map's scale can show.
+pub fn shown_pass(state: &impl super::state::State, cell: usize) -> io::Result<bool> {
+    let field = state.field()?;
+    let cols = state.held().get("relief:keyCols", || field.key_cols())?;
+    let rise = physical(&field.scale, RISE, 1, 0.5, REAL_RISE)?;
+    Ok(cols.get(cell)? >= MapScale::native(rise))
+}
 pub fn present<S: RealizationState, Schedule>(
     state: &S,
     entry: &Entry<S, Schedule>,
@@ -212,11 +219,7 @@ fn gate(state: &impl RealizationState, kind: Kind, place: &Place) -> io::Result<
         .publish);
     }
     match kind {
-        Pass => {
-            let cols = state.held().get("relief:keyCols", || field.key_cols())?;
-            let rise = physical(&field.scale, RISE, 1, 0.5, REAL_RISE)?;
-            Ok(cols.get(place.anchor)? >= MapScale::native(rise))
-        }
+        Pass => shown_pass(state, place.anchor),
         Ridge | Escarpment | Valley | Gorge => course(state, place),
         Plateau | Dome | Cirque | Moraine => complex(state, place),
         Volcano | Caldera => volcano(state, place),

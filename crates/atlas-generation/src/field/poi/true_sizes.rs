@@ -446,6 +446,7 @@ pub fn reason(kind: Kind) -> &'static str {
         DisasterSite => "Where a disaster struck.",
         Institution => "A house a large town keeps for its faith and learning.",
         CulturalOrigin => "Where a living tongue or faith began.",
+        Cutting => "A road people cut over a busy col.",
         CityWall => "A wall the city raised round its built land when it had cause to.",
         CityGate => "Where a way passes through the city's wall.",
         CityPlace => "Where the city's people and ways concentrate enough to raise it.",

@@ -41,7 +41,6 @@
       "townThreshold": 5000,
       "cityReach": 0.05,
       "roadTraffic": 1000,
-      "marketTravel": 1,
       "highways": 2
     },
     "features": {
@@ -3354,7 +3353,6 @@
           "townThreshold": 5000,
           "cityReach": 0.05,
           "roadTraffic": 1000,
-          "marketTravel": 1,
           "highways": 2
         }
       }

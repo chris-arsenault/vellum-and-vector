@@ -178,7 +178,8 @@ impl Relief {
         )
     }
 }
-fn cols(state: &impl State) -> io::Result<Rc<Band<f64>>> {
+/// Each cell's col rise: above zero where a saddle crosses a ridge.
+pub(super) fn cols(state: &impl State) -> io::Result<Rc<Band<f64>>> {
     state
         .held()
         .get("relief:keyCols", || state.field()?.key_cols())

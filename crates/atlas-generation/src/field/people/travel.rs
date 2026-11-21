@@ -88,7 +88,7 @@ pub fn respond(
                 Ok(if field.water().column.kind.get(cell)? == 0 {
                     1.0 - 0.5
                         * (1.0
-                            - (-field.people.view(HumanField::WalkedRoute).get(cell)? / 50_000.0)
+                            - (-field.people.view(HumanField::WalkedRoute).get(cell)? / WORN)
                                 .exp())
                 } else {
                     1.0
@@ -103,7 +103,28 @@ pub fn respond(
             queries: vec![],
             kind: ResponseKind::Base(Box::new(|_, _, _| Ok(1.0))),
         },
+    )?;
+    book.respond(
+        "climbing",
+        Responder {
+            by: "graded roads".into(),
+            queries: vec![],
+            kind: ResponseKind::Scale(Box::new(|field, cell, _| {
+                let traffic = field.people.view(HumanField::WalkedRoute).get(cell)?;
+                Ok(if graded(traffic) { 1.0 - GRADING } else { 1.0 })
+            })),
+        },
     )
+}
+/// The traffic, in traveller-years, over which a way wears its ground most of the way it
+/// will, and at which people grade its climbs.
+pub const WORN: f64 = 50_000.0;
+/// How much of a climb's cost and steepness a graded road takes away.
+const GRADING: f64 = 0.5;
+/// Whether a way carrying `traffic` is graded where it climbs: cut and terraced over its cols
+/// and slopes, so it climbs at half the cost and twice the steepness.
+pub fn graded(traffic: f64) -> bool {
+    traffic >= WORN
 }
 pub struct Travel<'a> {
     field: &'a Field,

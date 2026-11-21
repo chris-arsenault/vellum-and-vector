@@ -55,6 +55,5 @@ parameters! {
     town_threshold: (5000.0, 100.0, f64::INFINITY, true),
     city_reach: (0.05, 0.0025, f64::INFINITY, false),
     road_traffic: (1000.0, 50.0, f64::INFINITY, false),
-    market_travel: (1.0, 0.0, f64::INFINITY, false),
     highways: (2.0, 0.0, f64::INFINITY, true),
 }

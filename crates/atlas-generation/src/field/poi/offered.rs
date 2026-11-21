@@ -23,9 +23,15 @@ pub struct PlaceOffers {
     benefits: Vec<ReadBand<f64>>,
     threatened: ReadBand<f64>,
     perilous: ReadBand<f64>,
+    links: Vec<crate::links::Link>,
     meetings: Vec<Meeting>,
 }
 impl PlaceOffers {
+    /// The distant pairs the standing places join for walkers, such as a traversable door,
+    /// each at the cost its place declares.
+    pub fn links(&self) -> &[crate::links::Link] {
+        &self.links
+    }
     pub fn benefit(&self, benefit: Benefit, cell: usize) -> io::Result<f64> {
         self.benefits[benefit as usize].get(cell)
     }
@@ -140,6 +146,19 @@ fn lay_offers(
 fn usable(value: f64) -> bool {
     value.is_finite() && value > 0.0
 }
+/// The pairs a place joins on this map, at the cost of going through, in the map's steps.
+fn joined(field: &Field, joins: &[super::values::Link]) -> Vec<crate::links::Link> {
+    joins
+        .iter()
+        .filter(|link| link.a < field.mesh.len() && link.b < field.mesh.len())
+        .filter(|link| link.steps.is_finite() && link.steps >= 0.0)
+        .map(|link| crate::links::Link {
+            a: link.a,
+            b: link.b,
+            cost: link.steps * field.mesh.spacing(),
+        })
+        .collect()
+}
 /// A place's declared dangers, over the cells within each one's reach: how threatened the
 /// ground is, which sets how much its people want walls. They do not strike; the land's own
 /// hazards strike, and a place's danger mostly describes one of them.
@@ -241,16 +260,21 @@ pub fn offered<S: PublicationState<Schedule>, Schedule>(
         .map(|_| field.coverage.borrow_mut().allocate(0.0))
         .collect();
     let mut threatened = field.coverage.borrow_mut().allocate(0.0);
+    let mut links = Vec::new();
     let mut trace = Trace::default();
     for entry in catalogue.entries() {
         let offers = entry.roles.people.offers.value();
         let threats = entry.roles.people.threatens.value();
-        if offers.is_none() && threats.is_none() {
+        let joins = entry.roles.movement.links.value();
+        if offers.is_none() && threats.is_none() && joins.is_none() {
             continue;
         }
         let places = standing(state, entry)?;
         let mut given = [0.0; Benefit::ALL.len()];
         for place in &places {
+            if let Some(joins) = joins {
+                links.extend(joined(field, &joins(state, place)?));
+            }
             if let Some(offers) = offers {
                 let offered = offers(state, place)?;
                 for (&benefit, &strength) in &offered {
@@ -270,6 +294,7 @@ pub fn offered<S: PublicationState<Schedule>, Schedule>(
         benefits: benefits.iter().map(Band::read_only).collect(),
         threatened: threatened.read_only(),
         perilous: perilous(field, state)?.read_only(),
+        links,
         meetings,
     })
 }

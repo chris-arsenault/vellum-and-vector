@@ -3691,14 +3691,6 @@
         "step": 50,
         "group": "human"
       },
-      "marketTravel": {
-        "label": "Market travel",
-        "unit": "multiplier",
-        "minimum": 0,
-        "default": 1,
-        "step": 0.1,
-        "group": "human"
-      },
       "highways": {
         "label": "Highways per polity",
         "unit": "count",
@@ -3801,7 +3793,6 @@
               "built.layout": {
                 "settings": {
                   "roadTraffic": 2000,
-                  "marketTravel": 0.5,
                   "highways": 0
                 }
               }
@@ -3814,7 +3805,6 @@
               "built.layout": {
                 "settings": {
                   "roadTraffic": 1000,
-                  "marketTravel": 1,
                   "highways": 2
                 }
               }
@@ -3827,7 +3817,6 @@
               "built.layout": {
                 "settings": {
                   "roadTraffic": 500,
-                  "marketTravel": 2,
                   "highways": 4
                 }
               }

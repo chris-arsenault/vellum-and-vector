@@ -19,6 +19,7 @@ pub mod identity_sunder;
 pub mod land;
 pub mod flight;
 pub mod realm_character;
+pub mod seeking;
 pub mod speech;
 pub mod land_events;
 pub mod land_processes;

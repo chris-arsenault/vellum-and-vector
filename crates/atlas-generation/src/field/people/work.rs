@@ -43,12 +43,14 @@ impl Work {
         let rivers = context.query(rivers)?;
         let field = context.state();
         let travel = Travel::new(field, friction, climbing, rivers)?;
+        let range = length(field, facts.range)?;
         let going = Passage::new(
             &field.mesh,
             &mut field.coverage.borrow_mut(),
             |a, b| travel.step(a, b),
-            length(field, facts.range)?,
-        )?;
+            range,
+        )?
+        .with_links(field.place_offers().map_or(&[], |o| o.links()), range)?;
         let mut area = working(field);
         let mut land = working(field);
         for cell in 0..field.mesh.len() {

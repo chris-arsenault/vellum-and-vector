@@ -158,7 +158,6 @@ pub(super) fn features() -> Vec<Feature> {
         "townThreshold",
         "cityReach",
         "roadTraffic",
-        "marketTravel",
         "highways",
     ];
     built

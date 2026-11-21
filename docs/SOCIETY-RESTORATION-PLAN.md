@@ -791,6 +791,65 @@ M5 and M6 share the realm-strength code and are committed together.
 **Acceptance:** the documents describe the running code, and no checklist row is left without
 a verdict.
 
+#### M7 record
+
+**What was built:**
+
+- **Seeking** (`field/people/seeking.rs`). A mover weighs each destination by the media of
+  the crafts the mover's people keep, as the old rule did. The weight runs from one half (all
+  keep a craft whose medium is absent there) to one and a half (all on a full medium). A
+  people's share without a craft is indifferent, so a fifth keeping a craft swings a fifth
+  as far. The old rule divided by the practising share, so it swung fully.
+- **Fire people leave sealed veins.** A Fire core's heat serves the Fire craft as power, and
+  a sealed core offers nothing.
+- **Links join the going.** The facade gathers every standing place's declared links (a
+  traversable door) at the cost the entry declares on its link. Contact, food, crowds and
+  journeys pass through them. At a link's end its edges and links share what the end takes
+  in, so reach stays bounded.
+- **People-built passes.** People grade the climbs of their busiest ways through a
+  `climbing` responder, so a graded way climbs at half the cost and twice the steepness.
+  `field/poi/cutting.rs` publishes a graded way over a pass the map shows as a pass on
+  `transportSites`. The plan's "road saving read by `travelFriction`" was dropped. The
+  catalogue's road costs were written for a road router, and travel already pays wetland,
+  wear and col costs, so reading them double-counted.
+- **`marketTravel` deleted** from the parameters, the feature's parameter list and both
+  configuration files. Stored parameters naming it no longer load.
+
+**Deviations:**
+
+- Realm reach does not yet lean toward country its crafts suit (backlog 37).
+- The old livelihood seeking is carried by food draw, not by seeking.
+- Exchange beyond food is the owner's re-scope (backlog 29).
+
+**Evidence:**
+
+- Unit tests on the seeking factor, cut passes, link carrying and bounded link ends.
+- Clippy, the generation suite and the architecture checks.
+- A review found the original road-cost reading, unbounded door ends and resident-based
+  seeking; all three were replaced as above.
+- No world was generated for M7.
+
+#### Verdicts closed
+
+| Row     | Outcome                                                                             |
+| ------- | ----------------------------------------------------------------------------------- |
+| L1, L2  | Built in M1. Relative draw is weak at world scale (see M1 evidence).                |
+| L3      | Built in M2; links joined in M7.                                                    |
+| L4, L5  | Built in M3.                                                                        |
+| L6, L7  | Built in M4. Soil water and Greenwood follow only through their owners.             |
+| L8–L13  | Built in M5. Deviations are in the M5 and M6 record.                                |
+| L14     | Built in M6. The forgetting fix is unit-tested, not yet seen on a world.            |
+| L15     | Built in M6.                                                                        |
+| L16     | Built in M7 on the climb, not as a road cost.                                       |
+| L17     | Deleted in M7.                                                                      |
+| D1      | People's seeking built in M7; realm seeking open (backlog 37).                      |
+| D2      | Built in M3.                                                                        |
+| D3      | Built in M6.                                                                        |
+| D4      | Built in M5; district names open (backlog 38).                                      |
+| R1, R2  | Built in M5 and M4.                                                                 |
+| R3, R4  | Stay deferred.                                                                      |
+| R5      | Stays removed.                                                                      |
+
 ## Technical details
 
 **Owners and callers:**
