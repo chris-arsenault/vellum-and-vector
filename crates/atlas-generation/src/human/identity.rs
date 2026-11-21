@@ -98,9 +98,45 @@ pub fn settle(column: &mut IdentityColumn) {
         let at = twinned(column).unwrap_or_else(|| least(column));
         let lost = column.remove(at);
         let to = heir(column, &lost, at);
+        inherit_known(&mut column[to], &lost);
         // The heir retains its own age and hardness; only its holding grows.
         column[to].people += lost.people;
     }
+}
+/// When a layer that knows a second tongue joins one that does not, the joined layer knows it
+/// with the chance of the knowers' share of them: over the cells of a country, as many people
+/// know the tongue as before, held whole by some layers rather than lost from all. A coarse
+/// share is realised as shares of the cells, not as every cell holding a little.
+fn inherit_known(heir: &mut IdentityLayer, lost: &IdentityLayer) {
+    let (tongue, known) = (Tradition::Tongue as usize, Tradition::Known as usize);
+    let learned = lost.traditions[known];
+    if learned == 0
+        || learned == heir.traditions[known]
+        || learned == heir.traditions[tongue]
+        || heir.traditions[known] != 0
+    {
+        return;
+    }
+    let share = lost.people / (lost.people + heir.people).max(f64::EPSILON);
+    if dither(lost, heir) < share {
+        heir.traditions[known] = learned;
+    }
+}
+/// A fraction in [0, 1) that is the same for the same two layers and spread evenly over many:
+/// the deciding draw of `inherit_known`.
+fn dither(a: &IdentityLayer, b: &IdentityLayer) -> f64 {
+    let mut hash = 0x9e37_79b9_7f4a_7c15_u64;
+    for value in [
+        a.people.to_bits(),
+        b.people.to_bits(),
+        a.traditions[0] as u64,
+        b.traditions[0] as u64,
+    ] {
+        hash ^= value;
+        hash = hash.wrapping_mul(0xbf58_476d_1ce4_e5b9);
+        hash ^= hash >> 31;
+    }
+    (hash >> 11) as f64 / (1u64 << 53) as f64
 }
 pub fn rename(column: &mut IdentityColumn, field: Tradition, from: i32, to: i32) {
     let previous = std::mem::take(column);
@@ -289,6 +325,48 @@ mod tests {
         assert!((holding - 60.0).abs() < 1e-9);
         // Their tongue is untouched.
         assert!((leading(&column, Tradition::Tongue).1 - 100.0).abs() < 1e-9);
+    }
+    #[test]
+    fn a_full_column_keeps_its_countrys_share_of_knowers_when_learners_join_their_twins() {
+        let layer = |people: f64, tongue: i32, faith: i32, known: i32| {
+            let mut traditions = [0; TRADITIONS];
+            traditions[Tradition::Tongue as usize] = tongue;
+            traditions[Tradition::Faith as usize] = faith;
+            traditions[Tradition::Known as usize] = known;
+            IdentityLayer {
+                people,
+                traditions,
+                ..Default::default()
+            }
+        };
+        let (mut learned, mut kept) = (0.0, 0.0);
+        for i in 0..2000 {
+            let learners = 1.0 + (i % 37) as f64;
+            let speakers = 60.0 + (i % 53) as f64;
+            // Four layers fill the column; the learners are the twins of the first.
+            let mut column = vec![
+                layer(speakers, 1, 1, 0),
+                layer(50.0, 1, 2, 0),
+                layer(40.0, 3, 1, 0),
+                layer(30.0, 3, 2, 0),
+                layer(learners, 1, 1, 2),
+            ];
+            learned += learners;
+            settle(&mut column);
+            assert_eq!(column.len(), IDENTITY_SLOTS);
+            kept += column
+                .iter()
+                .filter(|l| l.traditions[Tradition::Known as usize] == 2)
+                .map(|l| l.people)
+                .sum::<f64>();
+        }
+        // Each joined column knows the tongue whole or not at all, and over the country as many
+        // know it as learned it.
+        let ratio = kept / learned;
+        assert!(
+            (0.9..1.1).contains(&ratio),
+            "kept {kept} of {learned} learned"
+        );
     }
     #[test]
     fn people_never_know_their_own_tongue_as_a_second_one() {

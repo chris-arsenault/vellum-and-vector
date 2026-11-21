@@ -1021,6 +1021,43 @@ and bounded.
   character, seeking and goods. This follows the boundary "constants in contracts, not process
   files". The rules' modules hold no settings of their own.
 
+#### M12 record — the world run
+
+**The run:** two draft worlds on the local atlas, 1000 × 750 km.
+
+- **The first failed** at the era's place offers with "RefCell already borrowed". The facade's
+  restructure allocated three bands from the coverage inside one struct literal; each now has
+  its own statement. M3 hit the same pattern.
+- **The first world's traces** showed second tongues still vanishing, from 110 cells to 3 over
+  four ages. The cause was coarsening. A full identity column merges its thinnest twin away,
+  twins are compared on tongue, faith, custom and allegiance only, and learners are thin, so
+  they merged into their twins and lost what they had learned.
+
+  Now a joined layer knows the tongue with the chance of the knowers' share of the join. That
+  is the rule that a coarse share is realised as shares of cells. A test over 2000 columns keeps
+  the country's knowers within a tenth; without the fix it keeps none of 37,965.
+
+**The second world, as a cartographer reads it:**
+
+- **Realms:** six, named Commonwealth twice, Oath twice, Hold and Covenant. One seat moved to a
+  town that outgrew it.
+- **Tongues:** people knowing a second tongue rise from 1% (126 cells) in the Ice age to 16% (83
+  cells) in the Lantern Age. Multilingual frontiers hold and grow.
+- **Places:** 13 temples and academies, 24 culture hearths, 15 districts named after their
+  towns, and 6 cut passes on the transport layer.
+- **Trade:** 15 towns trade, from 5 to 13,533 goods a year. One town carries most of it.
+  Materials dominate, about 5,200 a year by the last age, then the Hallowed and Salt crafts'
+  goods and wares.
+- **Share of wants traded:** about 1.3% of all wants are met by trade. Only cells where places
+  offer materials or power, or where a craft is practised on its medium, make goods.
+- **Events:** one siege (24,247 died, 73,137 fled to a town), one flood (2,888 died, 1,906
+  fled), seven famines of 27,000–48,000, and battles at frontiers.
+- **The map:** the western landmass carries a dense road net between its towns, and a sea lane
+  runs to the eastern island. The eastern lands have few roads.
+
+**Observed, not caused here:** two straight horizontal blue lines cross land and sea at the
+same rows in the map picture. Their cause is not traced.
+
 #### Verdicts closed
 
 | Row     | Outcome                                                                             |

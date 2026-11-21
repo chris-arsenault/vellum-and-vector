@@ -355,13 +355,18 @@ pub fn offered<S: PublicationState<Schedule>, Schedule>(
     catalogue: &Catalogue<S, Schedule>,
 ) -> io::Result<PlaceOffers> {
     let field = state.field()?;
+    // Each band is allocated in its own statement: borrows of the coverage inside one struct
+    // literal live until the literal ends and would overlap.
+    let benefits = Benefit::ALL
+        .iter()
+        .map(|_| field.coverage.borrow_mut().allocate(0.0))
+        .collect();
+    let threatened = field.coverage.borrow_mut().allocate(0.0);
+    let roads = field.coverage.borrow_mut().allocate(1.0);
     let mut gathered = Gathered {
-        benefits: Benefit::ALL
-            .iter()
-            .map(|_| field.coverage.borrow_mut().allocate(0.0))
-            .collect(),
-        threatened: field.coverage.borrow_mut().allocate(0.0),
-        roads: field.coverage.borrow_mut().allocate(1.0),
+        benefits,
+        threatened,
+        roads,
         links: Vec::new(),
     };
     let mut trace = Trace::default();
