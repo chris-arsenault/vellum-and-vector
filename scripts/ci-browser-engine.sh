@@ -5,7 +5,7 @@ set -euo pipefail
 # this artifact for typechecking and bundling, even with browser tests disabled.
 sudo apt-get update
 sudo apt-get install -y cmake ninja-build
-rustup toolchain install nightly --profile minimal --component rust-src
+rustup toolchain install nightly-2026-11-14 --profile minimal --component rust-src
 cargo install wasm-bindgen-cli --version 0.2.130 --locked --root "$PWD/target/ci-tools"
 export PATH="$PWD/target/ci-tools/bin:$PATH"
 atlas_sdk_directory="${RUNNER_TEMP:?CI runner temporary directory}/emsdk-6.0.10"

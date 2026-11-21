@@ -284,10 +284,13 @@ queries, and `atlas-host` supplies application composition for both hosts.
 `packages/map` and `packages/atlas-context` expose the map and job interfaces. Computational
 TypeScript values are generated from Rust with `make contracts`.
 
-Native development uses Rust and CMake. The browser build uses Emscripten 6.0.10,
-Rust nightly with `rust-src`, and `wasm-bindgen-cli` matching `Cargo.lock`. Activate
-the Emscripten SDK before building. It compiles the Rust standard library with
-shared-memory support for WasmFS's OPFS worker, using one wasm32 target.
+Native development needs a C/C++ toolchain and CMake for bundled GEOS.
+`make rust-check` uses upstream stable Rust and Clippy for the native gates.
+The browser build uses Emscripten 6.0.10, Ninja, Rust `nightly-2026-11-14`
+with `rust-src`, and the `wasm-bindgen` CLI matching `Cargo.lock`. Sulion's
+toolset supplies them. On other workbenches, activate the Emscripten SDK and
+put the matching CLI on `PATH` before building. The browser build compiles the
+Rust standard library with shared-memory support for WasmFS's OPFS worker.
 `make test-rust` runs native explicit-input contracts and compile-fail architecture
 examples. Existing Playwright scenarios exercise the production WASM engine using
 supplied GIS maps. Run `make browser-fixture` before those local scenarios;

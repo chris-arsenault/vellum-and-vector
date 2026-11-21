@@ -1,5 +1,8 @@
 .PHONY: ci lint format format-check typecheck test test-architecture test-perf test-browser terraform-fmt-check build dev rust-check test-rust contracts wasm-engine build-lan test-postgis local-up local-down local-world local-real local-resume local-profile
 
+WASM_RUST_TOOLCHAIN := nightly-2026-11-14
+WASM_BINDGEN_VERSION = $(shell awk '/^name = "wasm-bindgen"$$/ { getline; gsub(/"/, "", $$3); print $$3; exit }' Cargo.lock)
+
 ci: lint format-check typecheck test test-architecture rust-check terraform-fmt-check
 
 lint:
@@ -22,15 +25,21 @@ test: wasm-engine
 # substitutes; a finding names the site and its replacement.
 test-architecture:
 	pnpm exec vitest run -c vitest.architecture.config.ts
-	cargo clippy --workspace --lib -- -D clippy::disallowed_types
-	cargo test --workspace --doc
+	cargo +stable clippy --workspace --lib -- -D clippy::disallowed_types
+	cargo +stable test --workspace --doc
 
 contracts:
 	cargo run -p atlas-host --bin export_contracts
 	pnpm exec prettier --write packages/map/src/generated.ts packages/map/src/generatedEditing.ts packages/map/src/generatedStructure.ts packages/atlas-context/src/generated.ts
 
 wasm-engine:
-	cargo +nightly build -Zbuild-std=std,panic_abort -p atlas-host --bin atlas_browser --release --target wasm32-unknown-emscripten
+	@command -v em++ >/dev/null || { echo 'Activate Emscripten SDK 6.0.10 before building the browser engine.' >&2; exit 1; }
+	@version=$$(wasm-bindgen --version 2>/dev/null); \
+	  if [ "$$version" != "wasm-bindgen $(WASM_BINDGEN_VERSION)" ]; then \
+	    echo "Browser engine requires wasm-bindgen $(WASM_BINDGEN_VERSION) from Cargo.lock. Found: $${version:-missing}." >&2; \
+	    exit 1; \
+	  fi
+	cargo +$(WASM_RUST_TOOLCHAIN) build -Zbuild-std=std,panic_abort -p atlas-host --bin atlas_browser --release --target wasm32-unknown-emscripten
 	mkdir -p packages/engine/dist
 	cp target/wasm32-unknown-emscripten/release/atlas_browser.js target/wasm32-unknown-emscripten/release/atlas_browser.wasm target/wasm32-unknown-emscripten/release/atlas_browser.d.ts packages/engine/dist/
 
@@ -38,10 +47,10 @@ test-rust:
 	cargo test --workspace
 
 rust-check:
-	cargo fmt --all --check
-	cargo clippy --workspace --all-targets -- -D warnings
-	cargo +nightly check -Zbuild-std=std,panic_abort --workspace --lib --target wasm32-unknown-emscripten
-	cargo test --workspace
+	cargo +stable fmt --all --check
+	cargo +stable clippy --workspace --all-targets -- -D warnings
+	cargo +$(WASM_RUST_TOOLCHAIN) check -Zbuild-std=std,panic_abort --workspace --lib --target wasm32-unknown-emscripten
+	cargo +stable test --workspace
 
 # One run of each data structure against its substitute; numbers land in test-results/.
 test-perf:
