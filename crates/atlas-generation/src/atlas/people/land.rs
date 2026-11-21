@@ -38,6 +38,28 @@ pub(super) fn epoch(
         move |scope, era: &Occurrence| scope.run_with_context(&epoch, &(), Rc::new(era.physical)),
     )
 }
+/// Reads what the places standing at the start of an era offer and threaten, and holds it on
+/// the field for the era's people. It is the only reader of the catalogue for people.
+pub(super) fn place_offers(projection: &Projection<State, Field>) -> Operation {
+    let hold = Field::place_offers_operation().projected(projection);
+    Command::with_inputs(
+        "human.place-offers",
+        CommandKind::Event,
+        vec![],
+        move |scope, era: &Occurrence| {
+            let offers = {
+                let state = scope.state();
+                state.clear_queries();
+                Rc::new(crate::field::poi::offered::offered(
+                    state,
+                    &state.catalogue,
+                )?)
+            };
+            scope.state().clear_queries();
+            scope.run_with_context(&hold, &offers, Rc::new(era.physical))
+        },
+    )
+}
 pub(super) fn era(
     land: Rc<land_processes::Operations>,
     progress: crate::atlas::regional::work::Progress,

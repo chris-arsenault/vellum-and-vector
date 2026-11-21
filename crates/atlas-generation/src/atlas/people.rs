@@ -37,6 +37,7 @@ pub struct Operations {
     pub record: Command<Field, era_places::Setting>,
     pub watch: Operation,
     pub epoch: Operation,
+    pub place_offers: Operation,
     pub era: Operation,
     pub places: Operation,
     pub identity: Operation,
@@ -153,11 +154,13 @@ impl Operations {
         let cultures = distributions::cultures();
         let politics = territories::operation();
         let built = built::operation(input, water_publication);
+        let place_offers = land::place_offers(projection);
         Self {
             land,
             record,
             watch,
             epoch,
+            place_offers,
             era,
             places,
             identity,

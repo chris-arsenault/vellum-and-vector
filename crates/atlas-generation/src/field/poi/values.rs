@@ -190,7 +190,7 @@ pub enum Barrier {
     Ice,
     Ward,
 }
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum Benefit {
     Water,
     Food,
@@ -199,6 +199,20 @@ pub enum Benefit {
     Trade,
     Materials,
     Sanctity,
+    /// Authority: the seat a realm is governed from. Power is mills, falls and furnaces.
+    Rule,
+}
+impl Benefit {
+    pub const ALL: [Self; 8] = [
+        Self::Water,
+        Self::Food,
+        Self::Power,
+        Self::Defence,
+        Self::Trade,
+        Self::Materials,
+        Self::Sanctity,
+        Self::Rule,
+    ];
 }
 pub struct Hazard {
     pub hazard: String,

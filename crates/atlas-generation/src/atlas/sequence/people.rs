@@ -32,7 +32,7 @@ pub(super) fn era_loop(
         for era in eras {
             era.validate().map_err(io::Error::other)?;
         }
-        let mut body = operations(&["human.land-era"]);
+        let mut body = operations(&["human.place-offers", "human.land-era"]);
         if context.enabled("human.cultures") {
             body.extend(operations(&["human.identity-era"]));
         }

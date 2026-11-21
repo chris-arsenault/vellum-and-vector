@@ -41,5 +41,6 @@ pub fn register_people(
     people::travel::respond(book, rivers, vec![])?;
     people::questions::built_hold(book, vec![])?;
     people::questions::rules(book)?;
+    people::needs::respond(book)?;
     people::crafts::breaks(book, vec![])
 }

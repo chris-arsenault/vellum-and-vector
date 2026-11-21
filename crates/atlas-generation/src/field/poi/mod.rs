@@ -48,6 +48,7 @@ pub mod mill;
 pub mod mine;
 pub mod names;
 pub mod oasis;
+pub mod offered;
 pub mod origins;
 pub mod peak;
 pub mod peak_forms;

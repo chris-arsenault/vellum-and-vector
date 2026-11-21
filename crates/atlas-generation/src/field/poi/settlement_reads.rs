@@ -24,6 +24,14 @@ pub trait SettlementState: CommunityState {
 }
 pub const KEPT_CONDITION: f64 = 0.5;
 pub const DEAD_ARE_RECORDED:&str="People's layers write deaths as they happen and Salt empties the mass-death band into brine; declaring the toll again would feed it on every evaluation.";
+/// The tradition most of a cell's people hold, or 0 where nobody holds one.
+pub fn leading(
+    state: &impl State,
+    cell: usize,
+    tradition: crate::human::identity::Tradition,
+) -> io::Result<i32> {
+    Ok(crate::human::identity::leading(&state.field()?.people.column(cell)?, tradition).0)
+}
 pub fn touching(state: &impl State, reach: f64) -> io::Result<f64> {
     Ok(state.field()?.scale.supported(reach, 1.5))
 }

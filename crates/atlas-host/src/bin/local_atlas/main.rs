@@ -350,6 +350,11 @@ struct Place {
     name: String,
     position: [f64; 2],
     population: f64,
+    /// Its built ground, square kilometres.
+    built_km2: f64,
+    /// Its role (capital, market town, settlement) and the kind of site it stands on.
+    role: String,
+    site: String,
 }
 /// The map's settlements, largest first, each with the point it is drawn at.
 fn settlements(harness: &Harness, reference: &MapRef) -> io::Result<Vec<Place>> {
@@ -367,15 +372,29 @@ fn settlements(harness: &Harness, reference: &MapRef) -> io::Result<Vec<Place>> 
         |feature| {
             if let atlas_map::Geometry::Point { coordinates } = feature.geometry {
                 let [x, y, _] = coordinates.coordinates();
+                let number = |key: &str| {
+                    feature
+                        .attributes
+                        .get(key)
+                        .and_then(|p| p.as_f64().or_else(|| p.as_str()?.parse().ok()))
+                        .unwrap_or(0.)
+                };
+                let text = |key: &str| {
+                    feature
+                        .attributes
+                        .get(key)
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or_default()
+                        .to_owned()
+                };
                 places.push(Place {
                     id: feature.id,
-                    name: feature.name.unwrap_or_default(),
+                    name: feature.name.clone().unwrap_or_default(),
                     position: [x, y],
-                    population: feature
-                        .attributes
-                        .get("population")
-                        .and_then(|p| p.as_f64().or_else(|| p.as_str()?.parse().ok()))
-                        .unwrap_or(0.),
+                    population: number("population"),
+                    built_km2: number("builtKm2"),
+                    role: text("settlementRole"),
+                    site: text("siteKind"),
                 });
             }
         },
@@ -410,13 +429,24 @@ fn places(harness: &Harness, parent: Option<&str>) -> io::Result<()> {
         None => harness.world_file(),
     };
     let kept: Kept = read_json(&file)?;
+    println!(
+        "{:<28} {:>17} {:>10} {:>9} {:>10}  {:<11} site",
+        "place", "position", "people", "built km2", "per km2", "role"
+    );
     for place in settlements(harness, &kept.reference)? {
         println!(
-            "{:<28} {},{} {}",
+            "{:<28} {:>17} {:>10} {:>9.1} {:>10.0}  {:<11} {}",
             place.name,
-            place.position[0].round(),
-            place.position[1].round(),
-            place.population
+            format!(
+                "{},{}",
+                place.position[0].round(),
+                place.position[1].round()
+            ),
+            place.population,
+            place.built_km2,
+            place.population / place.built_km2.max(f64::EPSILON),
+            place.role,
+            place.site
         );
     }
     Ok(())

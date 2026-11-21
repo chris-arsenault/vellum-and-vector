@@ -47,6 +47,14 @@ const DEFINITIONS: &[Definition] = &[
         false,
     ),
     (
+        "human.place-offers",
+        |o| &o.place_offers,
+        "atlas:workspace",
+        "",
+        true,
+        false,
+    ),
+    (
         "human.land-era",
         |o| &o.era,
         "atlas:workspace",

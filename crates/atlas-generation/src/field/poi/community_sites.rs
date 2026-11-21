@@ -272,10 +272,42 @@ fn naming<S: State + 'static>(kind: Community) -> Naming<S> {
         lends_name_to: Slot::Value(if kind == Community::Settlement { vec![Relation { kind: Kind::Ruin, holds: Rc::new(|_, a, b| Ok(a.anchor == b.anchor)) }] } else { vec![cover_shared::near(Kind::Settlement, 8.0)] }), term: Slot::Unwritten,
     }
 }
+/// The allegiance code of the realm governed from this settlement, if it is a seat.
+fn seat_of(state: &impl SettlementState, place: &Place) -> Option<i32> {
+    let attributes = &place.feature.as_ref()?.attributes;
+    if attributes
+        .get("settlementRole")
+        .and_then(serde_json::Value::as_str)
+        != Some("capital")
+    {
+        return None;
+    }
+    let polity = attributes
+        .get("polityId")
+        .and_then(serde_json::Value::as_str)?;
+    state
+        .traditions()
+        .known
+        .iter()
+        .find(|tradition| tradition.entity.to_string() == polity)
+        .map(|tradition| tradition.code)
+}
 fn people<S: SettlementState + 'static>(kind: Community) -> People<S> {
     People {
         statement: Must::Value("Living seats supply markets and defence; ruins supply cut stone and memory, sometimes with restless dead.".into()),
-        offers: Slot::Value(Rc::new(move |state, place| { let size = kind.magnitude(place); Ok(if kind == Community::Settlement { [(Benefit::Trade, size), (Benefit::Defence, size.max(kind.cultural(state, place)?))] } else { [(Benefit::Materials, size), (Benefit::Sanctity, kind.cultural(state, place)? / 2.0)] }.into_iter().collect()) })),
+        offers: Slot::Value(Rc::new(move |state, place| {
+            let size = kind.magnitude(place);
+            if kind != Community::Settlement {
+                return Ok([(Benefit::Materials, size), (Benefit::Sanctity, kind.cultural(state, place)? / 2.0)].into_iter().collect());
+            }
+            let mut offers: Benefits = [(Benefit::Trade, size), (Benefit::Defence, size.max(kind.cultural(state, place)?))].into_iter().collect();
+            let Some(realm) = seat_of(state, place) else {
+                return Ok(offers);
+            };
+            // A realm's seat gives rule to the people who hold with that realm.
+            offers.insert(Benefit::Rule, size);
+            Ok(offers.serving(Benefit::Rule, crate::human::identity::Tradition::Allegiance, realm))
+        })),
         threatens: if kind == Community::Ruin { Slot::Value(Rc::new(settled::restless_dead)) } else { Slot::NotApplicable("Sieges and disasters are separate historical places.") },
     }
 }

@@ -43,6 +43,9 @@ pub fn passes_for(years: f64) -> usize {
 pub const GROWTH_RATE: f64 = 0.02;
 pub const HUNGER_YEARS: f64 = 30.0;
 pub const PRESSURE: f64 = 0.25;
+/// How much faster than its size a concentrated town pulls people in: the old society cycle's
+/// town pull grew as town size to the power 1.3.
+pub const CONCENTRATION: f64 = 0.3;
 pub const MARKET_SHARE: f64 = 0.2;
 pub const CLEARING_YEARS: f64 = 50.0;
 pub const PEOPLE_PER_BUILT_KM2: f64 = 8000.0;

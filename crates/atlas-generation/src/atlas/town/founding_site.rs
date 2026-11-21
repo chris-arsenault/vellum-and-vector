@@ -251,7 +251,7 @@ fn observe_feature(
                 continue;
             }
             match benefit {
-                Benefit::Sanctity => {
+                Benefit::Sanctity | Benefit::Rule => {
                     evidence.institution.get_or_insert(p);
                 }
                 Benefit::Materials | Benefit::Power => {

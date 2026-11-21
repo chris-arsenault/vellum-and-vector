@@ -120,8 +120,82 @@ pub struct Others<S> {
     pub contains: Slot<Vec<Relation<S>>>,
     pub pairs_with: Slot<Vec<Relation<S>>>,
 }
-// hpc-exempt: benefit strengths keyed by the seven catalogue roles, not cells.
-pub type Benefits = BTreeMap<Benefit, f64>;
+/// Whom a place's offers serve: the people holding one tradition. Offers with none serve
+/// everyone. Consumers value a benefit; the place says only what it gives and to whom.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Beneficiary {
+    pub tradition: crate::human::identity::Tradition,
+    pub code: i32,
+}
+/// What a place gives people, in the seven benefits every consumer speaks, and whom each
+/// serves. It reads as the benefit map it extends, so entries keep building it from pairs.
+#[derive(Clone, Default)]
+pub struct Benefits {
+    // hpc-exempt: benefit strengths keyed by the seven catalogue roles, not cells.
+    strengths: BTreeMap<Benefit, f64>,
+    // hpc-exempt: beneficiaries keyed by the seven catalogue roles, not cells.
+    serves: BTreeMap<Benefit, Beneficiary>,
+}
+impl Benefits {
+    pub fn new() -> Self {
+        Self::default()
+    }
+    /// The same offers, with `benefit` for the people holding `tradition` `code` only. A code
+    /// of 0 is no tradition, so that benefit stays open to everyone.
+    #[must_use]
+    pub fn serving(
+        mut self,
+        benefit: Benefit,
+        tradition: crate::human::identity::Tradition,
+        code: i32,
+    ) -> Self {
+        if code == 0 {
+            self.serves.remove(&benefit);
+        } else {
+            self.serves.insert(benefit, Beneficiary { tradition, code });
+        }
+        self
+    }
+    /// Whom `benefit` serves; `None` is everyone.
+    pub fn serves(&self, benefit: Benefit) -> Option<Beneficiary> {
+        self.serves.get(&benefit).copied()
+    }
+}
+impl std::ops::Deref for Benefits {
+    // hpc-exempt: the benefit map, keyed by catalogue role, not cells.
+    type Target = BTreeMap<Benefit, f64>;
+    fn deref(&self) -> &Self::Target {
+        &self.strengths
+    }
+}
+impl std::ops::DerefMut for Benefits {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.strengths
+    }
+}
+impl FromIterator<(Benefit, f64)> for Benefits {
+    fn from_iter<I: IntoIterator<Item = (Benefit, f64)>>(pairs: I) -> Self {
+        Self {
+            strengths: pairs.into_iter().collect(),
+            // hpc-exempt: beneficiaries keyed by catalogue role, not cells.
+            serves: BTreeMap::new(),
+        }
+    }
+}
+impl IntoIterator for Benefits {
+    type Item = (Benefit, f64);
+    type IntoIter = std::collections::btree_map::IntoIter<Benefit, f64>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.strengths.into_iter()
+    }
+}
+impl<'a> IntoIterator for &'a Benefits {
+    type Item = (&'a Benefit, &'a f64);
+    type IntoIter = std::collections::btree_map::Iter<'a, Benefit, f64>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.strengths.iter()
+    }
+}
 pub struct People<S> {
     pub statement: Must<String>,
     pub offers: Slot<OnPlace<S, Benefits>>,
@@ -188,4 +262,27 @@ pub struct GroupPage {
     pub name: String,
     pub belongs: Must<String>,
     pub excludes: Must<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Benefit, Benefits};
+    use crate::human::identity::Tradition;
+
+    #[test]
+    fn a_benefit_can_serve_one_tradition_while_the_rest_serve_everyone() {
+        let offers: Benefits = [(Benefit::Trade, 0.5), (Benefit::Power, 0.8)]
+            .into_iter()
+            .collect::<Benefits>()
+            .serving(Benefit::Power, Tradition::Allegiance, 7);
+        assert_eq!(offers.get(&Benefit::Power), Some(&0.8));
+        assert_eq!(offers.serves(Benefit::Trade), None);
+        assert_eq!(offers.serves(Benefit::Power).map(|b| b.code), Some(7));
+        assert_eq!(
+            offers
+                .serving(Benefit::Power, Tradition::Allegiance, 0)
+                .serves(Benefit::Power),
+            None
+        );
+    }
 }

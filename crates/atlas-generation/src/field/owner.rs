@@ -157,6 +157,7 @@ impl FieldSeed {
             transport_plan: None,
             melt_receiver: None,
             human_land_seen: None,
+            place_offers: None,
             engineered_dams: None,
             settled_place_targets: std::array::from_fn(|_| None),
             town: crate::town::signals::Signals::default(),
@@ -195,6 +196,7 @@ pub struct Field {
     pub(super) transport_plan: Option<crate::transport::plan::TransportPlan>,
     pub(super) melt_receiver: Option<super::surface_media::MeltReceiver>,
     pub(super) human_land_seen: Option<super::people::history::Seen>,
+    pub(super) place_offers: Option<Rc<super::poi::offered::PlaceOffers>>,
     pub(super) engineered_dams: Option<Band<u8>>,
     pub(super) settled_place_targets: [Option<Band<f64>>; 5],
     pub(super) town: crate::town::signals::Signals,
@@ -250,6 +252,23 @@ impl Field {
                 Ok(())
             },
         )
+    }
+    /// Holds the era's place offers; the human era runs it once, before its people live.
+    pub fn place_offers_operation(
+    ) -> crate::execution::Command<Self, Rc<super::poi::offered::PlaceOffers>> {
+        crate::execution::Command::with_inputs(
+            "human.place-offers.hold",
+            crate::execution::CommandKind::Work,
+            vec![],
+            |scope, offers: &Rc<super::poi::offered::PlaceOffers>| {
+                scope.state_mut().place_offers = Some(offers.clone());
+                Ok(())
+            },
+        )
+    }
+    /// What the places standing at the start of this era offer people, if an era has read them.
+    pub fn place_offers(&self) -> Option<&super::poi::offered::PlaceOffers> {
+        self.place_offers.as_deref()
     }
     pub fn town_signals(&self) -> &crate::town::signals::Signals {
         &self.town

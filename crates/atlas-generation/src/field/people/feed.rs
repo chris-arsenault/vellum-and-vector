@@ -122,19 +122,34 @@ fn clear(
         },
     )
 }
+/// How much more strongly a cell draws people than the country around it: its draw per
+/// person against the draw per person within the travel reach. Offers felt everywhere alike
+/// cancel; a seat or harbour above its country raises it.
+pub fn relative_draw(here: f64, people: f64, around: f64, around_people: f64) -> f64 {
+    if people <= 0.0 || around <= 0.0 || around_people <= 0.0 {
+        return 1.0;
+    }
+    ((here / people) / (around / around_people)).max(0.0)
+}
 fn food_requests(
     field: &Field,
     work: &Work,
     support: &ReadBand<f64>,
+    draw: &ReadBand<f64>,
 ) -> std::io::Result<(Band<f64>, Band<f64>)> {
     let mut demand = working(field);
     let mut demand_felt = working(field);
+    let mut drawing = working(field);
+    let mut drawing_felt = working(field);
     for cell in 0..field.mesh.len() {
         if habitable(field, cell)? {
             demand.set(cell, field.people.people(cell)? * km2(field, cell))?;
+            drawing.set(cell, draw.get(cell)? * km2(field, cell))?;
         }
     }
     work.reach(field, &demand, &mut demand_felt)?;
+    work.reach(field, &drawing, &mut drawing_felt)?;
+    let mut traced = Strongest::default();
     for cell in 0..field.mesh.len() {
         if !habitable(field, cell)? {
             continue;
@@ -146,13 +161,84 @@ fn food_requests(
         } else {
             people
         };
-        demand.set(
-            cell,
-            market_demand(people, support.get(cell)?, surrounding) * km2(field, cell),
-        )?;
+        let relative = relative_draw(
+            draw.get(cell)?,
+            people,
+            drawing_felt.get(cell)?,
+            demand_felt.get(cell)?,
+        );
+        let wanted = market_demand(people, people * relative, support.get(cell)?, surrounding);
+        demand.set(cell, wanted * km2(field, cell))?;
+        if relative > 1.0 {
+            traced.offer(Drawing {
+                weight: relative * people * km2(field, cell),
+                cell,
+                people,
+                relative,
+                surrounding,
+                wanted,
+            });
+        }
     }
+    traced.write(field, support)?;
     work.reach(field, &demand, &mut demand_felt)?;
     Ok((demand, demand_felt))
+}
+/// One cell drawing above its country, as the food trace reports it.
+#[derive(Clone, Copy)]
+struct Drawing {
+    weight: f64,
+    cell: usize,
+    people: f64,
+    relative: f64,
+    surrounding: f64,
+    wanted: f64,
+}
+/// The eight cells drawing most above their country, written to the server log when
+/// `ATLAS_TRACE_PEOPLE` is set: their people, relative draw, country density, local food and
+/// the food their markets order. It keeps only the strongest eight, without sorting cells.
+#[derive(Default)]
+struct Strongest {
+    kept: Vec<Drawing>,
+}
+impl Strongest {
+    fn offer(&mut self, drawing: Drawing) {
+        if self.kept.len() < 8 {
+            self.kept.push(drawing);
+            return;
+        }
+        let weakest = (0..self.kept.len()).fold(0, |w, i| {
+            if self.kept[i].weight < self.kept[w].weight {
+                i
+            } else {
+                w
+            }
+        });
+        if drawing.weight > self.kept[weakest].weight {
+            self.kept[weakest] = drawing;
+        }
+    }
+    fn write(&self, field: &Field, support: &ReadBand<f64>) -> std::io::Result<()> {
+        if std::env::var_os("ATLAS_TRACE_PEOPLE").is_none() {
+            return Ok(());
+        }
+        let [ox, oy] = field.mesh.origin();
+        let mut top = Vec::new();
+        for d in &self.kept {
+            let [x, y] = field.mesh.position(d.cell);
+            top.push(serde_json::json!({
+                "at": [(x + ox).round(), (y + oy).round()], "weight": d.weight.round(),
+                "perKm2": d.people.round(), "relativeDraw": (d.relative * 100.0).round() / 100.0,
+                "countryPerKm2": d.surrounding.round(), "fedPerKm2": support.get(d.cell)?.round(),
+                "ordersPerKm2": d.wanted.round(),
+            }));
+        }
+        eprintln!(
+            "{}",
+            serde_json::json!({"event": "people.drawing", "details": {"top": top}})
+        );
+        Ok(())
+    }
 }
 
 fn share(
@@ -162,7 +248,8 @@ fn share(
 ) -> ExecutionResult<()> {
     let field = context.state();
     let support = context.query(&q.support)?.values();
-    let (demand, demand_felt) = food_requests(field, work, &support)?;
+    let draw = context.query(&q.draw)?.values();
+    let (demand, demand_felt) = food_requests(field, work, &support, &draw)?;
     let mut offered = working(field);
     let mut reached = working(field);
     let mut taken = working(field);
@@ -208,10 +295,12 @@ fn offer_per_request(available: f64, reachable_requests: f64) -> f64 {
 
 /// Existing urban concentration can commission food for additional households.
 /// Local food first covers current residents and any growth it can already feed.
-fn market_demand(living: f64, support: f64, surrounding: f64) -> f64 {
+/// `drawn` is the crowd the place draws as: its people, raised by how much more its places
+/// draw than the country around, so a seat or harbour orders food for those who will come.
+fn market_demand(living: f64, drawn: f64, support: f64, surrounding: f64) -> f64 {
     // Potential arrivals come from the surrounding population. An established
     // city cannot commission a second city of its own size from empty land.
-    let arrivals = (living - surrounding).max(0.0).min(surrounding);
+    let arrivals = (drawn - surrounding).max(0.0).min(surrounding);
     (living + arrivals - support).max(0.0)
 }
 pub fn operation(
@@ -259,11 +348,21 @@ mod tests {
     #[test]
     fn urban_demand_anticipates_arrivals_only_where_people_concentrate() {
         use super::market_demand;
-        assert_eq!(market_demand(50.0, 50.0, 50.0), 0.0);
-        assert_eq!(market_demand(50.0, 35.0, 50.0), 15.0);
-        assert_eq!(market_demand(100.0, 100.0, 50.0), 50.0);
-        assert_eq!(market_demand(100.0, 160.0, 50.0), 0.0);
-        assert_eq!(market_demand(1_000.0, 1_000.0, 50.0), 50.0);
+        assert_eq!(market_demand(50.0, 50.0, 50.0, 50.0), 0.0);
+        assert_eq!(market_demand(50.0, 50.0, 35.0, 50.0), 15.0);
+        assert_eq!(market_demand(100.0, 100.0, 100.0, 50.0), 50.0);
+        assert_eq!(market_demand(100.0, 100.0, 160.0, 50.0), 0.0);
+        assert_eq!(market_demand(1_000.0, 1_000.0, 1_000.0, 50.0), 50.0);
+    }
+
+    #[test]
+    fn a_place_that_draws_above_its_country_orders_food_for_arrivals() {
+        use super::{market_demand, relative_draw};
+        assert_eq!(relative_draw(500.0, 100.0, 5_000.0, 1_000.0), 1.0);
+        assert_eq!(relative_draw(1_250.0, 100.0, 5_000.0, 1_000.0), 2.5);
+        let drawn = 60.0 * relative_draw(150.0, 60.0, 1_000.0, 1_000.0);
+        assert!(market_demand(60.0, drawn, 60.0, 50.0) > market_demand(60.0, 60.0, 60.0, 50.0));
+        assert_eq!(relative_draw(10.0, 0.0, 1.0, 1.0), 1.0);
     }
 
     #[test]

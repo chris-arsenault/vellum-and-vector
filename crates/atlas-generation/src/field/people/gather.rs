@@ -1,6 +1,6 @@
 // Arconis: docs/architecture/subsystems.arconis#item=pp_move — moves people toward room along the going.
 use super::{
-    facts::PRESSURE,
+    facts::{CONCENTRATION, PRESSURE},
     land::WorkInput,
     questions::Questions,
     work::{habitable, km2, working, Work},
@@ -154,15 +154,18 @@ fn drain(
     owner: &operations::Operations<Field>,
     leaving: &mut Leaving,
 ) -> ExecutionResult<()> {
+    let draw = context.query(&q.draw)?.values();
     let field = context.state();
     let mut crowd = working(field);
-    let mut pull = working(field);
+    let mut drawing = working(field);
     for cell in 0..field.mesh.len() {
         if habitable(field, cell)? {
             crowd.set(cell, field.people.people(cell)? * km2(field, cell))?;
+            drawing.set(cell, draw.get(cell)? * km2(field, cell))?;
         }
     }
-    work.reach(field, &crowd, &mut pull)?;
+    trace_draw(field, &draw)?;
+    let pull = concentrated_pull(field, work, &drawing)?;
     let support = context.query(&q.support)?.values();
     let spare = |cell| {
         Ok::<_, io::Error>(
@@ -195,6 +198,69 @@ fn drain(
     move_people(context, work, owner, leaving)
 }
 
+/// How much more than its size a cell pulls: its draw against the country around it, raised
+/// to the concentration exponent. A town above its country outdraws a crowd of the same size
+/// spread thin; country no denser than its surroundings pulls in proportion.
+pub fn concentration_weight(here: f64, around: f64) -> f64 {
+    if here <= 0.0 || around <= 0.0 {
+        return 1.0;
+    }
+    (here / around).max(1.0).powf(CONCENTRATION)
+}
+/// How much the places raise people's pull, written to the server log when
+/// `ATLAS_TRACE_PEOPLE` is set: the people-weighted mean of draw over people, its largest
+/// value, and the people living where places raise it by a tenth or more.
+fn trace_draw(field: &Field, draw: &crate::storage::ReadBand<f64>) -> io::Result<()> {
+    if std::env::var_os("ATLAS_TRACE_PEOPLE").is_none() {
+        return Ok(());
+    }
+    let (mut people, mut weighted, mut most, mut raised) = (0.0, 0.0, 0.0f64, 0.0);
+    for cell in 0..field.mesh.len() {
+        let living = field.people.people(cell)? * km2(field, cell);
+        if living <= 0.0 {
+            continue;
+        }
+        let ratio = draw.get(cell)? * km2(field, cell) / living;
+        people += living;
+        weighted += living * ratio;
+        most = most.max(ratio);
+        if ratio >= 1.1 {
+            raised += living;
+        }
+    }
+    eprintln!(
+        "{}",
+        serde_json::json!({"event": "people.draw", "details": {
+            "people": people.round(),
+            "meanDrawOverPeople": (weighted / people.max(1.0) * 1000.0).round() / 1000.0,
+            "largest": (most * 1000.0).round() / 1000.0,
+            "peopleWhereRaised": raised.round(),
+        }})
+    );
+    Ok(())
+}
+/// The pull felt in each cell: every cell's draw, weighted by its concentration above the
+/// country within the travel reach, spread back over that reach.
+fn concentrated_pull(field: &Field, work: &Work, drawing: &Band<f64>) -> io::Result<Band<f64>> {
+    let mut around = working(field);
+    work.reach(field, drawing, &mut around)?;
+    let mut weighted = working(field);
+    for cell in 0..field.mesh.len() {
+        let mass = drawing.get(cell)?;
+        let land = work.land.get(cell)?;
+        if mass <= 0.0 || land <= 0.0 {
+            continue;
+        }
+        let here = mass / km2(field, cell);
+        weighted.set(
+            cell,
+            mass * concentration_weight(here, around.get(cell)? / land),
+        )?;
+    }
+    let mut pull = working(field);
+    work.reach(field, &weighted, &mut pull)?;
+    Ok(pull)
+}
 /// Remaining market supply constrains the arriving group. Existing residents'
 /// food demand has already been deducted by the feeding process.
 fn supported_share(willing: f64, spare: f64, source_people: f64) -> f64 {
@@ -255,6 +321,16 @@ mod tests {
         assert_eq!(600.0 * leaving.share.get(0).unwrap(), 75.0);
         assert_eq!(200.0 * leaving.share.get(1).unwrap(), 25.0);
         assert_eq!(200.0 * leaving.share.get(2).unwrap(), 100.0);
+    }
+
+    #[test]
+    fn a_town_above_its_country_pulls_more_than_its_size() {
+        use super::concentration_weight;
+        assert_eq!(concentration_weight(50.0, 50.0), 1.0);
+        assert_eq!(concentration_weight(20.0, 50.0), 1.0);
+        assert!(concentration_weight(5_000.0, 50.0) > concentration_weight(500.0, 50.0));
+        assert!(concentration_weight(500.0, 50.0) > 1.0);
+        assert_eq!(concentration_weight(0.0, 50.0), 1.0);
     }
 
     #[test]

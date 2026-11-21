@@ -172,6 +172,33 @@ fn landscape_kind(kind: Kind) -> Option<&'static str> {
         _ => return None,
     })
 }
+/// Works too small for a world map to publish, which still stand and serve people there.
+fn published_below_world(kind: Kind) -> bool {
+    use Kind::*;
+    matches!(
+        kind,
+        Mine | Shrine
+            | Forge
+            | Archive
+            | Harbour
+            | Irrigation
+            | Clearance
+            | Mill
+            | Ford
+            | Bridge
+            | Dam
+    )
+}
+/// Whether a found place stands on this map at all, published or not: every realized place,
+/// and the works a world map leaves to finer maps. Landforms below this map's significance
+/// are not here, since at this scale there is no such landform.
+pub fn present<S: RealizationState, Schedule>(
+    state: &S,
+    entry: &Entry<S, Schedule>,
+    place: &Place,
+) -> io::Result<bool> {
+    Ok(published_below_world(entry.id) || realized(state, entry, place)?)
+}
 fn gate(state: &impl RealizationState, kind: Kind, place: &Place) -> io::Result<bool> {
     use Kind::*;
     let field = state.field()?;

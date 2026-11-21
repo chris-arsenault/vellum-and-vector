@@ -19,6 +19,7 @@ pub struct Questions {
     pub climbing: Query<Field, AnswerBand>,
     pub yielding: Query<Field, AnswerBand>,
     pub presence: Query<Field, AnswerBand>,
+    pub draw: Query<Field, AnswerBand>,
 }
 pub fn built_hold(
     book: &mut QuestionBook<Field, &'static str>,
@@ -67,6 +68,7 @@ impl Questions {
             climbing: query("climbing"),
             yielding: query("yielding"),
             presence: query("presence"),
+            draw: query("draw"),
         }
     }
     pub fn select(&self, executor: &mut crate::execution::Executor<Field>) {
@@ -87,6 +89,7 @@ impl Questions {
             &self.climbing,
             &self.yielding,
             &self.presence,
+            &self.draw,
         ] {
             executor.select(question);
         }

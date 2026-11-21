@@ -236,7 +236,21 @@ fn people<S: CommunityState + 'static>(kind: Practice) -> People<S> {
         statement: Must::Value("Forges supply power and worked metal at a risk to core crackers; archives draw scholars and trade while reading strains minds.".into()),
         offers: Slot::Value(Rc::new(move |state, place| {
             let size = magnitude(state, place)?;
-            Ok(if kind == Practice::Forge { [(Benefit::Power, size), (Benefit::Materials, size)] } else { let memory = retention(state, place.anchor)? * settled::strength(place); [(Benefit::Sanctity, memory), (Benefit::Trade, memory * size)] }.into_iter().collect())
+            if kind == Practice::Forge {
+                // A forge's power and worked metal serve the hearth-keepers who crack its cores.
+                let fire = crate::field::people::crafts::CRAFTS
+                    .iter()
+                    .find(|craft| craft.system == "fire")
+                    .map_or(0, |craft| craft.code);
+                let craft = crate::human::identity::Tradition::Craft;
+                return Ok([(Benefit::Power, size), (Benefit::Materials, size)]
+                    .into_iter()
+                    .collect::<Benefits>()
+                    .serving(Benefit::Power, craft, fire)
+                    .serving(Benefit::Materials, craft, fire));
+            }
+            let memory = retention(state, place.anchor)? * settled::strength(place);
+            Ok([(Benefit::Sanctity, memory), (Benefit::Trade, memory * size)].into_iter().collect())
         })),
         threatens: Slot::Value(Rc::new(move |state, place| Ok(vec![if kind == Practice::Forge { Hazard { hazard: "core cracking".into(), reach: settled::attribute(place, "radius", 0.0).max(seat(state)?), severity: 0.3 * settled::strength(place) } } else { Hazard { hazard: "cognitive strain".into(), reach: seat(state)?, severity: 0.2 } }]))),
     }
