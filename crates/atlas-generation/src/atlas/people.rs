@@ -99,7 +99,7 @@ impl Operations {
             move |scope, struck| scope.root_run(&event, struck),
         );
         let events = land::events(
-            land_events::operation(questions, owner, effects),
+            land_events::operation(questions, owner, effects, physical.rivers.clone()),
             input.clone(),
             projection,
         );

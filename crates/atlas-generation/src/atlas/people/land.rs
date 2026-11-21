@@ -175,6 +175,7 @@ pub(super) fn events(
                 events: state.people.events.clone(),
                 places: state.people.places.clone(),
                 ways: state.people.ways.clone(),
+                links: state.travel_links(),
                 era: era.era.clone(),
                 years: era.years,
                 town: input.parameters.town_threshold,

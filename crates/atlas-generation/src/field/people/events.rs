@@ -21,6 +21,11 @@ pub struct Event {
     pub townsfolk: f64,
     pub magnitude: f64,
     pub causes: Vec<String>,
+    /// How many survivors fled the place, and the living place they fled to, if they reached one.
+    #[serde(default)]
+    pub displaced: f64,
+    #[serde(default)]
+    pub refuge: Option<String>,
 }
 #[derive(Default, Serialize, Deserialize)]
 pub struct Events {
@@ -63,16 +68,19 @@ impl Events {
         let townsfolk = rounded(place.town_people.max(place.peak));
         self.record(Event { id: String::new(), kind: "famine".into(), era: era.into(), place: place.id.clone(), cell: place.anchor,
             casualties, townsfolk, magnitude: casualties / (casualties + townsfolk),
-            causes: vec![format!("{era}: the country around this place could not feed those who lived on it, and {casualties} died here.")] });
+            causes: vec![format!("{era}: the country around this place could not feed those who lived on it, and {casualties} died here.")],
+            displaced: 0.0, refuge: None });
         Ok(())
     }
+    /// The siege of a place that passed from one realm's hold to another's this era, for the
+    /// caller to strike and then record; `None` where it did not change hands.
     pub fn siege(
         &mut self,
         field: &Field,
         memory: &Context,
         place: &Place,
         era: &str,
-    ) -> io::Result<()> {
+    ) -> io::Result<Option<Event>> {
         let column = field.people.column(place.anchor)?;
         let (realm, holding) = leading(&column, Tradition::Allegiance);
         let before = self.held.get(&place.id).copied().unwrap_or(0);
@@ -80,7 +88,20 @@ impl Events {
             self.held.insert(place.id.clone(), realm);
         }
         if realm == 0 || before == 0 || before == realm || place.abandoned.is_some() {
-            return Ok(());
+            return Ok(None);
+        }
+        // A realm that ended passed its towns on without a fight, and a town that rose to seat
+        // a realm of its own was not taken.
+        let ended = memory
+            .traditions
+            .get(before)
+            .is_some_and(|t| t.ended.is_some());
+        let seats_it = memory
+            .traditions
+            .get(realm)
+            .is_some_and(|t| t.seat.as_ref() == Some(&place.id));
+        if ended || seats_it {
+            return Ok(None);
         }
         let name = |code| {
             memory
@@ -90,7 +111,7 @@ impl Events {
                 .map_or("another realm", |e| e.name.as_str())
         };
         let everyone: f64 = column.iter().map(|layer| layer.people).sum();
-        self.record(Event {
+        Ok(Some(Event {
             id: String::new(),
             kind: "siege".into(),
             era: era.into(),
@@ -108,8 +129,9 @@ impl Events {
                 name(before),
                 name(realm)
             )],
-        });
-        Ok(())
+            displaced: 0.0,
+            refuge: None,
+        }))
     }
     pub fn count_dead(&mut self, field: &Field) -> io::Result<()> {
         let dead = field.people.view(HumanField::MassDeath);

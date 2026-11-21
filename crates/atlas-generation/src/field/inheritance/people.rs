@@ -44,13 +44,18 @@ pub(super) fn install(samples: &Samples, seed: &mut FieldSeed, cell: usize) -> i
         identity.people = get("People")?;
         identity.hardness = get("Hardness")?;
         identity.age = get("Age")?;
-        for (value, part) in
-            identity
-                .traditions
-                .iter_mut()
-                .zip(["Tongue", "Faith", "Custom", "Allegiance", "Craft"])
+        for (value, part) in identity
+            .traditions
+            .iter_mut()
+            .zip(crate::human::identity::Tradition::NAMES)
         {
-            *value = (get(part)? + 0.5).floor() as i32;
+            // Maps captured before people knew a second tongue have no band for it.
+            let read = if part == "Known" {
+                get(part).unwrap_or(0.0)
+            } else {
+                get(part)?
+            };
+            *value = (read + 0.5).floor() as i32;
         }
     }
     seed.people.initialize_column(cell, &identities)

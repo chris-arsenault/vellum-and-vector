@@ -68,6 +68,15 @@ pub struct Tradition {
     pub seat: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ended: Option<String>,
+    /// For a realm: how well it holds together, from 0 to 1. It follows the share of its
+    /// people their land feeds and how many of its towns stand, over the years.
+    #[serde(default = "whole")]
+    pub health: f64,
+}
+/// The health a successor realm begins with: the old society cycle's 0.65.
+const SUCCESSOR_HEALTH: f64 = 0.65;
+fn whole() -> f64 {
+    1.0
 }
 pub struct Founding {
     pub kind: Kind,
@@ -180,6 +189,13 @@ impl Traditions {
             origin: founding.origin,
             seat: None,
             ended: None,
+            // A realm that breaks from another begins as unsteady as the old society cycle's
+            // successors; a first realm begins whole.
+            health: if founding.parent.is_some() {
+                SUCCESSOR_HEALTH
+            } else {
+                1.0
+            },
         });
         Ok(code)
     }
@@ -241,6 +257,7 @@ impl Traditions {
                 origin,
                 seat: None,
                 ended: None,
+                health: 1.0,
             });
         }
         self.known = restored
@@ -256,6 +273,7 @@ impl Traditions {
                     origin: Position::default(),
                     seat: None,
                     ended: Some("forgotten".into()),
+                    health: 1.0,
                 })
             })
             .collect();

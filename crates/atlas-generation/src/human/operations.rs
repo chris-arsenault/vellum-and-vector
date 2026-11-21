@@ -30,7 +30,9 @@ pub struct Dwelling {
     pub fading: Option<ReadBand<f64>>,
 }
 pub struct Overlay {
-    pub traditions: [Option<ReadBand<i32>>; 5],
+    /// Per tradition, the code each cell's taking people adopt: above zero a tradition, below
+    /// zero none (the tradition is lost), zero no change.
+    pub traditions: [Option<ReadBand<i32>>; crate::human::identity::TRADITIONS],
     pub people: ReadBand<f64>,
     pub hardness: f64,
 }

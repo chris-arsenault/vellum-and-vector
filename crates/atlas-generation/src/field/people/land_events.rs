@@ -1,18 +1,26 @@
 // Arconis: docs/architecture/subsystems.arconis#item=pp_events — applies famine, disaster and siege while keeping frontiers.
 use super::{
     events::{dead_on, rounded, Event, Events},
+    facts::PEOPLE_PER_BUILT_KM2,
+    flight::{Fled, Flight, Going},
     frontiers,
     hazards::Hazard,
     place_country::KnownWay,
     places::{Place, Places},
     questions::Questions,
     traditions,
+    travel::Travel,
     work::working,
 };
 use crate::{
-    execution::{Command, CommandContext, CommandKind, ExecutionResult},
+    execution::{Command, CommandContext, CommandKind, ExecutionResult, Query},
     field::Field,
-    human::operations::{self, Keep, Wear},
+    human::{
+        catalogue::LayerId,
+        operations::{self, Keep, Wear},
+        HumanField,
+    },
+    links::Offers,
     storage::ReadBand,
 };
 use std::{cell::RefCell, io, rc::Rc};
@@ -28,6 +36,7 @@ pub struct Era {
     pub events: Rc<RefCell<Events>>,
     pub places: Rc<RefCell<Places>>,
     pub ways: Rc<RefCell<Vec<KnownWay>>>,
+    pub links: Rc<Offers<Field>>,
     pub era: String,
     pub years: f64,
     pub town: f64,
@@ -57,10 +66,74 @@ fn exposure(
 struct Strike<'a> {
     era: &'a Era,
     harm: &'a ReadBand<f64>,
+    flight: &'a Flight<'a>,
     owner: &'a operations::Operations<Field>,
     effects: &'a Command<Field, Struck>,
 }
+/// How hard a siege wears the place it takes, before its walls. With the magnitude's six to
+/// nine tenths, the old society cycle's siege magnitudes, it kills about a fifth of the town.
+const SIEGE_WEAR: f64 = 0.5;
+/// How much a full offer of defence lessens a siege's toll.
+const DEFENDED: f64 = 1.0;
+/// Writes where a strike's survivors went onto its event and its account.
+fn fled_to(era: &Era, event: &mut Event, fled: &Fled) {
+    event.displaced = rounded(fled.people);
+    event.refuge = fled.refuge.and_then(|cell| {
+        era.places
+            .borrow()
+            .known
+            .iter()
+            .find(|p| p.abandoned.is_none() && p.absorbed_by.is_none() && p.cells.contains(&cell))
+            .map(|p| p.id.clone())
+    });
+}
+fn fled_clause(fled: f64) -> String {
+    if fled > 0.0 {
+        format!(", and {fled} fled to the country nearby")
+    } else {
+        String::new()
+    }
+}
 impl Strike<'_> {
+    /// A place taken by another realm is besieged: its people die and its works are worn by
+    /// how firmly the taker now holds it, less for the walls it offers, and its survivors
+    /// flee. The siege is then recorded with its toll.
+    fn siege(
+        &self,
+        context: &mut CommandContext<'_, Field>,
+        place: &Place,
+        event: &mut Event,
+    ) -> ExecutionResult<()> {
+        let defence = context.state().place_offers().map_or(Ok(0.0), |offers| {
+            offers.benefit(crate::field::poi::values::Benefit::Defence, place.anchor)
+        })?;
+        let magnitude = (0.6 + 0.3 * event.magnitude.clamp(0.0, 1.0)) / (1.0 + DEFENDED * defence);
+        let before = dead_on(context.state(), place)?;
+        let mut intensity = working(context.state());
+        for &cell in &place.cells {
+            intensity.set(cell, SIEGE_WEAR * magnitude * self.harm.get(cell)?)?;
+        }
+        context.run(
+            &self.owner.wear,
+            &Wear {
+                mix: siege_mix(),
+                intensity: intensity.read_only(),
+            },
+        )?;
+        let casualties = rounded(dead_on(context.state(), place)? - before);
+        let fled = self.flight.flee(context, place, &place.cells, magnitude)?;
+        fled_to(self.era, event, &fled);
+        event.casualties = casualties;
+        // The siege's works are worn through the standing layer above; it changes no ground,
+        // so the catalogue's event command has nothing to do for it.
+        event.magnitude = magnitude;
+        event.causes.push(format!(
+            "{} died in the taking{}.",
+            casualties,
+            fled_clause(event.displaced)
+        ));
+        Ok(())
+    }
     fn place(&self, context: &mut CommandContext<'_, Field>, place: &Place) -> ExecutionResult<()> {
         for hazard in Hazard::ALL {
             let (cells, worst, yearly) = exposure(context.state(), place, hazard)?;
@@ -74,7 +147,7 @@ impl Strike<'_> {
                 (hazard.severity() * (0.5 + (self.era.random.borrow_mut())() * 1.5)).min(1.0);
             let before = dead_on(context.state(), place)?;
             let mut intensity = working(context.state());
-            for cell in cells {
+            for &cell in &cells {
                 intensity.set(cell, magnitude * self.harm.get(cell)?)?;
             }
             context.run(
@@ -85,7 +158,8 @@ impl Strike<'_> {
                 },
             )?;
             let casualties = rounded(dead_on(context.state(), place)? - before);
-            self.era.events.borrow_mut().record(Event {
+            let fled = self.flight.flee(context, place, &cells, magnitude)?;
+            let mut event = Event {
                 id: String::new(),
                 kind: hazard.kind().into(),
                 era: self.era.era.clone(),
@@ -94,12 +168,18 @@ impl Strike<'_> {
                 casualties,
                 townsfolk: rounded(place.town_people),
                 magnitude,
-                causes: vec![format!(
-                    "{}: {} {casualties} died.",
-                    self.era.era,
-                    hazard.cause()
-                )],
-            });
+                causes: Vec::new(),
+                displaced: 0.0,
+                refuge: None,
+            };
+            fled_to(self.era, &mut event, &fled);
+            event.causes.push(format!(
+                "{}: {} {casualties} died{}.",
+                self.era.era,
+                hazard.cause(),
+                fled_clause(event.displaced)
+            ));
+            self.era.events.borrow_mut().record(event);
             context.run(
                 self.effects,
                 &Struck {
@@ -164,7 +244,9 @@ impl Strike<'_> {
                 },
             )?;
             let casualties = rounded(dead_on(context.state(), place)? - before);
-            self.era.events.borrow_mut().record(Event {
+            let struck: Vec<usize> = exposed.iter().map(|&(cell, _)| cell).collect();
+            let fled = self.flight.flee(context, place, &struck, magnitude)?;
+            let mut event = Event {
                 id: String::new(),
                 kind: threat.kind.clone(),
                 era: self.era.era.clone(),
@@ -173,14 +255,30 @@ impl Strike<'_> {
                 casualties,
                 townsfolk: rounded(place.town_people),
                 magnitude,
-                causes: vec![format!(
-                    "{}: {} {casualties} died.",
-                    self.era.era, threat.cause
-                )],
-            });
+                causes: Vec::new(),
+                displaced: 0.0,
+                refuge: None,
+            };
+            fled_to(self.era, &mut event, &fled);
+            event.causes.push(format!(
+                "{}: {} {casualties} died{}.",
+                self.era.era,
+                threat.cause,
+                fled_clause(event.displaced)
+            ));
+            self.era.events.borrow_mut().record(event);
         }
         Ok(())
     }
+}
+/// How a siege wears the place it takes: mostly by fire, and by the shaking down of walls
+/// and roofs.
+fn siege_mix() -> crate::human::catalogue::CompiledLayerMix {
+    use crate::human::catalogue::{compile, LayerMode};
+    let mut taking = [0.0; 7];
+    taking[LayerMode::Burn as usize] = 0.6;
+    taking[LayerMode::Shake as usize] = 0.4;
+    compile(taking)
 }
 /// How hard a meeting at full severity wears the living ground it strikes. Through the
 /// shake-and-burn mix this takes about a fifth of the people there, as the old society
@@ -195,10 +293,31 @@ fn threat_mix() -> crate::human::catalogue::CompiledLayerMix {
     striking[LayerMode::Burn as usize] = 0.5;
     compile(striking)
 }
+/// Each cell's room for people per km², as growth reckons it: what its land feeds and its
+/// built ground houses, on ground people can live on.
+fn room(
+    context: &mut CommandContext<'_, Field>,
+    questions: &Questions,
+) -> ExecutionResult<ReadBand<f64>> {
+    let fed = context.query(&questions.support)?.values();
+    let livable = context.query(&questions.livable)?.values();
+    let field = context.state();
+    let built = field.people.view(HumanField::Layer(LayerId::BuiltUp));
+    let mut room = working(field);
+    for cell in 0..field.mesh.len() {
+        room.set(
+            cell,
+            (fed.get(cell)?.max(0.0) + built.get(cell)? * PEOPLE_PER_BUILT_KM2)
+                * livable.get(cell)?.max(0.0),
+        )?;
+    }
+    Ok(room.read_only())
+}
 pub fn operation(
     questions: Rc<Questions>,
     owner: Rc<operations::Operations<Field>>,
     effects: Command<Field, Struck>,
+    rivers: Query<Field, ReadBand<u32>>,
 ) -> Command<Field, Era> {
     Command::with_inputs(
         "human.events",
@@ -211,11 +330,26 @@ pub fn operation(
                 harm.set(cell, asked.get(cell)?)?;
             }
             let harm = harm.read_only();
+            let room = room(context, &questions)?;
+            let friction = context.query(&questions.friction)?.values();
+            let climbing = context.query(&questions.climbing)?.values();
+            let rivers = context.query(&rivers)?;
+            let going = {
+                let field = context.state();
+                Going::new(field, &Travel::new(field, friction, climbing, rivers)?)?
+            };
+            let flight = Flight {
+                going: &going,
+                links: &era.links,
+                room: &room,
+                owner: &owner,
+            };
             era.events.borrow_mut().era = Some(era.era.clone());
             let places = era.places.borrow().known.clone();
             let strike = Strike {
                 era,
                 harm: &harm,
+                flight: &flight,
                 owner: &owner,
                 effects: &effects,
             };
@@ -226,12 +360,16 @@ pub fn operation(
                 if place.abandoned.is_none() {
                     strike.place(context, place)?;
                 }
-                era.events.borrow_mut().siege(
+                let taken = era.events.borrow_mut().siege(
                     context.state(),
                     &era.memory.borrow(),
                     place,
                     &era.era,
                 )?;
+                if let Some(mut siege) = taken {
+                    strike.siege(context, place, &mut siege)?;
+                    era.events.borrow_mut().record(siege);
+                }
             }
             era.events.borrow_mut().count_dead(context.state())?;
             let mut kept = vec![false; context.state().mesh.len()];

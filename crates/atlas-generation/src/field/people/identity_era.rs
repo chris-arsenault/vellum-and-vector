@@ -346,6 +346,10 @@ fn share(
                     },
                 )?;
             }
+            if tradition == Tradition::Tongue {
+                learn(context, owner, &codes, &people)?;
+                continue;
+            }
             let mut traditions = std::array::from_fn(|_| None);
             traditions[tradition as usize] = Some(codes.read_only());
             context.run(
@@ -358,7 +362,102 @@ fn share(
             )?;
         }
     }
-    Ok(())
+    forget(context, era, owner)
+}
+/// The share of the people a tongue reaches who learn it as a second tongue; the rest take it
+/// up as their own and keep the one they spoke as a tongue they know.
+const LEARNING: f64 = 2.0 / 3.0;
+/// People who meet a tongue learn it before they speak it: most come to know it beside their
+/// own, the rest take it up and keep their old tongue as one they know.
+fn learn(
+    context: &mut CommandContext<'_, Field>,
+    owner: &operations::Operations<Field>,
+    codes: &Band<i32>,
+    reached: &Band<f64>,
+) -> ExecutionResult<()> {
+    let field = context.state();
+    let spoken = leading_all(field)?;
+    let mut old = field.coverage.borrow_mut().scratch(field.mesh.len(), 0i32);
+    let mut learning = working(field);
+    let mut speaking = working(field);
+    for cell in 0..field.mesh.len() {
+        // Those taking up the tongue their place already speaks keep no other.
+        let before = spoken[0].code[cell];
+        old.set(cell, if before == codes.get(cell)? { 0 } else { before })?;
+        learning.set(cell, reached.get(cell)? * LEARNING)?;
+        speaking.set(cell, reached.get(cell)? * (1.0 - LEARNING))?;
+    }
+    let mut known = std::array::from_fn(|_| None);
+    known[Tradition::Known as usize] = Some(codes.read_only());
+    context.run(
+        &owner.overlay,
+        &Overlay {
+            traditions: known,
+            people: learning.read_only(),
+            hardness: 0.0,
+        },
+    )?;
+    let mut taken_up = std::array::from_fn(|_| None);
+    taken_up[Tradition::Tongue as usize] = Some(codes.read_only());
+    taken_up[Tradition::Known as usize] = Some(old.read_only());
+    context.run(
+        &owner.overlay,
+        &Overlay {
+            traditions: taken_up,
+            people: speaking.read_only(),
+            hardness: 0.0,
+        },
+    )
+}
+/// The share of the people on and around a cell who must speak a tongue for those who know it
+/// there to keep it.
+const KEPT_BY_USE: f64 = 0.01;
+/// How long an unused tongue takes to fade, in years: the old society cycle's 300.
+const FORGETTING_YEARS: f64 = 300.0;
+/// A tongue known where almost no one around speaks it fades over the years.
+fn forget(
+    context: &mut CommandContext<'_, Field>,
+    era: &Era,
+    owner: &operations::Operations<Field>,
+) -> ExecutionResult<()> {
+    let field = context.state();
+    let fading = 1.0 - (-era.years / FORGETTING_YEARS).exp();
+    let mut lost = field.coverage.borrow_mut().scratch(field.mesh.len(), 0i32);
+    let mut people = working(field);
+    let (mut cells, mut knowing, mut all) = (0, 0.0, 0.0);
+    for cell in 0..field.mesh.len() {
+        let column = field.people.column(cell)?;
+        let (known, holding) = crate::human::identity::leading(&column, Tradition::Known);
+        let everyone: f64 = column.iter().map(|layer| layer.people).sum();
+        all += everyone * km2(field, cell);
+        if known == 0 || everyone <= 0.0 {
+            continue;
+        }
+        cells += 1;
+        knowing += holding * km2(field, cell);
+        if super::speech::spoken(known, &super::speech::around(field, cell)?) < KEPT_BY_USE {
+            lost.set(cell, -1)?;
+            people.set(cell, holding * fading)?;
+        }
+    }
+    if std::env::var_os("ATLAS_TRACE_PEOPLE").is_some() {
+        eprintln!(
+            "{}",
+            serde_json::json!({"event": "people.tongues", "details": {
+                "era": era.era, "cellsKnowingAnother": cells,
+                "shareKnowingAnother": (knowing / all.max(f64::EPSILON) * 1000.0).round() / 1000.0}})
+        );
+    }
+    let mut changes = std::array::from_fn(|_| None);
+    changes[Tradition::Known as usize] = Some(lost.read_only());
+    context.run(
+        &owner.overlay,
+        &Overlay {
+            traditions: changes,
+            people: people.read_only(),
+            hardness: 0.0,
+        },
+    )
 }
 pub struct Operations {
     pub found: Command<Field, Era>,

@@ -6,14 +6,13 @@ use crate::{
     features::Relation,
     field::{
         people::{
-            identity_reads, political_regions,
+            country, identity_reads, political_regions, realm_character,
             traditions::{Kind, Tradition},
         },
         poi::map_records::{self, Record},
     },
     human::identity,
     identity::area_record_id,
-    scale::{AreaUnit, MapScale},
     storage::Band,
 };
 use serde_json::json;
@@ -116,22 +115,11 @@ fn territory(
     }
     Ok(())
 }
-fn describe(state: &State, realm: &Tradition, anyone: &Band<f64>, leads: &[i32]) -> io::Result<()> {
-    let field = state.field();
-    let mut people = 0.0;
-    for cell in 0..field.mesh().len() {
-        let share = anyone.get(cell)?;
-        if share > 0.0 {
-            people += share
-                * field.people().people(cell)?
-                * MapScale::area_units(
-                    field.mesh().area(cell),
-                    AreaUnit::SquareMetre,
-                    AreaUnit::SquareKilometre,
-                );
-        }
-    }
-    let places = state
+/// Each town a realm holds governs the realm's ground nearer to it than to the realm's other
+/// towns: its administration district, as the old society cycle drew one for each controlled
+/// community.
+fn districts(state: &mut State, realm: &Tradition, leads: &[i32]) -> io::Result<()> {
+    let towns: Vec<_> = state
         .people
         .places
         .borrow()
@@ -140,7 +128,76 @@ fn describe(state: &State, realm: &Tradition, anyone: &Band<f64>, leads: &[i32])
         .filter(|p| {
             p.abandoned.is_none() && p.absorbed_by.is_none() && leads[p.anchor] == realm.code
         })
-        .count();
+        .cloned()
+        .collect();
+    if towns.is_empty() {
+        return Ok(());
+    }
+    let field = state.field();
+    let anchors: Vec<usize> = towns.iter().map(|t| t.anchor).collect();
+    let mesh = field.mesh();
+    let step = |a: usize, b: usize| -> io::Result<f64> {
+        let (pa, pb) = (mesh.position(a), mesh.position(b));
+        Ok(mesh.delta_x(pa[0] - pb[0]).hypot(pa[1] - pb[1]))
+    };
+    let links = state.travel_links();
+    let nearest = country::spread(field, &anchors, &step, f64::INFINITY, None, &links)?.owner;
+    for (index, town) in towns.iter().enumerate() {
+        let governs = |cell: usize| Ok(leads[cell] == realm.code && nearest[cell] == index as i32);
+        let samples = state.physical.surface.samples();
+        let shape = shapes::samples(state, |sample| {
+            let cell = samples.get(sample)?;
+            if cell < 0 {
+                Ok(false)
+            } else {
+                governs(cell as usize)
+            }
+        })?;
+        let Some(shape) = shape else {
+            continue;
+        };
+        let name = state
+            .people
+            .memory
+            .borrow()
+            .entities
+            .get(&realm.entity)
+            .map_or_else(String::new, |e| e.name.clone());
+        let mut attributes = serde_json::Map::new();
+        attributes.insert(
+            "seat".into(),
+            area_record_id(state.scope.world, false, state.scope.area, &town.id).into(),
+        );
+        let mut feature = map_records::generated(
+            state,
+            Record {
+                key: &format!("jurisdiction:{}", town.id),
+                name: &format!("{name} district"),
+                kind: "jurisdiction",
+                layer: "administration",
+                geometry: shape,
+                attributes,
+            },
+        )?;
+        feature.relations = vec![Relation {
+            target_id: realm.entity,
+            kind: "administeredBy".into(),
+        }];
+        feature.causes = vec![format!(
+            "The ground of {name} nearer this town than any other the realm holds."
+        )];
+        state.write_feature(feature)?;
+    }
+    Ok(())
+}
+fn describe(state: &State, realm: &Tradition, anyone: &Band<f64>, leads: &[i32]) -> io::Result<()> {
+    let character = realm_character::character(
+        state.field(),
+        realm.code,
+        &anyone.read_only(),
+        leads,
+        &state.people.places.borrow().known,
+    )?;
     if let Some(entity) = state
         .people
         .memory
@@ -148,10 +205,17 @@ fn describe(state: &State, realm: &Tradition, anyone: &Band<f64>, leads: &[i32])
         .entities
         .get_mut(&realm.entity)
     {
+        // The realm's name ends in the word its people's character gives it now.
+        entity.name = realm_character::renamed(&entity.name, character.term);
         entity.attributes.insert(
             "character".into(),
-            json!({ "people": (people + 0.5).floor(), "places": places }),
+            json!({
+                "people": (character.people + 0.5).floor(),
+                "places": character.places,
+                "term": character.term,
+            }),
         );
+        entity.attributes.insert("status".into(), character.status.into());
     }
     Ok(())
 }
@@ -184,6 +248,7 @@ pub(super) fn operation() -> Operation {
                     Ok(anyone.get(cell)? >= FIRMLY_HELD)
                 })?;
                 territory(state, &realm, "claim", |cell| Ok(anyone.get(cell)? > 0.0))?;
+                districts(state, &realm, &leading.code)?;
             }
             Ok(())
         },

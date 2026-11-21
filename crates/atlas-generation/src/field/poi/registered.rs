@@ -149,6 +149,8 @@ where
         seat_practices::entry(seat_practices::Practice::Forge),
         seat_practices::entry(seat_practices::Practice::Archive),
         shrine::entry(),
+        super::institutions::institution(),
+        super::institutions::cultural_origin(),
         historical_sites::entry(Historical::Battlefield),
         historical_sites::entry(Historical::Disaster),
         super::city_places::wall(),

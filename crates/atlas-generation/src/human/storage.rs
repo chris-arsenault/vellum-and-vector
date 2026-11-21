@@ -1,6 +1,6 @@
 use super::{
     catalogue::{self, LayerId},
-    identity::{IdentityColumn, IdentityLayer, Tradition, IDENTITY_SLOTS},
+    identity::{IdentityColumn, IdentityLayer, Tradition, IDENTITY_SLOTS, TRADITIONS},
 };
 use crate::{
     lattice::TriangularLattice,
@@ -37,13 +37,13 @@ pub struct IdentityView {
     pub people: ReadBand<f64>,
     pub hardness: ReadBand<f64>,
     pub age: ReadBand<f64>,
-    pub traditions: [ReadBand<i32>; 5],
+    pub traditions: [ReadBand<i32>; TRADITIONS],
 }
 pub(super) struct IdentityBands {
     pub people: Band<f64>,
     hardness: Band<f64>,
     age: Band<f64>,
-    traditions: [Band<i32>; 5],
+    traditions: [Band<i32>; TRADITIONS],
 }
 impl IdentityBands {
     fn new(coverage: &mut Coverage) -> Self {
@@ -55,7 +55,7 @@ impl IdentityBands {
         }
     }
     fn read(&self, cell: usize) -> io::Result<IdentityLayer> {
-        let mut traditions = [0; 5];
+        let mut traditions = [0; TRADITIONS];
         for (value, band) in traditions.iter_mut().zip(&self.traditions) {
             *value = band.get(cell)?;
         }
@@ -267,9 +267,7 @@ impl HumanLayers {
                     return Ok(true);
                 }
             }
-            for (part, band) in ["Tongue", "Faith", "Custom", "Allegiance", "Craft"]
-                .into_iter()
-                .zip(&mut bands.traditions)
+            for (part, band) in Tradition::NAMES.into_iter().zip(&mut bands.traditions)
             {
                 if name == format!("Identity{part}{slot}") {
                     band.set(cell, (value + 0.5).floor() as i32)?;

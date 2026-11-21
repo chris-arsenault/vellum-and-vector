@@ -25,6 +25,9 @@ pub struct Craft {
     pub name: &'static str,
     pub medium: S,
     pub town: TownPractice,
+    /// The word a realm's name ends in when a third of its people keep this craft: the old
+    /// society cycle's Hold, Conclave and Covenant, and one for each later craft.
+    pub realm_term: &'static str,
 }
 // Arconis: docs/architecture/subsystems.arconis#item=pp_crafts — the seven magic crafts, each learned where its medium lies.
 pub const CRAFTS: [Craft; 7] = [
@@ -34,6 +37,7 @@ pub const CRAFTS: [Craft; 7] = [
         name: "hearth-keeping",
         medium: S::Quickening,
         town: town::FIRE,
+        realm_term: "Hold",
     },
     Craft {
         system: "aurora",
@@ -41,6 +45,7 @@ pub const CRAFTS: [Craft; 7] = [
         name: "reading",
         medium: S::Stillness,
         town: town::AURORA,
+        realm_term: "Conclave",
     },
     Craft {
         system: "pressure",
@@ -48,6 +53,7 @@ pub const CRAFTS: [Craft; 7] = [
         name: "diving",
         medium: S::FogForcing,
         town: town::PRESSURE,
+        realm_term: "Covenant",
     },
     Craft {
         system: "greenwood",
@@ -55,6 +61,7 @@ pub const CRAFTS: [Craft; 7] = [
         name: "tending",
         medium: S::Verdure,
         town: town::GREENWOOD,
+        realm_term: "Circle",
     },
     Craft {
         system: "salt",
@@ -62,6 +69,7 @@ pub const CRAFTS: [Craft; 7] = [
         name: "raking",
         medium: S::Salting,
         town: town::SALT,
+        realm_term: "Compact",
     },
     Craft {
         system: "hallowed",
@@ -69,6 +77,7 @@ pub const CRAFTS: [Craft; 7] = [
         name: "the vow",
         medium: S::Warding,
         town: town::HALLOWED,
+        realm_term: "Oath",
     },
     Craft {
         system: "veil",
@@ -76,6 +85,7 @@ pub const CRAFTS: [Craft; 7] = [
         name: "door-keeping",
         medium: S::Tearing,
         town: town::VEIL,
+        realm_term: "Threshold",
     },
 ];
 pub fn by_code(code: i32) -> Option<Craft> {

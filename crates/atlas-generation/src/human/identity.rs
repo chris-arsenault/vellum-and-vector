@@ -9,15 +9,24 @@ pub enum Tradition {
     Custom,
     Allegiance,
     Craft,
+    /// A tongue the layer's people know besides the one they speak: learned by contact,
+    /// forgotten where no one around them uses it.
+    Known,
 }
+/// How many traditions a layer of people holds.
+pub const TRADITIONS: usize = 6;
 impl Tradition {
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; TRADITIONS] = [
         Self::Tongue,
         Self::Faith,
         Self::Custom,
         Self::Allegiance,
         Self::Craft,
+        Self::Known,
     ];
+    /// The name each tradition's band takes in storage and publication.
+    pub const NAMES: [&'static str; TRADITIONS] =
+        ["Tongue", "Faith", "Custom", "Allegiance", "Craft", "Known"];
     pub const SOCIAL: [Self; 4] = [Self::Tongue, Self::Faith, Self::Custom, Self::Allegiance];
 }
 // Arconis: docs/architecture/subsystems.arconis#item=pp_layers — one entry of the people's identity column.
@@ -26,10 +35,10 @@ pub struct IdentityLayer {
     pub people: f64,
     pub hardness: f64,
     pub age: f64,
-    pub traditions: [i32; 5],
+    pub traditions: [i32; TRADITIONS],
 }
 pub type IdentityColumn = Vec<IdentityLayer>;
-pub type TraditionChanges = [Option<i32>; 5];
+pub type TraditionChanges = [Option<i32>; TRADITIONS];
 fn join(into: &mut IdentityLayer, from: &IdentityLayer) {
     let people = into.people + from.people;
     if people <= 0.0 {
@@ -123,7 +132,7 @@ pub fn arrive(column: &mut IdentityColumn, arriving: &[IdentityLayer]) {
     }
     settle(column);
 }
-fn changed(traditions: [i32; 5], changes: &TraditionChanges) -> [i32; 5] {
+fn changed(traditions: [i32; TRADITIONS], changes: &TraditionChanges) -> [i32; TRADITIONS] {
     std::array::from_fn(|index| changes[index].unwrap_or(traditions[index]))
 }
 pub fn overlay(
@@ -154,7 +163,7 @@ pub fn overlay(
         people: taken * without / open,
         hardness,
         age: 0.0,
-        traditions: changed([0; 5], changes),
+        traditions: changed([0; TRADITIONS], changes),
     }];
     for layer in column
         .iter_mut()
@@ -240,4 +249,32 @@ pub fn leading(column: &[IdentityLayer], field: Tradition) -> (i32, f64) {
                 (code, most)
             }
         })
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn realm_of(code: i32, people: f64) -> IdentityLayer {
+        let mut traditions = [0; TRADITIONS];
+        traditions[Tradition::Allegiance as usize] = code;
+        traditions[Tradition::Tongue as usize] = 1;
+        IdentityLayer {
+            people,
+            traditions,
+            ..Default::default()
+        }
+    }
+    #[test]
+    fn people_no_realm_reaches_forget_it_by_the_share_overlaid() {
+        let mut column = vec![realm_of(4, 100.0)];
+        let mut lost = [None; TRADITIONS];
+        lost[Tradition::Allegiance as usize] = Some(0);
+        let taken = overlay(&mut column, &lost, 40.0, 0.0, 0.0);
+        assert!((taken - 40.0).abs() < 1e-9);
+        let (realm, holding) = leading(&column, Tradition::Allegiance);
+        assert_eq!(realm, 4);
+        assert!((holding - 60.0).abs() < 1e-9);
+        // Their tongue is untouched.
+        assert!((leading(&column, Tradition::Tongue).1 - 100.0).abs() < 1e-9);
+    }
 }

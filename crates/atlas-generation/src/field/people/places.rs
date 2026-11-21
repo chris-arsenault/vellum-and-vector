@@ -34,6 +34,9 @@ pub struct Place {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub hinterland: Option<Hinterland>,
     pub history: Vec<History>,
+    /// The realm that nearly holds this town as firmly as its own, in the last era, if any.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub contested_by: Option<i32>,
 }
 pub struct Adopted {
     pub id: atlas_map::Id,
@@ -71,6 +74,7 @@ impl Place {
             works: 0.0,
             hinterland: None,
             history: Vec::new(),
+            contested_by: None,
         }
     }
     fn shared(&self, ground: &BitSet) -> usize {

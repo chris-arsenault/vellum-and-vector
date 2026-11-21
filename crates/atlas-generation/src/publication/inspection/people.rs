@@ -93,6 +93,7 @@ fn identity(cell: &Cell<'_>, density: f64) -> io::Result<Vec<BTreeMap<String, Va
             ("Custom", "custom"),
             ("Allegiance", "realm"),
             ("Craft", "craft"),
+            ("Known", "also knows"),
         ] {
             let channel = format!("Identity{tradition}{slot}");
             let code = (cell.read)(&channel)?;

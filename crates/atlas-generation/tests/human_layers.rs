@@ -277,7 +277,7 @@ fn identity_hardens_with_standing_and_keeps_unmentioned_traditions() {
         )
         .unwrap();
     let column = f.column(0);
-    assert_eq!(column[0].traditions, [1, 9, 0, 0, 0]);
+    assert_eq!(column[0].traditions, [1, 9, 0, 0, 0, 0]);
     near(column[0].people, 5.0);
     near(column[0].age, 10000.0);
 }
@@ -285,7 +285,7 @@ fn identity_hardens_with_standing_and_keeps_unmentioned_traditions() {
 fn identity_coarsening_prefers_craft_twins_and_renaming_joins_existing_holders() {
     let layer = |people, tongue, craft| IdentityLayer {
         people,
-        traditions: [tongue, 0, 0, 0, craft],
+        traditions: [tongue, 0, 0, 0, craft, 0],
         ..Default::default()
     };
     let mut column = vec![

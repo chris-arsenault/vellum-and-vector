@@ -42,7 +42,14 @@ fn event_feature(state: &impl WorkState, event: &Event) -> io::Result<Feature> {
         ("era", json!(event.era)),
         ("radius", json!(reach(state, event)?)),
         ("casualties", json!(event.casualties)),
-        ("displaced", json!(0)),
+        ("displaced", json!(event.displaced)),
+        (
+            "refugeAt",
+            json!(event.refuge.as_ref().map(|id| community_records::local_id(
+                state,
+                state.known_places().standing_place(id)
+            ))),
+        ),
         ("townsfolk", json!(event.townsfolk)),
         ("magnitude", json!(event.magnitude)),
     ] {

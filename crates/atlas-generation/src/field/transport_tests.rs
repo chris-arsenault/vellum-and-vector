@@ -48,7 +48,7 @@ fn one_dispatched_move_preserves_quantities_and_complete_owner_packages() {
                 people: 40.0,
                 hardness: 0.7,
                 age: 30.0,
-                traditions: [3, 4, 5, 6, 7],
+                traditions: [3, 4, 5, 6, 7, 8],
             }],
         )
         .unwrap();

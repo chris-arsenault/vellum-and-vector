@@ -223,7 +223,7 @@ fn people(bands: &mut Vec<NamedBand>, people: &crate::human::HumanLayers) {
         ] {
             add(bands, format!("Identity{name}{slot}"), value);
         }
-        for (name, value) in ["Tongue", "Faith", "Custom", "Allegiance", "Craft"]
+        for (name, value) in crate::human::identity::Tradition::NAMES
             .into_iter()
             .zip(identity.traditions)
         {

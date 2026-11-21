@@ -42,6 +42,8 @@ fn standing(
         "settlement"
     } else if seat.is_some() {
         "capital"
+    } else if place.town_people >= 4.0 * least && regional_capital(state, place, allegiance)? {
+        "regionalCapital"
     } else if place.town_people >= 4.0 * least {
         "marketTown"
     } else {
@@ -51,7 +53,61 @@ fn standing(
     if let Some(realm) = realm {
         attributes.insert("polityId".into(), realm.entity.into());
     }
+    let living = place.abandoned.is_none();
+    if let Some(rival) = place
+        .contested_by
+        .filter(|_| living)
+        .and_then(|code| traditions.get(code))
+    {
+        attributes.insert("contestedBy".into(), rival.entity.into());
+    }
     Ok(())
+}
+/// How far a regional capital's towns lie from it, as a share of the map's span: the old
+/// society cycle's region.
+const REGION: f64 = 0.0375;
+/// Whether a town outranks another for a region: by its townsfolk, then by its record.
+fn outranks(a: &KnownPlace, b: &KnownPlace) -> bool {
+    a.town_people > b.town_people || (a.town_people == b.town_people && a.id < b.id)
+}
+/// A town governing a region of its realm, as the old society cycle named regional capitals:
+/// at least two other towns of its allegiance lie within a region's distance, none of them
+/// larger and none of them a realm's seat.
+fn regional_capital(
+    state: &impl CommunityState,
+    place: &KnownPlace,
+    allegiance: i32,
+) -> io::Result<bool> {
+    if allegiance == 0 {
+        return Ok(false);
+    }
+    let field = state.field()?;
+    let reach = crate::field::people::travel::length(field, REGION)?;
+    let at = field.mesh.position(place.anchor);
+    let traditions = state.traditions();
+    let mut neighbours = 0;
+    for other in &state.known_places().known {
+        if other.id == place.id || other.abandoned.is_some() || other.absorbed_by.is_some() {
+            continue;
+        }
+        let there = field.mesh.position(other.anchor);
+        if field.mesh.delta_x(at[0] - there[0]).hypot(at[1] - there[1]) > reach {
+            continue;
+        }
+        let held = identity::leading(&field.people.column(other.anchor)?, Tradition::Allegiance).0;
+        if held != allegiance {
+            continue;
+        }
+        let seat = traditions
+            .known
+            .iter()
+            .any(|t| t.seat.as_deref() == Some(&other.id));
+        if seat || outranks(other, place) {
+            return Ok(false);
+        }
+        neighbours += 1;
+    }
+    Ok(neighbours >= 2)
 }
 fn whole(value: f64) -> f64 {
     (value + 0.5).floor()

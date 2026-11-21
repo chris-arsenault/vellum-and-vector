@@ -122,7 +122,32 @@ fn remains(field: &Field, cell: usize) -> io::Result<f64> {
     let built = field.people.view(HumanField::RuinedBuiltUp).get(cell)?;
     let works =
         field.people.view(HumanField::RuinedStanding).get(cell)? / FULL_STANDING_PER_BUILT_KM2;
-    Ok(built.max(works) * PEOPLE_PER_BUILT_KM2 * REMAINS_DRAW)
+    let left = built.max(works);
+    if left <= 0.0 {
+        return Ok(0.0);
+    }
+    Ok(left * PEOPLE_PER_BUILT_KM2 * REMAINS_DRAW * (1.0 + UNDER_RULE * ruled(field, cell)?))
+}
+/// How much more a ruin draws its founders back when a realm holds the country around it:
+/// the old society cycle resettled ruins held under control.
+const UNDER_RULE: f64 = 1.0;
+/// Whether a realm holds the people on or beside an empty cell, 0 or 1.
+fn ruled(field: &Field, cell: usize) -> io::Result<f64> {
+    use crate::human::identity::{leading, Tradition};
+    let held = |at| -> io::Result<bool> {
+        Ok(leading(&field.people.column(at)?, Tradition::Allegiance).0 != 0)
+    };
+    if held(cell)? {
+        return Ok(1.0);
+    }
+    for edge in 0..3 {
+        if let Some(next) = field.mesh.neighbor(cell, edge) {
+            if held(next)? {
+                return Ok(1.0);
+            }
+        }
+    }
+    Ok(0.0)
 }
 /// The `draw` question: the people here, plus the crowd ruins' remains once housed, scaled by
 /// what the places on this ground offer the people who value it.

@@ -48,7 +48,7 @@ fn found(field: &Field, era: &Era) -> io::Result<()> {
     if realm_seats::active(era).is_empty() {
         return realm_seats::first(field, era, &towns);
     }
-    let held = realm_seats::seats(era);
+    let held = realm_seats::seats(field, era)?;
     let travel = era.travel(field)?;
     let centres: Vec<_> = held.iter().map(|s| s.anchor).collect();
     let strengths: Vec<_> = held.iter().map(|s| s.strength).collect();
@@ -79,7 +79,15 @@ fn found(field: &Field, era: &Era) -> io::Result<()> {
     }
     Ok(())
 }
-fn falling(field: &Field, era: &Era, held: &[Seat]) -> io::Result<Vec<i32>> {
+/// How close a runner-up's hold must come to the holder's for a town to be contested: the
+/// old society cycle's runner-up above four fifths of the leader.
+const CONTESTED: f64 = 0.8;
+/// Each cell's realm, and the realm that nearly holds it as firmly, where one does.
+struct Falling {
+    code: Vec<i32>,
+    rival: Vec<i32>,
+}
+fn falling(field: &Field, era: &Era, held: &[Seat]) -> io::Result<Falling> {
     let travel = era.travel(field)?;
     let mut costs = Vec::new();
     for seat in held {
@@ -97,28 +105,39 @@ fn falling(field: &Field, era: &Era, held: &[Seat]) -> io::Result<Vec<i32>> {
     }
     let leading = leading_of(field, Tradition::Allegiance)?;
     let mut code = vec![0; field.mesh.len()];
+    let mut rival = vec![0; field.mesh.len()];
     for (cell, code) in code.iter_mut().enumerate() {
-        let mut best = None;
-        let mut best_cost = f64::INFINITY;
+        let mut normals = Vec::new();
         for (at, cost) in costs.iter().enumerate() {
             let raw = cost.get(cell)?;
-            let normal = raw / held[at].strength;
-            if raw.is_finite() && (best.is_none() || normal < best_cost) {
-                best = Some(at);
-                best_cost = normal;
+            if raw.is_finite() {
+                normals.push((at, raw / held[at].strength));
             }
         }
-        if let Some(mut best) = best {
-            if let Some(incumbent) = held.iter().position(|s| s.code == leading.code[cell]) {
-                let cost = costs[incumbent].get(cell)?;
-                if cost.is_finite() && best_cost > 0.6 * cost / held[incumbent].strength {
-                    best = incumbent;
-                }
+        let Some(&(mut best, best_cost)) = normals.iter().min_by(|a, b| a.1.total_cmp(&b.1)) else {
+            continue;
+        };
+        if let Some(incumbent) = held.iter().position(|s| s.code == leading.code[cell]) {
+            let cost = costs[incumbent].get(cell)?;
+            if cost.is_finite() && best_cost > 0.6 * cost / held[incumbent].strength {
+                best = incumbent;
             }
-            *code = held[best].code;
         }
+        let holder = normals
+            .iter()
+            .find(|(at, _)| *at == best)
+            .map_or(best_cost, |n| n.1);
+        // A rival whose hold comes close to the holder's contests the ground.
+        if let Some(&(other, _)) = normals
+            .iter()
+            .filter(|(at, normal)| *at != best && holder >= CONTESTED * normal)
+            .min_by(|a, b| a.1.total_cmp(&b.1))
+        {
+            rival[cell] = held[other].code;
+        }
+        *code = held[best].code;
     }
-    Ok(code)
+    Ok(Falling { code, rival })
 }
 fn spread(
     context: &mut CommandContext<'_, Field>,
@@ -129,25 +148,36 @@ fn spread(
     for realm in realm_seats::active(era) {
         realm_seats::reseat(context, era, &realm, owner)?;
     }
-    let held = realm_seats::seats(era);
+    let support = context.query(&questions.support)?.values();
+    realm_seats::tend(context.state(), era, &support)?;
+    for realm in realm_seats::active(era) {
+        realm_seats::follow_the_crowd(context.state(), era, &realm)?;
+    }
+    let held = realm_seats::seats(context.state(), era)?;
     if held.is_empty() {
+        for place in era.places.borrow_mut().known.iter_mut() {
+            place.contested_by = None;
+        }
         return Ok(());
     }
     let yielding = context.query(&questions.yielding)?.values();
     let field = context.state();
-    let codes = falling(field, era, &held)?;
+    let fell = falling(field, era, &held)?;
+    for place in era.places.borrow_mut().known.iter_mut() {
+        place.contested_by = (fell.rival[place.anchor] != 0).then_some(fell.rival[place.anchor]);
+    }
+    let codes = fell.code;
     let mut code = field.coverage.borrow_mut().scratch(field.mesh.len(), 0i32);
     let mut people = working(field);
     let share = (0.5 * era.capacity * era.years / 100.0).min(1.0);
     for (cell, &held) in codes.iter().enumerate() {
-        code.set(cell, held)?;
+        // Ground no realm reaches forgets its realm at the pace held ground takes one up.
+        code.set(cell, if held != 0 { held } else { -1 })?;
         people.set(
             cell,
-            if held != 0 {
-                field.people.people(cell)? * share * yielding.get(cell)?
-            } else {
-                0.0
-            },
+            field.people.people(cell)?
+                * share
+                * if held != 0 { yielding.get(cell)? } else { 1.0 },
         )?;
     }
     let mut traditions = std::array::from_fn(|_| None);

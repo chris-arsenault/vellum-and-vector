@@ -61,12 +61,14 @@ impl HumanLayers {
             if taking <= 0.0 {
                 continue;
             }
-            let mut changes = [None; 5];
+            let mut changes = [None; identity::TRADITIONS];
             for (next, codes) in changes.iter_mut().zip(&action.traditions) {
                 if let Some(codes) = codes {
                     let code = codes.get(cell)?;
                     if code > 0 {
                         *next = Some(code);
+                    } else if code < 0 {
+                        *next = Some(0);
                     }
                 }
             }

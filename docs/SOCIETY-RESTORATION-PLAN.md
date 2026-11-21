@@ -638,6 +638,94 @@ cause.
 
 **Not observed:** forest returning on a named abandoned field.
 
+#### M5 and M6 record
+
+M5 and M6 share the realm-strength code and are committed together.
+
+**What was built (M5):**
+
+- **Realm health.** It moves over 80 years toward `fed × (1 − 0.75 × declined)`. Here `fed`
+  is the share of the realm's people its land feeds, and `declined` is how far its towns
+  have fallen from their peak. Strength is multiplied by health. A successor begins at the
+  old cycle's 0.65.
+- **Seat moves.** A seat moves to a town of its own allegiance 1.5× larger than it, and the
+  move is traced.
+- **Contests.** A runner-up within 0.8 of the holder is recorded as `contestedBy` on living
+  towns.
+- **Unheld ground.** Ground no realm reaches forgets its realm at the pace held ground takes
+  one up, so allegiance shrinks with reach.
+- **Sieges.** A town taken by a living realm from another is besieged. Wear runs at six to nine
+  tenths magnitude, divided by (1 + its defence offer). Two exceptions:
+  - an ended realm's towns pass on without a fight;
+  - a town that rises to seat a realm of its own is not besieged.
+- **Survivors flee.** After every strike and siege, 0.6 × severity of the survivors move along
+  the going (travel cost, links included) to the reachable cell with the most room. Room
+  is reckoned as growth reckons it. Every mover is admitted in the same proportion. The event
+  records how many fled and the town they reached.
+- **Other restored mechanisms:**
+  - ruins draw founders back where a realm holds the ground;
+  - regional capitals follow the old rule: two towns of their realm within 0.0375 of the span,
+    none larger, none a seat;
+  - administration districts are published as `jurisdiction` on `administration`;
+  - each realm carries the old collapsed / fragmented / active status.
+
+**What was built (M6):**
+
+- **A known tongue on every identity layer.** Contact teaches its tongue: two thirds of those
+  it reaches come to know it, and the rest take it up and keep their old tongue as known.
+  A known tongue fades over 300 years where under 1% of the people on and around the cell
+  speak it (`field/people/speech.rs`).
+- **A tongue in common cheapens travel.** `travelFriction` gains a responder: up to 0.3 off
+  where the people understand the tongue spoken around them. Linguistic frontiers slow
+  contact and realm reach.
+- **Institutions** (`field/poi/institutions.rs`). Every town of 8× the least town keeps a
+  meeting house. It offers:
+  - sanctity to its faith;
+  - trade to its tongue's speakers;
+  - 0.1 × size of rule to its realm.
+
+  Realm strength gains the rule its towns other than the seat give it, as the old
+  institutional influence did.
+- **Cultural origins.** Each living tongue and faith has a hearth at its founding origin. The
+  hearth offers sanctity to its people.
+- **Realm character in its name.** At publication a realm's name ends in a word chosen in this
+  order:
+  1. a craft a third of its people keep: the old Hold, Conclave and Covenant, with Circle,
+     Compact, Oath and Threshold for the later crafts;
+  2. otherwise a livelihood half of them live by: Commonwealth, Horde, League or Confederacy;
+  3. otherwise Concord, where three tongues are in common use.
+
+**Deviations:**
+
+- **Crowding is folded into the fed share**, not a separate divisor on reach.
+- **Ruin is read as decline from the towns' peak**, not as a ruined share of places.
+- **Sieges change no ground.** Their works damage is the wear on the standing layer; the
+  catalogue's event command is not called for them. Walls are counted twice: once through
+  the defence offer and once through standing's resistance to wear.
+- **Survivors go to the cell with the most room**, not to a neighbouring town.
+- **Fishing and gathering in a realm's character** are estimated from coastal cells and
+  unworked ground, until yields expose their sources.
+- **District names** are the realm's name; districts are written before towns are named.
+
+**Evidence:**
+
+- Unit tests:
+  - flight admission;
+  - realm term, status and renaming;
+  - speech in use and understood across a frontier;
+  - an overlay clearing allegiance;
+  - health holding.
+- Clippy, the touched suites and the architecture checks.
+- One draft world, before the speech fix:
+  - 4 realms, three named Oath and one Commonwealth;
+  - 13 institutions and 22 hearths;
+  - two seats moved to towns that outgrew them;
+  - two sieges, one killing 39,833 and sending 114,285 to a nearby town;
+  - floods recording where survivors went.
+- That world's tongue trace showed the forgetting defect that `speech.rs` fixes: tongues
+  were judged by the learner's own cell, so a frontier forgot its neighbours' tongue within
+  the era. The fix is unit-tested, not yet seen on a world.
+
 ### M5 — Realms rise and fall with their people [depends on M1; DECISION R1]
 
 **Scope:**

@@ -32,6 +32,15 @@ pub fn length(field: &Field, fraction: f64) -> io::Result<f64> {
         .map_err(io::Error::other)?
         .value())
 }
+/// How much easier people's country is to cross where all of them understand the tongue
+/// spoken around them.
+const SHARED_SPEECH: f64 = 0.3;
+/// The share of a cell's people who speak or know the tongue most spoken on and around it:
+/// all of them deep in one tongue's country, few at a frontier where no one has learned the
+/// neighbours' speech. Empty ground has no one to understand and is neither.
+fn understood(field: &Field, cell: usize) -> io::Result<f64> {
+    Ok(super::speech::understood(&super::speech::around(field, cell)?))
+}
 pub fn respond(
     book: &mut QuestionBook<Field, &'static str>,
     rivers: Query<Field, ReadBand<u32>>,
@@ -57,6 +66,16 @@ pub fn respond(
                         + 2.0 * field.shared.scalar(Scalar::WetlandCover).get(cell)?
                 };
                 Ok(going + 3.0 * ice)
+            })),
+        },
+    )?;
+    book.respond(
+        "travelFriction",
+        Responder {
+            by: "a tongue in common".into(),
+            queries: vec![],
+            kind: ResponseKind::Scale(Box::new(|field, cell, _| {
+                Ok(1.0 - SHARED_SPEECH * understood(field, cell)?)
             })),
         },
     )?;

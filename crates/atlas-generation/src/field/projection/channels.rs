@@ -595,6 +595,7 @@ pub(super) fn humans() -> Vec<Channel> {
             ("Custom", "category"),
             ("Allegiance", "category"),
             ("Craft", "category"),
+            ("Known", "category"),
         ] {
             c.push(Channel::new(
                 format!("Identity{name}{slot}"),
