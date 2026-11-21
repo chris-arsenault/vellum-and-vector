@@ -153,3 +153,35 @@ pub const TRADING: f64 = 0.6;
 pub const WEALTH: f64 = 1.0;
 /// How many goods one traveller carries on a trip, by pack and cart.
 pub const CARRIED: f64 = 100.0;
+
+// Journeys (`gather.rs`).
+/// Where a route stops: once the going has passed on less than this share of a journey.
+pub const ROUTE_PASSED: f64 = 0.1;
+
+// What places are worth (`needs.rs`).
+/// How much defence is wanted where nothing threatens: walls still draw a little.
+pub const QUIET_DEFENCE: f64 = 0.25;
+/// The share of the crowd a ruin's remains once housed that still draws people back.
+pub const REMAINS_DRAW: f64 = 0.25;
+/// How much more a ruin draws its founders back when a realm holds the country around it:
+/// the old society cycle resettled ruins held under control.
+pub const UNDER_RULE: f64 = 1.0;
+
+// The living land people use (`yields.rs`, `land_use.rs`).
+/// The least share of a cell counted as its wild ground, so a fully farmed cell's last
+/// scraps of cover are not read as dense woods.
+pub const LEAST_WILD: f64 = 0.05;
+/// The people per km² at which half of what hunting and fishing could take is taken.
+pub const HUNTERS_HALF: f64 = 20.0;
+
+// The places people's eras raise and read (`poi/institutions.rs`, `poi/land_places.rs`,
+// `poi/offered.rs`).
+/// How many keepers, in least towns, make a full temple or academy.
+pub const FULL_HOUSE: f64 = 8.0;
+/// How far a regional capital's towns lie from it, as a share of the map's span: the old
+/// society cycle's region.
+pub const REGION: f64 = 0.0375;
+/// The Pressure intensity, in thousandths, at which the old society cycle cut coastal catch.
+pub const CRUSHING: f64 = 360.0;
+/// The share of the catch Pressure's crush takes from boats that dare it.
+pub const CRUSHED: f64 = 0.7;

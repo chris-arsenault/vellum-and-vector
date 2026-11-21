@@ -27,6 +27,8 @@ pub struct Questions {
     pub grazed: Query<Field, AnswerBand>,
     pub hunted: Query<Field, AnswerBand>,
     pub fished: Query<Field, AnswerBand>,
+    /// How many times the works its built ground alone would gather a cell gathers toward.
+    pub wealth: Query<Field, AnswerBand>,
 }
 pub fn built_hold(
     book: &mut QuestionBook<Field, &'static str>,
@@ -82,6 +84,7 @@ impl Questions {
             grazed: query("grazed"),
             hunted: query("hunted"),
             fished: query("fished"),
+            wealth: query("wealth"),
         }
     }
     pub fn select(&self, executor: &mut crate::execution::Executor<Field>) {
@@ -109,6 +112,7 @@ impl Questions {
             &self.grazed,
             &self.hunted,
             &self.fished,
+            &self.wealth,
         ] {
             executor.select(question);
         }
@@ -122,6 +126,7 @@ pub fn rules(book: &mut QuestionBook<Field, &'static str>) -> ExecutionResult<()
         ("building", "people who stay"),
         ("forgetting", "time"),
         ("yielding", "people who can change their minds"),
+        ("wealth", "built ground"),
     ] {
         book.respond(
             key,

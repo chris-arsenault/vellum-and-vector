@@ -406,8 +406,10 @@ materials where places offer materials, wares where they offer power, and each
 craft's goods where its keepers practise it on its medium, as far as the means
 employ them. The kinds clear together through the food market's rule. A maker's
 goods travel a route up the going toward where they are most wanted, wearing it.
-What a cell sends or carries draws people and the food their markets order, and
-raises the wealth its built ground gathers toward. After the last era the map's lakes and rivers are
+Trade reaches the rest of the census only through shared questions: what a cell
+sends or carries raises its answer to `draw`, which orders its market's food and
+pulls movers, and its answer to `wealth`, which its built ground gathers toward.
+After the last era the map's lakes and rivers are
 read again from the water as people left it.
 
 A craft is the magic system a people know how to work, held in the identity

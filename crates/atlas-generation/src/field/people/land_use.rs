@@ -1,6 +1,7 @@
 //! How people use the land, as the living land asks it: the share they keep under fields and
 //! buildings, under pasture, and how hard they hunt and fish. Ecology asks these shared
 //! questions and names no human layer; a craft could break any of them.
+use super::facts::HUNTERS_HALF;
 use crate::{
     answers::{QuestionBook, Responder, ResponseKind},
     execution::ExecutionResult,
@@ -8,9 +9,6 @@ use crate::{
     human::{catalogue::LayerId, HumanField},
 };
 use std::io;
-
-/// The people per km² at which half of what hunting and fishing could take is taken.
-const HUNTERS_HALF: f64 = 20.0;
 /// How heavily people at `density` per km² hunt and fish, from 0 to 1.
 pub fn taking(density: f64) -> f64 {
     let density = density.max(0.0);

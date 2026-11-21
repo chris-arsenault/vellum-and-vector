@@ -1,6 +1,6 @@
 // Arconis: docs/architecture/subsystems.arconis#item=pp_move — moves people toward room along the going.
 use super::{
-    facts::{CONCENTRATION, PRESSURE},
+    facts::{CONCENTRATION, PRESSURE, ROUTE_PASSED},
     land::WorkInput,
     questions::Questions,
     reach::{passed_over, ranges_of, REACH_SWEEPS},
@@ -60,8 +60,6 @@ impl Leaving {
         Ok(())
     }
 }
-/// Where a route stops: once the going has passed on less than this share of a journey.
-const ROUTE_PASSED: f64 = 0.1;
 /// How much of a journey one step from `cell` along `edge` passes on, from 0 to 1.
 fn step_passed(work: &Work, cell: usize, edge: usize) -> io::Result<f64> {
     Ok(work.going.passed.get(cell * work.going.stride + edge)? * work.going.stride as f64)
@@ -339,10 +337,7 @@ fn drain(
     for cell in 0..field.mesh.len() {
         if habitable(field, cell)? {
             crowd.set(cell, field.people.people(cell)? * km2(field, cell))?;
-            drawing.set(
-                cell,
-                draw.get(cell)? * work.trade_pull(cell)? * km2(field, cell),
-            )?;
+            drawing.set(cell, draw.get(cell)? * km2(field, cell))?;
         }
     }
     trace_draw(field, &draw)?;
@@ -391,9 +386,9 @@ pub fn concentration_weight(here: f64, around: f64) -> f64 {
     }
     (here / around).max(1.0).powf(CONCENTRATION)
 }
-/// How much the places raise people's pull, written to the server log when
-/// `ATLAS_TRACE_PEOPLE` is set: the people-weighted mean of draw over people, its largest
-/// value, and the people living where places raise it by a tenth or more.
+/// How much places, trade and anything else answering `draw` raise people's pull, written to
+/// the server log when `ATLAS_TRACE_PEOPLE` is set: the people-weighted mean of draw over
+/// people, its largest value, and the people living where it is raised by a tenth or more.
 fn trace_draw(field: &Field, draw: &crate::storage::ReadBand<f64>) -> io::Result<()> {
     if std::env::var_os("ATLAS_TRACE_PEOPLE").is_none() {
         return Ok(());

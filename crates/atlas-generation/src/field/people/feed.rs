@@ -144,11 +144,9 @@ fn food_requests(
     for cell in 0..field.mesh.len() {
         if habitable(field, cell)? {
             demand.set(cell, field.people.people(cell)? * km2(field, cell))?;
-            // A town draws arrivals for its trade as for its places, and orders their food.
-            drawing.set(
-                cell,
-                draw.get(cell)? * work.trade_pull(cell)? * km2(field, cell),
-            )?;
+            // A town orders food for the arrivals it draws, by its places, trade or anything
+            // else that answers the `draw` question.
+            drawing.set(cell, draw.get(cell)? * km2(field, cell))?;
         }
     }
     work.reach(field, &demand, &mut demand_felt)?;
@@ -166,7 +164,7 @@ fn food_requests(
             people
         };
         let relative = relative_draw(
-            draw.get(cell)? * work.trade_pull(cell)?,
+            draw.get(cell)?,
             people,
             drawing_felt.get(cell)?,
             demand_felt.get(cell)?,

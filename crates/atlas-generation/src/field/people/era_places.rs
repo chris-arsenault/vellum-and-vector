@@ -28,7 +28,8 @@ pub struct Setting {
     pub country: place_country::Setting,
 }
 /// Records on each living place the goods its people trade a year, read from the land as the
-/// era leaves it, over a settled pass's going.
+/// era leaves it, over a settled pass's going. Finer maps run no trading pass, so the record
+/// measures trade itself rather than reading a pass's turnover.
 fn record_goods(field: &Field, travel: &Travel<'_>, places: &mut Places) -> io::Result<()> {
     let facts = super::facts::Facts::settled(1.0, 1.0);
     let range = super::travel::length(field, facts.range)?;

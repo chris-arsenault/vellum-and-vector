@@ -19,8 +19,7 @@ use crate::{
 use atlas_map::{Geometry, Position};
 use std::{io, rc::Rc};
 
-/// How many keepers, in least towns, make a full temple or academy.
-const FULL_HOUSE: f64 = 8.0;
+use crate::field::people::facts::FULL_HOUSE;
 
 fn point(state: &impl CommunityState, cell: usize) -> io::Result<Geometry> {
     let field = state.field()?;

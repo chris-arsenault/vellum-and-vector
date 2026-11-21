@@ -17,9 +17,6 @@ pub struct Work {
     pub going: Passage,
     pub land: Band<f64>,
     pub imports: Band<f64>,
-    /// Each cell's goods turnover per person this pass, against what a person wants: zero where
-    /// nothing changes hands, one where a cell's people trade as much as they want.
-    pub trading: Band<f64>,
 }
 pub fn habitable(field: &Field, cell: usize) -> io::Result<bool> {
     Ok(field.water.borrow().kind_at(cell)? == 0)
@@ -81,12 +78,7 @@ impl Work {
             going,
             land,
             imports: working(field),
-            trading: working(field),
         })
-    }
-    /// How much more a cell pulls people for the goods it trades this pass.
-    pub fn trade_pull(&self, cell: usize) -> io::Result<f64> {
-        Ok(1.0 + super::goods::from_trade(self.trading.get(cell)?, super::goods::TRADING))
     }
     pub fn reach(
         &self,

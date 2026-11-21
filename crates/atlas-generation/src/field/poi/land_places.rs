@@ -63,9 +63,7 @@ fn standing(
     }
     Ok(())
 }
-/// How far a regional capital's towns lie from it, as a share of the map's span: the old
-/// society cycle's region.
-const REGION: f64 = 0.0375;
+use crate::field::people::facts::REGION;
 /// Whether a town outranks another for a region: by its townsfolk, then by its record.
 fn outranks(a: &KnownPlace, b: &KnownPlace) -> bool {
     a.town_people > b.town_people || (a.town_people == b.town_people && a.id < b.id)

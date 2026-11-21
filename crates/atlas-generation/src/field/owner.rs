@@ -158,6 +158,7 @@ impl FieldSeed {
             melt_receiver: None,
             human_land_seen: None,
             place_offers: None,
+            goods_turnover: None,
             engineered_dams: None,
             settled_place_targets: std::array::from_fn(|_| None),
             town: crate::town::signals::Signals::default(),
@@ -197,6 +198,9 @@ pub struct Field {
     pub(super) melt_receiver: Option<super::surface_media::MeltReceiver>,
     pub(super) human_land_seen: Option<super::people::history::Seen>,
     pub(super) place_offers: Option<Rc<super::poi::offered::PlaceOffers>>,
+    /// Each cell's goods turnover in the latest people's pass, written by the goods trade alone
+    /// and read through the questions it answers; a loose pass, which trades nothing, clears it.
+    pub(super) goods_turnover: Option<Band<f64>>,
     pub(super) engineered_dams: Option<Band<u8>>,
     pub(super) settled_place_targets: [Option<Band<f64>>; 5],
     pub(super) town: crate::town::signals::Signals,
@@ -269,6 +273,12 @@ impl Field {
     /// What the places standing at the start of this era offer people, if an era has read them.
     pub fn place_offers(&self) -> Option<&super::poi::offered::PlaceOffers> {
         self.place_offers.as_deref()
+    }
+    /// A cell's goods turnover in the latest people's pass; zero where none has traded.
+    pub fn goods_turnover(&self, cell: usize) -> io::Result<f64> {
+        self.goods_turnover
+            .as_ref()
+            .map_or(Ok(0.0), |turnover| turnover.get(cell))
     }
     pub fn town_signals(&self) -> &crate::town::signals::Signals {
         &self.town

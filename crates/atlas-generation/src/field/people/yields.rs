@@ -1,5 +1,5 @@
 // Arconis: docs/architecture/subsystems.arconis#item=c_season — answers crop and herd yields from what the land feeds.
-use super::travel::length;
+use super::{facts::LEAST_WILD, travel::length};
 use crate::{
     answers::{QuestionBook, Responder, ResponseKind},
     execution::{ExecutionResult, Query, QueryDependency},
@@ -30,9 +30,6 @@ fn worked_farmland(farmland: f64, residents_per_km2: f64) -> f64 {
 fn read(field: &Field, name: S, cell: usize) -> io::Result<f64> {
     field.shared.scalar(name).get(cell)
 }
-/// The least share of a cell counted as its wild ground, so a fully farmed cell's last
-/// scraps of cover are not read as dense woods.
-const LEAST_WILD: f64 = 0.05;
 fn human(field: &Field, id: LayerId, cell: usize) -> io::Result<f64> {
     field.people.view(HumanField::Layer(id)).get(cell)
 }

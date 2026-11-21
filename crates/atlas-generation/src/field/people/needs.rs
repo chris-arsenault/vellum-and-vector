@@ -2,7 +2,7 @@
 //! `draw` question that gathering asks. Places say what they offer and to whom
 //! (`field::poi::offered`); this table says what those offers are worth, and when. Neither
 //! side knows the other: a new kind of place declares offers, a new need is a row here.
-use super::facts::PEOPLE_PER_BUILT_KM2;
+use super::facts::{PEOPLE_PER_BUILT_KM2, QUIET_DEFENCE, REMAINS_DRAW, UNDER_RULE};
 use crate::{
     answers::{Answers, QuestionBook, Responder, ResponseKind},
     execution::ExecutionResult,
@@ -71,10 +71,6 @@ pub const NEEDS: [Need; 7] = [
         felt: Felt::Always,
     },
 ];
-/// How much defence is wanted where nothing threatens: walls still draw a little.
-const QUIET_DEFENCE: f64 = 0.25;
-/// The share of the crowd a ruin's remains once housed that still draws people back.
-pub const REMAINS_DRAW: f64 = 0.25;
 
 /// How strongly a need is felt in a cell with `threatened` place threats, where `unfed` of the
 /// people go hungry. Threat saturates: past a few overlapping dangers people are simply afraid.
@@ -125,9 +121,6 @@ fn remains(field: &Field, cell: usize) -> io::Result<f64> {
     }
     Ok(left * PEOPLE_PER_BUILT_KM2 * REMAINS_DRAW * (1.0 + UNDER_RULE * ruled(field, cell)?))
 }
-/// How much more a ruin draws its founders back when a realm holds the country around it:
-/// the old society cycle resettled ruins held under control.
-const UNDER_RULE: f64 = 1.0;
 /// Whether a realm holds the people on or beside an empty cell, 0 or 1.
 fn ruled(field: &Field, cell: usize) -> io::Result<f64> {
     use crate::human::identity::{leading, Tradition};

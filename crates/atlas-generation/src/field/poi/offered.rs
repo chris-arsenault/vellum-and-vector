@@ -108,10 +108,7 @@ pub struct Meeting {
     pub severity: f64,
     pub yearly: f64,
 }
-/// The Pressure intensity, in thousandths, at which the old society cycle cut coastal catch.
-const CRUSHING: f64 = 360.0;
-/// The share of the catch Pressure's crush takes from boats that dare it.
-const CRUSHED: f64 = 0.7;
+use crate::field::people::facts::{CRUSHED, CRUSHING};
 /// The share of a cell's people `benefits` serves with `benefit`: everyone, or those holding
 /// its beneficiary's tradition.
 fn served(field: &Field, benefits: &Benefits, benefit: Benefit, cell: usize) -> io::Result<f64> {

@@ -42,6 +42,7 @@ pub fn register_people(
     people::questions::built_hold(book, vec![])?;
     people::questions::rules(book)?;
     people::needs::respond(book)?;
+    people::goods::respond(book)?;
     people::land_use::respond(book)?;
     people::crafts::breaks(book, vec![])
 }

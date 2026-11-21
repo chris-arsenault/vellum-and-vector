@@ -73,7 +73,8 @@ processes it changes.
 - **Goods are traded as food is.** People make goods where the land's places offer the means,
   and every people wants them. Each kind clears through the same market rule as food. The goods
   travel routes toward those who want them and wear those routes into ways. What a place sends
-  or carries draws people and raises its wealth. No price or stock is kept.
+  or carries raises its answers to the shared `draw` and `wealth` questions, so it draws people
+  and grows richer without any other process calling into trade. No price or stock is kept.
 - **Crafts seek their medium.** A mover weighs each destination by how well its media suit the
   crafts the mover's people keep, so crafts cluster where their medium lies and follow it.
 - **Busy ways are graded.** Where a way carries enough traffic, people grade its climbs: a

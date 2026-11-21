@@ -156,12 +156,11 @@ fn trace_refused(field: &Field, livable: &crate::storage::ReadBand<f64>) -> std:
     );
     Ok(())
 }
-/// The works and wealth a built share of ground gathers toward, raised by the goods its people
-/// trade: a trading town grows richer than a town of the same size that trades nothing.
-pub fn standing_target(built: f64, trading: f64) -> f64 {
-    built.max(0.0)
-        * catalogue::FULL_STANDING_PER_BUILT_KM2
-        * (1.0 + super::goods::from_trade(trading, super::goods::WEALTH))
+/// The works and wealth a built share of ground gathers toward, times what the `wealth`
+/// question answers there: one for built ground alone, more where trade or anything else
+/// enriches it.
+fn standing_target(built: f64, wealth: f64) -> f64 {
+    built.max(0.0) * catalogue::FULL_STANDING_PER_BUILT_KM2 * wealth.max(0.0)
 }
 fn harden(
     context: &mut CommandContext<'_, Field>,
@@ -173,6 +172,7 @@ fn harden(
         return Ok(());
     }
     let builders = context.query(&q.building)?.values();
+    let wealth = context.query(&q.wealth)?.values();
     let field = context.state();
     let built = field.people.view(HumanField::Layer(LayerId::BuiltUp));
     let works = field.people.view(HumanField::Layer(LayerId::Standing));
@@ -213,8 +213,7 @@ fn harden(
     for cell in 0..context.state().mesh.len() {
         raised.set(
             cell,
-            (standing_target(built.get(cell)?, work.trading.get(cell)?) - works.get(cell)?)
-                .max(0.0)
+            (standing_target(built.get(cell)?, wealth.get(cell)?) - works.get(cell)?).max(0.0)
                 * gathering,
         )?;
     }

@@ -247,8 +247,9 @@ fn trace(field: &Field, market: &Market) -> io::Result<()> {
     );
     Ok(())
 }
-/// Trades every kind of goods this pass: records each cell's turnover in the work for the
-/// pass's feeding, gathering and building, and wears the ways the goods travel.
+/// Trades every kind of goods this pass: holds each cell's turnover on the field, where the
+/// `draw` and `wealth` questions read it, and wears the ways the goods travel. Loose peoples
+/// trade nothing, so their passes hold no turnover.
 pub fn operation(
     owner: std::rc::Rc<crate::human::operations::Operations<Field>>,
 ) -> crate::execution::Command<Field, super::land::WorkInput> {
@@ -257,21 +258,44 @@ pub fn operation(
         crate::execution::CommandKind::Work,
         vec![],
         move |context, input: &super::land::WorkInput| {
-            let mut work = input.borrow_mut();
+            let work = input.borrow();
             if !work.facts.farms {
+                context.state_mut().goods_turnover = None;
                 return Ok(());
             }
             let field = context.state();
             let traded = trade(field, &work)?;
             let mut worn = working(field);
             for cell in 0..field.mesh.len() {
-                work.trading.set(cell, traded.turnover.get(cell)?)?;
                 worn.set(cell, traded.carried.get(cell)? / CARRIED * work.facts.years)?;
             }
             drop(work);
+            context.state_mut().goods_turnover = Some(traded.turnover);
             context.run(&owner.travel, &worn.read_only())
         },
     )
+}
+/// How trade reaches the rest of the census: a trading cell draws people more strongly than
+/// its places alone would, and its built ground gathers toward more wealth. Both read the
+/// turnover the latest trading pass held. The census's processes ask these questions and never
+/// call into the goods trade; only the era's place record measures trade, to publish it.
+pub fn respond(
+    book: &mut crate::answers::QuestionBook<Field, &'static str>,
+) -> crate::execution::ExecutionResult<()> {
+    use crate::answers::{Responder, ResponseKind};
+    for (key, full) in [("draw", TRADING), ("wealth", WEALTH)] {
+        book.respond(
+            key,
+            Responder {
+                by: "the goods traded here".into(),
+                queries: vec![],
+                kind: ResponseKind::Scale(Box::new(move |field, cell, _| {
+                    Ok(1.0 + from_trade(field.goods_turnover(cell)?, full))
+                })),
+            },
+        )?;
+    }
+    Ok(())
 }
 #[cfg(test)]
 mod tests {
@@ -468,16 +492,49 @@ mod tests {
             "no goods go away from those who want them"
         );
         assert_eq!(walked.get(far).unwrap(), 0.0);
-        let work = work.borrow();
-        // The mine and the market its goods are sold in trade and gain pull and wealth.
-        assert!(work.trade_pull(mine).unwrap() > 1.0);
-        assert!(work.trade_pull(farm).unwrap() > 1.0);
-        assert_eq!(work.trade_pull(far).unwrap(), 1.0);
-        let trading = work.trading.get(mine).unwrap();
-        assert!(
-            crate::field::people::land::standing_target(0.5, trading)
-                > crate::field::people::land::standing_target(0.5, 0.0)
+    }
+    /// The `draw` and `wealth` answers in each cell, from the people's question book as every
+    /// run registers it, over ground without rivers.
+    fn answers(run: &mut crate::execution::Executor<Field>) -> [crate::storage::ReadBand<f64>; 2] {
+        let mut book = crate::answers::QuestionBook::default();
+        let rivers = crate::execution::Query::new("rivers", vec![], |field: &Field, _| {
+            Ok(field
+                .coverage
+                .borrow_mut()
+                .scratch(field.mesh.len(), 0u32)
+                .read_only())
+        });
+        run.select(&rivers);
+        crate::atlas::questions::register_people(&mut book, rivers).unwrap();
+        let book = Rc::new(book);
+        ["draw", "wealth"].map(|key| {
+            let question = Field::question(book.clone(), key, key);
+            run.select(&question);
+            run.query(&question).unwrap().values()
+        })
+    }
+    #[test]
+    fn trade_reaches_the_census_only_through_the_questions_it_answers() {
+        use crate::execution::Executor;
+        let (mut field, mine, farm, far) = towns(40.0, [0, 0]);
+        offering(
+            &mut field,
+            &[(Benefit::Materials, &|c| if c == mine { 1.0 } else { 0.0 })],
         );
+        let work = Rc::new(std::cell::RefCell::new(plain_work(&field)));
+        let mut run = Executor::new(field);
+        let [draw_before, wealth_before] = answers(&mut run);
+        run.run_with(&operation(Rc::new(Field::human_operations())), &work)
+            .unwrap();
+        let [draw, wealth] = answers(&mut run);
+        // The mine and the market its goods are sold in draw more and grow richer.
+        for cell in [mine, farm] {
+            assert!(draw.get(cell).unwrap() > draw_before.get(cell).unwrap());
+            assert!(wealth.get(cell).unwrap() > wealth_before.get(cell).unwrap());
+        }
+        // Where nothing changes hands, trade changes neither answer.
+        assert_eq!(draw.get(far).unwrap(), draw_before.get(far).unwrap());
+        assert_eq!(wealth.get(far).unwrap(), 1.0);
     }
     #[test]
     fn a_village_that_only_buys_gains_no_trade_of_its_own() {
@@ -511,12 +568,15 @@ mod tests {
             &mut field,
             &[(Benefit::Materials, &|c| if c == mine { 1.0 } else { 0.0 })],
         );
+        // Trade an earlier settled pass held does not outlast a loose one.
+        let earlier = field.coverage.borrow_mut().scratch(field.mesh.len(), 1.0);
+        field.goods_turnover = Some(earlier);
         let loose = crate::field::people::facts::Facts::loose(100.0);
         let work = Rc::new(std::cell::RefCell::new(work_with(&field, loose, &[])));
         let mut run = Executor::new(field);
         run.run_with(&operation(Rc::new(Field::human_operations())), &work)
             .unwrap();
-        assert_eq!(work.borrow().trading.get(mine).unwrap(), 0.0);
+        assert_eq!(run.state().goods_turnover(mine).unwrap(), 0.0);
     }
     #[test]
     fn trade_adds_half_a_gain_at_full_trade_and_never_all_of_it() {
