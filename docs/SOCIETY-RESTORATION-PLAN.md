@@ -829,6 +829,83 @@ a verdict.
   seeking; all three were replaced as above.
 - No world was generated for M7.
 
+### Reopened phases (owner, 2026-11-21)
+
+The owner rejected two things:
+
+- moving plan scope to the backlog to close the plan;
+- the rushed finish of M5–M7.
+
+Four phases follow:
+
+| Phase | Scope |
+| ----- | ----- |
+| M9 | Mechanism tests on small fields for M5–M7, and their fixes. |
+| M10 | Exchange beyond food. The owner wants things beyond food traded. |
+| M11 | The remaining open items. |
+| M12 | One world run, a cartographer's review and the durable record. |
+
+#### M9 record
+
+**Test fixture** (`field/people/fixture.rs`): a 1000-unit land of about 6000 cells, with identity
+columns, water and answer bands laid on it. Each test runs the mechanism's real function, or
+its overlay through the owner's operation, and reads the field.
+
+**What the tests found, and what changed:**
+
+- **Learning counted people twice.** The "know it" overlay ran first and the "speak it" overlay
+  then drew from the people it had just taught. Speakers are now taken first. A layer is never
+  taught the tongue it speaks, and people who take up the tongue they knew no longer know it as
+  a second one.
+- **Forgetting erased every frontier.** It judged use by the learner's own cell; it is now
+  judged over the cell and its neighbours. This was found in the world run and fixed with
+  tests in M9.
+- **Survivors barely left town.** The flight's reach, 0.02 of the span, was about 1.4 world
+  cells. It is now 0.05, a few days' walk to the towns beside.
+- **Realm health** now follows the share of the realm's people their own ground feeds, counted
+  cell by cell as the old cycle did, so plenty in one province does not hide hunger in another.
+  The decline-from-peak term, which made old ruins weaken a realm forever, is gone.
+- **Crowding and ruin weaken the hold where they are.** A realm holds crowded ground
+  (people ÷ support) and ruined ground (a quarter of its hold at full ruin) harder, as the old
+  cycle divided reach.
+- **Sieges.** The magnitude runs from 0.6 to 0.9 with how far the losing realm has fallen, as
+  the old cycle struck fragmented and collapsed realms harder. The defence divisor is gone:
+  walls count once, through standing's resistance to wear.
+- **Institutions.** There is now one temple per living faith and one academy per living
+  tongue, in the town where most of its people live. Each offers a new **Learning** benefit to
+  its own people, and realm strength gains 0.1 × the Learning its towns receive. This replaces
+  a house in every large town and the Rule workaround that skipped the seat's cell.
+- **Livelihoods** come from what feeds the realm. Fishing is its own answer (`catchYield`),
+  and each era records each realm's shares of food from farming, herding, fishing and
+  gathering. This replaces the coastline estimate (former backlog 39).
+- **Seat moves** go to the largest town that has grown 1.5× past the seat, not the first found.
+
+**Tests on fields:**
+
+- flight: refuge, admission, no refuge without room;
+- tongue keeping and fading at a frontier;
+- learning splits;
+- held ground taking up its realm, and unheld ground forgetting it;
+- fed shares across provinces;
+- a temple strengthening its realm;
+- livelihoods read from yields;
+- a realm named Hold or League from its columns;
+- movers leaning toward their crafts' medium;
+- a graded way crossing a col too steep for a track;
+- an even country staying even at a door's end.
+
+The door test fails without the renormalisation, at 1.6× an open cell.
+
+**Pure-rule tests:** siege trigger, siege magnitude, holder and rival choice, seat choice,
+health relaxation.
+
+**Not changed:**
+
+- Health relaxes over 80 years, so across an era-long step it reaches its target, as in the
+  old cycle. A successor's weaker start therefore lasts less than an era.
+- The settings of these rules sit as named, documented constants in the module that owns
+  each rule. M11 moves them to one people's settings table.
+
 #### Verdicts closed
 
 | Row     | Outcome                                                                             |
