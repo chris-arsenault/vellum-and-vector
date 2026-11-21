@@ -271,8 +271,14 @@ impl Planner<'_> {
         kind: &str,
         geometry: &Geometry,
     ) -> Result<Geometry, String> {
-        let shape =
-            super::shape_of_kind(layer_id, kind).ok_or("Features cannot be drawn in this layer")?;
+        let Some(shape) = super::shape_of_kind(layer_id, kind) else {
+            // An authored map takes a point, a line or an outline of any catalogue kind that
+            // no layer rule pins to one shape (a peak is a point, a range a line or an area).
+            if self.real.kind != crate::RealScaleKind::Authored {
+                return Err("Features cannot be drawn in this layer".into());
+            }
+            return self.framed(geometry);
+        };
         let fits = match (shape, geometry) {
             (Shape::Line, Geometry::LineString { coordinates }) => coordinates.len() >= 2,
             (Shape::Area, Geometry::Polygon { .. } | Geometry::MultiPolygon { .. }) => true,
@@ -283,6 +289,19 @@ impl Planner<'_> {
                 Shape::Line => "This layer holds lines of two or more points".into(),
                 Shape::Area => "This layer holds outlines".into(),
             });
+        }
+        self.framed(geometry)
+    }
+    /// A geometry in canonical form, inside the map's frame.
+    fn framed(&self, geometry: &Geometry) -> Result<Geometry, String> {
+        let valid = match geometry {
+            Geometry::Point { .. } => true,
+            Geometry::LineString { coordinates } => coordinates.len() >= 2,
+            Geometry::Polygon { .. } | Geometry::MultiPolygon { .. } => true,
+            _ => false,
+        };
+        if !valid {
+            return Err("Draw a point, a line of two or more points, or an outline".into());
         }
         let canonical = self.spatial.canonical(geometry)?;
         let crate::Bounds(w, s, e, n) = self.spatial.bounds(&canonical)?;

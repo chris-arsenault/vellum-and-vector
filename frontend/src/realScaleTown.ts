@@ -3,6 +3,7 @@ import { unByKey } from "ol/Observable.js";
 import type { Bounds } from "@atlas/map";
 import type { PublishedMapEngine } from "./publishedMapEngine";
 import { installSnaps, toGeometry, type EditingEvents } from "./realScaleEditing";
+import { streetCommand } from "./drawCommand";
 
 /** The street class and building use the town tools lay; Rust owns widths, plots and names. */
 export interface TownChoice {
@@ -61,13 +62,7 @@ export function installStreet(engine: PublishedMapEngine, events: EditingEvents)
   const draw = new Draw({ type: "LineString" });
   draw.on("drawend", (event) => {
     void events
-      .command({
-        command: "drawStreet",
-        roadClass: town.roadClass,
-        geometry: toGeometry(event.feature.getGeometry()!),
-        name: nameOf(town.name),
-        creatorLayer: target || null,
-      })
+      .command(streetCommand(town, toGeometry(event.feature.getGeometry()!), target))
       .then((outcome) => {
         if (outcome?.created.length) events.select(outcome.created.slice(0, 1));
       });

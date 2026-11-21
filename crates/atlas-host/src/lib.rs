@@ -1,5 +1,7 @@
 //! Application composition and generation hosting. GIS storage lives in atlas-gis.
 pub mod asset_writer;
+pub mod authored_maps;
+pub mod authored_terrain;
 #[cfg(target_arch = "wasm32")]
 pub mod browser_control;
 #[cfg(target_arch = "wasm32")]
@@ -33,6 +35,8 @@ pub mod job_files;
 pub mod local_inputs;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod map_http;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod mcp;
 pub mod native;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod native_control;

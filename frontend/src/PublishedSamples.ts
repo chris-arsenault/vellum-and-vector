@@ -95,6 +95,12 @@ export class PublishedSamples {
     }
     return file;
   }
+  /** Drop the open files after an asset is rewritten in place. */
+  async forget() {
+    const files = [...this.files.values()];
+    this.files.clear();
+    await Promise.allSettled(files.map(async (file) => (await file).close()));
+  }
   async close() {
     this.abort.abort();
     await Promise.allSettled([...this.files.values()].map(async (file) => (await file).close()));

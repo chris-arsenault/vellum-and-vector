@@ -42,6 +42,15 @@ drawn by hand and show the outside context, especially magic prevalence. This su
 the Local, Site and Interior rows of section 4.1 and the deferral of authoring for these
 maps. See [ADR 0016](adr/0016-real-scale-maps.md).
 
+**Authored maps — 2026-11-21 owner direction:** A creator can start a blank all-ocean map
+and author world, region and city maps in the GIS store: draw landmasses (coast polygons
+decide land and sea), shape elevation with a brush, guide lines and height-bearing features,
+draw rivers as plain lines, and place any feature kind in the catalogue. City maps get a
+handful of street and parcel controls. An agent over MCP performs the same operations.
+Authored maps view, inspect, save and export like any published map. Merging with
+generation, multi-user editing and image overlays are later. This lifts the World and
+Region authoring deferral for authored maps. See [ADR 0019](adr/0019-authored-maps.md).
+
 **Current implementation scope — updated 2026-11-15:** Support pure browser or pure
 LAN backend execution, with computation and storage together. One Rust engine runs
 on both hosts. The browser UI reads finished GIS maps; numerical generation inputs

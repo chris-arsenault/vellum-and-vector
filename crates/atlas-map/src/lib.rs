@@ -63,11 +63,15 @@ pub struct MapDescriptor {
 }
 
 /// What a real-scale map is: outdoor ground (caves included) or a building's floors.
+/// `Authored` is a world, region or city map a creator starts blank and draws by hand
+/// (ADR 0019): it carries the same editing block, creator layers and undo steps, but has no
+/// hexes, so `across_flats` only sets the snapping tolerance.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum RealScaleKind {
     Ground,
     Structure,
+    Authored,
 }
 
 /// A real-scale map's hex grid. Hexes are pointy-topped; `origin` is one hex centre.

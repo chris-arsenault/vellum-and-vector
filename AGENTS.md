@@ -41,6 +41,15 @@ lattice, never a lattice of their own. A parent's major landmarks are the only f
 real-scale child must show and roughly agree with. See
 [ADR 0016](docs/adr/0016-real-scale-maps.md).
 
+**Authored maps — 2026-11-21 owner direction:** Authoring of every level, world, region
+and city, now takes priority over generation, starting from a blank all-ocean map with
+little or no procedural generation. This lifts the deferral of World and Region authoring
+for authored maps; generated World and Region maps stay read-only. Work is in the GIS
+store and leaves the numerical representation alone; elevation is the only authored
+raster; rivers are plain lines; coast polygons decide land and sea; every catalogue kind is
+placeable; the target is a finished-looking atlas; agents get the same operations as the UI
+over MCP. Ignore generation for this work. See [ADR 0019](docs/adr/0019-authored-maps.md).
+
 Current user direction and the product contract define required behavior. These
 instructions and the [ADRs](docs/adr/0001-spatial-authority.md) record implementation
 direction. Distinguish explicitly agreed boundaries from agent-derived choices;

@@ -35,6 +35,7 @@
 | [0016](adr/0016-real-scale-maps.md)                                  | Real-scale maps: hexes built from the shared triangles, generated land, GIS authoring on real scale only                  |
 | [0017](adr/0017-gis-native-storage-and-rust-native-data.md)          | GIS-native map storage and Rust-native identities, records, capture, previews and town state                              |
 | [0018](adr/0018-cities-refine-into-city-and-district-maps.md)        | Cities refine into city maps and organic district maps; city growth, walls, hot spots and templates at two levels         |
+| [0019](adr/0019-authored-maps.md)                                    | Authored maps start blank; GIS is the authority; coasts decide land and sea; one command set for UI and MCP               |
 
 Files named `*-PLAN.md` in this directory are working copies of open plans and
 are deleted when their plan closes; see the

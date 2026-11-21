@@ -176,6 +176,12 @@ impl Selection<'_> {
             None => "region",
             Some(atlas_map::RealScaleKind::Ground) => "local",
             Some(atlas_map::RealScaleKind::Structure) => "interior",
+            // Generation on authored maps joins authoring later (ADR 0019).
+            Some(atlas_map::RealScaleKind::Authored) => {
+                return Err(io::Error::other(
+                    "Authored maps are not refined by generation yet",
+                ))
+            }
         }
         .into();
         // The child map is its outline; its extent adds the band generation reads around it.

@@ -237,9 +237,10 @@ pub struct EditRecord {
 
 /// The real-scale block of a map that accepts edits.
 // owner-direction(2026-11-16): its time to introduce manual authoring for real scale only
+// owner-direction(2026-11-21): authoring of every level, world, region and city, starting from a blank all-ocean map; the same operations for agents over MCP
 pub fn editable(map: &MapDescriptor) -> Result<&RealScale, String> {
     map.real_scale.as_ref().ok_or_else(|| {
-        "Only real-scale maps can be edited; world and regional maps are read-only".into()
+        "Only real-scale and authored maps can be edited; generated world and regional maps are read-only".into()
     })
 }
 
@@ -267,7 +268,9 @@ pub fn shape_of_kind(layer_id: &str, kind: &str) -> Option<Shape> {
 pub fn shape_of(layer_id: &str) -> Option<Shape> {
     match family(layer_id) {
         "rivers" | "roads" | "waterworks" | "caveWalls" => Some(Shape::Line),
-        "lakes" | "oceans" | "plots" | "structures" | "ruins" | "objects" => Some(Shape::Area),
+        "lakes" | "oceans" | "landmasses" | "plots" | "structures" | "ruins" | "objects" => {
+            Some(Shape::Area)
+        }
         _ => None,
     }
 }

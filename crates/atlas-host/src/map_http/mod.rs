@@ -113,11 +113,26 @@ fn handle(request: &mut Request, services: &Services) -> io::Result<ResponseBox>
                         .with_header(header("Cache-Control", "no-store")?)
                         .boxed());
                 }
+                if let Some(call) = crate::authored_maps::AuthoredCall::parse_value(value.clone()) {
+                    let result = call.execute(
+                        &mut *lock(&services.writer)?,
+                        &services.files,
+                        crate::authored_terrain::history(),
+                    )?;
+                    let mut bytes = Vec::new();
+                    ciborium::into_writer(&result, &mut bytes).map_err(io::Error::other)?;
+                    return Ok(Response::from_data(bytes)
+                        .with_header(header("Content-Type", "application/cbor")?)
+                        .with_header(header("Cache-Control", "no-store")?)
+                        .boxed());
+                }
                 let call: EditingCall = serde_json::from_value(value).map_err(io::Error::other)?;
-                call.execute(
+                crate::authored_maps::edit(
+                    call,
                     lock(&services.writer)?.edits(),
                     &services.files,
                     &crate::town_names::AtlasNames,
+                    crate::authored_terrain::history(),
                 )?
             }
             _ => {

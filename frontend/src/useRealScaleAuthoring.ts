@@ -11,12 +11,26 @@ import type {
 import { vectorFamily } from "./publishedAppearance";
 import { defaultLand, type LandChoice } from "./realScaleLandTools";
 import { defaultTown, type TownChoice, type ViewFocus } from "./realScaleTown";
+import { defaultAuthored, type AuthoredChoice } from "./authoredState";
+import { useAuthoredActions } from "./useAuthoredActions";
 
 /** Select moves, turns and sizes the selection; points edits its vertices; draw adds shapes;
  * place sets down one object, scatter fills an outline with them, hexes selects hexes;
- * street draws a town street and building places a building on a plot. */
+ * street draws a town street and building places a building on a plot. On authored maps,
+ * brush, heightLine, heightArea and peak shape the terrain (ADR 0019). */
 export type EditTool =
-  "select" | "points" | "draw" | "place" | "scatter" | "hexes" | "street" | "building";
+  | "select"
+  | "points"
+  | "draw"
+  | "place"
+  | "scatter"
+  | "hexes"
+  | "street"
+  | "building"
+  | "brush"
+  | "heightLine"
+  | "heightArea"
+  | "peak";
 export type DrawShape = "line" | "area";
 export interface DrawChoice {
   layerId: string;
@@ -26,9 +40,13 @@ export interface DrawChoice {
   width: number;
   /** Kind attributes every drawn shape takes, such as a way's class. */
   attributes?: Record<string, JsonValue>;
+  /** The geometry to draw on an authored map, where any kind may be a point, line or area. */
+  geometry?: "Point" | "LineString" | "Polygon";
 }
 export interface AuthoringState {
   tool: EditTool;
+  /** Authored maps only: the toolbar's tool and its brush and height settings. */
+  authored: AuthoredChoice;
   draw: DrawChoice | null;
   land: LandChoice;
   town: TownChoice;
@@ -46,8 +64,13 @@ export type AuthoringSession = ReturnType<typeof useRealScaleAuthoring>;
 /** Layer families a creator draws into and the shape their features take. */
 const lineFamilies = new Set(["rivers", "roads", "waterworks", "caveWalls"]);
 const areaFamilies = new Set(["lakes", "oceans", "plots", "structures", "ruins", "objects"]);
-export function drawShape(layerId: string, kind?: string): DrawShape | null {
+const hexFamilies = new Set(["hexes", "caveHexes"]);
+/** Authored maps draw into every vector layer except hexes; the kind's suggested geometry
+ * (the draw choice's `geometry`) decides the actual shape. */
+export const isAuthored = (map: MapDescriptor) => map.realScale?.kind === "authored";
+export function drawShape(layerId: string, kind?: string, authored = false): DrawShape | null {
   const family = vectorFamily(layerId);
+  if (authored) return hexFamilies.has(family) ? null : lineFamilies.has(family) ? "line" : "area";
   // A wall is a line with a thickness, even among the structures layer's outlines (Rust
   // `shape_of_kind`).
   if (family === "structures" && kind === "wall") return "line";
@@ -55,7 +78,9 @@ export function drawShape(layerId: string, kind?: string): DrawShape | null {
   return areaFamilies.has(family) ? "area" : null;
 }
 export const authorableLayers = (map: MapDescriptor): MapLayer[] =>
-  map.layers.filter((layer) => layer.source.kind === "vector" && drawShape(layer.id));
+  map.layers.filter(
+    (layer) => layer.source.kind === "vector" && drawShape(layer.id, undefined, isAuthored(map))
+  );
 /** The first drawable kind, so the Draw tool always has a choice. */
 export function defaultDraw(map: MapDescriptor): DrawChoice | null {
   const layer = authorableLayers(map).find((entry) => entry.catalog.featureTypes.length);
@@ -65,11 +90,13 @@ export function defaultDraw(map: MapDescriptor): DrawChoice | null {
 
 const initialState = (map: MapDescriptor): AuthoringState => ({
   tool: "select",
+  authored: defaultAuthored(map.bounds),
   draw: null,
   land: defaultLand(),
   town: defaultTown(),
   focus: null,
-  keepTool: false,
+  // An authored map keeps the tool: a creator draws many coasts and places many things.
+  keepTool: isAuthored(map),
   snapHexes: false,
   selected: [],
   target: map.realScale?.creatorLayers[0]?.id ?? "",
@@ -106,45 +133,44 @@ export function useRealScaleAuthoring(
     },
     [cache]
   );
+  const guard = useCallback(async <T>(work: () => Promise<T>) => {
+    setBusy(true);
+    try {
+      const done = await work();
+      setError(null);
+      return done;
+    } catch (failure) {
+      setError(failure);
+      return undefined;
+    } finally {
+      setBusy(false);
+    }
+  }, []);
   const perform = useCallback(
-    async (work: () => Promise<EditOutcome>) => {
-      setBusy(true);
-      try {
-        return settle(await work());
-      } catch (failure) {
-        setError(failure);
-        return undefined;
-      } finally {
-        setBusy(false);
-      }
-    },
-    [settle]
+    (work: () => Promise<EditOutcome>) => guard(async () => settle(await work())),
+    [guard, settle]
   );
   const run = useCallback(
     (command: EditCommand) => perform(() => editing.edit(reference, command)),
     [perform, editing, reference]
   );
-  const undo = useCallback(
-    () => perform(() => editing.undo(reference)),
-    [perform, editing, reference]
-  );
-  const redo = useCallback(
-    () => perform(() => editing.redo(reference)),
-    [perform, editing, reference]
-  );
   const steps = useMemo(() => history.data?.steps ?? [], [history.data]);
+  const authored = useAuthoredActions({ map, editing, perform, guard, steps });
+  // An authored map's Undo and Redo reach feature and terrain edits alike; a real-scale
+  // map has feature edits only.
+  const own = isAuthored(map)
+    ? authored
+    : {
+        ...authored,
+        run,
+        undo: () => perform(() => editing.undo(reference)),
+        redo: () => perform(() => editing.redo(reference)),
+        canUndo: steps.some((step) => !step.undone),
+        canRedo: steps.some((step) => step.undone),
+      };
   return {
-    map,
-    state,
-    set,
-    run,
-    undo,
-    redo,
-    steps,
-    canUndo: steps.some((step) => !step.undone),
-    canRedo: steps.some((step) => step.undone),
+    ...{ map, state, set, steps, showSpace, busy },
+    ...own,
     error: error ?? history.error,
-    busy,
-    showSpace,
   };
 }

@@ -5,6 +5,8 @@ import type { PublishedTool } from "./publishedInteractions";
 
 /** A carried tool only holds if this map can still use it. */
 function usableTool(tool: PublishedTool | undefined, map: MapDescriptor): PublishedTool {
+  // An authored map opens ready to draw (ADR 0019).
+  if (map.realScale?.kind === "authored") return "edit";
   if (!tool || tool === "region-edit") return "inspect";
   if ((tool === "edit" || tool === "measure") && !map.realScale) return "inspect";
   if (tool.startsWith("region-") && !map.regionScale.enabled) return "inspect";

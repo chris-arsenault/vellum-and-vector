@@ -30,6 +30,7 @@
     ["lake", "lakes", "Lakes", "Water and coasts", "Water bodies"],
     ["pool", "lakes", "Pools", "Water and coasts", "Water bodies"],
     ["ocean", "oceans", "Oceans and seas", "Water and coasts", "Water bodies"],
+    ["landmass", "landmasses", "Landmasses", "Water and coasts", "Coasts"],
     ["fjord", "geology", "Fjords", "Water and coasts", "Water bodies"],
     ["forest", "ecology", "Forests", "Ecology", "Biomes"],
     ["grassland", "ecology", "Grasslands", "Ecology", "Biomes"],

@@ -73,3 +73,22 @@ the server process; it is not a saved execution queue.
 For local database-only development, `compose.database.yaml` supplies an isolated PostGIS
 instance. `make test-postgis` uses its own temporary testcontainer instead. Neither command
 contacts the TrueNAS database.
+
+## Agent authoring over MCP
+
+`atlas_mcp` is a Model Context Protocol server over stdio (newline-delimited JSON-RPC). It
+adapts the backend's `/api/maps/*` CBOR calls into agent tools, so an agent authors maps with
+the same operations as the editor ([ADR 0019](adr/0019-authored-maps.md)); it holds no map
+logic and no state of its own. The backend URL is the first argument, else `ATLAS_URL`, else
+`http://127.0.0.1:4123`. The URL is plain `http://`.
+
+```sh
+cargo build --release -p atlas-host --bin atlas_mcp
+claude mcp add atlas -- target/release/atlas_mcp http://host:port
+```
+
+Tools: `list_maps`, `create_map`, `describe_map`, `list_kinds`, `query_features`,
+`apply_edit`, `edit_terrain`, `undo`, `redo` and `edit_history`. Maps are named by the
+`{mapId, revision}` reference that `create_map` and `list_maps` return. Failed backend calls
+come back as tool errors with the backend's message. Lists are capped at 200 items with a
+`truncated` flag.

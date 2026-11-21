@@ -45,6 +45,13 @@ export const realScaleDirections: readonly OwnerDirection[] = [
   },
   {
     direction:
+      "authoring of every level, world, region and city, starting from a blank all-ocean map; the same operations for agents over MCP",
+    given: "2026-11-21",
+    marks: ["crates/atlas-map/src/authoring/mod.rs"],
+    test: "crates/atlas-host/tests/authored_maps.rs",
+  },
+  {
+    direction:
       "there are no tools for art generation. we will ship assets that we genrate in development with open ai",
     given: "2026-11-17",
     marks: ["frontend/src/buildingArt.ts"],

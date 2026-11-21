@@ -1,0 +1,520 @@
+/* The editing panel of an authored map: a drafting table of grouped tools over a catalogue
+ * of places. Teal ground and gold ink as in the rest of the atlas; Georgia names the
+ * groups the way a map key does, Inter carries the controls. */
+.authored-panel {
+  --ink: #dfdfd4;
+  --ink-soft: #a9b6a8;
+  --gold: #ddbe83;
+  --gold-soft: #f1dab0;
+  --ground: #1e2f31;
+  --raised: #263a3c;
+  --sunk: #1a292b;
+  --rule: #3d4d48;
+  --field: #203236;
+  --field-line: #485957;
+  gap: 14px;
+  color: var(--ink);
+}
+.authored-panel h2,
+.authored-panel h3 {
+  margin: 0;
+  font-family: Georgia, "Iowan Old Style", serif;
+  font-weight: 400;
+  color: var(--gold-soft);
+}
+.authored-panel h2 {
+  font-size: 21px;
+}
+.authored-panel h3 {
+  font-size: 15px;
+  margin-bottom: 8px;
+}
+.authored-panel button:focus-visible,
+.authored-panel input:focus-visible,
+.authored-panel summary:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
+.authored-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.authored-history-buttons {
+  display: flex;
+  gap: 4px;
+}
+.authored-history-buttons button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.authored-icon {
+  flex: none;
+}
+
+/* Tool palette */
+.authored-palette {
+  display: grid;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--sunk);
+}
+.authored-group {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  gap: 8px;
+  padding: 8px;
+}
+.authored-group + .authored-group {
+  border-top: 1px solid var(--rule);
+}
+.authored-group-name {
+  padding-top: 4px;
+  font:
+    italic 12.5px/1.3 Georgia,
+    serif;
+  color: var(--ink-soft);
+}
+.authored-tools {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+}
+.authored-tool {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-height: 48px;
+  padding: 7px 2px 5px;
+  border-color: transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 10.5px;
+  line-height: 1.15;
+  text-align: center;
+}
+.authored-tool:hover {
+  background: var(--raised);
+}
+.authored-tool kbd {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  font:
+    9px ui-monospace,
+    monospace;
+  color: var(--ink-soft);
+  opacity: 0.7;
+}
+.authored-panel .authored-tool[aria-pressed="true"] {
+  background: #35504a;
+  border-color: #718b7f;
+  box-shadow: inset 0 -2px 0 var(--gold);
+  color: var(--gold-soft);
+}
+.authored-tool[aria-pressed="true"] kbd {
+  color: var(--gold-soft);
+  opacity: 1;
+}
+
+/* Options of the tool in hand */
+.authored-options {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  /* Tall enough for the brush options, so changing tools does not move what is below. */
+  min-height: 150px;
+  padding: 10px 12px;
+  border-left: 2px solid var(--gold);
+  background: var(--raised);
+  border-radius: 0 4px 4px 0;
+}
+.authored-options fieldset {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.authored-options legend {
+  padding: 0;
+  margin-bottom: 6px;
+  font:
+    15px Georgia,
+    serif;
+  color: var(--gold-soft);
+}
+.authored-options fieldset label {
+  display: grid;
+  gap: 3px;
+  color: var(--ink-soft);
+}
+.authored-options fieldset p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+.authored-panel section[aria-label="Address search"] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 8px;
+  align-items: end;
+}
+.authored-panel section[aria-label="Address search"] label {
+  display: grid;
+  gap: 3px;
+  color: var(--ink-soft);
+}
+.authored-panel section[aria-label="Address search"] button {
+  margin: 0;
+}
+.authored-panel section[aria-label="Address search"] output {
+  grid-column: 1 / -1;
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+.authored-field {
+  display: grid;
+  grid-template-columns: 70px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+.authored-field label {
+  color: var(--ink-soft);
+}
+.authored-field output,
+.authored-unit {
+  min-width: 44px;
+  text-align: right;
+  font:
+    11.5px ui-monospace,
+    monospace;
+  color: var(--gold-soft);
+}
+.authored-field input[type="range"] {
+  width: 100%;
+  accent-color: var(--gold);
+}
+.authored-field input:not([type="range"]) {
+  min-width: 0;
+  padding: 5px 8px;
+  border: 1px solid var(--field-line);
+  border-radius: 4px;
+  background: var(--field);
+  color: var(--ink);
+}
+.authored-field input:focus-visible,
+.authored-search:focus-within {
+  border-color: var(--gold);
+}
+.authored-name {
+  grid-template-columns: 70px minmax(0, 1fr);
+}
+.authored-armed {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  align-items: baseline;
+}
+.authored-armed strong {
+  font:
+    15px Georgia,
+    serif;
+  font-weight: 400;
+  color: var(--gold-soft);
+}
+.authored-armed span,
+.authored-guidance {
+  color: var(--ink-soft);
+}
+.authored-guidance {
+  margin: 0;
+  font-size: 12px;
+  max-width: 60ch;
+}
+
+/* Selection */
+.authored-selection {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+}
+.authored-selection .danger {
+  justify-self: start;
+}
+
+/* Kind browser */
+.authored-kinds {
+  min-width: 0;
+}
+.authored-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  margin-bottom: 8px;
+  border: 1px solid var(--field-line);
+  border-radius: 4px;
+  background: var(--field);
+  color: var(--ink-soft);
+}
+.authored-search input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+}
+.authored-search:focus-within {
+  border-color: var(--gold);
+}
+.authored-search input:focus-visible {
+  outline: none;
+}
+.authored-chips {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.authored-chips > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.authored-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  background: var(--raised);
+}
+.authored-category {
+  border-top: 1px solid var(--rule);
+}
+.authored-category summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 2px;
+  cursor: pointer;
+  font:
+    13.5px Georgia,
+    serif;
+  color: var(--ink);
+}
+.authored-category summary span {
+  font:
+    11px ui-monospace,
+    monospace;
+  color: var(--ink-soft);
+}
+.authored-kind-list {
+  display: grid;
+  margin: 0 0 6px;
+  padding: 0;
+  list-style: none;
+}
+.authored-kind {
+  display: flex;
+  align-items: stretch;
+  border-left: 2px solid transparent;
+}
+.authored-kind[data-armed="true"] {
+  border-left-color: var(--gold);
+  background: var(--raised);
+}
+.authored-panel .authored-kind-pick,
+.authored-panel .authored-star {
+  border-color: transparent;
+  background: transparent;
+  border-radius: 3px;
+}
+.authored-kind-pick {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 4px 6px;
+  text-align: left;
+}
+.authored-kind-pick:hover,
+.authored-star:hover {
+  background: var(--raised);
+}
+.authored-kind-text {
+  display: grid;
+  min-width: 0;
+  line-height: 1.25;
+}
+.authored-kind-text small {
+  color: var(--ink-soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.authored-badge {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  background: var(--sunk);
+  color: var(--gold);
+}
+.authored-star {
+  padding: 0 6px;
+  color: var(--ink-soft);
+}
+.authored-star[aria-pressed="true"] {
+  color: var(--gold);
+}
+.authored-none {
+  padding: 8px 2px;
+  color: var(--ink-soft);
+}
+.authored-log {
+  border-top: 1px solid var(--rule);
+  padding-top: 6px;
+  color: var(--ink-soft);
+}
+.authored-log summary {
+  cursor: pointer;
+  font:
+    13px Georgia,
+    serif;
+}
+.authored-log ol {
+  margin: 6px 0 0;
+  padding-left: 20px;
+}
+.authored-log .undone {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+.elevation-readout {
+  position: absolute;
+  bottom: 40px;
+  right: 12px;
+  padding: 4px 8px;
+  border-radius: 3px;
+  font:
+    11px ui-monospace,
+    monospace;
+  color: #eef1dc;
+  background: #24423edb;
+  pointer-events: none;
+}
+
+/* New map dialog */
+.new-map-dialog {
+  width: min(460px, calc(100vw - 32px));
+  padding: 20px 22px 18px;
+  border: 1px solid #5a6e60;
+  border-radius: 8px;
+  background: #1b2b2d;
+  color: #dfdfd4;
+}
+.new-map-dialog::backdrop {
+  background: #0008;
+}
+.new-map-dialog form {
+  display: grid;
+  gap: 14px;
+}
+.new-map-dialog h2 {
+  margin: 0;
+  font-size: 24px;
+}
+.new-map-lede {
+  margin: -6px 0 0;
+  color: #a9b6a8;
+  max-width: 50ch;
+}
+.new-map-dialog label {
+  display: grid;
+  gap: 4px;
+}
+.new-map-dialog input:not([type="radio"]) {
+  padding: 8px;
+  border: 1px solid #485957;
+  border-radius: 4px;
+  background: #203236;
+  color: #f1ebd9;
+}
+.new-map-dialog input:focus-visible {
+  border-color: #dfc18a;
+}
+.new-map-levels {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.new-map-levels legend {
+  padding: 0 0 4px;
+}
+.new-map-levels label {
+  position: relative;
+  align-content: start;
+  gap: 2px;
+  padding: 9px 10px;
+  border: 1px solid #405050;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.new-map-levels label[data-checked="true"] {
+  border-color: #ddbe83;
+  background: #263a3c;
+  box-shadow: inset 0 -2px 0 #ddbe83;
+}
+.new-map-levels label:focus-within {
+  outline: 2px solid #ddbe83;
+}
+.new-map-levels input {
+  position: absolute;
+  opacity: 0;
+  inset: 0;
+  cursor: pointer;
+}
+.new-map-levels strong {
+  font:
+    15px Georgia,
+    serif;
+  font-weight: 400;
+  color: #f1dab0;
+}
+.new-map-levels span {
+  font-size: 11.5px;
+  color: #a9b6a8;
+}
+.new-map-frame {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.new-map-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.new-map-actions .primary {
+  width: auto;
+  margin: 0;
+}

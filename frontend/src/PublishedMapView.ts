@@ -2,7 +2,7 @@ import { unByKey } from "ol/Observable.js";
 import type { EventsKey } from "ol/events.js";
 import type { Geometry } from "geojson";
 import type { Bounds, MapDescriptor, MapEntity, MapFeature, MapReader } from "@atlas/map";
-import { terrainLayerId } from "@atlas/map";
+import { terrainBands, terrainLayerId } from "@atlas/map";
 import type { CartographicPresentation, LayerStyle } from "./types";
 import type { RasterPresentation } from "./types";
 import type { RealScalePresentation } from "./realScale";
@@ -74,6 +74,28 @@ export class PublishedMapView {
       this.rasterPresentation = undefined;
     Object.assign(this.engine.descriptor, descriptor);
     this.scene = undefined;
+  }
+  /** An authored map rewrote its terrain raster in place: read it again and redraw. */
+  async reloadTerrain() {
+    this.engine.rasters.reloadTerrain();
+    this.rasterPresentation = undefined;
+    await this.samples.forget();
+    if (this.presentation) await this.update(this.presentation);
+  }
+  /** The terrain height in metres at a map position, or null off the raster. */
+  async elevationAt(x: number, y: number, signal?: AbortSignal): Promise<number | null> {
+    const layer = this.engine.descriptor.layers.find((entry) => entry.id === terrainLayerId);
+    if (!layer) return null;
+    const [window] = await this.samples.read(
+      layer,
+      [terrainBands[0]],
+      [x - 1, y - 1, x + 1, y + 1],
+      2,
+      {
+        signal,
+      }
+    );
+    return window?.covers({ x, y }) ? window.at(terrainBands[0], { x, y }) : null;
   }
   async update(presentation: PublishedPresentation) {
     this.presentation = presentation;

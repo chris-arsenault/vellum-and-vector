@@ -13,6 +13,9 @@ export class PublishedMapLayers {
   readonly layers = new Map<string, ReturnType<typeof publishedRaster>>();
   private readonly loading = new Map<string, Promise<ReturnType<typeof publishedRaster>>>();
   private sequence = 0;
+  /** Counts terrain rewrites; an authored map's terrain asset is replaced in place. */
+  private terrainVersion = 0;
+  private readonly retired: ReturnType<typeof publishedRaster>[] = [];
   private readonly abort = new AbortController();
   constructor(
     private readonly reader: MapReader,
@@ -70,17 +73,54 @@ export class PublishedMapLayers {
       .source(this.descriptor.reference, layer.source.data.assetId, { signal: this.abort.signal })
       .then((source) => {
         this.abort.signal.throwIfAborted();
-        const raster = publishedRaster(layer, source, this.projection, presentation, field);
+        const url =
+          layer.id === terrainLayerId ? fresh(source.url, this.terrainVersion) : source.url;
+        const raster = publishedRaster(
+          layer,
+          { ...source, url },
+          this.projection,
+          presentation,
+          field
+        );
         this.layers.set(key, raster);
-        if (layer.id === terrainLayerId && !field) this.base.getLayers().push(raster);
+        if (layer.id === terrainLayerId && !field) {
+          this.base.getLayers().push(raster);
+          this.replaceRetired(raster);
+        }
         return raster;
       })
       .finally(() => this.loading.delete(key));
     this.loading.set(key, promise);
     return promise;
   }
+  /** Retire the open terrain so the next update reads the rewritten file. The old raster
+   * stays on screen until the new one has drawn a tile, so a terrain edit does not blink. */
+  reloadTerrain() {
+    this.terrainVersion += 1;
+    for (const key of [terrainLayerId, elevationOverlayKey]) {
+      const layer = this.layers.get(key);
+      if (!layer) continue;
+      this.retired.push(layer);
+      this.layers.delete(key);
+    }
+  }
+  private dropRetired = () => {
+    for (const layer of this.retired.splice(0)) {
+      this.base.getLayers().remove(layer);
+      this.overlays.getLayers().remove(layer);
+      layer.getSource()?.dispose();
+      layer.dispose();
+    }
+  };
+  /** Drop the retired terrain once the new raster has loaded a tile, or after a pause. */
+  private replaceRetired(raster: ReturnType<typeof publishedRaster>) {
+    if (!this.retired.length) return;
+    raster.getSource()?.once("tileloadend", this.dropRetired);
+    setTimeout(this.dropRetired, 4000);
+  }
   close() {
     this.abort.abort();
+    this.dropRetired();
     for (const layer of this.layers.values()) {
       layer.getSource()?.dispose();
       layer.dispose();
@@ -104,5 +144,11 @@ function applyRasterStyle(
   if (terrain) configureTerrainContours(raster, presentation.contourInterval);
 }
 const elevationOverlayKey = "overlay:terrain";
+/** A served file gets a version in its query so a rewrite is not read from the cache; local
+ * object URLs are already new. */
+function fresh(url: string, version: number) {
+  if (!version || !/^https?:/.test(url)) return url;
+  return `${url}${url.includes("?") ? "&" : "?"}terrain=${version}`;
+}
 const layerKey = (layer: MapLayer, field?: FieldStyle) =>
   layer.id === terrainLayerId && field ? elevationOverlayKey : layer.id;
