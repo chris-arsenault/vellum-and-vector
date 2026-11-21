@@ -184,9 +184,7 @@ fn movement<S: State + 'static>() -> Movement<S> {
         statement: Must::Value(
             "Grain traffic wears a lane while the weir slows boats through its flash lock.".into(),
         ),
-        roads: Slot::Value(Rc::new(|state, place| {
-            carry_rules::cost_near(state, place, 0.85, 0.0)
-        })),
+        roads: Slot::NotApplicable("Travel reads the grain lane from the ground its traffic wore."),
         boats: Slot::Value(Rc::new(|state, place| {
             carry_rules::cost_near(state, place, 3.0, 0.0)
         })),

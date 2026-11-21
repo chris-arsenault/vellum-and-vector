@@ -12,6 +12,7 @@ pub mod fixture;
 pub mod flight;
 pub mod frontiers;
 pub mod gather;
+pub mod goods;
 pub mod growth;
 pub mod hazards;
 pub mod history;

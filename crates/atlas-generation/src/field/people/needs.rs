@@ -31,8 +31,9 @@ pub struct Need {
 }
 /// The needs table. Starting values follow the old society cycle's site draw, which
 /// multiplied a town's pull: a realm's seat ×2.5, a harbour ×1.6, a Fire seat ×1.4, a pass
-/// ×1.3 and a river node ×1.2.
-pub const NEEDS: [Need; 9] = [
+/// ×1.3 and a river node ×1.2. Materials and power draw people through the goods their makers
+/// trade (`goods.rs`), not as needs of their own.
+pub const NEEDS: [Need; 7] = [
     Need {
         benefit: Benefit::Rule,
         worth: 1.5,
@@ -41,16 +42,6 @@ pub const NEEDS: [Need; 9] = [
     Need {
         benefit: Benefit::Trade,
         worth: 0.6,
-        felt: Felt::Always,
-    },
-    Need {
-        benefit: Benefit::Power,
-        worth: 0.4,
-        felt: Felt::Always,
-    },
-    Need {
-        benefit: Benefit::Materials,
-        worth: 0.4,
         felt: Felt::Always,
     },
     Need {

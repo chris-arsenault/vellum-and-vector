@@ -163,6 +163,8 @@ fn districts(state: &mut State, realm: &Tradition, leads: &[i32]) -> io::Result<
             .entities
             .get(&realm.entity)
             .map_or_else(String::new, |e| e.name.clone());
+        // A district takes the name of the town it is governed from.
+        let town_name = crate::field::poi::land_places::town_name(&*state, town)?.name;
         let mut attributes = serde_json::Map::new();
         attributes.insert(
             "seat".into(),
@@ -172,7 +174,7 @@ fn districts(state: &mut State, realm: &Tradition, leads: &[i32]) -> io::Result<
             state,
             Record {
                 key: &format!("jurisdiction:{}", town.id),
-                name: &format!("{name} district"),
+                name: &format!("District of {town_name}"),
                 kind: "jurisdiction",
                 layer: "administration",
                 geometry: shape,
@@ -184,7 +186,7 @@ fn districts(state: &mut State, realm: &Tradition, leads: &[i32]) -> io::Result<
             kind: "administeredBy".into(),
         }];
         feature.causes = vec![format!(
-            "The ground of {name} nearer this town than any other the realm holds."
+            "The ground of {name} nearer {town_name} than any other town the realm holds."
         )];
         state.write_feature(feature)?;
     }

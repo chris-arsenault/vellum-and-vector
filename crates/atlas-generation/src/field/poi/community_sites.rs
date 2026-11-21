@@ -201,7 +201,7 @@ fn movement<S: State + 'static>(kind: Community) -> Movement<S> {
     let people: OnPlace<S, Vec<Cost>> =
         Rc::new(|state, place| carry_rules::cost_near(state, place, 0.8, 0.0));
     Movement { on_foot: (kind == Community::Settlement).then_some(TrailRole::Junction),
-        statement: Must::Value("Living traffic wears routes and carries stock; ruins leave an easier old roadbed and cut stone.".into()), roads: Slot::Value(Rc::new(move |state, place| carry_rules::cost_near(state, place, if kind == Community::Settlement { 0.6 } else { 0.85 }, measure(&state.field()?.scale, if kind == Community::Settlement { 0.0005 } else { 0.00025 }, 1, 1.0)?))),
+        statement: Must::Value("Living traffic wears routes and carries stock; ruins leave an easier old roadbed and cut stone.".into()), roads: Slot::NotApplicable("Travel reads a town's and a ruin's roadbeds from the ground its traffic wore."),
         boats: Slot::NotApplicable("Harbours own the boat connection."), drainage: Slot::NotApplicable("The settlement schedule supplies river-seat corridor influence."), magic: if kind == Community::Settlement { Slot::Value([(Carrier::People, people)].into_iter().collect()) } else { Slot::NotApplicable("The former carriers have left.") }, links: Slot::NotApplicable("Roads and doors supply connections."), crosses: Slot::NotApplicable("The seat is a route endpoint, not a barrier crossing."),
     }
 }

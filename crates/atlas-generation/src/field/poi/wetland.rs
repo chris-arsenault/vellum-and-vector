@@ -152,7 +152,7 @@ fn movement<S: State + 'static>() -> Movement<S> {
         Rc::new(|state, place| carry_rules::cost_near(state, place, 0.8, 0.0));
     Movement { on_foot: None,
         statement: Must::Value("Carts need causeways, shallow boats move slowly, drainage loses its way and roots follow connected cover.".into()),
-        roads: Slot::Value(Rc::new(|state, place| carry_rules::cost_near(state, place, 3.0, 0.0))), boats: Slot::Value(Rc::new(|state, place| carry_rules::cost_near(state, place, 2.0, 0.0))), drainage: Slot::Value(Rc::new(|state, place| carry_rules::cost_near(state, place, 1.5, 0.0))),
+        roads: Slot::NotApplicable("Travel reads the wetland's cost from the ground's wetland cover."), boats: Slot::Value(Rc::new(|state, place| carry_rules::cost_near(state, place, 2.0, 0.0))), drainage: Slot::Value(Rc::new(|state, place| carry_rules::cost_near(state, place, 1.5, 0.0))),
         magic: Slot::Value([(Carrier::Roots, roots)].into_iter().collect()), links: Slot::NotApplicable("A causeway is a road's own."), crosses: Slot::NotApplicable("The wetland is the barrier, not its crossing."),
     }
 }

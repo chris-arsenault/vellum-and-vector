@@ -265,7 +265,7 @@ fn movement<S: ReliefState + 'static>(relief: Relief) -> Movement<S> {
         Relief::Plateau => &[],
     };
     Movement { on_foot: None, statement: Must::Value("Crests divide drainage, valleys draw it along their floors, and cols ease roads and carriers over ridges.".into()),
-        roads: if relief == Relief::Pass { Slot::Value(Rc::new(move |state: &S, place| carry_rules::cost_near(state, place, 1.0 - 0.5 * relief.magnitude(state, place)?, state.field()?.scale.cells(2.0)))) } else { Slot::NotApplicable("Ordinary road grade reads these slopes.") },
+        roads: Slot::NotApplicable("Ordinary road grade reads these slopes and a col's saddle."),
         boats: Slot::NotApplicable("Rivers supply any boat route through this ground."),
         drainage: Slot::Value(Rc::new(move |state, place| carry_rules::cost_near(state, place, match relief { Relief::Ridge => 3.0, Relief::Valley => 0.5, Relief::Plateau => 1.3, Relief::Pass => 1.5 }, 0.0))),
         magic: if carriers.is_empty() { Slot::NotApplicable("Level high ground adds no carrier cost.") } else { Slot::Value(carriers.iter().map(|&carrier| { let cost: OnPlace<S, Vec<Cost>> = Rc::new(move |state, place| carry_rules::cost_near(state, place, if relief == Relief::Ridge { 1.5 } else { 0.8 }, 0.0)); (carrier, cost) }).collect()) },

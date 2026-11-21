@@ -66,7 +66,11 @@ impl Operations {
                             |a, b| travel.step(a, b),
                             range,
                         )?
-                        .with_links(field.place_offers().map_or(&[], |o| o.links()), range)?,
+                        .with_links(
+                            &field.mesh,
+                            field.place_offers().map_or(&[], |o| o.links()),
+                            range,
+                        )?,
                     );
                     context.run(
                         &identity,

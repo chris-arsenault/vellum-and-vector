@@ -116,6 +116,7 @@ pub fn place(id: &str, anchor: usize, cells: Vec<usize>, town_people: f64) -> su
         hinterland: None,
         history: Vec::new(),
         contested_by: None,
+        goods: 0.0,
     }
 }
 /// The going over plain, unwooded land: friction one, no climbing cost, no rivers.
@@ -126,6 +127,29 @@ pub fn plain_travel(field: &Field) -> super::travel::Travel<'_> {
         Rc::new(band.read_only())
     };
     super::travel::Travel::new(field, band(field, |_| 1.0), band(field, |_| 1.0), rivers).unwrap()
+}
+/// The work of a settled pass over plain land: its going, and the land each cell reaches.
+pub fn plain_work(field: &Field) -> super::work::Work {
+    work_with(field, super::facts::Facts::settled(100.0, 1.0), &[])
+}
+/// The work of a pass with `facts` over plain land joined by `links`.
+pub fn work_with(
+    field: &Field,
+    facts: super::facts::Facts,
+    links: &[crate::links::Link],
+) -> super::work::Work {
+    let travel = plain_travel(field);
+    let range = super::travel::length(field, facts.range).unwrap();
+    let going = super::reach::Passage::new(
+        &field.mesh,
+        &mut field.coverage.borrow_mut(),
+        |a, b| travel.step(a, b),
+        range,
+    )
+    .unwrap()
+    .with_links(&field.mesh, links, range)
+    .unwrap();
+    super::work::Work::over(field, facts, going).unwrap()
 }
 /// The cells next to `cell`.
 pub fn neighbours(field: &Field, cell: usize) -> Vec<usize> {

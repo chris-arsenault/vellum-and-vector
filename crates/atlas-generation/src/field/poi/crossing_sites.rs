@@ -10,7 +10,7 @@ use super::{
     state::State,
     values::*,
     visibility,
-    work_crossings::{self, BRIDGE_FLOW, FORD_COST, ROAD_TRAVELLERS, TRACK_TRAVELLERS},
+    work_crossings::{self, BRIDGE_FLOW, ROAD_TRAVELLERS, TRACK_TRAVELLERS},
     work_records::WorkState,
 };
 use crate::{
@@ -22,7 +22,6 @@ use crate::{
 use std::{io, rc::Rc};
 
 const RULING_GRADE: f64 = 0.08;
-const WET_GROUND_COST: f64 = 3.0;
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Crossing {
     Ford,
@@ -188,36 +187,10 @@ fn across<S: CatalogueState<Schedule> + WorkState + 'static, Schedule: 'static>(
         schedule: Slot::NotApplicable("Crossing drainage costs supply any channel influence."),
     }
 }
-fn road_cost(kind: Crossing, state: &impl State, place: &Place) -> io::Result<Vec<Cost>> {
-    if kind == Crossing::Ford {
-        return Ok(vec![Cost {
-            cell: place.anchor,
-            factor: (1.0 + (FORD_COST - 1.0) * fullness(state, place.anchor)?) / FORD_COST,
-        }]);
-    }
-    let field = state.field()?;
-    let mut costs = vec![Cost {
-        cell: place.anchor,
-        factor: 1.0 / FORD_COST,
-    }];
-    for edge in 0..3 {
-        if let Some(cell) = field.mesh.neighbor(place.anchor, edge) {
-            costs.push(Cost {
-                cell,
-                factor: 1.0
-                    / (1.0
-                        + WET_GROUND_COST
-                            * field.shared.scalar(Scalar::FloodplainIntensity).get(cell)?
-                            / 1000.0),
-            });
-        }
-    }
-    Ok(costs)
-}
 fn movement<S: State + 'static>(kind: Crossing) -> Movement<S> {
     Movement { on_foot: None,
         statement: Must::Value("Known crossings reduce road taxes; boats pay for shallows or piers, and bridge abutments hold the channel.".into()),
-        roads: Slot::Value(Rc::new(move |state, place| road_cost(kind, state, place))),
+        roads: Slot::NotApplicable("Travel crosses a river as cheap going already; a known crossing saves nothing more."),
         boats: Slot::Value(Rc::new(move |state, place| carry_rules::cost_near(state, place, if kind == Crossing::Ford { 2.0 } else { 1.25 }, 0.0))),
         drainage: if kind == Crossing::Bridge { Slot::Value(Rc::new(|state, place| carry_rules::cost_near(state, place, 0.9, 0.0))) } else { Slot::NotApplicable("A ford reads an existing shallow channel.") },
         magic: Slot::NotApplicable("River stock passes through; people pay ordinary road costs."),

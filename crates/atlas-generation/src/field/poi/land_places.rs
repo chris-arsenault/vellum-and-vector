@@ -147,6 +147,7 @@ fn facts(place: &KnownPlace, land: &PlaceLand) -> Attributes {
         ("history", json!(place.history)),
         ("representedAreaKm2", json!(land.zone_km2)),
         ("builtKm2", json!(place.built_km2)),
+        ("goodsTradedPerYear", json!(whole(place.goods))),
         ("farmedKm2", json!(land.farmed_km2)),
         ("grazedKm2", json!(land.grazed_km2)),
         ("elevationMetres", json!(whole(land.metres))),
@@ -168,14 +169,26 @@ fn story(place: &KnownPlace, reason: &str) -> String {
     let gathered = format!("{}: people gathered here {reason}", place.founded);
     match &place.abandoned { Some(era)=>format!("{gathered}. {era}: the place could no longer feed a town, and its {} townsfolk at its height are gone.",whole(place.peak)),None=>format!("{gathered}; {} now live here beyond what the place's own land feeds.",whole(place.town_people)) }
 }
+/// A town's name, as its people name it in their tongue: the same for its record and for
+/// anything named after it, such as the district it governs.
+pub fn town_name(
+    state: &impl CommunityState,
+    place: &KnownPlace,
+) -> io::Result<crate::features::publication::Named> {
+    let land = place_land::place_land(state.field()?, place.anchor, &place.cells)?;
+    let language = {
+        let traditions = state.traditions();
+        place
+            .tongue
+            .and_then(|code| traditions.get(code))
+            .map(|t| t.entity.to_string())
+    };
+    state.name_community(place, &land, language.as_deref())
+}
 fn record(state: &impl CommunityState, place: &KnownPlace, least: f64) -> io::Result<Feature> {
     let land = place_land::place_land(state.field()?, place.anchor, &place.cells)?;
+    let named = town_name(state, place)?;
     let traditions = state.traditions();
-    let language = place
-        .tongue
-        .and_then(|code| traditions.get(code))
-        .map(|t| t.entity.to_string());
-    let named = state.name_community(place, &land, language.as_deref())?;
     let mut attributes = named.metadata;
     attributes.extend(facts(place, &land));
     standing(state, place, least, &mut attributes)?;

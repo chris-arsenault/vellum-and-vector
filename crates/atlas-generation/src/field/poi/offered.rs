@@ -6,7 +6,7 @@ use super::{
     contract::{Benefits, Entry},
     publication::PublicationState,
     realized::present,
-    values::{Benefit, Place},
+    values::{Benefit, Cost, Place},
 };
 use crate::{
     field::{refinement::topology::within, Field},
@@ -23,22 +23,36 @@ pub struct PlaceOffers {
     benefits: Vec<ReadBand<f64>>,
     threatened: ReadBand<f64>,
     perilous: ReadBand<f64>,
+    roads: ReadBand<f64>,
     links: Vec<crate::links::Link>,
     meetings: Vec<Meeting>,
 }
 impl PlaceOffers {
+    /// How much the places standing on a cell multiply the cost of going over it, for what the
+    /// ground's own going does not already count: hot or torn ground, wards, caravan routes,
+    /// ditches and the like.
+    pub fn road(&self, cell: usize) -> io::Result<f64> {
+        self.roads.get(cell)
+    }
     /// Offers of one benefit only, valued per cell, for tests of the processes that read them.
     #[cfg(test)]
     pub fn only(field: &Field, benefit: Benefit, value: impl Fn(usize) -> f64) -> io::Result<Self> {
+        Self::of(field, &[(benefit, &value)])
+    }
+    /// Offers of the given benefits, each valued per cell, for tests.
+    #[cfg(test)]
+    pub fn of(field: &Field, given: &[TestOffer<'_>]) -> io::Result<Self> {
         let blank = || -> io::Result<ReadBand<f64>> {
             Ok(field.coverage.borrow_mut().allocate(0.0).read_only())
         };
         let mut benefits = Vec::new();
         for each in Benefit::ALL {
             let mut band = field.coverage.borrow_mut().allocate(0.0);
-            if each == benefit {
-                for cell in 0..field.mesh.len() {
-                    band.set(cell, value(cell))?;
+            for (benefit, value) in given {
+                if *benefit == each {
+                    for cell in 0..field.mesh.len() {
+                        band.set(cell, value(cell))?;
+                    }
                 }
             }
             benefits.push(band.read_only());
@@ -47,6 +61,13 @@ impl PlaceOffers {
             benefits,
             threatened: blank()?,
             perilous: blank()?,
+            roads: {
+                let mut band = field.coverage.borrow_mut().allocate(1.0);
+                for cell in 0..field.mesh.len() {
+                    band.set(cell, 1.0)?;
+                }
+                band.read_only()
+            },
             links: Vec::new(),
             meetings: Vec::new(),
         })
@@ -74,6 +95,9 @@ impl PlaceOffers {
         &self.meetings
     }
 }
+/// A benefit and its value on each cell, for building test offers.
+#[cfg(test)]
+pub type TestOffer<'a> = (Benefit, &'a dyn Fn(usize) -> f64);
 /// A magic meeting that strikes the ground it covers: its hazard, cause, how often a year it
 /// strikes, how badly, and how much of each cell it covers.
 #[derive(Clone)]
@@ -169,6 +193,16 @@ fn lay_offers(
 /// A positive, finite strength; NaN and infinities are not.
 fn usable(value: f64) -> bool {
     value.is_finite() && value > 0.0
+}
+/// Multiplies each declared road cost into the cells it falls on. An unreadable factor, or one
+/// for a cell off this map, changes nothing.
+fn lay_roads(costs: &[Cost], roads: &mut Band<f64>, cells: usize) -> io::Result<()> {
+    for cost in costs {
+        if cost.cell < cells && usable(cost.factor) {
+            roads.set(cost.cell, roads.get(cost.cell)? * cost.factor)?;
+        }
+    }
+    Ok(())
 }
 /// The pairs a place joins on this map, at the cost of going through, in the map's steps.
 fn joined(field: &Field, joins: &[super::values::Link]) -> Vec<crate::links::Link> {
@@ -274,51 +308,81 @@ fn standing<S: PublicationState<Schedule>, Schedule>(
     }
     Ok(places)
 }
+/// What the standing places give people, as it is gathered entry by entry.
+struct Gathered {
+    benefits: Vec<Band<f64>>,
+    threatened: Band<f64>,
+    roads: Band<f64>,
+    links: Vec<crate::links::Link>,
+}
+impl Gathered {
+    /// Lays one place's offers, threats, road costs and links, returning what it offered.
+    fn place<S: PublicationState<Schedule>, Schedule>(
+        &mut self,
+        state: &S,
+        entry: &Entry<S, Schedule>,
+        place: &Place,
+    ) -> io::Result<Benefits> {
+        let field = state.field()?;
+        let movement = &entry.roles.movement;
+        if let Some(joins) = movement.links.value() {
+            self.links.extend(joined(field, &joins(state, place)?));
+        }
+        if let Some(road) = movement.roads.value() {
+            lay_roads(&road(state, place)?, &mut self.roads, field.mesh.len())?;
+        }
+        if let Some(threats) = entry.roles.people.threatens.value() {
+            lay_threats(field, state, place, threats, &mut self.threatened)?;
+        }
+        let Some(offers) = entry.roles.people.offers.value() else {
+            return Ok(Benefits::default());
+        };
+        let offered = offers(state, place)?;
+        lay_offers(field, place, &offered, &mut self.benefits)?;
+        Ok(offered)
+    }
+}
+/// Whether an entry gives people anything the facade gathers.
+fn gives<S, Schedule>(entry: &Entry<S, Schedule>) -> bool {
+    let (people, movement) = (&entry.roles.people, &entry.roles.movement);
+    people.offers.value().is_some()
+        || people.threatens.value().is_some()
+        || movement.links.value().is_some()
+        || movement.roads.value().is_some()
+}
 pub fn offered<S: PublicationState<Schedule>, Schedule>(
     state: &S,
     catalogue: &Catalogue<S, Schedule>,
 ) -> io::Result<PlaceOffers> {
     let field = state.field()?;
-    let mut benefits: Vec<Band<f64>> = Benefit::ALL
-        .iter()
-        .map(|_| field.coverage.borrow_mut().allocate(0.0))
-        .collect();
-    let mut threatened = field.coverage.borrow_mut().allocate(0.0);
-    let mut links = Vec::new();
+    let mut gathered = Gathered {
+        benefits: Benefit::ALL
+            .iter()
+            .map(|_| field.coverage.borrow_mut().allocate(0.0))
+            .collect(),
+        threatened: field.coverage.borrow_mut().allocate(0.0),
+        roads: field.coverage.borrow_mut().allocate(1.0),
+        links: Vec::new(),
+    };
     let mut trace = Trace::default();
-    for entry in catalogue.entries() {
-        let offers = entry.roles.people.offers.value();
-        let threats = entry.roles.people.threatens.value();
-        let joins = entry.roles.movement.links.value();
-        if offers.is_none() && threats.is_none() && joins.is_none() {
-            continue;
-        }
+    for entry in catalogue.entries().iter().filter(|e| gives(e)) {
         let places = standing(state, entry)?;
         let mut given = [0.0; Benefit::ALL.len()];
         for place in &places {
-            if let Some(joins) = joins {
-                links.extend(joined(field, &joins(state, place)?));
-            }
-            if let Some(offers) = offers {
-                let offered = offers(state, place)?;
-                for (&benefit, &strength) in &offered {
-                    given[benefit as usize] += strength;
-                }
-                lay_offers(field, place, &offered, &mut benefits)?;
-            }
-            if let Some(threats) = threats {
-                lay_threats(field, state, place, threats, &mut threatened)?;
+            for (&benefit, &strength) in &gathered.place(state, entry, place)? {
+                given[benefit as usize] += strength;
             }
         }
         trace.kind(entry.id.as_str(), places.len(), given);
     }
-    let meetings = meetings(field, state, &mut threatened)?;
-    trace.write(field, &benefits, &meetings)?;
+    let meetings = meetings(field, state, &mut gathered.threatened)?;
+    trace.write(field, &gathered.benefits, &meetings)?;
     Ok(PlaceOffers {
-        benefits: benefits.iter().map(Band::read_only).collect(),
-        threatened: threatened.read_only(),
+        benefits: gathered.benefits.iter().map(Band::read_only).collect(),
+        threatened: gathered.threatened.read_only(),
         perilous: perilous(field, state)?.read_only(),
-        links,
+        roads: gathered.roads.read_only(),
+        links: gathered.links,
         meetings,
     })
 }

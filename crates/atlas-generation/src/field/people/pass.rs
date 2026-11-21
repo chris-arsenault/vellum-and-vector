@@ -17,6 +17,7 @@ pub fn operation(
     let land = land::Operations::new(questions.clone(), owner.clone());
     let learn = crafts::learning(owner.clone());
     let feed = feed::operation(questions.clone(), owner.clone());
+    let trade = super::goods::operation(owner.clone());
     let gather = gather::operation(questions.clone(), owner.clone());
     Command::with_inputs(
         "human.land.pass",
@@ -30,6 +31,9 @@ pub fn operation(
             let work = Rc::new(RefCell::new(Work::open(
                 context, *facts, &questions, &rivers,
             )?));
+            // Goods are traded first, so the food a trading town orders and the people it draws
+            // follow its trade.
+            context.run(&trade, &work)?;
             context.run(&feed, &work)?;
             context.run(&land.grow, &work)?;
             context.run(&gather, &work)?;

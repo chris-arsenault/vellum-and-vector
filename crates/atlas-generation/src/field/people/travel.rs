@@ -74,6 +74,21 @@ pub fn respond(
     book.respond(
         "travelFriction",
         Responder {
+            by: "the places on the way".into(),
+            queries: vec![],
+            kind: ResponseKind::Scale(Box::new(|field, cell, _| {
+                Ok(match field.place_offers() {
+                    Some(offers) if field.water().column.kind.get(cell)? == 0 => {
+                        offers.road(cell)?
+                    }
+                    _ => 1.0,
+                })
+            })),
+        },
+    )?;
+    book.respond(
+        "travelFriction",
+        Responder {
             by: "a tongue in common".into(),
             queries: vec![],
             kind: ResponseKind::Scale(Box::new(|field, cell, _| {

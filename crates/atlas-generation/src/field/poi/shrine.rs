@@ -137,14 +137,7 @@ fn movement<S: State + 'static>() -> Movement<S> {
         statement: Must::Value(
             "Pilgrims wear routes and carry seed, salt and cores along them.".into(),
         ),
-        roads: Slot::Value(Rc::new(|state, place| {
-            carry_rules::cost_near(
-                state,
-                place,
-                0.8,
-                measure(&state.field()?.scale, 0.0005, 1, 1.0)?,
-            )
-        })),
+        roads: Slot::NotApplicable("Travel reads the pilgrims' road from the ground they wore."),
         boats: Slot::NotApplicable("People reach the shrine on foot."),
         drainage: Slot::NotApplicable("The shrine does not hold water."),
         magic: Slot::Value([(Carrier::People, people)].into_iter().collect()),

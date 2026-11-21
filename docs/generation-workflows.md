@@ -361,14 +361,17 @@ tongue mostly teaches it as a second tongue; a known tongue fades where the
 people on and around a cell no longer speak it, and a tongue in common lowers
 the cost of crossing a cell. A realm is an allegiance with a seat at a known
 place. Its hold spreads from the seat along the travel surface, as far as the
-seat's crowd, the realm's health and the rule its towns' places give it carry.
-Health follows how well the realm's land feeds its people and how far its towns
-have fallen from their peak. People within the hold take the allegiance up as an
-overlay, and ground beyond every realm's reach forgets its realm. A seat follows
-the realm's crowd to a much larger town, a close rival contests a town, a town
-beyond every realm's reach founds its own, and a realm with no seat left ends.
-At publication a realm's name ends in its character: a craft many of its people
-keep, else the livelihood most live by, else the breadth of its tongues.
+seat's crowd, the realm's health and the learning its towns' temples and
+academies give it carry. It holds crowded and ruined ground harder, and country
+its seat's crafts suit more easily. Health follows the share of the realm's
+people their own ground feeds. People within the hold take the allegiance up as
+an overlay, and ground beyond every realm's reach forgets its realm. A seat
+follows the realm's crowd to a much larger town, a realm keeps its ground unless
+another holds it far more cheaply, a close rival contests a town, a town beyond
+every realm's reach founds its own, and a realm with no seat left ends. Each era
+records what a realm's food comes from. At publication a realm's name ends in
+its character: a craft many of its people keep, else the livelihood half its
+food comes from, else the breadth of its tongues.
 
 Cultural regions and territories are read from the column. Each tongue, faith
 and custom publishes as the share of every cell's people who hold it, so regions
@@ -386,16 +389,25 @@ place's ground within the era, a disaster where an avalanche, flood or tsunami
 struck it by the chance its ground gives or a magic meeting struck the ground it
 covers, and a siege where a living realm took a place from another. A hazard
 or siege takes from the layers what the layer catalogue says they give up, a
-siege less where the place offers defence, and a share of the survivors flees
-along the going to the nearest ground with room; the event records how many
-fled and where. A way whose two ends different realms hold is a
+siege the harder the further the losing realm has fallen, and a share of the
+survivors flees along the going to the ground with most room within a few days'
+walk; the event records how many fled and where. A way whose two ends different realms hold is a
 frontier, and the places at its ends keep that line. Irrigation, harbours,
 forges, archives and shrines are sited by their catalogue entries from the
-ground near living places. Large towns keep meeting houses that serve their
-faith, tongue and realm; each living tongue and faith has a hearth where it was
-founded; and people grade the climbs of their busiest ways through the
-`climbing` question, so a graded way over a pass the map shows publishes as a
-cut pass. After the last era the map's lakes and rivers are
+ground near living places. Each living faith keeps a temple and each living
+tongue an academy in the town where most of its people live, teaching them;
+each living tongue and faith has a hearth where it was founded; and people
+grade the climbs of their busiest ways through the `climbing` question, so a
+graded way over a pass the map shows publishes as a cut pass. Each settlement
+records the goods its people trade a year.
+
+Goods beyond food are traded in every settled pass, before feeding. People make
+materials where places offer materials, wares where they offer power, and each
+craft's goods where its keepers practise it on its medium, as far as the means
+employ them. The kinds clear together through the food market's rule. A maker's
+goods travel a route up the going toward where they are most wanted, wearing it.
+What a cell sends or carries draws people and the food their markets order, and
+raises the wealth its built ground gathers toward. After the last era the map's lakes and rivers are
 read again from the water as people left it.
 
 A craft is the magic system a people know how to work, held in the identity

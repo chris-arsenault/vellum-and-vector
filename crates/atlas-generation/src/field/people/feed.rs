@@ -144,7 +144,11 @@ fn food_requests(
     for cell in 0..field.mesh.len() {
         if habitable(field, cell)? {
             demand.set(cell, field.people.people(cell)? * km2(field, cell))?;
-            drawing.set(cell, draw.get(cell)? * km2(field, cell))?;
+            // A town draws arrivals for its trade as for its places, and orders their food.
+            drawing.set(
+                cell,
+                draw.get(cell)? * work.trade_pull(cell)? * km2(field, cell),
+            )?;
         }
     }
     work.reach(field, &demand, &mut demand_felt)?;
@@ -162,7 +166,7 @@ fn food_requests(
             people
         };
         let relative = relative_draw(
-            draw.get(cell)?,
+            draw.get(cell)? * work.trade_pull(cell)?,
             people,
             drawing_felt.get(cell)?,
             demand_felt.get(cell)?,
@@ -285,7 +289,7 @@ fn share(
 
 /// Travel discounts requests before they reach the supplier. A faint request
 /// across a costly route cannot claim the entire harvest by being the only bid.
-fn offer_per_request(available: f64, reachable_requests: f64) -> f64 {
+pub(super) fn offer_per_request(available: f64, reachable_requests: f64) -> f64 {
     if reachable_requests > 0.0 {
         (available / reachable_requests).min(1.0)
     } else {

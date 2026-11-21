@@ -906,6 +906,119 @@ health relaxation.
 - The settings of these rules sit as named, documented constants in the module that owns
   each rule. M11 moves them to one people's settings table.
 
+#### M10 design — exchange beyond food
+
+**Owner, 2026-11-21:** things beyond food should be traded.
+
+**What is traded.** Nine kinds of goods, each read from what the land's places and people
+offer:
+
+- **materials:** ore, salt, stone and timber, where places offer `Materials`;
+- **wares:** what mills, forges and furnaces make, where places offer `Power`;
+- **one kind for each craft:** what its keepers make where they practise it on its medium.
+
+Kinds stay separate so that a materials town trades with a wares town, and two craft towns
+with each other. With one aggregate good they would cancel. Ore and salt are both materials,
+so an iron town and a salt town do not trade with each other.
+
+**How much is made.** As many of a cell's people as make goods, as far as the means employ
+them: a fully offered km² of means employs a hundred makers, however many people live around
+it.
+
+**How it moves.** Each kind clears through the market food already uses (`feed.rs`):
+
+- a cell's makers offer what they make beyond their own wants;
+- every cell asks for its people's wants;
+- each request gets its share of the supply within reach, discounted by travel.
+
+The result per cell is what it brought in and sent out.
+
+**What trade does to people:**
+
+- **It draws them.** A cell's trade per person, against what a person wants, raises its pull in
+  the gathering step and the food its markets order for arrivals. A cell's trade is what it
+  sends, and what passes through it or ends in it as the market where goods are sold. A town
+  grows through the food market, with food conserved. A village that only buys gains nothing of
+  its own.
+- **It makes towns rich.** Trade raises the standing a built place gathers toward, so trading
+  towns hold their people better against blows.
+- **It wears ways.** A maker's goods of each kind travel a route up the going toward where that
+  kind is most wanted, as journeys climb their guide. Their carriers wear each cell of the route,
+  at a hundred goods per traveller's trip. The worn ground becomes roads and, over cols, cut
+  passes.
+- **Materials and power no longer draw as needs.** Their draw comes through the trade they make.
+
+**What is published.** Each settlement records the goods its people trade a year.
+
+**Boundaries:**
+
+- No prices, no stock of goods kept between eras, and no per-commodity records.
+- Turnover is recomputed each pass from the land as it stands.
+- People code reads goods offers only through the facade, as for every benefit.
+
+**Tests:**
+
+- on a small field, a mining town and a farming town exchange materials and not food;
+- two towns that each make one kind trade both ways;
+- turnover raises pull and standing;
+- goods traffic is highest between maker and wanter.
+
+#### M10 record
+
+**Built as designed above** (`field/people/goods.rs`). Trade runs before feeding in each settled
+pass. Each settlement publishes `goodsTradedPerYear`, read once per era from the land as it
+stands. The `people.trade` trace reports goods sent by kind and the share of all wants traded.
+
+**A review found weaknesses, now fixed:**
+
+- traffic spread as a disk around each maker, and overstated what moved;
+- buyers gained as much as makers;
+- a city over a thin vein out-made a mining village;
+- materials and power drew twice;
+- all crafts were lumped into one kind;
+- door links made the going asymmetric, so goods, and food too, were not conserved through
+  doors.
+
+The fixes are what the design above now describes. Links pass the same share both ways, and each
+edge at a link's end keeps the share the tighter of its cells allows, so the going is symmetric
+and bounded.
+
+**Tests on fields:**
+
+- a mine sending materials to its neighbour, with every good arriving;
+- the same through a door;
+- two craft towns trading both ways;
+- a town that makes part of its wants asking only for the rest;
+- goods wearing exactly their route to the market and nothing behind the mine;
+- a buying village gaining no trade;
+- loose peoples not trading;
+- production bounded by the means;
+- going symmetric through a door.
+
+**Not observed:** magnitudes on a world (M12).
+
+#### M11 record
+
+- **Realm reach leans toward its seat's crafts.** A realm's cost of holding a cell is divided
+  by how well the cell's media suit the crafts kept at its seat, as the old cycle's seeking
+  extended a seat's reach.
+- **Districts are named after their towns**, through the same naming the town's record uses.
+- **Catalogue road costs are read without double counting.** Nine entries declared costs that
+  travel already charges from the ground. Those now declare "not applicable" and say where
+  travel reads the cost:
+  - wetland cover and ice;
+  - the worn ways of settlements, ruins, mines, forges, archives, shrines and mills;
+  - fords and bridges, since rivers are cheap going already;
+  - the col's saddle, which the climb reads.
+
+  The facade multiplies every remaining declared cost into one band, and `travelFriction`
+  scales by it on land. Those costs cover hot and torn ground, wards, battlefields, disaster
+  wreck, caravan routes, water stops, field lanes, ditches, dams, gorges, deltas, quays, shores,
+  waterless ground and magic fields.
+- **Livelihoods from yields** were done in M9.
+- **Not done:** society settings gathered into one table. They stay as named, documented
+  constants in the module that owns each rule.
+
 #### Verdicts closed
 
 | Row     | Outcome                                                                             |

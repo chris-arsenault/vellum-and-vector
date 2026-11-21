@@ -93,7 +93,15 @@ impl Passage {
     /// The same going, also joining each link's ends by its cost over `range`, as one more
     /// edge of each end. A cell's edges then share what it can take in among all of them, so
     /// a door's end gathers no more than any other cell.
-    pub fn with_links(mut self, links: &[crate::links::Link], range: f64) -> io::Result<Self> {
+    ///
+    /// Every edge stays the same both ways, so what one cell passes another is what it takes
+    /// back, and amounts spread over the going are conserved through the links as elsewhere.
+    pub fn with_links(
+        mut self,
+        mesh: &TriangularLattice,
+        links: &[crate::links::Link],
+        range: f64,
+    ) -> io::Result<Self> {
         let joined: Vec<_> = links
             .iter()
             .map(|link| (link.a, link.b, passed_on(link.cost, range)))
@@ -108,24 +116,44 @@ impl Passage {
                 }
             }
         }
-        let edges =
-            |cell: usize| self.stride + ends.iter().find(|(c, _)| *c == cell).map_or(0, |e| e.1);
+        let extra = |cell: usize| ends.iter().find(|(c, _)| *c == cell).map_or(0, |e| e.1);
+        let stride = self.stride;
+        let keeps = |cell: usize| shared_among(stride, extra(cell));
+        // A link passes the same both ways: the share the busier of its ends can take.
         self.linked = joined
             .iter()
-            .map(|&(a, b, passed)| Joined {
-                a,
-                b,
-                into_a: passed / edges(a) as f64,
-                into_b: passed / edges(b) as f64,
-                passed,
+            .map(|&(a, b, passed)| {
+                let share = passed / (stride + extra(a).max(extra(b))) as f64;
+                Joined {
+                    a,
+                    b,
+                    into_a: share,
+                    into_b: share,
+                    passed,
+                }
             })
             .collect();
-        for &(end, extra) in &ends {
-            let scale = shared_among(self.stride, extra);
-            for edge in 0..self.stride {
-                let at = end * self.stride + edge;
-                self.passed.set(at, self.passed.get(at)? * scale)?;
+        // Each edge touching a link's end keeps the share the tighter of its two cells allows,
+        // in both directions, scaled once however many ends it touches.
+        let mut scaled: Vec<(usize, f64)> = Vec::new();
+        for &(end, _) in &ends {
+            for edge in 0..stride {
+                let Some(next) = mesh.neighbor(end, edge) else {
+                    continue;
+                };
+                let scale = keeps(end).min(keeps(next));
+                let back = (0..stride).find(|&e| mesh.neighbor(next, e) == Some(end));
+                for at in
+                    std::iter::once(end * stride + edge).chain(back.map(|e| next * stride + e))
+                {
+                    if scaled.iter().all(|&(done, _)| done != at) {
+                        scaled.push((at, scale));
+                    }
+                }
             }
+        }
+        for (at, scale) in scaled {
+            self.passed.set(at, self.passed.get(at)? * scale)?;
         }
         Ok(self)
     }
@@ -253,7 +281,7 @@ mod tests {
             range,
         )
         .unwrap()
-        .with_links(&[door], range)
+        .with_links(&field.mesh, &[door], range)
         .unwrap()
     }
     fn reached(
@@ -290,6 +318,24 @@ mod tests {
             );
         }
         assert_eq!(shared_among(3, 0), 1.0);
+    }
+    #[test]
+    fn what_one_place_passes_another_through_a_door_the_other_takes_back() {
+        // The markets conserve goods and food because the going is symmetric: what a reaches
+        // of b's amount equals what b reaches of a's.
+        let (field, west, east, middle) = doored();
+        let going = going(&field, west, east);
+        let beside = (0..3).find_map(|e| field.mesh.neighbor(west, e)).unwrap();
+        let one = |at: usize| move |cell: usize| if cell == at { 100.0 } else { 0.0 };
+        for (a, b) in [(west, east), (beside, east), (west, middle), (beside, west)] {
+            let from_b = reached(&field, &going, one(b));
+            let from_a = reached(&field, &going, one(a));
+            let (ab, ba) = (100.0 * from_b[a], 100.0 * from_a[b]);
+            assert!(
+                (ab - ba).abs() <= 1e-9 * ab.max(ba).max(1.0),
+                "{a}->{b}: {ab} against {ba}"
+            );
+        }
     }
     #[test]
     fn a_crowd_at_one_door_is_felt_at_the_other() {

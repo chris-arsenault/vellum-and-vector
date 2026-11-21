@@ -147,6 +147,11 @@ fn falling(
             .cost,
         );
     }
+    // A seat holds best the country its own people's crafts know how to work.
+    let seekers = held
+        .iter()
+        .map(|seat| super::seeking::keepers(field, seat.anchor))
+        .collect::<io::Result<Vec<_>>>()?;
     let leading = leading_of(field, Tradition::Allegiance)?;
     let mut code = vec![0; field.mesh.len()];
     let mut rival = vec![0; field.mesh.len()];
@@ -155,7 +160,8 @@ fn falling(
         for (at, cost) in costs.iter().enumerate() {
             let raw = cost.get(cell)?;
             if raw.is_finite() {
-                normals.push((at, raw * hold[cell] / held[at].strength));
+                let suited = super::seeking::toward(field, &seekers[at], cell)?;
+                normals.push((at, holding_cost(raw, hold[cell], held[at].strength, suited)));
             }
         }
         let incumbent = held.iter().position(|s| s.code == leading.code[cell]);
@@ -168,6 +174,11 @@ fn falling(
         *code = held[best].code;
     }
     Ok(Falling { code, rival })
+}
+/// What it costs a realm to hold a cell: the going from its seat, as hard as the cell is to
+/// hold, over the realm's strength and how well the cell suits its seat's crafts.
+pub fn holding_cost(going: f64, hard: f64, strength: f64, suited: f64) -> f64 {
+    going * hard / (strength * suited).max(f64::EPSILON)
 }
 /// How much more cheaply a challenger must hold ground than the realm already holding it to
 /// take it: a realm keeps what it holds unless another holds it far more cheaply.
@@ -301,7 +312,21 @@ pub fn operation(
 }
 #[cfg(test)]
 mod tests {
-    use super::{allegiances, decide, hard_to_hold, RUIN_HOLD};
+    use super::{allegiances, decide, hard_to_hold, holding_cost, RUIN_HOLD};
+
+    #[test]
+    fn a_realm_holds_country_its_seats_crafts_suit_more_cheaply() {
+        let plain = holding_cost(10.0, 1.0, 2.0, 1.0);
+        let suited = holding_cost(10.0, 1.0, 2.0, 1.5);
+        let unsuited = holding_cost(10.0, 1.0, 2.0, 0.5);
+        assert!(suited < plain && plain < unsuited);
+        // Two realms an equal walk away: the one whose crafts suit the ground holds it.
+        let (fire, other) = (
+            holding_cost(10.0, 1.0, 1.0, 1.4),
+            holding_cost(9.0, 1.0, 1.0, 0.8),
+        );
+        assert_eq!(decide(&[(0, fire), (1, other)], None).unwrap().0, 0);
+    }
 
     #[test]
     fn a_realm_keeps_its_ground_unless_another_holds_it_far_more_cheaply() {

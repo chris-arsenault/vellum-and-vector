@@ -99,7 +99,7 @@ fn movement<S: State + 'static>() -> Movement<S> {
         Rc::new(|state, place| carry_rules::cost_near(state, place, 1.5, 0.0));
     Movement { on_foot: None,
         statement: Must::Value("Rotten ice and slush hinder travel; drainage starts here and ice-carried charge is lost.".into()),
-        roads: Slot::Value(Rc::new(|state, place| carry_rules::cost_near(state, place, 2.0, 0.0))), boats: Slot::NotApplicable("Water under and over ice has no boat reach."),
+        roads: Slot::NotApplicable("Travel reads the ice's cost from the ground's ice."), boats: Slot::NotApplicable("Water under and over ice has no boat reach."),
         drainage: Slot::Value(Rc::new(|state, place| carry_rules::cost_near(state, place, 0.8, 0.0))), magic: Slot::Value([(Carrier::Ice, ice)].into_iter().collect()),
         links: Slot::NotApplicable("A line joins no two cells."), crosses: Slot::NotApplicable("Rotten ice loses crossings; it opens none."),
     }

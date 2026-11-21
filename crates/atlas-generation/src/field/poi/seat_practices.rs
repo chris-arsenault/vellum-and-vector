@@ -214,7 +214,7 @@ fn movement<S: State + 'static>(kind: Practice) -> Movement<S> {
     });
     Movement { on_foot: Some(TrailRole::Destination),
         statement: Must::Value("Core traffic and readers wear roads; forges draw carried cores while archive crystals dissipate carried Pressure.".into()),
-        roads: Slot::Value(Rc::new(move |state, place| carry_rules::cost_near(state, place, if kind == Practice::Forge { 0.8 } else { 0.9 }, measure(&state.field()?.scale, 0.0005, 1, 1.0)?))),
+        roads: Slot::NotApplicable("Travel reads the lane to the works from the ground its traffic wore."),
         boats: Slot::NotApplicable("The practice stands at its land seat."), drainage: Slot::NotApplicable("The practice adds no drainage cost."),
         magic: Slot::Value([(Carrier::People, carrier)].into_iter().collect()), links: Slot::NotApplicable("A practice joins no cells."), crosses: Slot::NotApplicable("A practice opens no barrier route."),
     }

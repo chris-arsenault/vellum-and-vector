@@ -27,6 +27,33 @@ pub struct Setting {
     pub town: Option<f64>,
     pub country: place_country::Setting,
 }
+/// Records on each living place the goods its people trade a year, read from the land as the
+/// era leaves it, over a settled pass's going.
+fn record_goods(field: &Field, travel: &Travel<'_>, places: &mut Places) -> io::Result<()> {
+    let facts = super::facts::Facts::settled(1.0, 1.0);
+    let range = super::travel::length(field, facts.range)?;
+    let going = Passage::new(
+        &field.mesh,
+        &mut field.coverage.borrow_mut(),
+        |a, b| travel.step(a, b),
+        range,
+    )?
+    .with_links(
+        &field.mesh,
+        field.place_offers().map_or(&[], |o| o.links()),
+        range,
+    )?;
+    let work = super::work::Work::over(field, facts, going)?;
+    let trade = super::goods::trade(field, &work)?;
+    for place in places.known.iter_mut() {
+        place.goods = if place.abandoned.is_none() && place.absorbed_by.is_none() {
+            super::goods::traded_by(field, &trade, &place.cells)?
+        } else {
+            0.0
+        };
+    }
+    Ok(())
+}
 /// People per km² averaged over the habitable country a traveller reaches from each cell.
 pub fn surrounding_density(
     field: &Field,
@@ -120,6 +147,7 @@ pub fn operation(
                     place.tongue = Some(tongues.code[place.anchor]);
                 }
             }
+            record_goods(field, &travel, &mut places)?;
             let (ways, worn) = place_country::record(
                 field,
                 &mut places,

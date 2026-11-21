@@ -339,7 +339,10 @@ fn drain(
     for cell in 0..field.mesh.len() {
         if habitable(field, cell)? {
             crowd.set(cell, field.people.people(cell)? * km2(field, cell))?;
-            drawing.set(cell, draw.get(cell)? * km2(field, cell))?;
+            drawing.set(
+                cell,
+                draw.get(cell)? * work.trade_pull(cell)? * km2(field, cell),
+            )?;
         }
     }
     trace_draw(field, &draw)?;
