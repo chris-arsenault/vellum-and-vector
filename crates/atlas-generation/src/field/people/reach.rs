@@ -93,11 +93,7 @@ impl Passage {
     /// The same going, also joining each link's ends by its cost over `range`, as one more
     /// edge of each end. A cell's edges then share what it can take in among all of them, so
     /// a door's end gathers no more than any other cell.
-    pub fn with_links(
-        mut self,
-        links: &[crate::links::Link],
-        range: f64,
-    ) -> io::Result<Self> {
+    pub fn with_links(mut self, links: &[crate::links::Link], range: f64) -> io::Result<Self> {
         let joined: Vec<_> = links
             .iter()
             .map(|link| (link.a, link.b, passed_on(link.cost, range)))
@@ -112,9 +108,8 @@ impl Passage {
                 }
             }
         }
-        let edges = |cell: usize| {
-            self.stride + ends.iter().find(|(c, _)| *c == cell).map_or(0, |e| e.1)
-        };
+        let edges =
+            |cell: usize| self.stride + ends.iter().find(|(c, _)| *c == cell).map_or(0, |e| e.1);
         self.linked = joined
             .iter()
             .map(|&(a, b, passed)| Joined {
@@ -159,8 +154,14 @@ impl Passage {
                 next.set(cell, amount.get(cell)? + arriving)?;
             }
             for link in &self.linked {
-                next.set(link.a, next.get(link.a)? + result.get(link.b)? * link.into_a)?;
-                next.set(link.b, next.get(link.b)? + result.get(link.a)? * link.into_b)?;
+                next.set(
+                    link.a,
+                    next.get(link.a)? + result.get(link.b)? * link.into_a,
+                )?;
+                next.set(
+                    link.b,
+                    next.get(link.b)? + result.get(link.a)? * link.into_b,
+                )?;
             }
             for cell in 0..mesh.len() {
                 result.set(cell, next.get(cell)?)?;
@@ -208,10 +209,21 @@ mod tests {
     fn a_link_carries_each_end_to_the_other_and_leaves_the_rest() {
         let result = [10.0, 0.0, 0.0, 4.0];
         let mut next = [10.0, 0.0, 0.0, 4.0];
-        let link = |a, b, into| Joined { a, b, into_a: into, into_b: into, passed: into };
-        carry_links(&[link(0, 3, 0.5), link(1, 9, 1.0)], &result, &mut next, &|into, from, passed| {
-            *into += from * passed;
-        });
+        let link = |a, b, into| Joined {
+            a,
+            b,
+            into_a: into,
+            into_b: into,
+            passed: into,
+        };
+        carry_links(
+            &[link(0, 3, 0.5), link(1, 9, 1.0)],
+            &result,
+            &mut next,
+            &|into, from, passed| {
+                *into += from * passed;
+            },
+        );
         assert_eq!(next, [12.0, 0.0, 0.0, 9.0]);
     }
     #[test]

@@ -100,7 +100,8 @@ impl Flight<'_> {
             if !going.cost.get(cell)?.is_finite() || hit.has(cell) || !habitable(field, cell)? {
                 continue;
             }
-            let spare = (self.room.get(cell)? - field.people.people(cell)?).max(0.0) * km2(field, cell);
+            let spare =
+                (self.room.get(cell)? - field.people.people(cell)?).max(0.0) * km2(field, cell);
             if spare > best.map_or(0.0, |(_, most)| most) {
                 best = Some((cell, spare));
             }
@@ -117,7 +118,10 @@ impl Flight<'_> {
         severity: f64,
     ) -> ExecutionResult<Fled> {
         let share = (FLEEING * severity).clamp(0.0, 1.0);
-        let none = Fled { people: 0.0, refuge: None };
+        let none = Fled {
+            people: 0.0,
+            refuge: None,
+        };
         if share <= 0.0 || struck.is_empty() {
             return Ok(none);
         }

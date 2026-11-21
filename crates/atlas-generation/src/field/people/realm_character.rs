@@ -102,8 +102,14 @@ pub fn renamed(name: &str, term: &str) -> String {
     }
 }
 fn livelihoods(field: &Field, cell: usize) -> io::Result<[f64; 4]> {
-    let farmland = field.people.view(HumanField::Layer(LayerId::Farmland)).get(cell)?;
-    let pasture = field.people.view(HumanField::Layer(LayerId::Pasture)).get(cell)?;
+    let farmland = field
+        .people
+        .view(HumanField::Layer(LayerId::Farmland))
+        .get(cell)?;
+    let pasture = field
+        .people
+        .view(HumanField::Layer(LayerId::Pasture))
+        .get(cell)?;
     let water = field.water.borrow().kinds();
     let mut seas = 0.0;
     for edge in 0..3 {
@@ -121,11 +127,12 @@ fn keeping(field: &Field, claimed: &ReadBand<f64>) -> io::Result<(f64, Keeping)>
     let mut people = 0.0;
     let mut keeping = Keeping::default();
     let mut tongues: Vec<(i32, f64)> = Vec::new();
-    let add = |list: &mut Vec<(i32, f64)>, code: i32, amount: f64| {
-        match list.iter_mut().find(|(c, _)| *c == code) {
-            Some(entry) => entry.1 += amount,
-            None => list.push((code, amount)),
-        }
+    let add = |list: &mut Vec<(i32, f64)>, code: i32, amount: f64| match list
+        .iter_mut()
+        .find(|(c, _)| *c == code)
+    {
+        Some(entry) => entry.1 += amount,
+        None => list.push((code, amount)),
     };
     for cell in 0..field.mesh.len() {
         let share = claimed.get(cell)?;
@@ -136,7 +143,11 @@ fn keeping(field: &Field, claimed: &ReadBand<f64>) -> io::Result<(f64, Keeping)>
         let weight = share * here;
         people += weight;
         let column = field.people.column(cell)?;
-        let everyone: f64 = column.iter().map(|layer| layer.people).sum::<f64>().max(f64::EPSILON);
+        let everyone: f64 = column
+            .iter()
+            .map(|layer| layer.people)
+            .sum::<f64>()
+            .max(f64::EPSILON);
         for (code, holding) in held(&column, Tradition::Craft) {
             add(&mut keeping.crafts, code, weight * holding / everyone);
         }
@@ -145,7 +156,11 @@ fn keeping(field: &Field, claimed: &ReadBand<f64>) -> io::Result<(f64, Keeping)>
                 add(&mut tongues, code, weight * holding / everyone);
             }
         }
-        for (into, way) in keeping.livelihoods.iter_mut().zip(livelihoods(field, cell)?) {
+        for (into, way) in keeping
+            .livelihoods
+            .iter_mut()
+            .zip(livelihoods(field, cell)?)
+        {
             *into += weight * way;
         }
     }
@@ -220,6 +235,9 @@ mod tests {
     }
     #[test]
     fn renaming_changes_only_the_last_word() {
-        assert_eq!(renamed("Vash Taro Commonwealth", "League"), "Vash Taro League");
+        assert_eq!(
+            renamed("Vash Taro Commonwealth", "League"),
+            "Vash Taro League"
+        );
     }
 }

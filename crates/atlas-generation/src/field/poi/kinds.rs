@@ -44,9 +44,9 @@ impl Kind {
             | FireCore | WardRing | WardLine | HearthRing | ReadIce | HeldShore | BoundWood
             | SwornGround | VowedGround => Group::Anomalies,
             Settlement | Ruin | Dam | Mill | Irrigation | Harbour | Ford | Bridge | Forge
-            | Archive | Shrine | Battlefield | DisasterSite | Institution | CulturalOrigin | Cutting
-            | CityWall | CityGate | CityPlace
-            | CityDistrict | MajorWork | CityThoroughfare | CityBlock => Group::Settlements,
+            | Archive | Shrine | Battlefield | DisasterSite | Institution | CulturalOrigin
+            | Cutting | CityWall | CityGate | CityPlace | CityDistrict | MajorWork
+            | CityThoroughfare | CityBlock => Group::Settlements,
         }
     }
 }

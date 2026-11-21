@@ -11,8 +11,7 @@ use super::{
     values::*,
 };
 use crate::{
-    features::Feature, field::people::traditions::Kind as TraditionKind,
-    human::identity::Tradition,
+    features::Feature, field::people::traditions::Kind as TraditionKind, human::identity::Tradition,
 };
 use atlas_map::{Geometry, Position};
 use std::{io, rc::Rc};
@@ -78,9 +77,17 @@ fn size(state: &impl CommunityState, place: &Place) -> f64 {
         .known
         .iter()
         .find(|p| p.anchor == place.anchor && p.abandoned.is_none())
-        .map_or(0.0, |p| (p.town_people / (INSTITUTION_TOWN * least)).sqrt().min(1.0))
+        .map_or(0.0, |p| {
+            (p.town_people / (INSTITUTION_TOWN * least)).sqrt().min(1.0)
+        })
 }
-fn record<S: CommunityState>(state: &S, place: &Place, kind: &str, name: &str, layer: &str) -> io::Result<Option<Feature>> {
+fn record<S: CommunityState>(
+    state: &S,
+    place: &Place,
+    kind: &str,
+    name: &str,
+    layer: &str,
+) -> io::Result<Option<Feature>> {
     let mut attributes = crate::features::records::Attributes::new();
     let faith = settled::leading(state, place.anchor, Tradition::Faith)?;
     let tongue = settled::leading(state, place.anchor, Tradition::Tongue)?;
@@ -93,31 +100,54 @@ fn record<S: CommunityState>(state: &S, place: &Place, kind: &str, name: &str, l
     drop(traditions);
     Ok(Some(community_records::local_record(
         state,
-        Record { key: &place.id, name, kind, layer, geometry: point(state, place.anchor)?, attributes },
+        Record {
+            key: &place.id,
+            name,
+            kind,
+            layer,
+            geometry: point(state, place.anchor)?,
+            attributes,
+        },
     )?))
 }
 fn people<S: CommunityState + 'static>(origin: bool) -> People<S> {
     People {
-        statement: Must::Value(if origin {
-            "A culture's hearth is sacred to the people who still hold its tongue or faith."
-        } else {
-            "A meeting house keeps its people's faith and draws scholars and pilgrims."
-        }.into()),
+        statement: Must::Value(
+            if origin {
+                "A culture's hearth is sacred to the people who still hold its tongue or faith."
+            } else {
+                "A meeting house keeps its people's faith and draws scholars and pilgrims."
+            }
+            .into(),
+        ),
         offers: Slot::Value(Rc::new(move |state, place| {
             if origin {
-                let code: i32 = place.origin.as_deref().and_then(|c| c.parse().ok()).unwrap_or(0);
+                let code: i32 = place
+                    .origin
+                    .as_deref()
+                    .and_then(|c| c.parse().ok())
+                    .unwrap_or(0);
                 let kind = state.traditions().get(code).map(|t| t.kind);
-                let tradition = if kind == Some(TraditionKind::Faith) { Tradition::Faith } else { Tradition::Tongue };
-                return Ok([(Benefit::Sanctity, 0.5)].into_iter().collect::<Benefits>().serving(Benefit::Sanctity, tradition, code));
+                let tradition = if kind == Some(TraditionKind::Faith) {
+                    Tradition::Faith
+                } else {
+                    Tradition::Tongue
+                };
+                return Ok([(Benefit::Sanctity, 0.5)]
+                    .into_iter()
+                    .collect::<Benefits>()
+                    .serving(Benefit::Sanctity, tradition, code));
             }
             let strength = size(state, place);
             let faith = settled::leading(state, place.anchor, Tradition::Faith)?;
             let tongue = settled::leading(state, place.anchor, Tradition::Tongue)?;
             let realm = settled::leading(state, place.anchor, Tradition::Allegiance)?;
-            let mut offers: Benefits =
-                [(Benefit::Sanctity, strength), (Benefit::Trade, strength / 3.0)]
-                    .into_iter()
-                    .collect();
+            let mut offers: Benefits = [
+                (Benefit::Sanctity, strength),
+                (Benefit::Trade, strength / 3.0),
+            ]
+            .into_iter()
+            .collect();
             // A house in a town no realm holds upholds no rule.
             if realm != 0 {
                 offers.insert(Benefit::Rule, INFLUENCE * strength);
@@ -155,7 +185,14 @@ fn roles<S: CommunityState + 'static>(kind: Kind, origin: bool) -> Roles<S> {
             crosses: Slot::NotApplicable("It crosses nothing."),
         },
         others: Others {
-            statement: Must::Value(if origin { "A hearth stands where its culture began, with or without a town." } else { "An institution stands in a large town." }.into()),
+            statement: Must::Value(
+                if origin {
+                    "A hearth stands where its culture began, with or without a town."
+                } else {
+                    "An institution stands in a large town."
+                }
+                .into(),
+            ),
             needs: if origin {
                 Slot::NotApplicable("A hearth needs only its memory.")
             } else {
@@ -174,12 +211,22 @@ fn roles<S: CommunityState + 'static>(kind: Kind, origin: bool) -> Roles<S> {
             fate: Slot::Value(Rc::new(|_, _| Ok(Fate::Persists))),
         },
         visibility: Visibility {
-            statement: Must::Value("Its town's size, or its culture's reach, makes it notable.".into()),
-            magnitude: Slot::Value(Rc::new(move |state, place| Ok(if origin { 0.6 } else { size(state, place) }))),
-            local_conditions: Slot::NotApplicable("It stands out by what it keeps, not its ground."),
+            statement: Must::Value(
+                "Its town's size, or its culture's reach, makes it notable.".into(),
+            ),
+            magnitude: Slot::Value(Rc::new(move |state, place| {
+                Ok(if origin { 0.6 } else { size(state, place) })
+            })),
+            local_conditions: Slot::NotApplicable(
+                "It stands out by what it keeps, not its ground.",
+            ),
             isolation: Slot::NotApplicable("Its distance from others does not matter."),
-            cultural: Slot::Value(Rc::new(move |state, place| Ok(if origin { 0.8 } else { size(state, place) }))),
-            importance: Must::Value(Rc::new(move |state: &S, place| Ok(if origin { 0.6 } else { size(state, place) }))),
+            cultural: Slot::Value(Rc::new(move |state, place| {
+                Ok(if origin { 0.8 } else { size(state, place) })
+            })),
+            importance: Must::Value(Rc::new(move |state: &S, place| {
+                Ok(if origin { 0.6 } else { size(state, place) })
+            })),
         },
         naming: Naming {
             statement: Must::Value("Its people name it in their own tongue.".into()),
@@ -191,26 +238,50 @@ fn roles<S: CommunityState + 'static>(kind: Kind, origin: bool) -> Roles<S> {
     }
 }
 fn entry<S: CommunityState + 'static, Schedule>(origin: bool) -> Entry<S, Schedule> {
-    let kind = if origin { Kind::CulturalOrigin } else { Kind::Institution };
+    let kind = if origin {
+        Kind::CulturalOrigin
+    } else {
+        Kind::Institution
+    };
     let (record_kind, name, layer) = if origin {
         ("culturalOrigin", "Hearth of a culture", "cultures")
     } else {
         ("institution", "Meeting house", "institutions")
     };
-    let find: Places<S> = if origin { Rc::new(|s: &S| origins(s)) } else { Rc::new(|s: &S| institutions(s)) };
+    let find: Places<S> = if origin {
+        Rc::new(|s: &S| origins(s))
+    } else {
+        Rc::new(|s: &S| institutions(s))
+    };
     let finding = find.clone();
     Entry {
         id: kind,
         group: Group::Settlements,
         name: name.into(),
         recognition: Recognition {
-            distinct: Must::Value(if origin { "Where a living tongue or faith began." } else { "A house a large town keeps for its faith and learning." }.into()),
-            is_a: Must::Value(Rc::new(move |state, cell| places::holds_record(state, kind, cell, || finding(state)))),
+            distinct: Must::Value(
+                if origin {
+                    "Where a living tongue or faith began."
+                } else {
+                    "A house a large town keeps for its faith and learning."
+                }
+                .into(),
+            ),
+            is_a: Must::Value(Rc::new(move |state, cell| {
+                places::holds_record(state, kind, cell, || finding(state))
+            })),
             landform: Slot::NotApplicable("It is no landform."),
         },
         existence: Existence {
             origins: Slot::Unwritten,
-            statement: Must::Value(if origin { "Each living tongue and faith has one hearth, where it was founded." } else { "Every town of eight times the least town keeps one." }.into()),
+            statement: Must::Value(
+                if origin {
+                    "Each living tongue and faith has one hearth, where it was founded."
+                } else {
+                    "Every town of eight times the least town keeps one."
+                }
+                .into(),
+            ),
             way: Must::Value(ExistenceWay::Emerges),
             requires: Slot::NotApplicable("Its people decide where it stands."),
             suitability: Slot::NotApplicable("Its people decide where it stands."),
@@ -220,7 +291,9 @@ fn entry<S: CommunityState + 'static, Schedule>(origin: bool) -> Entry<S, Schedu
             delivery: Delivery::Landforms,
             statement: Must::Value("Publish it at its cell.".into()),
             moment: Must::Value(Moment::Society),
-            record: Must::Value(Rc::new(move |state: &S, place: &Place| record(state, place, record_kind, name, layer))),
+            record: Must::Value(Rc::new(move |state: &S, place: &Place| {
+                record(state, place, record_kind, name, layer)
+            })),
         },
         across_maps: AcrossMaps {
             statement: Must::Value("A finer map finds it again from its own people.".into()),

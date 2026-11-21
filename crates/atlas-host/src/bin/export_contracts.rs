@@ -34,6 +34,38 @@ fn main() -> std::io::Result<()> {
             atlas_map::structure::VOCABULARY.trim()
         ),
     )?;
+    // Authored-map calls (ADR 0019): the host's call types and the terrain shapes they carry.
+    let authoring_cfg = ts_rs::Config::default();
+    fs::write(
+        map.with_file_name("generatedAuthoring.ts"),
+        format!(
+            "{header}{}\n",
+            [
+                <atlas_host::authored_maps::AuthoredProfile as ts_rs::TS>::decl(&authoring_cfg),
+                <atlas_host::authored_maps::NewMapRequest as ts_rs::TS>::decl(&authoring_cfg),
+                <atlas_host::authored_terrain::TerrainEdit as ts_rs::TS>::decl(&authoring_cfg),
+                <atlas_host::authored_terrain::TerrainOutcome as ts_rs::TS>::decl(&authoring_cfg),
+                <atlas_generation::publication::authored::Stroke as ts_rs::TS>::decl(
+                    &authoring_cfg
+                ),
+                <atlas_generation::publication::authored::BrushMode as ts_rs::TS>::decl(
+                    &authoring_cfg
+                ),
+                <atlas_generation::publication::authored::HeightLine as ts_rs::TS>::decl(
+                    &authoring_cfg
+                ),
+                <atlas_generation::publication::authored::HeightArea as ts_rs::TS>::decl(
+                    &authoring_cfg
+                ),
+                <atlas_generation::publication::authored::HeightPeak as ts_rs::TS>::decl(
+                    &authoring_cfg
+                ),
+                <atlas_generation::publication::authored::Rect as ts_rs::TS>::decl(&authoring_cfg),
+            ]
+            .map(|declaration| format!("export {declaration}"))
+            .join("\n")
+        ),
+    )?;
     fs::write(
         generation,
         format!(

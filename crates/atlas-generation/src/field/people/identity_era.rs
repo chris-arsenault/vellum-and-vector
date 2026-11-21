@@ -383,7 +383,14 @@ fn learn(
     for cell in 0..field.mesh.len() {
         // Those taking up the tongue their place already speaks keep no other.
         let before = spoken[0].code[cell];
-        old.set(cell, if before == codes.get(cell)? { 0 } else { before })?;
+        old.set(
+            cell,
+            if before == codes.get(cell)? {
+                0
+            } else {
+                before
+            },
+        )?;
         learning.set(cell, reached.get(cell)? * LEARNING)?;
         speaking.set(cell, reached.get(cell)? * (1.0 - LEARNING))?;
     }

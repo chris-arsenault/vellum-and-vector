@@ -29,7 +29,7 @@ export type MapDescriptor = {
   realScale?: RealScale;
 };
 
-export type RealScaleKind = "ground" | "structure";
+export type RealScaleKind = "ground" | "structure" | "authored";
 
 export type RealScale = {
   kind: RealScaleKind;

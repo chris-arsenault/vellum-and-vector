@@ -39,7 +39,9 @@ const SHARED_SPEECH: f64 = 0.3;
 /// all of them deep in one tongue's country, few at a frontier where no one has learned the
 /// neighbours' speech. Empty ground has no one to understand and is neither.
 fn understood(field: &Field, cell: usize) -> io::Result<f64> {
-    Ok(super::speech::understood(&super::speech::around(field, cell)?))
+    Ok(super::speech::understood(&super::speech::around(
+        field, cell,
+    )?))
 }
 pub fn respond(
     book: &mut QuestionBook<Field, &'static str>,
@@ -88,8 +90,7 @@ pub fn respond(
                 Ok(if field.water().column.kind.get(cell)? == 0 {
                     1.0 - 0.5
                         * (1.0
-                            - (-field.people.view(HumanField::WalkedRoute).get(cell)? / WORN)
-                                .exp())
+                            - (-field.people.view(HumanField::WalkedRoute).get(cell)? / WORN).exp())
                 } else {
                     1.0
                 })

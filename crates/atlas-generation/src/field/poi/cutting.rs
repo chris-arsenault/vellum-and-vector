@@ -21,7 +21,11 @@ pub fn cut(pass: bool, traffic: f64) -> bool {
     pass && graded(traffic)
 }
 fn traffic(state: &impl CommunityState, cell: usize) -> io::Result<f64> {
-    state.field()?.people.view(HumanField::WalkedRoute).get(cell)
+    state
+        .field()?
+        .people
+        .view(HumanField::WalkedRoute)
+        .get(cell)
 }
 fn found(state: &impl CommunityState) -> io::Result<Vec<Place>> {
     let mut found = Vec::new();
@@ -45,7 +49,10 @@ fn record<S: CommunityState>(state: &S, place: &Place) -> io::Result<Option<Feat
     let [x, y] = field.mesh.position(place.anchor);
     let [ox, oy] = field.mesh.origin();
     let mut attributes = crate::features::records::Attributes::new();
-    attributes.insert("travellerYears".into(), traffic(state, place.anchor)?.round().into());
+    attributes.insert(
+        "travellerYears".into(),
+        traffic(state, place.anchor)?.round().into(),
+    );
     Ok(Some(community_records::local_record(
         state,
         Record {
@@ -53,7 +60,9 @@ fn record<S: CommunityState>(state: &S, place: &Place) -> io::Result<Option<Feat
             name: "Cut pass",
             kind: "pass",
             layer: "transportSites",
-            geometry: Geometry::Point { coordinates: Position::xy(x + ox, y + oy) },
+            geometry: Geometry::Point {
+                coordinates: Position::xy(x + ox, y + oy),
+            },
             attributes,
         },
     )?))
@@ -77,7 +86,9 @@ fn roles<S: CommunityState + 'static>() -> Roles<S> {
         appearance: Slot::Unwritten,
         account: super::true_sizes::account(Kind::Cutting),
         fields: Fields {
-            statement: Must::Value("The cutting is a road's work; it changes no ground at map scale.".into()),
+            statement: Must::Value(
+                "The cutting is a road's work; it changes no ground at map scale.".into(),
+            ),
             terrain: Slot::NotApplicable("A road's cut is below the map's relief."),
             water: Slot::NotApplicable("It takes no water."),
             climate: Slot::NotApplicable("It changes no climate."),
@@ -87,7 +98,10 @@ fn roles<S: CommunityState + 'static>() -> Roles<S> {
         movement: movement(),
         others: Others {
             statement: Must::Value("A cutting lies on a col that busy ways cross.".into()),
-            needs: Slot::Value(vec![Relation { kind: Kind::Pass, holds: Rc::new(|_, a, b| Ok(a.anchor == b.anchor)) }]),
+            needs: Slot::Value(vec![Relation {
+                kind: Kind::Pass,
+                holds: Rc::new(|_, a, b| Ok(a.anchor == b.anchor)),
+            }]),
             excludes: Slot::NotApplicable("Nothing excludes it."),
             contains: Slot::NotApplicable("It is one place."),
             pairs_with: Slot::NotApplicable("It pairs with its own pass."),
@@ -98,7 +112,9 @@ fn roles<S: CommunityState + 'static>() -> Roles<S> {
             threatens: Slot::NotApplicable("A cutting endangers no one."),
         },
         time: ThroughTime {
-            statement: Must::Value("A cut road stays cut: the ground keeps the traffic that made it.".into()),
+            statement: Must::Value(
+                "A cut road stays cut: the ground keeps the traffic that made it.".into(),
+            ),
             fate: Slot::Value(Rc::new(|_, _| Ok(Fate::Persists))),
         },
         visibility: Visibility {
@@ -126,7 +142,9 @@ pub fn entry<S: CommunityState + 'static, Schedule>() -> Entry<S, Schedule> {
         group: Group::Settlements,
         name: "Cut pass".into(),
         recognition: Recognition {
-            distinct: Must::Value("A road people cut over a col; the col itself is a natural pass.".into()),
+            distinct: Must::Value(
+                "A road people cut over a col; the col itself is a natural pass.".into(),
+            ),
             is_a: Must::Value(Rc::new(move |state, cell| {
                 places::holds_record(state, Kind::Cutting, cell, || finding(state))
             })),
@@ -134,7 +152,9 @@ pub fn entry<S: CommunityState + 'static, Schedule>() -> Entry<S, Schedule> {
         },
         existence: Existence {
             origins: Slot::Unwritten,
-            statement: Must::Value("People cut the road over a col their ways cross busily.".into()),
+            statement: Must::Value(
+                "People cut the road over a col their ways cross busily.".into(),
+            ),
             way: Must::Value(ExistenceWay::Emerges),
             requires: Slot::NotApplicable("The col and its traffic decide it."),
             suitability: Slot::NotApplicable("The col and its traffic decide it."),

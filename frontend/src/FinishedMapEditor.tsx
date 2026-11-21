@@ -29,6 +29,7 @@ import { RealScaleOpen } from "./RealScaleOpen";
 import { CityOpen } from "./CityOpen";
 import { defaultRealScalePresentation, shownSpace } from "./realScale";
 import { RealScaleEditor } from "./RealScaleEditor";
+import { AuthoredEditor } from "./AuthoredEditor";
 import { StructureProvider, useStructureServices } from "./structureServices";
 import { useRealScaleAuthoring, type AuthoringSession } from "./useRealScaleAuthoring";
 import type { CityChoice, RealScaleChoice } from "@atlas/context";
@@ -46,6 +47,8 @@ interface Props {
   viewed?: ViewedChrome;
   open(reference: MapRef): void;
   create(): void;
+  /** Start a blank map to draw by hand. */
+  newMap?(): void;
   lore(): void;
   library(): void;
   refine(
@@ -195,6 +198,8 @@ export function FinishedMapEditor(props: Props) {
   );
 }
 function FinishedSidebar({ model, authoring }: { model: Model; authoring: AuthoringSession }) {
+  if (model.tool === "edit" && model.map.realScale?.kind === "authored")
+    return <AuthoredEditor session={authoring} reader={model.context.maps} />;
   return model.tool === "edit" && model.map.realScale ? (
     <RealScaleEditor
       session={authoring}
@@ -214,6 +219,7 @@ function FinishedHeader({ model }: { model: Model }) {
         <Brand />
         <strong>{map.name}</strong>
         <button onClick={props.create}>New world</button>
+        {props.newMap && <button onClick={props.newMap}>New map</button>}
         <button onClick={props.library}>
           {context.mode === "backend" ? "Server maps" : "Saved maps"}
         </button>

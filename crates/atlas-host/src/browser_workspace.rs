@@ -87,12 +87,28 @@ impl BrowserWorkspace {
                 .map_err(error)?;
             return codec::encode(&opened).map_err(error);
         }
+        if let Some(call) = crate::authored_maps::AuthoredCall::parse(request) {
+            if let Some(reference) = call.reference() {
+                self.ensure(reference).map_err(error)?;
+            }
+            let mut maps = self.maps.clone();
+            let result = call
+                .execute(
+                    &mut maps,
+                    &MapFiles::new(ASSETS),
+                    crate::authored_terrain::history(),
+                )
+                .map_err(error)?;
+            return codec::encode(&result).map_err(error);
+        }
         let call: EditingCall = serde_json::from_str(request).map_err(error)?;
         self.ensure(call.reference()).map_err(error)?;
-        call.execute(
+        crate::authored_maps::edit(
+            call,
             self.maps.edits(),
             &MapFiles::new(ASSETS),
             &crate::town_names::AtlasNames,
+            crate::authored_terrain::history(),
         )
         .map_err(error)
     }

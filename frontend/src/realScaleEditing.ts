@@ -16,7 +16,15 @@ import type { EditCommand, EditOutcome, Geometry } from "@atlas/map";
 import type { PublishedMapEngine } from "./publishedMapEngine";
 import type { PublishedFeature } from "./publishedAppearance";
 import { vectorFamily } from "./publishedAppearance";
-import { drawShape, type AuthoringState, type EditTool } from "./useRealScaleAuthoring";
+import {
+  drawShape,
+  isAuthored,
+  type DrawChoice,
+  type AuthoringState,
+  type EditTool,
+} from "./useRealScaleAuthoring";
+import { authoredInteractions, type AuthoredEvents } from "./authoredEditing";
+import { drawCommand } from "./drawCommand";
 import { installSelectionDrag } from "./realScaleDrag";
 import { overlayStyle } from "./realScaleOverlay";
 import { installBuilding, installStreet } from "./realScaleTown";
@@ -30,7 +38,7 @@ import {
 } from "./realScaleLandEditing";
 
 /** What the canvas asks of the edit session; every change runs as a Rust edit command. */
-export interface EditingEvents {
+export interface EditingEvents extends AuthoredEvents {
   state(): AuthoringState;
   select(ids: string[]): void;
   command(command: EditCommand): Promise<EditOutcome | undefined>;
@@ -43,8 +51,9 @@ export const toGeometry = (geometry: OLGeometry) =>
 
 /** Published layers a creator edits; hexes are derived from them and never edited directly. */
 export function editableLayers(engine: PublishedMapEngine) {
+  const authored = isAuthored(engine.descriptor);
   return [...engine.vectors.layers.entries()]
-    .filter(([id]) => drawShape(id) !== null)
+    .filter(([id]) => drawShape(id, undefined, authored) !== null)
     .map(([, layer]) => layer);
 }
 export function findFeature(engine: PublishedMapEngine, id: string): Feature | undefined {
@@ -107,6 +116,7 @@ const toolInteractions: Record<EditTool, Install[]> = {
   hexes: [({ engine, events }) => installHexes(engine, events)],
   street: [({ engine, events }) => installStreet(engine, events)],
   building: [({ engine, events }) => installBuilding(engine, events)],
+  ...authoredInteractions,
 };
 function installKeys(engine: PublishedMapEngine, events: EditingEvents) {
   const key = (event: KeyboardEvent) => {
@@ -185,32 +195,23 @@ function installPoints(engine: PublishedMapEngine, selected: Feature[], events: 
     engine.map.removeInteraction(modify);
   };
 }
+function drawType(choice: DrawChoice) {
+  if (choice.geometry) return choice.geometry;
+  const shape = drawShape(choice.layerId, choice.kind);
+  return shape === "line" ? "LineString" : shape === "area" ? "Polygon" : null;
+}
 /** Draw a new shape of the chosen layer and kind into the chosen creator layer. */
 function installDraw(engine: PublishedMapEngine, events: EditingEvents) {
   const { draw: choice, target, snapHexes } = events.state();
-  const shape = choice ? drawShape(choice.layerId, choice.kind) : null;
-  if (!choice || !shape) return () => {};
-  const draw = new Draw({ type: shape === "line" ? "LineString" : "Polygon" });
+  const type = choice && drawType(choice);
+  if (!choice || !type) return () => {};
+  const draw = new Draw({ type });
   draw.on("drawend", (event) => {
     const geometry = toGeometry(event.feature.getGeometry()!);
-    const points = geometry.type === "LineString" ? geometry.coordinates.length : 0;
-    void events
-      .command({
-        command: "create",
-        layerId: choice.layerId,
-        kind: choice.kind,
-        name: choice.name.trim() || null,
-        geometry,
-        attributes: {
-          ...choice.attributes,
-          ...(shape === "line" ? { widths: Array(points).fill(choice.width) } : {}),
-        },
-        creatorLayer: target || null,
-      })
-      .then((outcome) => {
-        if (outcome) events.select(outcome.changed);
-        followSpace(engine, events, choice.layerId)(outcome);
-      });
+    void events.command(drawCommand(choice, geometry, target)).then((outcome) => {
+      if (outcome) events.select(outcome.changed);
+      followSpace(engine, events, choice.layerId)(outcome);
+    });
     events.drawn();
   });
   engine.map.addInteraction(draw);

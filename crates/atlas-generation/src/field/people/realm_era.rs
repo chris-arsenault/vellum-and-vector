@@ -175,9 +175,7 @@ fn spread(
         code.set(cell, if held != 0 { held } else { -1 })?;
         people.set(
             cell,
-            field.people.people(cell)?
-                * share
-                * if held != 0 { yielding.get(cell)? } else { 1.0 },
+            field.people.people(cell)? * share * if held != 0 { yielding.get(cell)? } else { 1.0 },
         )?;
     }
     let mut traditions = std::array::from_fn(|_| None);

@@ -10,8 +10,8 @@ import { sheetPadding } from "./drawnSheet";
 import { bounds } from "./presentation";
 import { installPublishedRegions, type PublishedRegionEvents } from "./publishedRegionInteractions";
 import { installMeasure } from "./realScaleMeasure";
-import { useRealScaleEditing } from "./useRealScaleEditing";
 import type { AuthoringSession } from "./useRealScaleAuthoring";
+import { CanvasEditing } from "./CanvasEditing";
 
 interface Props {
   map: MapDescriptor;
@@ -88,7 +88,6 @@ function MapCanvas(props: Props) {
   }, [viewer, tool]);
   useHighlight(viewer, selection, props.highlight);
   const measured = useMeasure(viewer, tool, callbacks);
-  useRealScaleEditing(viewer, tool, props.authoring);
   return (
     <div className={`map-frame${presentation.drawing.mode === "drawn" ? " drawn-map" : ""}`}>
       <div
@@ -105,6 +104,7 @@ function MapCanvas(props: Props) {
       <output className="coordinates" ref={coordinates}>
         Map coordinates · metres
       </output>
+      <CanvasEditing viewer={viewer} tool={tool} map={map} authoring={props.authoring} />
       {measured}
       <div className="map-instruction">{instructions[tool]} · Esc: cancel</div>
       <ErrorMessage error={error} />

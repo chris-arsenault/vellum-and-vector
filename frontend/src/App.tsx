@@ -12,6 +12,7 @@ import { RegionalGeneration } from "./RegionalGeneration";
 import type { GenerationWorkflowOptions } from "./useGenerationWorkflow";
 import { FinishedMapEditor } from "./FinishedMapEditor";
 import { FinishedMapLibrary } from "./FinishedMapLibrary";
+import { NewMapDialog } from "./NewMapDialog";
 import { FinishedGeneration } from "./FinishedGeneration";
 import { LoreEncyclopedia } from "./LoreEncyclopedia";
 import { ErrorMessage } from "./ErrorMessage";
@@ -93,6 +94,7 @@ function useAtlas(context: FinishedContext) {
   const [jobTarget, setJobTarget] = useState<JobTarget | null>(null);
   const [lore, setLore] = useState(false);
   const [library, setLibrary] = useState(false);
+  const [newMap, setNewMap] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const map = useQuery({
     queryKey: ["finished-map", opened?.reference],
@@ -149,6 +151,8 @@ function useAtlas(context: FinishedContext) {
     start,
     setLore,
     setLibrary,
+    newMap,
+    setNewMap,
     setOpened,
     ...useRecovery(jobTarget, { close: () => setJob(null), open, refine: generation.refine }),
     observe(job: GenerationStatus) {
@@ -262,6 +266,16 @@ function Atlas({ context }: { context: FinishedContext }) {
           }}
         />
       )}
+      {state.newMap && (
+        <NewMapDialog
+          editing={context.editing}
+          close={() => state.setNewMap(false)}
+          open={(reference) => {
+            state.setNewMap(false);
+            void open(reference);
+          }}
+        />
+      )}
       {job && (
         <FinishedGeneration
           key={job.jobId}
@@ -292,6 +306,7 @@ function AtlasContent({ state }: { state: ReturnType<typeof useAtlas> }) {
       viewed={viewed}
       open={state.open}
       create={() => void state.create()}
+      newMap={() => state.setNewMap(true)}
       lore={() => state.setLore(true)}
       library={() => state.setLibrary(true)}
       refine={(selection, name, child, realScale, city) =>
@@ -315,6 +330,7 @@ function AtlasWelcome({ state }: { state: ReturnType<typeof useAtlas> }) {
         <button className="primary" onClick={() => void state.create()}>
           New world
         </button>
+        <button onClick={() => state.setNewMap(true)}>New map</button>
         <button onClick={() => state.setLibrary(true)}>
           {state.context.mode === "backend" ? "Server maps" : "Saved maps"}
         </button>
