@@ -82,6 +82,8 @@ impl State {
                 .map_or(&[], |m| m.fields.as_slice()),
             input.parameters,
             input.epoch,
+            // A refined map develops its land without re-living its people's use of it.
+            None,
         )?;
         let seats = regional
             .evidence

@@ -36,6 +36,8 @@ pub struct EcologicalWork<'a> {
     pub parameters: &'a AtlasParameters,
     pub epoch: &'a EcologyEpoch,
     pub authority: &'a Authority,
+    /// How the land is used, as the shared questions answer it, where people live on it.
+    pub land_use: Option<crate::ecology::forcing::LandUse>,
 }
 impl State {
     pub fn initialize_ecology(&mut self, input: &world::Establish<'_>) -> ExecutionResult<()> {
@@ -82,6 +84,7 @@ impl State {
                 .map_or(&[], |magic| magic.fields.as_slice()),
             input.parameters,
             input.epoch,
+            input.land_use.take(),
         )?;
         let work = world::Elapsed {
             time: input.time,

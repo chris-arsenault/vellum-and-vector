@@ -89,6 +89,10 @@ impl Operations {
                 parameters: input.ecology.parameters.clone(),
                 inherited: input.ecology.inherited,
                 authority,
+                land_use: Some(Rc::new(ecology::LandUseQuestions::new(
+                    &physical.people,
+                    runtime.field_projection(),
+                ))),
             }),
             physical.environment.clone(),
             runtime.field_projection(),

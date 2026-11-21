@@ -19,6 +19,16 @@ pub struct Inputs {
     channels: [ReadBand<f64>; 5],
     skin: f64,
     base: Forcing,
+    land_use: Option<LandUse>,
+}
+/// How the land is used, as the shared questions answer it: the share kept under fields and
+/// buildings, under pasture, and how hard it is hunted and fished, each from 0 to 1. The
+/// ecology owner applies them to its own cover and stocks.
+pub struct LandUse {
+    pub cleared: ReadBand<f64>,
+    pub grazed: ReadBand<f64>,
+    pub hunted: ReadBand<f64>,
+    pub fished: ReadBand<f64>,
 }
 impl Inputs {
     pub fn new(
@@ -75,7 +85,14 @@ impl Inputs {
                 fire_regime: ecology.fire,
                 ..Forcing::default()
             },
+            land_use: None,
         })
+    }
+    /// The same forcing, meeting how the land is used.
+    #[must_use]
+    pub fn with_land_use(mut self, land_use: LandUse) -> Self {
+        self.land_use = Some(land_use);
+        self
     }
     pub fn at(&self, cell: usize) -> io::Result<Forcing> {
         let mut effects = [0.0; 5];
@@ -96,6 +113,15 @@ impl Inputs {
                 *sum += intensity / 1000.0 * held * effect;
             }
         }
+        let (farmed, grazed, hunted, fished) = match &self.land_use {
+            Some(used) => (
+                used.cleared.get(cell)?,
+                used.grazed.get(cell)?,
+                used.hunted.get(cell)?,
+                used.fished.get(cell)?,
+            ),
+            None => (0.0, 0.0, 0.0, 0.0),
+        };
         Ok(Forcing {
             growth: effects[0],
             fire: effects[1],
@@ -106,6 +132,10 @@ impl Inputs {
             stillness: self.channels[1].get(cell)?,
             verdure: self.channels[2].get(cell)?,
             salting: self.channels[3].get(cell)?,
+            farmed,
+            grazed,
+            hunting: hunted,
+            fishing: fished,
             ..self.base
         })
     }
@@ -128,4 +158,32 @@ pub fn toxicity(
         )?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{super::animals::taken, super::Forcing};
+
+    #[test]
+    fn fields_take_ground_from_woods_and_pasture_keeps_grass() {
+        let f = Forcing {
+            farmed: 0.4,
+            grazed: 0.3,
+            ..Forcing::default()
+        };
+        assert!((f.cleared_for(true) - 0.4).abs() < 1e-12);
+        assert!((f.cleared_for(false) - 0.7).abs() < 1e-12);
+        let full = Forcing {
+            farmed: 0.9,
+            grazed: 0.5,
+            ..Forcing::default()
+        };
+        assert_eq!(full.cleared_for(false), 1.0);
+    }
+
+    #[test]
+    fn a_heavier_take_leaves_less() {
+        assert_eq!(taken(0.0, 300.0, 150.0), 1.0);
+        assert!(taken(1.0, 300.0, 150.0) < taken(0.5, 300.0, 150.0));
+    }
 }

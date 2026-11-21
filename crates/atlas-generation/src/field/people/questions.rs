@@ -21,6 +21,10 @@ pub struct Questions {
     pub presence: Query<Field, AnswerBand>,
     pub draw: Query<Field, AnswerBand>,
     pub livable: Query<Field, AnswerBand>,
+    pub cleared: Query<Field, AnswerBand>,
+    pub grazed: Query<Field, AnswerBand>,
+    pub hunted: Query<Field, AnswerBand>,
+    pub fished: Query<Field, AnswerBand>,
 }
 pub fn built_hold(
     book: &mut QuestionBook<Field, &'static str>,
@@ -71,6 +75,10 @@ impl Questions {
             presence: query("presence"),
             draw: query("draw"),
             livable: query("livable"),
+            cleared: query("cleared"),
+            grazed: query("grazed"),
+            hunted: query("hunted"),
+            fished: query("fished"),
         }
     }
     pub fn select(&self, executor: &mut crate::execution::Executor<Field>) {
@@ -93,6 +101,10 @@ impl Questions {
             &self.presence,
             &self.draw,
             &self.livable,
+            &self.cleared,
+            &self.grazed,
+            &self.hunted,
+            &self.fished,
         ] {
             executor.select(question);
         }

@@ -166,13 +166,60 @@ pub fn evolve(
     for cell in 0..map.mesh.len() {
         consume(map, S::Grazers, &graze.read_only(), cell, years, false)?;
         consume(map, S::Browsers, &browse.read_only(), cell, years, true)?;
+        // People's hunting takes game after it has grazed: the deeper the longer they hunt.
+        let left = taken(forcing(cell)?.hunting, years, HUNTED_YEARS);
+        for name in [S::Grazers, S::Browsers] {
+            map.set(name, cell, map.get(name, cell)? * left)?;
+        }
         map.set(
             S::Herbivores,
             cell,
             map.get(S::Grazers, cell)? + map.get(S::Browsers, cell)?,
         )?;
     }
-    predators(map, years, speed, &aquatic.read_only(), coverage)
+    predators(map, years, speed, &aquatic.read_only(), coverage)?;
+    // Fish regrow toward their water's carrying level with the predators; what people take
+    // comes after, so the take is what the era leaves.
+    fished(map, years, forcing)
+}
+/// How long full hunting takes to wear game down to a third, in years: the old society
+/// cycle's `exp(−amount × years / 150)`.
+const HUNTED_YEARS: f64 = 150.0;
+/// Fishing wears the water's fauna more slowly than hunting wears game: open water refills
+/// from beyond the shore.
+const FISHED_YEARS: f64 = 600.0;
+/// The share of a stock left after `years` of people taking it at `pressure` (0 to 1).
+pub fn taken(pressure: f64, years: f64, wear_years: f64) -> f64 {
+    (-pressure.clamp(0.0, 1.0) * years.max(0.0) / wear_years).exp()
+}
+/// People fish the water beside the shores they live on: each water cell loses fauna to the
+/// heaviest fishing of the land touching it.
+fn fished(
+    map: &mut Habitat<'_>,
+    years: f64,
+    forcing: &dyn Fn(usize) -> io::Result<Forcing>,
+) -> io::Result<()> {
+    for cell in 0..map.mesh.len() {
+        let fauna = map.get(S::AquaticFauna, cell)?;
+        if fauna <= 0.0 {
+            continue;
+        }
+        // A river's own people fish it too.
+        let mut pressure = forcing(cell)?.fishing;
+        for edge in 0..3 {
+            if let Some(next) = map.mesh.neighbor(cell, edge) {
+                pressure = pressure.max(forcing(next)?.fishing);
+            }
+        }
+        if pressure > 0.0 {
+            map.set(
+                S::AquaticFauna,
+                cell,
+                fauna * taken(pressure, years, FISHED_YEARS),
+            )?;
+        }
+    }
+    Ok(())
 }
 fn predators(
     map: &mut Habitat<'_>,

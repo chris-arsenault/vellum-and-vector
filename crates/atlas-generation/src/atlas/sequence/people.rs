@@ -33,6 +33,10 @@ pub(super) fn era_loop(
             era.validate().map_err(io::Error::other)?;
         }
         let mut body = operations(&["human.place-offers", "human.land-era"]);
+        if context.enabled("ecology.living") {
+            // The living land answers the era's clearing, abandonment and hunting.
+            body.extend(operations(&["ecology.human-time"]));
+        }
         if context.enabled("human.cultures") {
             body.extend(operations(&["human.identity-era"]));
         }

@@ -212,6 +212,8 @@ fn owners(
             parameters: binding.parameters.clone(),
             inherited: binding.inherited,
             authority: input.authority,
+            // The map's people are asked once its field exists, at assembly.
+            land_use: None,
         }),
         people: Rc::new(people::Inputs {
             parameters: binding.parameters.clone(),

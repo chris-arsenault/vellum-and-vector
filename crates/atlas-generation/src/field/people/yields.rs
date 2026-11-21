@@ -30,6 +30,26 @@ fn worked_farmland(farmland: f64, residents_per_km2: f64) -> f64 {
 fn read(field: &Field, name: S, cell: usize) -> io::Result<f64> {
     field.shared.scalar(name).get(cell)
 }
+/// The least share of a cell counted as its wild ground, so a fully farmed cell's last
+/// scraps of cover are not read as dense woods.
+const LEAST_WILD: f64 = 0.05;
+fn human(field: &Field, id: LayerId, cell: usize) -> io::Result<f64> {
+    field.people.view(HumanField::Layer(id)).get(cell)
+}
+/// The share of a cell people do not keep under fields, pasture or buildings.
+fn wild_share(field: &Field, cell: usize) -> io::Result<f64> {
+    Ok((1.0
+        - human(field, LayerId::Farmland, cell)?
+        - human(field, LayerId::Pasture, cell)?
+        - human(field, LayerId::BuiltUp, cell)?)
+    .clamp(0.0, 1.0))
+}
+/// A cover the living land reports over a whole cell, as it stands on the part of the cell
+/// it can grow on: the land's cover already falls with the ground people keep, so food read
+/// per share of ground must not count that loss again.
+fn on_share(cover: f64, share: f64) -> f64 {
+    (cover / share.max(LEAST_WILD)).clamp(0.0, 1.0)
+}
 fn ice_free(field: &Field, cell: usize) -> io::Result<f64> {
     Ok(1.0 - (read(field, S::IceThickness, cell)? / length(field, 0.00025)?).min(1.0))
 }
@@ -110,7 +130,8 @@ pub fn crop_factors(field: &Field, cell: usize, river: f64) -> io::Result<CropFa
             .max(filled)
             .min(1.0),
         slope: (-12.0 * read(field, S::Slope, cell)?).exp(),
-        woods: 1.0 - 0.8 * read(field, S::TreeCover, cell)?,
+        // How wooded the land would be left alone: clearing it is the cost woods put on crops.
+        woods: 1.0 - 0.8 * on_share(read(field, S::TreeCover, cell)?, wild_share(field, cell)?),
         quickened: quickened(field, cell, 0.8)?,
     })
 }
@@ -201,7 +222,12 @@ pub fn respond(
             kind: ResponseKind::Base(Box::new(|field, cell, answers| {
                 Ok(if field.water.borrow().kind_at(cell)? == 0 {
                     // Steep grazing carries fewer animals; herds tolerate slope better than crops.
-                    5.0 * read(field, S::GrassCover, cell)?
+                    // Grass grows on all the ground fields and buildings leave open.
+                    let open = (1.0
+                        - human(field, LayerId::Farmland, cell)?
+                        - human(field, LayerId::BuiltUp, cell)?)
+                    .clamp(0.0, 1.0);
+                    5.0 * on_share(read(field, S::GrassCover, cell)?, open)
                         * answers.ask("season")?
                         * (-4.0 * read(field, S::Slope, cell)?).exp()
                         * quickened(field, cell, 0.5)?
@@ -220,10 +246,14 @@ pub fn respond(
                 if field.water.borrow().kind_at(cell)? != 0 {
                     return Ok(0.0);
                 }
+                // What the wild ground gives, per km² of wild ground: support counts only
+                // that share of the cell.
+                let wild = wild_share(field, cell)?;
                 let gathered = 2.0
-                    * read(field, S::TreeCover, cell)?
-                    * (3.0 * read(field, S::Productivity, cell)?.max(0.0)).min(1.0)
-                    + 2.0 * read(field, S::Herbivores, cell)?;
+                    * on_share(read(field, S::TreeCover, cell)?, wild)
+                    * (3.0 * read(field, S::Productivity, cell)?.max(0.0) / wild.max(LEAST_WILD))
+                        .min(1.0)
+                    + 2.0 * read(field, S::Herbivores, cell)? / wild.max(LEAST_WILD);
                 let fished = river(field, cell, answers.queries().get(&rivers)?.as_ref())?
                     * (0.5 + 4.0 * read(field, S::AquaticFauna, cell)?)
                     + shore_catch(field, cell)?;

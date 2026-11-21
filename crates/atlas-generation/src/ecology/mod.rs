@@ -118,6 +118,14 @@ pub struct Forcing {
     pub stillness: f64,
     pub verdure: f64,
     pub salting: f64,
+    /// The share of a cell people keep under fields and buildings, where nothing wild grows.
+    pub farmed: f64,
+    /// The share people keep under pasture, where their herds keep grass and stop woods.
+    pub grazed: f64,
+    /// How heavily the people here hunt, from 0 to 1.
+    pub hunting: f64,
+    /// How heavily the people here fish the water beside them, from 0 to 1.
+    pub fishing: f64,
 }
 impl Default for Forcing {
     fn default() -> Self {
@@ -137,6 +145,22 @@ impl Default for Forcing {
             stillness: 0.0,
             verdure: 0.0,
             salting: 0.0,
+            farmed: 0.0,
+            grazed: 0.0,
+            hunting: 0.0,
+            fishing: 0.0,
         }
+    }
+}
+impl Forcing {
+    /// The share of a cell a plant group cannot take from people: fields and buildings for
+    /// every group, and pasture too for all but grass, which the herds keep.
+    pub fn cleared_for(&self, grass: bool) -> f64 {
+        let taken = if grass {
+            self.farmed
+        } else {
+            self.farmed + self.grazed
+        };
+        taken.clamp(0.0, 1.0)
     }
 }

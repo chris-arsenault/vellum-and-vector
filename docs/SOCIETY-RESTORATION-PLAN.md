@@ -589,6 +589,55 @@ cause.
 - a long-farmed country holds less game than an untouched one;
 - people respond to both in later eras.
 
+#### M4 record
+
+**What was built:**
+
+- **The ecology runs in every human era.** The existing `ecology.human-time` step was built
+  and never called, in the archive as in Rust. It now runs after people work the land, over
+  the era's years, under the era's own physical epoch.
+- **People answer four shared questions** (`field/people/land_use.rs`): `cleared` (fields and
+  buildings), `grazed` (pasture), `hunted` (people who live on the wild) and `fished` (shore
+  people).
+  - Ecology's steps ask them through projected queries and pass the answers to the forcing.
+    Ecology names no human layer, and a craft could break any of the four.
+  - Refined maps develop without them, so refinement is unchanged while it is under review.
+- **Vegetation:** suitability falls with the cleared share. Trees cannot take fields,
+  buildings or pasture; grass keeps pasture.
+- **Animals:** game falls with hunting after it grazes (`exp(−hunted × years / 150)`, the old
+  cycle's rate). Fish fall with fishing after they regrow, so the take lasts the era.
+- **People's food reads cover on the ground it grows on.** Ecology's tree and grass cover now
+  fall with the fields, so wild food, herds and the woods' cost on crops read cover per share
+  of wild or open ground. Without this, clearing was counted twice and fed itself until cells
+  were fully farmed.
+
+**Deviations:**
+
+- **Soil water and Greenwood follow through their existing owners only.** Infiltration and
+  evapotranspiration read cover, and Greenwood sources need canopy and canopy age, so cleared
+  groves stop being sources. The old cycle also returned groundwater to the soil and drew
+  Greenwood sap by the cleared share; neither is rebuilt here. During present eras no water
+  step runs, so soil water follows only in the next epoch.
+- **Hunting is felt per era, not as a loss in game's regrowth.** Each era leaves game below
+  its carrying level by that era's take.
+- **The era step reads its years from the era**, not from a duration binding.
+
+**Evidence:**
+
+- Unit tests on clearing shares, the take and how many hunt.
+- Clippy, the generation suite and the architecture checks.
+- A full draft world (with M5 also in the tree):
+  - Forest biome regions fall from 5 to 2. Dense countryside on a world map is nearly fully
+    farmed, and the living land now honours that.
+  - Four of the five largest towns are capitals of 256k–455k; the largest, a market town,
+    holds 531k.
+  - The world holds 4.85M people, against 5.70M when food read cell-wide cover (the double
+    count) and 5.43M before this milestone. Reading wild food per share of wild ground makes
+    uncleared land worth more, so people clear more slowly. It also restores the woods' cost
+    on crops that held before this milestone.
+
+**Not observed:** forest returning on a named abandoned field.
+
 ### M5 — Realms rise and fall with their people [depends on M1; DECISION R1]
 
 **Scope:**

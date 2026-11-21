@@ -6,13 +6,16 @@ use super::{
     state::{EcologicalWork, EcologyPhase, State},
 };
 use crate::{
+    answers::AnswerBand,
     bindings::DurationBinding,
+    ecology::forcing::LandUse,
     ecology::lifecycle::{Advance, Authority},
     execution::{
         Command, CommandContext, CommandKind, ExecutionResult, Executor, Projection, Query,
     },
     field::{
         ecology::{self, world},
+        people::questions::Questions,
         Field,
     },
     processes::runner::PhysicalContext,
@@ -25,6 +28,8 @@ pub struct Inputs {
     pub parameters: AtlasParameters,
     pub inherited: bool,
     pub authority: Authority,
+    /// How people use the land, where the map has people to ask.
+    pub land_use: Option<Rc<LandUseQuestions>>,
 }
 impl Inputs {
     fn establish(&self) -> world::Establish<'_> {
@@ -67,6 +72,48 @@ pub struct HumanTime {
     pub years: f64,
     pub physical_epoch: Option<usize>,
 }
+/// The shared questions of how the land is used, asked of the map's field.
+pub struct LandUseQuestions {
+    cleared: Query<State, AnswerBand>,
+    grazed: Query<State, AnswerBand>,
+    hunted: Query<State, AnswerBand>,
+    fished: Query<State, AnswerBand>,
+}
+impl LandUseQuestions {
+    pub fn new(questions: &Questions, field: &Projection<State, Field>) -> Self {
+        Self {
+            cleared: questions.cleared.projected(field),
+            grazed: questions.grazed.projected(field),
+            hunted: questions.hunted.projected(field),
+            fished: questions.fished.projected(field),
+        }
+    }
+    fn ask(
+        &self,
+        scope: &mut CommandContext<'_, State>,
+        context: PhysicalContext,
+    ) -> ExecutionResult<LandUse> {
+        let context = Rc::new(context);
+        let mut ask = |query: &Query<State, AnswerBand>| {
+            scope
+                .with_context(context.clone(), |scope| scope.query(query))
+                .map(|answer| answer.values())
+        };
+        Ok(LandUse {
+            cleared: ask(&self.cleared)?,
+            grazed: ask(&self.grazed)?,
+            hunted: ask(&self.hunted)?,
+            fished: ask(&self.fished)?,
+        })
+    }
+}
+fn land_use(
+    scope: &mut CommandContext<'_, State>,
+    questions: Option<&LandUseQuestions>,
+    context: PhysicalContext,
+) -> ExecutionResult<Option<LandUse>> {
+    questions.map(|q| q.ask(scope, context)).transpose()
+}
 fn advance(
     scope: &mut CommandContext<'_, State>,
     field: &Projection<State, Field>,
@@ -75,6 +122,7 @@ fn advance(
     context: PhysicalContext,
     phase: EcologyPhase,
 ) -> ExecutionResult<()> {
+    let used = land_use(scope, input.land_use.as_deref(), context)?;
     let years = scope
         .values()
         .invocation()
@@ -99,6 +147,7 @@ fn advance(
             parameters: &input.parameters,
             epoch: &epoch,
             authority: &input.authority,
+            land_use: used,
         },
     )
 }
@@ -219,6 +268,7 @@ impl Operations {
                     .map_err(io::Error::other)?
                     .unwrap_or(-1);
                 let (epoch_index, epoch) = input.epoch(bound)?;
+                let used = land_use(scope, input.land_use.as_deref(), time.context)?;
                 State::advance_ecology(
                     scope,
                     &field,
@@ -237,6 +287,7 @@ impl Operations {
                         parameters: &input.parameters,
                         epoch: &epoch,
                         authority: &input.authority,
+                        land_use: used,
                     },
                 )
             },

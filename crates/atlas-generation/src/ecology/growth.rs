@@ -56,7 +56,9 @@ fn proposal(
     } else {
         0.0
     };
-    let suitable = groups::suitability(map, group, cell, f)?;
+    // Ground people keep under fields, buildings or (for woods) pasture grows nothing wild.
+    let suitable =
+        groups::suitability(map, group, cell, f)? * (1.0 - f.cleared_for(group.id == Id::Grass));
     let browsing = if group.juvenile.is_some() {
         map.get(S::Browsers, cell)? * 0.7
     } else {

@@ -19,6 +19,7 @@ pub mod identity_sunder;
 pub mod land;
 pub mod land_events;
 pub mod land_processes;
+pub mod land_use;
 pub mod needs;
 pub mod pass;
 pub mod place_country;

@@ -127,8 +127,14 @@ impl Field {
         magic: &[MagicField],
         parameters: &AtlasParameters,
         epoch: &EcologyEpoch,
+        // How people use the land, from the shared questions; refined maps develop without.
+        land_use: Option<crate::ecology::forcing::LandUse>,
     ) -> io::Result<Inputs> {
-        Inputs::new(&self.shared, magic, &self.scale, parameters, epoch)
+        let inputs = Inputs::new(&self.shared, magic, &self.scale, parameters, epoch)?;
+        Ok(match land_use {
+            Some(used) => inputs.with_land_use(used),
+            None => inputs,
+        })
     }
     pub fn ecology_authority(
         &self,
