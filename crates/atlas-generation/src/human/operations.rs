@@ -20,6 +20,14 @@ pub struct Move {
     pub share: ReadBand<f64>,
     pub years: f64,
 }
+pub struct Placement {
+    pub targets: ReadBand<i32>,
+    pub share: ReadBand<f64>,
+}
+pub struct LandPlacement {
+    pub kind: LayerId,
+    pub movement: Placement,
+}
 pub struct Convert {
     pub from: LayerId,
     pub to: LayerId,
@@ -80,6 +88,8 @@ fn command<S: 'static, P: 'static>(
 pub struct Operations<S> {
     pub lay: Command<S, Lay>,
     pub move_layer: Command<S, Move>,
+    pub place_ruins: Command<S, Placement>,
+    pub place_land: Command<S, LandPlacement>,
     pub convert: Command<S, Convert>,
     pub dwell: Command<S, Dwelling>,
     pub forget: Command<S, f64>,
@@ -104,6 +114,18 @@ impl<S: 'static> Operations<S> {
             lay: command("human.layers.lay", Work, access, |owner, _, input| {
                 owner.lay(input)
             }),
+            place_ruins: command(
+                "human.remains.place",
+                Work,
+                access,
+                |owner, coverage, input| owner.place_ruins(input, coverage),
+            ),
+            place_land: command(
+                "human.land-use.place",
+                Work,
+                access,
+                |owner, coverage, input| owner.place_land(input, coverage),
+            ),
             move_layer: command(
                 "human.layers.move",
                 Work,

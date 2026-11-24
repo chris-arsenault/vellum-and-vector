@@ -147,7 +147,7 @@ fn configured_world_runs_bound_human_history_before_the_next_physical_epoch() {
     let mut events = Vec::new();
     for stage in &stages {
         if let StageKind::Process(op) = stage.kind {
-            if matches!(op.process.as_str(), "atlas.begin-epoch" | "human.land-era") {
+            if op.process == "atlas.begin-epoch" || op.process == "human.place-offers" {
                 events.push(
                     stage
                         .context

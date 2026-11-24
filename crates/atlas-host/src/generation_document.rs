@@ -47,6 +47,7 @@ pub struct Preparation {
     context: Context,
     input: Value,
     layers: BTreeMap<String, Layer>,
+    definitions: BTreeMap<String, Layer>,
     channels: Vec<Binding>,
     geography: Vec<geographies::Binding>,
     resolved: atlas_generation::atlas::configuration::Resolved,
@@ -111,6 +112,7 @@ impl Preparation {
             context: request.geography.context(),
             input,
             layers: request.geography.layers.clone(),
+            definitions: atlas_generation::publication::layers::publication(),
             channels,
             geography,
             resolved: prepared.resolved.clone(),
@@ -132,14 +134,18 @@ impl Preparation {
             .collect();
         // Bindings for real-scale layers (plots, caves) belong to features a world also runs;
         // a map installs only the layers its profile carries.
-        let profile = result
+        let area = result
             .context
             .area(result.document.scope.located.area_id)
-            .map_err(io::Error::other)?
-            .profile;
-        let definitions = atlas_generation::publication::layers::publication();
+            .map_err(io::Error::other)?;
+        let profile = area.profile;
+        if area.map.as_ref().is_some_and(|m| m.city.is_some()) {
+            atlas_generation::publication::layers::city_plots(&mut result.definitions);
+            atlas_generation::publication::layers::city_plots(&mut result.layers);
+        }
         for id in selected {
-            if definitions
+            if result
+                .definitions
                 .get(id)
                 .is_none_or(|layer| layer.profiles.contains(&profile))
             {
@@ -227,8 +233,8 @@ impl Preparation {
         })
     }
     fn install_layer(&mut self, id: &str) -> io::Result<()> {
-        let definitions = atlas_generation::publication::layers::publication();
-        let definition = definitions
+        let definition = self
+            .definitions
             .get(id)
             .ok_or_else(|| io::Error::other(format!("Declare layer {id}")))?;
         let profile = self
@@ -237,7 +243,9 @@ impl Preparation {
             .map_err(io::Error::other)?
             .profile;
         if !definition.profiles.contains(&profile) {
-            return Err(io::Error::other("Layer does not support map profile"));
+            return Err(io::Error::other(format!(
+                "Layer {id} does not support map profile {profile:?}"
+            )));
         }
         if let Some(previous) = self.layers.get_mut(id) {
             if !previous.profiles.contains(&profile)

@@ -166,37 +166,7 @@ impl Ord for Ordered {
     }
 }
 
-/// A city map covers its settlement's built ground and the ground the city can grow into,
-/// this many times the built radius.
-pub const SURROUNDINGS: f64 = 2.5;
-/// A small built extent still opens on room for its walls, fields and approaches, in metres.
-pub const LEAST_RADIUS: f64 = 1_500.;
-/// The outline a city map is refined over: its settlement's surroundings, centred on it.
-pub fn surroundings(settlement: &crate::features::Feature) -> std::io::Result<atlas_map::Geometry> {
-    use atlas_map::{Geometry, Position};
-    let Geometry::Point { coordinates } = &settlement.geometry else {
-        return Err(std::io::Error::other(
-            "A city map opens at a settlement's point",
-        ));
-    };
-    let [x, y, _] = coordinates.coordinates();
-    let built = settlement
-        .attributes
-        .get("builtKm2")
-        .and_then(serde_json::Value::as_f64)
-        .unwrap_or(0.)
-        .max(0.);
-    let radius = ((built * 1e6 / std::f64::consts::PI).sqrt() * SURROUNDINGS).max(LEAST_RADIUS);
-    let ring = (0..=64)
-        .map(|i| {
-            let angle = std::f64::consts::TAU * f64::from(i % 64) / 64.;
-            Position::xy(x + radius * angle.cos(), y + radius * angle.sin())
-        })
-        .collect();
-    Ok(Geometry::Polygon {
-        coordinates: vec![ring],
-    })
-}
+pub mod outline;
 
 #[cfg(test)]
 mod tests {
@@ -232,44 +202,13 @@ mod tests {
     }
 
     #[test]
-    fn a_city_map_covers_its_settlement_and_the_ground_it_can_grow_into() {
+    fn city_resolution_follows_the_selected_area() {
         use crate::atlas::resolution::Quality;
-        let settlement = |built: f64| crate::features::Feature {
-            geometry: atlas_map::Geometry::Point {
-                coordinates: atlas_map::Position::xy(10_000., 20_000.),
-            },
-            attributes: [("builtKm2".to_owned(), serde_json::json!(built))]
-                .into_iter()
-                .collect(),
-            ..serde_json::from_value(serde_json::json!({
-                "id": atlas_map::Id::from_name("city"), "name": "City", "kind": "settlement",
-                "layerId": "settlements", "areaId": atlas_map::Id::from_name("parent"),
-                "geometry": {"type": "Point", "coordinates": [0, 0]}, "detail": {},
-                "attributes": {}, "relations": [], "state": "generated", "protected": false,
-                "actor": "generator", "generationId": null, "causes": [], "generationDomain": null
-            }))
-            .unwrap()
-        };
-        let spatial = atlas_gis::geometry::NativeGeos::new(1e-6).unwrap();
-        // A city built over 20 km² opens on about 2.5 times its built radius.
-        let outline = surroundings(&settlement(20.)).unwrap();
-        let area = crate::spatial::SpatialKernel::area(&spatial, &outline).unwrap();
-        let radius = (20e6 / std::f64::consts::PI).sqrt() * 2.5;
-        assert!((area / (std::f64::consts::PI * radius * radius) - 1.).abs() < 0.01);
-        // A hamlet still opens on room for its walls and fields.
-        let small = surroundings(&settlement(0.)).unwrap();
-        let area_small = crate::spatial::SpatialKernel::area(&spatial, &small).unwrap();
-        assert!(area_small > 0.99 * std::f64::consts::PI * 1_500f64.powi(2));
-        // The scale contract: each level a seventh of the one above it.
         let reference = crate::scale::MapScale::REFERENCE_WIDTH
             * crate::scale::MapScale::REFERENCE_HEIGHT
             * 0.35;
         assert_eq!(Quality::level_for_extent(reference / 7.), 1);
         assert_eq!(Quality::level_for_extent(reference / 7f64.powi(5)), 5);
-        // A city of 20 km² built, about 125 km² with its surroundings, refines near 100 m cells.
-        let level = Quality::level_for_extent(area);
-        let span = Quality::Draft.regional_span(level).unwrap();
-        assert!((60. ..250.).contains(&span), "level {level} span {span}");
     }
 
     #[test]

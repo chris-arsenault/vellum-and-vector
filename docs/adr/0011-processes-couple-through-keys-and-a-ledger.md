@@ -110,7 +110,14 @@ still occur during execution, so observation phases name execution boundaries ra
 every change is a deferred command. Material formation and alteration remain attached to the
 accepted material operation.
 
-The sequence still determines command order. Required/provided bands select runnable steps;
-current derived dependencies are executable queries rather than claims of freshness inferred from
+The configured sequence supplies occurrence and epoch boundaries to the production registry.
+Within those boundaries, named stages order operations and explicit dependencies order stages.
+Named feedback groups repeat spatial strategies for the declared number of passes without
+advancing historical time. Existing occurrences retain their recipe order unless a registration
+supplies scheduling metadata. The registry distinguishes causal work, classification/publication,
+and legacy operations still awaiting migration. Existing registrations keep their original
+executable handles and callers under the legacy category until migrated according to the owner’s
+process spreadsheet. Required/provided bands select runnable steps.
+Current derived dependencies are executable queries rather than claims of freshness inferred from
 those declarations. Numerical accuracy, exact replay and conservation
 closure are not acceptance criteria; generated geography is judged on maps.

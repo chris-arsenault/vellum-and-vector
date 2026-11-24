@@ -23,6 +23,8 @@ pub struct FieldSeed {
     pub shared: SharedFields,
     pub ground: GroundSeed,
     pub people: HumanSeed,
+    harvest: Option<super::people::yields::Harvest>,
+    pub(crate) process_site: crate::processes::strategies::Site,
     pub ground_load: MaterialLoad,
     pub sea_load: MaterialLoad,
     pub tectonics: Option<crate::tectonics::state::State>,
@@ -56,6 +58,11 @@ impl FieldSeed {
                 support_initialized: false,
             },
             people: HumanSeed::new(&mut coverage),
+            harvest: None,
+            process_site: crate::processes::strategies::Site {
+                map_type: crate::processes::strategies::MapType::World,
+                cell_metres: mesh.cell_span(),
+            },
             ground_load: MaterialLoad::ground(&mut coverage, mesh.clone()),
             sea_load: MaterialLoad::new(&mut coverage),
             tectonics: None,
@@ -157,6 +164,8 @@ impl FieldSeed {
             transport_plan: None,
             melt_receiver: None,
             human_land_seen: None,
+            harvest: self.harvest,
+            process_site: self.process_site,
             place_offers: None,
             goods_turnover: None,
             engineered_dams: None,
@@ -166,6 +175,20 @@ impl FieldSeed {
             thrust_slip: Default::default(),
             coverage: RefCell::new(self.coverage),
         })
+    }
+
+    pub(super) fn capture_harvest(
+        &mut self,
+        food: &Band<f64>,
+        farmland: &Band<f64>,
+        residents: &Band<f64>,
+    ) -> io::Result<()> {
+        self.harvest = Some(super::people::yields::Harvest {
+            food: self.coverage.copy_band(food)?.read_only(),
+            farmland: self.coverage.copy_band(farmland)?.read_only(),
+            residents: self.coverage.copy_band(residents)?.read_only(),
+        });
+        Ok(())
     }
 }
 
@@ -197,6 +220,8 @@ pub struct Field {
     pub(super) transport_plan: Option<crate::transport::plan::TransportPlan>,
     pub(super) melt_receiver: Option<super::surface_media::MeltReceiver>,
     pub(super) human_land_seen: Option<super::people::history::Seen>,
+    pub(super) harvest: Option<super::people::yields::Harvest>,
+    process_site: crate::processes::strategies::Site,
     pub(super) place_offers: Option<Rc<super::poi::offered::PlaceOffers>>,
     /// Each cell's goods turnover in the latest people's pass, written by the goods trade alone
     /// and read through the questions it answers; a loose pass, which trades nothing, clears it.
@@ -210,6 +235,9 @@ pub struct Field {
     pub(super) coverage: RefCell<Coverage>,
 }
 impl Field {
+    pub fn process_site(&self) -> crate::processes::strategies::Site {
+        self.process_site
+    }
     pub fn town_clearance_operation() -> crate::execution::Command<Self, Vec<(usize, f64)>> {
         crate::execution::Command::with_inputs(
             "town.clear-waste",

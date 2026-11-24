@@ -109,7 +109,13 @@ struct Options {
     // hpc-exempt: command-line options by name.
     values: BTreeMap<String, String>,
 }
-const FLAGS: [&str; 4] = ["fresh", "reference-width", "full-history", "outline"];
+const FLAGS: [&str; 5] = [
+    "fresh",
+    "reference-width",
+    "full-history",
+    "outline",
+    "capture-only",
+];
 impl Options {
     fn parse(arguments: impl Iterator<Item = String>) -> io::Result<Self> {
         let mut positionals = Vec::new();
@@ -217,7 +223,7 @@ fn usage(harness: &Harness) -> String {
        [--until \"<stage picture label, e.g. Initial regional detail>\"]
   region --at x,y|Settlement --width metres --name name [--parent map folder]
   region --at x,y|Settlement --outline [--choice n] --name name [--parent map folder]
-  city --at Settlement --name name [--parent map folder]
+  city --at Settlement --name name [--parent map folder] [--capture-only]
   real --outline [--choice n] --at x,y|Settlement --parent city map folder --name name
        [--hex 30m] opens a district of a city map as its own map
   cancel <jobId>
@@ -672,6 +678,9 @@ fn real_scale(harness: &Harness, options: &Options) -> io::Result<()> {
         return Ok(());
     };
     save(harness, &captured)?;
+    if options.flag("capture-only") {
+        return report::report(&harness.server, &captured, &harness.map_folder(&name));
+    }
     let mut developed: Value = harness.generation("configuration", json!(captured))?;
     developed["recipe"]["quality"] = json!(detail);
     for (flag, choice) in [("template", "template"), ("major-work", "majorWork")] {

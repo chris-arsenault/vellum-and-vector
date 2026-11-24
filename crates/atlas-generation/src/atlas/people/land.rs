@@ -4,13 +4,18 @@ use crate::{
     execution::{Command, CommandKind, Projection},
     field::{
         people::{
-            crafts, era_places, identity_processes, land_events, land_processes, place_country,
-            travel,
+            contract::{Dispatch, MapType, Rule, Timing},
+            era_places, identity_processes, land_events, land_processes, place_country, travel,
         },
         Field,
     },
 };
 use std::rc::Rc;
+
+const PLACE_OFFERS: Dispatch<()> = Dispatch {
+    id: "human.hold-place-offers",
+    rules: &[Rule::new(MapType::ALL, Some(()))],
+};
 
 pub(super) fn watch(
     land: Rc<land_processes::Operations>,
@@ -26,74 +31,36 @@ pub(super) fn watch(
         },
     )
 }
-pub(super) fn epoch(
-    land: Rc<land_processes::Operations>,
-    projection: &Projection<State, Field>,
-) -> Operation {
-    let epoch = land.epoch.projected(projection);
-    Command::with_inputs(
-        "human.land-epoch",
-        CommandKind::Event,
-        vec![],
-        move |scope, era: &Occurrence| scope.run_with_context(&epoch, &(), Rc::new(era.physical)),
-    )
-}
 /// Reads what the places standing at the start of an era offer and threaten, and holds it on
 /// the field for the era's people. It is the only reader of the catalogue for people.
 pub(super) fn place_offers(projection: &Projection<State, Field>) -> Operation {
-    let hold = Field::place_offers_operation().projected(projection);
+    let hold = hold_place_offers(projection);
     Command::with_inputs(
         "human.place-offers",
         CommandKind::Event,
         vec![],
-        move |scope, era: &Occurrence| {
-            let offers = {
-                let state = scope.state();
-                state.clear_queries();
-                Rc::new(crate::field::poi::offered::offered(
-                    state,
-                    &state.catalogue,
-                )?)
-            };
-            scope.state().clear_queries();
-            scope.run_with_context(&hold, &offers, Rc::new(era.physical))
-        },
+        move |scope, era: &Occurrence| scope.run_with_context(&hold, &(), Rc::new(era.physical)),
     )
 }
-pub(super) fn era(
-    land: Rc<land_processes::Operations>,
-    progress: crate::atlas::regional::work::Progress,
-    projection: &Projection<State, Field>,
-) -> Operation {
-    let era = land.era.projected(projection);
+
+pub(crate) fn hold_place_offers(projection: &Projection<State, Field>) -> Command<State> {
+    let hold = Field::place_offers_operation().projected(projection);
     Command::with_inputs(
-        "human.land-era",
-        CommandKind::Elapsed,
+        PLACE_OFFERS.id,
+        CommandKind::Work,
         vec![],
-        move |scope, input: &Occurrence| {
-            scope.run_with_context(
-                &era,
-                &land_processes::Era {
-                    years: input.years,
-                    mobility: input.mobility,
-                },
-                Rc::new(input.physical),
-            )?;
-            let mut lines = Vec::new();
-            for craft in crafts::CRAFTS {
-                let mut count = 0;
-                for cell in 0..scope.state().field().mesh().len() {
-                    if crafts::practised(scope.state().field(), craft, cell)? > 0.05 {
-                        count += 1;
-                    }
-                }
-                lines.push(format!("{} {count}", craft.name));
+        move |scope: &mut crate::execution::CommandContext<'_, State>, _| {
+            let state = scope.state();
+            if PLACE_OFFERS
+                .select(state.field().process_site(), Timing::Present)?
+                .is_none()
+            {
+                return Ok(());
             }
-            progress(
-                1.0,
-                &format!("Crafts practised, in cells: {}", lines.join(", ")),
-            );
-            Ok(())
+            state.clear_queries();
+            let offers = crate::field::poi::offered::offered(state, &state.catalogue)?;
+            state.clear_queries();
+            scope.run(&hold, &Rc::new(offers))
         },
     )
 }
@@ -116,6 +83,7 @@ pub(super) fn places(
                 era: era.era.clone(),
                 least: input.parameters.town_threshold,
                 town: None,
+                timing: Timing::Elapsed,
                 country: place_country::Setting {
                     range: travel::length(state.field(), input.parameters.city_reach)?,
                     road_travellers: input.parameters.road_traffic,

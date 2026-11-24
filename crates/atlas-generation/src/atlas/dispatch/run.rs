@@ -1,6 +1,6 @@
 //! Sequence traversal with recovery only at explicitly supported completed boundaries.
 mod checkpoint;
-use super::{Input, Registry};
+use super::{schedule, Input, Registry};
 use crate::{
     atlas::{
         context::{ContextSource, Epoch},
@@ -53,6 +53,7 @@ pub struct Run<'a> {
     stages: Vec<Stage<'a>>,
     settings: Settings,
     next: usize,
+    trace_registry: bool,
     pub products: ProductLedger,
     parents: Rc<RefCell<Vec<Vec<Cause>>>>,
 }
@@ -74,16 +75,20 @@ impl<'a> Run<'a> {
         products: ProductLedger,
         runtime: &mut Runtime,
     ) -> ExecutionResult<Self> {
-        registry.select(configuration, runtime)?;
-        let stages = configuration
-            .stages()
-            .map_err(|error| ExecutionError::Failed(format!("{error:?}")))?;
+        let site = runtime.executor.state().field().process_site();
+        let stages = schedule::stages(configuration, registry, site)?;
+        registry.select(&stages, runtime)?;
+        let trace_registry = std::env::var_os("ATLAS_TRACE_PROCESS_REGISTRY").is_some();
+        if trace_registry {
+            registry.trace_inventory();
+        }
         Ok(Self {
             configuration,
             registry,
             stages,
             settings,
             next: 0,
+            trace_registry,
             products,
             parents: Rc::default(),
         })
@@ -174,7 +179,9 @@ impl<'a> Run<'a> {
         stage: &Stage<'_>,
         call: &crate::recipe::Invocation,
     ) -> ExecutionResult<Event> {
-        if !call.enabled(&stage.context) {
+        let process = self.registry.get(call)?;
+        let site = runtime.executor.state().field().process_site();
+        if !call.enabled(&stage.context) || !process.specification.active(site, stage)? {
             observer.progress(
                 &stage.context.path,
                 (self.next + 1) as f64 / self.stages.len() as f64 * 0.98,
@@ -182,7 +189,6 @@ impl<'a> Run<'a> {
             )?;
             return Ok(Event::Skipped);
         }
-        let process = self.registry.get(call)?;
         process.validate_binding(stage.context.duration())?;
         let contract = &process.specification.contract;
         let missing = self.products.missing(contract);
@@ -246,6 +252,7 @@ impl<'a> Run<'a> {
             physical,
             epochs: ancestry(stage),
             epoch_indices: stage.context.epoch_indices.clone(),
+            site,
             random: Rc::new(RefCell::new(Streams::new(
                 &self.settings.seed,
                 &self.settings.seed_scope,
@@ -261,12 +268,17 @@ impl<'a> Run<'a> {
         let applied = (|| -> ExecutionResult<()> {
             process.execute(runtime, &input)?;
             if !process.specification.workspace_only {
-                runtime.executor.run(&Command::new(
-                    "atlas.compose-authored-surface",
-                    CommandKind::Event,
-                    vec![],
-                    |state: &mut State, _| state.compose_authored_surface(),
-                ))?;
+                if !matches!(
+                    process.specification.category,
+                    super::Category::ClassificationPublication
+                ) {
+                    runtime.executor.run(&Command::new(
+                        "atlas.compose-authored-surface",
+                        CommandKind::Event,
+                        vec![],
+                        |state: &mut State, _| state.compose_authored_surface(),
+                    ))?;
+                }
                 observer.validate(runtime.executor.state())?;
             }
             self.products
@@ -297,6 +309,30 @@ impl<'a> Run<'a> {
                 },
             )?;
             return Err(error);
+        }
+        if self.trace_registry {
+            let specification = &process.specification;
+            let selected = specification.strategy(site, stage)?;
+            let trace = |strategy: Option<super::metadata::Selected>| {
+                eprintln!(
+                    "{}",
+                    serde_json::json!({
+                        "event": "generation.registry.invoked", "id": contract.id,
+                        "category": specification.category.name(), "command": process.source_command,
+                        "path": stage.context.path, "mapType": format!("{:?}", site.map_type),
+                        "cellMetres": site.cell_metres, "duration": stage.context.duration(),
+                        "processId": strategy.map(|s| s.process_id).unwrap_or(&contract.id),
+                        "strategy": strategy.map(|s| s.name),
+                        "effectTime": strategy.map(|s| format!("{:?}", s.time)),
+                    })
+                )
+            };
+            if selected.is_empty() {
+                trace(None);
+            }
+            for strategy in selected {
+                trace(Some(strategy));
+            }
         }
         observer.progress(
             &stage.context.path,

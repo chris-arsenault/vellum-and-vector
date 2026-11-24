@@ -14,10 +14,12 @@ use crate::{
     field::{
         inheritance::Inputs as CapturedInputs,
         poi::carry::Outcomes,
-        refinement::{causes, people::PlaceSettings},
+        refinement::{
+            causes,
+            people::{Parent, PlaceSettings},
+        },
     },
     magic::workspace::Configuration,
-    reconstruction::Grid,
     storage::SharedCache,
 };
 use std::{cell::RefCell, io, rc::Rc};
@@ -153,7 +155,18 @@ impl Operations {
         registration::native(&mut registry, &physical)?;
         registration::world::register(&mut registry, &world, &publication)?;
         registration::ecology::register(&mut registry, &ecology)?;
-        registration::people::register(&mut registry, &people)?;
+        registration::people::register(
+            &mut registry,
+            &people,
+            &field,
+            input.regional.is_some(),
+            input
+                .regional
+                .as_ref()
+                .map(|region| region.parent_people.clone())
+                .unwrap_or_default(),
+            input.regional.as_ref().map_or(0, |region| region.seed),
+        )?;
         registration::magic::register(
             &mut registry,
             &magic,
@@ -177,6 +190,8 @@ impl Operations {
         };
         if let Some(region) = input.regional {
             operations.regional(runtime, features, region)?;
+        } else {
+            crate::processes::town::urban::registration::register(&mut operations.registry, None)?;
         }
         Ok(operations)
     }
@@ -201,11 +216,8 @@ impl Operations {
             ecology: input.ecology,
             authority: input.authority,
             people: regional::work::People {
-                land: self.people.land.clone(),
-                questions: self.physical.people.clone(),
                 record: self.people.record.clone(),
                 settings: input.places,
-                parent: input.parent_people,
             },
             progress: self.people_input.progress.clone(),
         });
@@ -273,5 +285,5 @@ pub struct Region {
     pub ecology: super::context::EcologyEpoch,
     pub authority: Authority,
     pub places: PlaceSettings,
-    pub parent_people: Option<Rc<Grid>>,
+    pub parent_people: Parent,
 }

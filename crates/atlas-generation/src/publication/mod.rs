@@ -23,5 +23,6 @@ pub mod samples;
 pub mod sampling;
 pub mod terrain;
 pub mod town;
+pub(crate) mod urban;
 pub mod upload;
 pub mod vectors;

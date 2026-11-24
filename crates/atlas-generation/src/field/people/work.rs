@@ -1,5 +1,6 @@
 use super::{
     facts::Facts,
+    feed::Market,
     questions::Questions,
     reach::Passage,
     travel::{length, Travel},
@@ -17,6 +18,10 @@ pub struct Work {
     pub going: Passage,
     pub land: Band<f64>,
     pub imports: Band<f64>,
+    pub outside_market: Option<Market>,
+    pub connections: std::rc::Rc<Vec<super::feed::Connection>>,
+    pub markets: std::rc::Rc<Vec<(usize, f64)>>,
+    pub city: Option<std::rc::Rc<super::growth::Guidance>>,
 }
 pub fn habitable(field: &Field, cell: usize) -> io::Result<bool> {
     Ok(field.water.borrow().kind_at(cell)? == 0)
@@ -78,6 +83,10 @@ impl Work {
             going,
             land,
             imports: working(field),
+            outside_market: None,
+            connections: Default::default(),
+            markets: Default::default(),
+            city: None,
         })
     }
     pub fn reach(

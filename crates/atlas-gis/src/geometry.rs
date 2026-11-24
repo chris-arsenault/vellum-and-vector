@@ -260,7 +260,7 @@ impl SpatialKernel for NativeGeos {
         if !metres.is_finite() {
             return Err("Buffer distance must be finite".into());
         }
-        Self::json(Self::buffer_parts(&self.read(value)?, metres)?)
+        self.overlay_result(Self::buffer_parts(&self.read(value)?, metres)?)
     }
     fn clip_by_rect(&self, value: &Geometry, bounds: Bounds) -> SpatialResult<Option<Geometry>> {
         Self::json(

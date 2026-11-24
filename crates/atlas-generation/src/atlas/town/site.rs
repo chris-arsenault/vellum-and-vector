@@ -549,58 +549,6 @@ fn ways_in(
     }
     Ok((arms, strategic))
 }
-/// Where a hot spot's town finds its ways: the city's roads passing within `reach`, and the
-/// neighbouring centres it heads for, each with its name.
-pub(crate) struct SpotApproaches<'a> {
-    pub reach: f64,
-    pub toward: &'a [(Point, String)],
-}
-/// The seat of a town founded at a city map's hot spot: its arms are the city's roads passing
-/// within reach and the ways toward its neighbouring centres.
-pub(crate) fn spot_seat(
-    state: &State,
-    key: Id,
-    name: String,
-    centre: Point,
-    approaches: &SpotApproaches<'_>,
-    mut story: Story,
-) -> io::Result<Seat> {
-    let roads = match state.records.source_features.as_deref() {
-        Some(source) => roads(source, None)?,
-        None => roads(state.records.features.as_ref(), Some(state.scope.area))?,
-    };
-    let scale = state.town.scale();
-    let meeting = Meeting {
-        centre,
-        reach: approaches.reach,
-        name: &name,
-        scale,
-    };
-    let (mut arms, strategic) = ways_in(state.spatial.as_ref(), &roads, &meeting)?;
-    // A city's centres are joined to one another: each hot spot's town heads for its
-    // neighbours, and those ways become the city's thoroughfares.
-    let probe = scale.length(HEADING_PROBE, Measure::Layout);
-    for (other, destination) in approaches.toward {
-        add_arm(
-            &mut arms,
-            Arm {
-                points: vec![centre, *other],
-                destination: Some(destination.clone()),
-            },
-            probe,
-        );
-    }
-    story.ways = arms.len();
-    story.guarded |= strategic;
-    Ok(Seat {
-        key,
-        name,
-        centre,
-        story,
-        arms,
-        culture: None,
-    })
-}
 fn story(feature: &Feature, ways: usize, guarded: bool) -> Story {
     let attributes = &feature.attributes;
     let site = text(feature, "siteKind").unwrap_or_default();

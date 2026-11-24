@@ -1,5 +1,9 @@
 // Arconis: docs/architecture/subsystems.arconis#item=pp_found — founds the first people, only on an empty map.
 use super::{
+    contract::{
+        initial_layer, layer_strategy, Condition, Contract, Dispatch, EffectTime, MapType, Product,
+        Rule, Strategy, Timing,
+    },
     facts::*,
     questions::Questions,
     work::{habitable, working, Work},
@@ -15,11 +19,112 @@ use crate::{
 };
 use std::{cell::RefCell, rc::Rc};
 
-pub type WorkInput = Rc<RefCell<Work>>;
+pub type SharedWork = Rc<RefCell<Work>>;
+pub struct WorkInput<S> {
+    pub work: SharedWork,
+    pub strategy: S,
+}
+pub type Demography = Strategy<(), LayerId>;
+pub type Capital = Strategy<Investment, LayerId>;
+
+pub(super) const FOUNDING: Dispatch<()> = Dispatch {
+    id: "human.land.found",
+    rules: &[
+        Rule::new(MapType::WORLD, Some(())).during(Timing::Elapsed),
+        Rule::new(MapType::WORLD, None).during(Timing::Present),
+        Rule::new(MapType::REFINED, None),
+    ],
+};
+
+pub const DEMOGRAPHY: Contract<(), LayerId> = Contract {
+    id: "human.land.grow",
+    effect: "Births and deaths during a historical interval",
+    reads: &[
+        Product::Layer(LayerId::Population),
+        Product::NetFoodImports,
+        Product::Question("livable"),
+    ],
+    writes: &[Product::Layer(LayerId::Population)],
+    catalog_id: "human.land.grow",
+    strategies: &[layer_strategy(
+        "demography",
+        (),
+        EffectTime::Elapsed,
+        LayerId::Population,
+        Condition::None,
+    )],
+};
+
+#[derive(Clone, Copy)]
+pub enum Investment {
+    Historical,
+    Spatial,
+}
+pub const BUILT_GROUND: Contract<Investment, LayerId> = Contract {
+    id: "human.land.harden",
+    effect: "Allocate built land and investment where households and businesses use them",
+    reads: &[
+        Product::Layer(LayerId::Population),
+        Product::Layer(LayerId::BuiltUp),
+        Product::Question("wealth"),
+    ],
+    writes: &[
+        Product::Layer(LayerId::BuiltUp),
+        Product::Layer(LayerId::Standing),
+    ],
+    catalog_id: "human.land.harden",
+    strategies: &[
+        layer_strategy(
+            "investment",
+            Investment::Historical,
+            EffectTime::Elapsed,
+            LayerId::BuiltUp,
+            Condition::None,
+        ),
+        layer_strategy(
+            "built-ground",
+            Investment::Spatial,
+            EffectTime::SpatialIteration,
+            LayerId::BuiltUp,
+            Condition::None,
+        ),
+    ],
+};
+pub const MAINTENANCE: Contract<Investment, LayerId> = Contract {
+    id: "settlement.built-maintenance",
+    effect: "Keep occupied structures in repair and expose neglected stock",
+    reads: &[
+        Product::Layer(LayerId::Standing),
+        Product::Layer(LayerId::BuiltUp),
+        Product::Question("wealth"),
+    ],
+    writes: &[
+        Product::Layer(LayerId::Standing),
+        Product::Layer(LayerId::BuiltUp),
+    ],
+    catalog_id: "town.maintenance",
+    strategies: &[
+        layer_strategy(
+            "historical-upkeep",
+            Investment::Historical,
+            EffectTime::Elapsed,
+            LayerId::Standing,
+            Condition::None,
+        ),
+        layer_strategy(
+            "current-condition",
+            Investment::Spatial,
+            EffectTime::SpatialIteration,
+            LayerId::Standing,
+            Condition::None,
+        ),
+    ],
+};
 pub struct Operations {
     pub found: Command<Field, Facts>,
-    pub grow: Command<Field, WorkInput>,
-    pub harden: Command<Field, WorkInput>,
+    pub(crate) grow: Command<Field, WorkInput<Demography>>,
+    pub(crate) harden: Command<Field, WorkInput<Capital>>,
+    pub(crate) maintenance: Command<Field, WorkInput<Capital>>,
 }
 pub fn mix(mode: LayerMode) -> catalogue::CompiledLayerMix {
     let mut values = [0.0; 7];
@@ -32,25 +137,132 @@ impl Operations {
         let found_o = owner.clone();
         let grow_q = questions.clone();
         let grow_o = owner.clone();
+        let maintain_q = questions.clone();
+        let maintain_o = owner.clone();
         Self {
             found: Command::with_inputs(
-                "human.land.found",
+                FOUNDING.id,
                 CommandKind::Initialize,
                 vec![],
                 move |context, _| found(context, &found_q, &found_o),
             ),
             grow: Command::with_inputs(
-                "human.land.grow",
+                DEMOGRAPHY.id,
                 CommandKind::Elapsed,
                 vec![],
-                move |context, input: &WorkInput| grow(context, &input.borrow(), &grow_q, &grow_o),
+                move |context, input: &WorkInput<Demography>| {
+                    grow(
+                        context,
+                        &input.work.borrow(),
+                        input.strategy,
+                        &grow_q,
+                        &grow_o,
+                    )
+                },
             ),
             harden: Command::with_inputs(
-                "human.land.harden",
-                CommandKind::Elapsed,
+                BUILT_GROUND.id,
+                CommandKind::Work,
                 vec![],
-                move |context, input: &WorkInput| {
-                    harden(context, &input.borrow(), &questions, &owner)
+                move |context, input: &WorkInput<Capital>| {
+                    let work = input.work.borrow();
+                    let strategy = input.strategy;
+                    let stock = initial_layer(context.state(), &strategy)?;
+                    match strategy.algorithm {
+                        Investment::Historical => harden(context, &work, &questions, &owner),
+                        Investment::Spatial => redistribute_stock(
+                            context,
+                            &work,
+                            &questions,
+                            &owner,
+                            LayerId::BuiltUp,
+                            &stock,
+                        ),
+                    }
+                },
+            ),
+            maintenance: Command::with_inputs(
+                MAINTENANCE.id,
+                CommandKind::Work,
+                vec![],
+                move |context, input: &WorkInput<Capital>| {
+                    let work = input.work.borrow();
+                    let field = context.state();
+                    let strategy = input.strategy;
+                    let stock = initial_layer(field, &strategy)?;
+                    match strategy.algorithm {
+                        Investment::Spatial => {
+                            redistribute_stock(
+                                context,
+                                &work,
+                                &maintain_q,
+                                &maintain_o,
+                                LayerId::Standing,
+                                &stock,
+                            )?;
+                            let harm = context.query(&maintain_q.harm)?.values();
+                            let field = context.state();
+                            let ruins = field.people.view(HumanField::RuinedBuiltUp);
+                            let mut exposure = working(field);
+                            for cell in 0..field.mesh.len() {
+                                if habitable(field, cell)? {
+                                    let (care, risk) =
+                                        upkeep_conditions(field, cell, harm.get(cell)?)?;
+                                    exposure.set(
+                                        cell,
+                                        (1.0 + risk)
+                                            / (1.0
+                                                + field.people.people(cell)?.sqrt()
+                                                + field.goods_turnover(cell)?
+                                                + care),
+                                    )?;
+                                }
+                            }
+                            let plan = super::gather::placement(
+                                field,
+                                &work,
+                                &ruins,
+                                &exposure,
+                                |cell| Ok((1.0 - ruins.get(cell)?).max(0.0)),
+                            )?;
+                            context.run(&maintain_o.place_ruins, &plan)
+                        }
+                        Investment::Historical => {
+                            if !work.facts.builds {
+                                return Ok(());
+                            }
+                            let builders = context.query(&maintain_q.building)?.values();
+                            let harm = context.query(&maintain_q.harm)?.values();
+                            let wealth = context.query(&maintain_q.wealth)?.values();
+                            let field = context.state();
+                            let built = field.people.view(HumanField::Layer(LayerId::BuiltUp));
+                            let mut neglect = working(field);
+                            for cell in 0..field.mesh.len() {
+                                let (institutions, exposure) =
+                                    upkeep_conditions(field, cell, harm.get(cell)?)?;
+                                let care = field.people.people(cell)?
+                                    * builders.get(cell)?
+                                    * (wealth.get(cell)? + institutions);
+                                let upkeep = built.get(cell)? * PEOPLE_PER_BUILT_KM2
+                                    + stock.get(cell)? / catalogue::FULL_STANDING_PER_BUILT_KM2
+                                        * PEOPLE_PER_BUILT_KM2;
+                                if upkeep > 0.0 {
+                                    neglect.set(
+                                        cell,
+                                        work.facts.years / BUILDING_YEARS
+                                            * (1.0 + exposure - care / upkeep).max(0.0),
+                                    )?;
+                                }
+                            }
+                            context.run(
+                                &maintain_o.wear,
+                                &Wear {
+                                    mix: mix(LayerMode::Neglect),
+                                    intensity: neglect.read_only(),
+                                },
+                            )
+                        }
+                    }
                 },
             ),
         }
@@ -86,6 +298,7 @@ fn found(
 fn grow(
     context: &mut CommandContext<'_, Field>,
     work: &Work,
+    strategy: Demography,
     q: &Questions,
     owner: &operations::Operations<Field>,
 ) -> ExecutionResult<()> {
@@ -96,13 +309,14 @@ fn grow(
     let harm = context.query(&q.harm)?.values();
     let livable = context.query(&q.livable)?.values();
     let field = context.state();
+    let residents = initial_layer(field, &strategy)?;
     trace_refused(field, &livable)?;
     let mut born = working(field);
     let mut starved = working(field);
     let filling = (-GROWTH_RATE * work.facts.years).exp();
     let lasting = (-work.facts.years / HUNGER_YEARS).exp();
     for cell in 0..field.mesh.len() {
-        let living = field.people.people(cell)?;
+        let living = residents.get(cell)?;
         // Ground people cannot live on holds nobody, however well it is fed.
         let room = (support.get(cell)? + work.imports.get(cell)?) * livable.get(cell)?;
         if living <= 0.0 {
@@ -162,6 +376,57 @@ fn trace_refused(field: &Field, livable: &crate::storage::ReadBand<f64>) -> std:
 fn standing_target(built: f64, wealth: f64) -> f64 {
     built.max(0.0) * catalogue::FULL_STANDING_PER_BUILT_KM2 * wealth.max(0.0)
 }
+fn upkeep_conditions(field: &Field, cell: usize, harm: f64) -> std::io::Result<(f64, f64)> {
+    use crate::field::{poi::values::Benefit, shared::Scalar};
+    let (institutions, threat) = match field.place_offers() {
+        Some(offers) => (
+            offers.benefit(Benefit::Rule, cell)? + offers.benefit(Benefit::Materials, cell)?,
+            offers.threatened(cell)?,
+        ),
+        None => (0.0, 0.0),
+    };
+    let woods = field.shared().scalar(Scalar::TreeCover).get(cell)?.max(0.0);
+    let grazing = field
+        .shared()
+        .scalar(Scalar::Herbivores)
+        .get(cell)?
+        .max(0.0);
+    let exposure = super::hazards::exposure(field, cell)? + threat + woods * (1.0 + grazing);
+    Ok((institutions, exposure * harm.max(0.0)))
+}
+
+fn redistribute_stock(
+    context: &mut CommandContext<'_, Field>,
+    work: &Work,
+    questions: &Questions,
+    owner: &operations::Operations<Field>,
+    kind: LayerId,
+    stock: &crate::storage::ReadBand<f64>,
+) -> ExecutionResult<()> {
+    let harm = context.query(&questions.harm)?.values();
+    let builders = context.query(&questions.building)?.values();
+    let field = context.state();
+    let built = field.people.view(HumanField::Layer(LayerId::BuiltUp));
+    let farms = field.people.view(HumanField::Layer(LayerId::Farmland));
+    let pasture = field.people.view(HumanField::Layer(LayerId::Pasture));
+    let mut value = working(field);
+    for cell in 0..field.mesh.len() {
+        if !habitable(field, cell)? {
+            continue;
+        }
+        let market = field.goods_turnover(cell)?;
+        let people = field.people.people(cell)?;
+        let (institutions, risk) = upkeep_conditions(field, cell, harm.get(cell)?)?;
+        let condition = (builders.get(cell)? + institutions) / (1.0 + risk);
+        let heads = people * (1.0 + market.ln_1p());
+        let weight = match kind {
+            LayerId::Standing => built.get(cell)? * heads.sqrt() * condition,
+            _ => heads * condition / (1.0 + farms.get(cell)? + pasture.get(cell)?),
+        };
+        value.set(cell, weight)?;
+    }
+    super::gather::distribute(context, work, owner, kind, stock, &value)
+}
 fn harden(
     context: &mut CommandContext<'_, Field>,
     work: &Work,
@@ -176,23 +441,19 @@ fn harden(
     let field = context.state();
     let built = field.people.view(HumanField::Layer(LayerId::BuiltUp));
     let works = field.people.view(HumanField::Layer(LayerId::Standing));
+    let farms = field.people.view(HumanField::Layer(LayerId::Farmland));
     let mut raised = working(field);
-    let mut empty = working(field);
     let building = 1.0 - (-work.facts.years / BUILDING_YEARS).exp();
     for cell in 0..field.mesh.len() {
         if !habitable(field, cell)? {
             continue;
         }
-        let needed =
-            (field.people.people(cell)? / PEOPLE_PER_BUILT_KM2).min(1.0) * builders.get(cell)?;
+        let labour = field.people.people(cell)? * builders.get(cell)? * wealth.get(cell)?.sqrt();
+        let land_cost = PEOPLE_PER_BUILT_KM2 * (1.0 + farms.get(cell)?);
+        let needed = labour / (land_cost + labour);
         let standing = built.get(cell)?;
         if needed > standing {
             raised.set(cell, (needed - standing) * building)?;
-        } else if standing > 0.0 {
-            empty.set(
-                cell,
-                work.facts.years / BUILDING_YEARS * (1.0 - needed / standing),
-            )?;
         }
     }
     context.run(
@@ -200,13 +461,6 @@ fn harden(
         &Lay {
             kind: LayerId::BuiltUp,
             amount: raised.read_only(),
-        },
-    )?;
-    context.run(
-        &owner.wear,
-        &Wear {
-            mix: mix(LayerMode::Neglect),
-            intensity: empty.read_only(),
         },
     )?;
     let gathering = 1.0 - (-work.facts.years / WORKS_YEARS).exp();

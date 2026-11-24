@@ -70,6 +70,7 @@ pub(super) fn review(settings: &Settings, mut action: Action) -> io::Result<Valu
                 private: &inputs,
             },
             &maps,
+            &settings.assets,
             &records.source_features(),
             &spatial,
         )?;

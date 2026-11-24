@@ -2,27 +2,19 @@ use super::State;
 use crate::{
     execution::{Command, CommandContext, CommandKind, ExecutionResult, Projection},
     field::{
-        people::{era_places, land_processes, questions::Questions, traditions::Context},
+        people::{era_places, traditions::Context},
         poi::{publication::Publication, values::Moment},
         refinement::{
             causes::Registry,
-            people::{self, PlaceRecords, PlaceSettings, PopulationReadout},
+            people::{self, PlaceRecords, PlaceSettings},
         },
         Field,
     },
     processes::runner::PhysicalContext,
-    reconstruction::Grid,
 };
 use std::{io, rc::Rc};
 
-pub struct RegionalLiving<'a> {
-    pub land: &'a land_processes::Operations,
-    pub questions: &'a Questions,
-    pub parent: Option<&'a Grid>,
-    pub context: Rc<PhysicalContext>,
-}
 pub struct RegionalRecording<'a> {
-    pub land: &'a land_processes::Operations,
     pub record: &'a Command<Field, era_places::Setting>,
     pub settings: &'a PlaceSettings,
     pub context: Rc<PhysicalContext>,
@@ -31,10 +23,8 @@ pub struct RegionalRecording<'a> {
 impl State {
     pub fn regional_place_effects(
         scope: &mut CommandContext<'_, Self>,
-        field: &Projection<Self, Field>,
         causes: &Registry<Self>,
-        people: Option<RegionalLiving<'_>>,
-    ) -> ExecutionResult<Option<PopulationReadout>> {
+    ) -> ExecutionResult<()> {
         scope.state().require_regional()?;
         scope.run(
             &Command::new(
@@ -48,10 +38,6 @@ impl State {
             ),
             &(),
         )?;
-        let readout = match people {
-            Some(work) => Self::live_regional_people(scope, field, work)?,
-            None => None,
-        };
         scope.run(
             &Command::with_inputs(
                 "regional.place-effects",
@@ -63,7 +49,7 @@ impl State {
             ),
             &causes,
         )?;
-        Ok(readout)
+        Ok(())
     }
     fn apply_regional_place_effects(&mut self, causes: &Registry<Self>) -> ExecutionResult<()> {
         let mut ledger = std::mem::take(&mut self.regional.as_mut().unwrap().contributions);
@@ -86,27 +72,6 @@ impl State {
             self.publish_places(publication, Moment::Society)?;
         }
         Ok(())
-    }
-    pub fn live_regional_people(
-        scope: &mut CommandContext<'_, Self>,
-        field: &Projection<Self, Field>,
-        work: RegionalLiving<'_>,
-    ) -> ExecutionResult<Option<PopulationReadout>> {
-        let Some(regional) = &scope.state().regional else {
-            return Ok(None);
-        };
-        let domains = regional.domains.clone();
-        let round = regional.round;
-        scope.project(field).with_context(work.context, |executor| {
-            people::live(
-                executor,
-                work.land,
-                work.questions,
-                &domains,
-                round,
-                work.parent,
-            )
-        })
     }
     fn adopt_captured_people(&mut self) -> io::Result<()> {
         {
@@ -145,7 +110,9 @@ impl State {
                 CommandKind::Initialize,
                 vec![],
                 |state: &mut State, _| {
-                    state.adopt_captured_people()?;
+                    era_places::adopt_initial_places(state.field().process_site(), || {
+                        state.adopt_captured_people()
+                    })?;
                     Ok(())
                 },
             ),
@@ -157,7 +124,7 @@ impl State {
             links: scope.state().travel_links(),
         };
         scope.project(field).with_context(work.context, |executor| {
-            people::record_places(executor, work.land, work.record, work.settings, records)
+            people::record_places(executor, work.record, work.settings, records)
         })
     }
     pub fn publish_people_places(

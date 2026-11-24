@@ -452,8 +452,10 @@ pub fn reason(kind: Kind) -> &'static str {
         CityPlace => "Where the city's people and ways concentrate enough to raise it.",
         CityDistrict => "A part of the city gathered round one of its centres.",
         MajorWork => "An extraordinary work the city's people sustain.",
-        CityThoroughfare => "A way the city's hot-spot towns grew to carry the city's traffic.",
-        CityBlock => "Ground a hot-spot town built up with one use: homes, trade or a civic seat.",
+        CityThoroughfare => "A route serving the city's approaches, districts and blocks.",
+        CityBlock => {
+            "Serviced district land occupied by homes, businesses, workshops or civic premises."
+        }
     }
 }
 /// The kind's reason as the place's account.

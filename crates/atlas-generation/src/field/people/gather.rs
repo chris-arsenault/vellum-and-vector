@@ -1,5 +1,6 @@
 // Arconis: docs/architecture/subsystems.arconis#item=pp_move — moves people toward room along the going.
 use super::{
+    contract::{initial_layer, layer_strategy, Condition, Contract, EffectTime, Product, Strategy},
     facts::{CONCENTRATION, PRESSURE, ROUTE_PASSED},
     land::WorkInput,
     questions::Questions,
@@ -16,6 +17,48 @@ use crate::{
     storage::Band,
 };
 use std::{io, rc::Rc};
+
+#[derive(Clone, Copy)]
+pub enum Movement {
+    Journeys,
+    Placement,
+}
+
+pub type Placement = Strategy<Movement, LayerId>;
+
+pub const MOVEMENT: Contract<Movement, LayerId> = Contract {
+    id: "human.land.gather",
+    effect: "Locate residents where households can live and reach their livelihoods",
+    reads: &[
+        Product::Layer(LayerId::Population),
+        Product::NetFoodImports,
+        Product::Travel,
+        Product::Question("draw"),
+        Product::Layer(LayerId::BuiltUp),
+    ],
+    writes: &[Product::Layer(LayerId::Population), Product::RoadWear],
+    catalog_id: "human.land.gather",
+    strategies: &[
+        layer_strategy(
+            "migration",
+            Movement::Journeys,
+            EffectTime::Elapsed,
+            LayerId::Population,
+            Condition::None,
+        ),
+        layer_strategy(
+            "household-placement",
+            Movement::Placement,
+            EffectTime::SpatialIteration,
+            LayerId::Population,
+            Condition::None,
+        ),
+    ],
+};
+
+mod placement;
+use placement::place;
+pub(super) use placement::{distribute, placement};
 
 struct Leaving {
     targets: Band<i32>,
@@ -241,11 +284,10 @@ fn choose(
 /// through into ways: a move's ends are worn by the move itself.
 fn move_people(
     context: &mut CommandContext<'_, Field>,
-    work: &Work,
     owner: &operations::Operations<Field>,
     leaving: &Leaving,
+    years: f64,
 ) -> ExecutionResult<()> {
-    let years = work.facts.years / work.facts.sweeps as f64;
     let field = context.state();
     let mut worn = working(field);
     let mut moved = 0.0;
@@ -270,7 +312,10 @@ fn move_people(
             years,
         },
     )?;
-    context.run(&owner.travel, &worn.read_only())
+    if years > 0.0 {
+        context.run(&owner.travel, &worn.read_only())?;
+    }
+    Ok(())
 }
 fn spill(
     context: &mut CommandContext<'_, Field>,
@@ -278,6 +323,7 @@ fn spill(
     q: &Questions,
     owner: &operations::Operations<Field>,
     leaving: &mut Leaving,
+    years: f64,
 ) -> ExecutionResult<()> {
     let support = context.query(&q.support)?.values();
     let livable = context.query(&q.livable)?.values();
@@ -321,7 +367,7 @@ fn spill(
     leaving.admit(&arriving, |to| {
         Ok((fed(to)? - field.people.people(to)?).max(0.0) * km2(field, to))
     })?;
-    move_people(context, work, owner, leaving)
+    move_people(context, owner, leaving, years)
 }
 fn drain(
     context: &mut CommandContext<'_, Field>,
@@ -329,6 +375,7 @@ fn drain(
     q: &Questions,
     owner: &operations::Operations<Field>,
     leaving: &mut Leaving,
+    years: f64,
 ) -> ExecutionResult<()> {
     let draw = context.query(&q.draw)?.values();
     let field = context.state();
@@ -374,7 +421,7 @@ fn drain(
         },
     )?;
     leaving.admit(&arriving, spare)?;
-    move_people(context, work, owner, leaving)
+    move_people(context, owner, leaving, years)
 }
 
 /// How much more than its size a cell pulls: its draw against the country around it, raised
@@ -449,17 +496,23 @@ fn supported_share(willing: f64, spare: f64, source_people: f64) -> f64 {
         0.0
     }
 }
-pub fn operation(
+pub(crate) fn operation(
     q: Rc<Questions>,
     owner: Rc<operations::Operations<Field>>,
-) -> Command<Field, WorkInput> {
+) -> Command<Field, WorkInput<Placement>> {
     Command::with_inputs(
-        "human.land.gather",
-        CommandKind::Elapsed,
+        MOVEMENT.id,
+        CommandKind::Work,
         vec![],
-        move |context, input: &WorkInput| {
-            let work = input.borrow();
+        move |context, input: &WorkInput<Placement>| {
+            let work = input.work.borrow();
             let field = context.state();
+            let strategy = input.strategy;
+            let residents = initial_layer(field, &strategy)?;
+            if !matches!(strategy.algorithm, Movement::Journeys) {
+                return place(context, &work, &q, &owner, &residents);
+            }
+            let years = work.facts.years / work.facts.sweeps as f64;
             let targets = field.coverage.borrow_mut().scratch(field.mesh.len(), 0i32);
             let mut leaving = Leaving {
                 targets,
@@ -467,9 +520,9 @@ pub fn operation(
                 journeys: Vec::new(),
             };
             for _ in 0..work.facts.sweeps {
-                spill(context, &work, &q, &owner, &mut leaving)?;
+                spill(context, &work, &q, &owner, &mut leaving, years)?;
                 if work.facts.farms {
-                    drain(context, &work, &q, &owner, &mut leaving)?;
+                    drain(context, &work, &q, &owner, &mut leaving, years)?;
                 }
             }
             Ok(())

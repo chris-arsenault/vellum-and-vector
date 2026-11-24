@@ -432,14 +432,17 @@ that craft. Magic fields are evaluated again at the end of each era from the
 land as people left it, without supplying or ageing any stock, and magic is
 published again after the last era.
 
-A refined map inherits its parent's layers and named places. Its people start as
-each parent cell's people shared among the child cells beneath it by how well
-each feeds or houses them. In each development round they first meet the round's
-water and ice, then live one settled pass over the round's exposure in which
-they farm, trade, build, move, grow and starve on the finer land. Their number
-roughly matches the parent's because these refinement processes produce roughly
-equal counts, as the other domains' refinement processes do; nothing holds it to
-the parent's. At the end the parent's settlements and ruins are known places on the
+A refined map starts with sampled parent layers and named places. On Region and City
+maps the scheduler repeats trade, food provisioning, household placement, development
+and upkeep at the captured moment. Markets draw on reachable customers and farms
+inside and outside the crop. Households and built stock can move across parent-cell
+boundaries. Where development occupies cultivated ground, farming can take up land
+vacated elsewhere. Flooding, encroaching vegetation, local institutions and the
+protection offered by crafts affect where functional and ruined stock concentrate.
+City placement also reads the local street network and settlement template.
+Premises upkeep describes individual holdings in the town model. The society owner
+handles aggregate standing capital and ruins. Historical casualties, births, road
+wear and decay run during World history. At the end the parent's settlements and ruins are known places on the
 ground the parent's cell covered, and every other crowd is read by the world's
 classifier and published by the same catalogue entry. A finer map shows smaller
 places, down to a hamlet, while rank is still judged against the World town
@@ -447,6 +450,16 @@ size. Ways and hinterlands come from the same reading; a ford or bridge stands
 where a way steps over a river, and mills stand at living places. The child's
 records name the same traditions as the parent's. Its cultural and political
 regions, its ruins and its events are the ones the parent recorded.
+
+Semantic process owners bind named algorithms to the strategy catalog. Each strategy owns
+its map types and metric intervals. The orchestrator selects the applicable algorithms for
+the current clock, orders explicit compositions, and passes their typed inputs to the
+process command. A strategy declares
+what its algorithm reads and changes through its process contract. Its inputs
+bind the sampled layers, reachable food supply, or settlement records
+as needed. Every strategy declares both an initial and a boundary condition.
+Each condition either names a typed source and a policy for missing evidence
+or explicitly says that the strategy needs no input of that kind.
 
 A creator's edit to a settlement's groups or population is reconciled on the
 settlement's own record. A drawn territory, event or work stands as drawn; apart
@@ -713,6 +726,12 @@ checks actual registry contracts and produces ordered diagnostics. The reviewed
 configuration travels to the worker and must match the resolved inputs. Complete
 settings participate in configuration identity and remain inspectable in the
 in-memory run record. JSON editing updates only the wizard draft.
+
+The orchestrator schedules registered operations. A semantic registration binds the
+owner's map-scale strategies to its command and supplies its scheduling metadata.
+Classifiers and publishers receive read-only numerical bands, the lattice and map
+scope, and writers for derived feature and network records. Existing legacy entries
+keep their original dispatch path until their owners migrate them.
 
 A new world includes cultural, political and built geography by default. The
 People & places step shows each of those capabilities as its own group with

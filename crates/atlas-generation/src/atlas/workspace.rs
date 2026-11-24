@@ -36,6 +36,12 @@ pub struct Frame<'a> {
     pub boundary_mode: f64,
 }
 impl Frame<'_> {
+    pub fn process_site(&self) -> io::Result<crate::processes::strategies::Site> {
+        Ok(crate::processes::strategies::Site {
+            map_type: self.scope.process_map_type(),
+            cell_metres: self.cell_span()?,
+        })
+    }
     pub fn cell_span(&self) -> io::Result<f64> {
         let span = match self.child_resolution.filter(|_| self.has_parent) {
             Some(span) => span,
@@ -177,6 +183,7 @@ pub fn construct(input: Construction<'_>) -> ExecutionResult<Prepared> {
         .map_err(io::Error::other)?
         .at_real_size(input.frame.scope.real_scale.is_some());
     let mut seed = FieldSeed::new(mesh.clone(), scale, input.cache.clone());
+    seed.process_site = input.frame.process_site()?;
     let mut imported = Coverage::new(mesh.clone(), input.cache.clone());
     let samples = if inherited {
         Some(

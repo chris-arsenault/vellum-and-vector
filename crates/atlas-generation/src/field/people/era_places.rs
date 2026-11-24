@@ -1,5 +1,9 @@
 use super::{
     classifier::{dense_zones, ruin_sites},
+    contract::{
+        Absent, Condition, Dispatch, EffectTime, MapType, Rule, ScaleBand, Site, Source, Strategy,
+        Timing,
+    },
     facts::PEOPLE_PER_BUILT_KM2,
     identity_reads::leading_of,
     place_country::{self, KnownWay},
@@ -18,6 +22,86 @@ use crate::{
 };
 use std::{cell::RefCell, io, rc::Rc};
 
+#[derive(Clone, Copy)]
+enum PlaceSource {
+    StandingHistory,
+    AdoptCapturedIdentities,
+}
+impl Source for PlaceSource {
+    type Value = Rc<RefCell<Places>>;
+}
+
+#[derive(Clone, Copy)]
+enum RouteSource {
+    ScopedTravelLinks,
+}
+impl Source for RouteSource {
+    type Value = Rc<Offers<Field>>;
+}
+
+type Recording = Strategy<(), PlaceSource, RouteSource>;
+
+const LINKS: Condition<RouteSource> = Condition::From {
+    source: RouteSource::ScopedTravelLinks,
+    absent: Absent::Error("Settlement recording requires the map's travel links"),
+};
+
+const HISTORY: Recording = Strategy {
+    name: "Record settlements and wear routes over an era",
+    time: EffectTime::Elapsed,
+    slot: "era settlement recording after the people pass",
+    initial: Condition::From {
+        source: PlaceSource::StandingHistory,
+        absent: Absent::Error("Settlement recording requires the era's place records"),
+    },
+    boundary: LINKS,
+    algorithm: (),
+};
+const PRESENT: Recording = Strategy {
+    name: "Adopt captured places and read current settlements and routes",
+    time: EffectTime::Present,
+    slot: "refinement settlement recording after the final terrain and people rounds",
+    initial: Condition::From {
+        source: PlaceSource::AdoptCapturedIdentities,
+        absent: Absent::Error("Settlement recording requires the child map's place records"),
+    },
+    boundary: LINKS,
+    algorithm: (),
+};
+
+const RECORD: Dispatch<Recording> = Dispatch {
+    id: "human.places.record",
+    rules: &[
+        Rule::at(MapType::WORLD, ScaleBand::World, Some(HISTORY)).during(Timing::Elapsed),
+        Rule::at(MapType::WORLD, ScaleBand::World, None).during(Timing::Present),
+        Rule::at(MapType::REGIONAL, ScaleBand::Regional, Some(PRESENT)).during(Timing::Present),
+        Rule::at(MapType::STREET, ScaleBand::Street, Some(PRESENT)).during(Timing::Present),
+        Rule::at(MapType::REGIONAL, ScaleBand::Regional, None).during(Timing::Elapsed),
+        Rule::at(MapType::STREET, ScaleBand::Street, None).during(Timing::Elapsed),
+    ],
+};
+
+pub(crate) fn adopt_initial_places(
+    site: Site,
+    adopt: impl FnOnce() -> io::Result<()>,
+) -> io::Result<()> {
+    if let Some(PlaceSource::AdoptCapturedIdentities) = RECORD
+        .select(site, Timing::Present)?
+        .and_then(|recording| recording.initial.source())
+    {
+        adopt()?;
+    }
+    Ok(())
+}
+
+fn route_years(strategy: Recording, era_years: f64) -> f64 {
+    if strategy.time == EffectTime::Elapsed {
+        era_years
+    } else {
+        0.0
+    }
+}
+
 pub struct Setting {
     pub places: Rc<RefCell<Places>>,
     pub ways: Rc<RefCell<Vec<KnownWay>>>,
@@ -25,11 +109,11 @@ pub struct Setting {
     pub era: String,
     pub least: f64,
     pub town: Option<f64>,
+    pub timing: Timing,
     pub country: place_country::Setting,
 }
-/// Records on each living place the goods its people trade a year, read from the land as the
-/// era leaves it, over a settled pass's going. Finer maps run no trading pass, so the record
-/// measures trade itself rather than reading a pass's turnover.
+/// Measures each living place's annual trade on the land as it stands when places are
+/// recorded. A fresh reading accounts for changes since the last goods pass.
 fn record_goods(field: &Field, travel: &Travel<'_>, places: &mut Places) -> io::Result<()> {
     let facts = super::facts::Facts::settled(1.0, 1.0);
     let range = super::travel::length(field, facts.range)?;
@@ -110,10 +194,36 @@ pub fn operation(
     owner: Rc<operations::Operations<Field>>,
 ) -> Command<Field, Setting> {
     Command::with_inputs(
-        "human.places.record",
+        RECORD.id,
         CommandKind::Work,
         vec![],
         move |context, setting: &Setting| {
+            let Some(recording) = RECORD.select(context.state().process_site(), setting.timing)?
+            else {
+                return Ok(());
+            };
+            let places = recording
+                .initial
+                .bind(|source| match source {
+                    PlaceSource::StandingHistory | PlaceSource::AdoptCapturedIdentities => {
+                        Ok(Some(setting.places.clone()))
+                    }
+                })?
+                .ok_or_else(|| {
+                    io::Error::other("Settlement recording has no initial records condition")
+                })?;
+            let links = recording
+                .boundary
+                .bind(|source| match source {
+                    RouteSource::ScopedTravelLinks => Ok(Some(setting.links.clone())),
+                })?
+                .ok_or_else(|| {
+                    io::Error::other("Settlement recording has no travel links condition")
+                })?;
+            let route_settings = place_country::Setting {
+                years: route_years(recording, setting.country.years),
+                ..setting.country
+            };
             let presence = context.query(&questions.presence)?.values();
             let friction = context.query(&questions.friction)?.values();
             let climbing = context.query(&questions.climbing)?.values();
@@ -121,7 +231,7 @@ pub fn operation(
             let field = context.state();
             let travel = Travel::new(field, friction, climbing, rivers)?;
             let country = surrounding_density(field, &travel, setting.country.range, &presence)?;
-            let mut places = setting.places.borrow_mut();
+            let mut places = places.borrow_mut();
             places.record(
                 &dense_zones(
                     field,
@@ -152,12 +262,61 @@ pub fn operation(
             let (ways, worn) = place_country::record(
                 field,
                 &mut places,
-                &setting.country,
+                &route_settings,
                 &|a, b| travel.step(a, b),
-                &setting.links,
+                &links,
             )?;
             *setting.ways.borrow_mut() = ways;
             context.run(&owner.travel, &worn.read_only())
         },
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn present_records_adopt_captured_identity_without_route_years() {
+        for &kind in MapType::REFINED {
+            let site = Site {
+                map_type: kind,
+                cell_metres: 50.0,
+            };
+            let mut retained = None;
+            adopt_initial_places(site, || {
+                retained = Some(("Nishi Mabasahiro", 450_202));
+                Ok(())
+            })
+            .unwrap();
+            assert_eq!(retained, Some(("Nishi Mabasahiro", 450_202)));
+            let strategy = RECORD.select(site, Timing::Present).unwrap().unwrap();
+            let records = Rc::new(RefCell::new(Places::default()));
+            let bound = strategy
+                .initial
+                .bind(|source| {
+                    assert!(matches!(source, PlaceSource::AdoptCapturedIdentities));
+                    Ok(Some(records.clone()))
+                })
+                .unwrap()
+                .unwrap();
+            assert!(Rc::ptr_eq(&bound, &records));
+            let scoped_links = Rc::new(Offers::<Field>::default());
+            let links = strategy
+                .boundary
+                .bind(|RouteSource::ScopedTravelLinks| Ok(Some(scoped_links.clone())))
+                .unwrap()
+                .unwrap();
+            assert!(Rc::ptr_eq(&links, &scoped_links));
+            assert!(strategy.boundary.bind(|_| Ok(None)).is_err());
+            assert_eq!(route_years(strategy, 250.0), 0.0);
+            assert!(RECORD.select(site, Timing::Elapsed).unwrap().is_none());
+        }
+        let world = Site {
+            map_type: MapType::World,
+            cell_metres: ScaleBand::World.endpoints().0,
+        };
+        let era = RECORD.select(world, Timing::Elapsed).unwrap().unwrap();
+        assert_eq!(route_years(era, 250.0), 250.0);
+    }
 }

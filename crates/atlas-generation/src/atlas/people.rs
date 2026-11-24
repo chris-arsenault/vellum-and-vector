@@ -14,6 +14,7 @@ use crate::{
     },
     processes::runner::PhysicalContext,
 };
+pub(crate) use land::hold_place_offers;
 use std::{cell::RefCell, rc::Rc};
 pub use water::Publication;
 
@@ -36,9 +37,7 @@ pub struct Operations {
     pub land: Rc<land_processes::Operations>,
     pub record: Command<Field, era_places::Setting>,
     pub watch: Operation,
-    pub epoch: Operation,
     pub place_offers: Operation,
-    pub era: Operation,
     pub places: Operation,
     pub identity: Operation,
     pub realms: Operation,
@@ -77,8 +76,6 @@ impl Operations {
             spatial,
         );
         let watch = land::watch(land.clone(), projection);
-        let epoch = land::epoch(land.clone(), projection);
-        let era = land::era(land.clone(), input.progress.clone(), projection);
         let places = land::places(record.clone(), input.clone(), projection);
         let identity = land::identity(identities.identity, input.clone(), projection);
         let realms = land::identity(identities.realms, input.clone(), projection);
@@ -159,9 +156,7 @@ impl Operations {
             land,
             record,
             watch,
-            epoch,
             place_offers,
-            era,
             places,
             identity,
             realms,

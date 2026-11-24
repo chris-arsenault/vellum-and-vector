@@ -49,6 +49,25 @@ pub(super) fn seed() -> FieldSeed {
         BlockCache::new(1_000_000, BlockScratch::new(MemoryFile::default())),
     )
 }
+
+#[test]
+fn surveyed_harvest_outlives_the_parent_sampling_coverage() {
+    let mut seed = seed();
+    {
+        let cache = BlockCache::new(1_000_000, BlockScratch::new(MemoryFile::default()));
+        let mut sampled = crate::storage::Coverage::samples(1, cache);
+        let food = sampled.allocate(80.0);
+        let farmland = sampled.allocate(0.5);
+        let residents = sampled.allocate(150.0);
+        seed.capture_harvest(&food, &farmland, &residents).unwrap();
+    }
+    let field = seed.finish(Box::<GroundObservers>::default()).unwrap();
+    let harvest = field.harvest.as_ref().unwrap();
+    assert_eq!(harvest.food.get(0).unwrap(), 80.0);
+    assert_eq!(harvest.farmland.get(0).unwrap(), 0.5);
+    assert_eq!(harvest.residents.get(0).unwrap(), 150.0);
+}
+
 #[test]
 fn captured_grid_projects_categories_and_values_past_the_child_boundary() {
     use super::projection::sampling::Interpolation;

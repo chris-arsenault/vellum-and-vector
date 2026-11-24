@@ -140,6 +140,7 @@ mod tests {
                 epochs: vec![],
             },
             next: 0,
+            trace_registry: false,
             products: ProductLedger::new(vec![], vec![]).unwrap(),
             parents: Default::default(),
         };

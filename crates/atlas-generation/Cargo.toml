@@ -22,6 +22,9 @@ rayon = "1"
 [lints]
 workspace = true
 
+[build-dependencies]
+serde_json.workspace = true
+
 [dev-dependencies]
 atlas-gis.workspace = true
 bytemuck = { version = "1", features = ["derive"] }

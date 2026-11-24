@@ -43,7 +43,10 @@ impl Composition<'_, '_> {
         body.extend(operations(&["poi.effects"]));
         if !inherited {
             body.extend(self.contribute("epoch.landmark-maintenance")?);
-            body.extend(self.peopled("human.land-epoch"));
+            body.extend(self.peopled("human.land.meet"));
+            for id in super::people::HISTORICAL_PASS {
+                body.extend(self.peopled(id));
+            }
         }
         body.extend(self.group("water.routing", "epoch.final-courses", false, false)?);
         body.extend(self.group("epoch.history", "epoch", false, false)?);

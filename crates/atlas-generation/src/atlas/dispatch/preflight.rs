@@ -1,7 +1,8 @@
 //! Recipe validation from preflight.ts. This walks contracts; it never runs simulation work.
-use super::specifications::Specifications;
+use super::{schedule, specifications::Specifications};
 use crate::{
     atlas::history::Severity,
+    processes::strategies::Site,
     products::{ProductError, ProductLedger},
     recipe::{Configuration, Invocation, Stage},
     sequence::StageKind,
@@ -43,11 +44,12 @@ fn product_issue(path: &str, error: ProductError) -> Diagnostic {
     }
     diagnostic
 }
-pub fn inspect(
-    configuration: &Configuration,
+pub fn inspect<'a>(
+    configuration: &'a Configuration,
     registry: &impl Specifications,
     mut products: ProductLedger,
-) -> Vec<Diagnostic> {
+    site: Site,
+) -> (Vec<Stage<'a>>, Vec<Diagnostic>) {
     // No current atlas owner declares a conditional reconciliation. Do not execute a stale
     // reviewed recipe containing one; the current source requires identical registered plans.
     if configuration
@@ -55,14 +57,22 @@ pub fn inspect(
         .get("reconciliations")
         .is_some_and(|value| value.as_object().is_none_or(|plans| !plans.is_empty()))
     {
-        return vec![issue(
-            &configuration.id,
-            "Execute the reconciliation plans recorded in the reviewed recipe",
-        )];
+        return (
+            Vec::new(),
+            vec![issue(
+                &configuration.id,
+                "Execute the reconciliation plans recorded in the reviewed recipe",
+            )],
+        );
     }
-    let stages = match configuration.stages() {
+    let stages = match schedule::stages(configuration, registry, site) {
         Ok(stages) => stages,
-        Err(error) => return vec![issue(&configuration.id, format!("{error:?}"))],
+        Err(error) => {
+            return (
+                Vec::new(),
+                vec![issue(&configuration.id, format!("{error:?}"))],
+            )
+        }
     };
     let mut diagnostics: Vec<Diagnostic> = configuration
         .inputs
@@ -84,6 +94,13 @@ pub fn inspect(
             }
             StageKind::EpochEnd => products.enter_epoch(&path),
             StageKind::Process(call) if call.enabled(&stage.context) => {
+                if registry
+                    .specification(call)
+                    .and_then(|spec| Ok(spec.active(site, stage)?))
+                    .is_ok_and(|active| !active)
+                {
+                    continue;
+                }
                 inspect_stage(
                     configuration,
                     registry,
@@ -96,7 +113,7 @@ pub fn inspect(
             StageKind::Process(_) => {}
         }
     }
-    diagnostics
+    (stages, diagnostics)
 }
 fn inspect_stage(
     configuration: &Configuration,

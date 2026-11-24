@@ -3,7 +3,7 @@ use super::{cartography, Resolved};
 use crate::{
     atlas::{dispatch::specifications::Specifications, resolution::Profile},
     publication::channels::Binding,
-    recipe::{Configuration, Invocation},
+    recipe::{Configuration, Invocation, Stage},
     sequence::StageKind,
 };
 use serde::{Deserialize, Serialize};
@@ -51,8 +51,9 @@ pub fn review(
         registry.products.clone(),
     )
     .map_err(|e| io::Error::other(format!("{e:?}")))?;
-    let diagnostics = preflight::inspect(&configuration, &registry, products);
-    let setup = project(resolved, &configuration, &registry, publications, context)?;
+    let (stages, diagnostics) =
+        preflight::inspect(&configuration, &registry, products, context.site);
+    let setup = project(resolved, &stages, &registry, publications, context)?;
     Ok(Review {
         configuration,
         setup,
@@ -82,6 +83,7 @@ struct Applicability {
     publication_profiles: BTreeMap<String, Vec<Profile>>,
 }
 pub struct Context<'a> {
+    pub site: crate::processes::strategies::Site,
     pub inherited: bool,
     pub completed: bool,
     pub profile: Profile,
@@ -128,19 +130,16 @@ struct Scheduled<'a> {
     call: &'a Invocation,
     enabled: bool,
 }
-pub fn project(
+fn project(
     resolved: &Resolved,
-    recipe: &Configuration,
+    stages: &[Stage<'_>],
     registry: &impl Specifications,
     publications: &[Binding],
     context: Context<'_>,
 ) -> io::Result<Setup> {
     let definitions: Vec<Feature> = serde_json::from_str(cartography::PRESENTATION)?;
     let mut calls = Vec::new();
-    for stage in recipe
-        .stages()
-        .map_err(|e| io::Error::other(format!("{e:?}")))?
-    {
+    for stage in stages {
         if let StageKind::Process(call) = stage.kind {
             let owner = call.feature.clone().or_else(|| {
                 definitions
@@ -149,10 +148,14 @@ pub fn project(
                     .map(|feature| feature.id.clone())
             });
             calls.push(Scheduled {
-                id: stage.context.path.last().cloned().unwrap_or_default(),
+                id: stage.context.path.join(" / "),
                 owner,
                 call,
-                enabled: call.enabled(&stage.context),
+                enabled: call.enabled(&stage.context)
+                    && registry
+                        .specification(call)
+                        .map_err(|error| io::Error::other(format!("{error:?}")))?
+                        .active(context.site, stage)?,
             });
         }
     }

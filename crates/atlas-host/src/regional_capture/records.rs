@@ -12,6 +12,16 @@ use std::io;
 /// Features clipped to the child in one overlay pass each.
 const BATCH: usize = 256;
 
+pub(super) use atlas_generation::processes::town::urban::fixed_geography;
+pub(super) fn capture_id(region: &Region<'_>, feature: &Feature, urban: bool) -> Id {
+    // owner-direction(2026-11-23): City district boundaries and identities are final at City scale
+    if urban && fixed_geography(&feature.kind) {
+        feature.id
+    } else {
+        region.id("feature", feature.id)
+    }
+}
+
 // Arconis: docs/architecture/subsystems.arconis#item=rg_feat — clips feature records and gives them new source-naming ids.
 pub(super) fn capture(
     region: &Region<'_>,
@@ -37,16 +47,23 @@ pub(super) fn capture(
             clipped(region, batch, |_, f| Some(&f.geometry), "geometry")?
                 .into_iter()
                 .zip(batch)
-                .map(|(shape, feature)| {
-                    let polygonal = matches!(
-                        feature.geometry,
-                        Geometry::Polygon { .. } | Geometry::MultiPolygon { .. }
-                    );
-                    if polygonal {
+                .map(|(shape, feature)| match feature.geometry {
+                    Geometry::Polygon { .. } | Geometry::MultiPolygon { .. } => {
                         shape.and_then(polygon)
-                    } else {
-                        shape
                     }
+                    Geometry::LineString { .. } | Geometry::MultiLineString { .. } => shape
+                        .and_then(|part| match part {
+                            Geometry::LineString { .. } | Geometry::MultiLineString { .. } => {
+                                Some(part)
+                            }
+                            Geometry::GeometryCollection { .. } => {
+                                let coordinates = atlas_map::regions::boundary_lines(&part);
+                                (!coordinates.is_empty())
+                                    .then_some(Geometry::MultiLineString { coordinates })
+                            }
+                            _ => None,
+                        }),
+                    _ => shape,
                 })
                 .collect();
         // Only a feature the child keeps has its footprint clipped.
@@ -59,6 +76,20 @@ pub(super) fn capture(
         for ((feature, shape), footprint) in batch.iter().zip(shapes).zip(footprints) {
             let Some(shape) = shape else {
                 continue;
+            };
+            let shape = if ids[&feature.id] == feature.id
+                && region
+                    .spatial
+                    .relation(
+                        &region.footprint,
+                        &feature.geometry,
+                        atlas_generation::spatial::Predicate::Covers,
+                    )
+                    .map_err(io::Error::other)?
+            {
+                feature.geometry.clone()
+            } else {
+                shape
             };
             let feature = rebind(region, feature.clone(), shape, footprint, ids);
             let network = *networks
@@ -113,13 +144,16 @@ fn rebind(
     ids: &BTreeMap<Id, Id>,
 ) -> Feature {
     feature.place_id = Some(feature.place_id.unwrap_or(feature.id));
+    let retained = feature.id == ids[&feature.id];
     feature.id = ids[&feature.id];
     feature.area_id = region.area;
     feature.geometry = shape;
     feature.footprint = footprint.and_then(polygon);
     feature.detail.clear();
-    feature.state = State::Generated;
-    feature.protected = false;
+    if !retained {
+        feature.state = State::Generated;
+        feature.protected = false;
+    }
     feature.map_only = None;
     feature.attributes.remove("developedBy");
     if feature.kind == "landmark" {
@@ -248,9 +282,18 @@ mod tests {
             geography: Vec::new(),
         };
         let line = |a: [f64; 2], b: [f64; 2]| json!({"type":"LineString","coordinates":[a,b]});
+        let mut district = feature(
+            "Market quarter",
+            "settlements",
+            json!({"type":"Polygon","coordinates":[[[23,28],[75,28],[67,70],[23,28]]]}),
+        );
+        district.kind = "district".into();
+        let district_shape = district.geometry.clone();
+        let district_id = district.id;
         let features = vec![
             feature("west", "roads", line([10.0, 10.0], [50.0, 50.0])),
             feature("east", "roads", line([50.0, 50.0], [150.0, 50.0])),
+            feature("touching", "roads", line([100.0, 100.0], [120.0, 115.0])),
             feature(
                 "field",
                 "land",
@@ -262,14 +305,19 @@ mod tests {
                 json!({"type":"Point","coordinates":[500,500]}),
             ),
             feature("well", "magic", json!({"type":"Point","coordinates":[5,5]})),
+            district,
         ];
         let ids: BTreeMap<Id, Id> = features
             .iter()
-            .map(|f| (f.id, region.id("feature", f.id)))
+            .map(|f| (f.id, capture_id(&region, f, true)))
             .collect();
         capture(&region, features, &ids, &mut output).unwrap();
         let names: Vec<_> = output.features.iter().map(|f| f.name.as_str()).collect();
-        assert_eq!(names, ["west", "east", "field"]);
+        assert_eq!(names, ["west", "east", "field", "Market quarter"]);
+        let quarter = &output.features[3];
+        assert_eq!(quarter.id, district_id);
+        assert_eq!(quarter.geometry, district_shape);
+        assert!(quarter.protected && quarter.state == State::Authored);
         let east = &output.features[1];
         assert_eq!(east.id, ids[&Id::from_name("east")]);
         assert_eq!(east.place_id, Some(Id::from_name("east")));

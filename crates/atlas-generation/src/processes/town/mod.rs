@@ -7,6 +7,7 @@ pub mod investment;
 pub mod movement;
 mod patronage;
 pub mod sanitation;
+pub mod urban;
 mod walks;
 use crate::{
     spatial::SpatialKernel,
@@ -105,7 +106,7 @@ pub const STEPS: &[Step] = &[
         run: Mechanism::Frontage(construction::advance),
     },
     Step {
-        id: "town.maintenance",
+        id: "town.premises-upkeep",
         run: Mechanism::Exposure(construction::maintain),
     },
 ];

@@ -1,15 +1,15 @@
-//! A city map's own steps, inside every refinement round: after the round's people pass the
-//! city's people move toward where it grows (`field::people::growth`), guided by the
-//! settlement template the city selects at its own scale and drawn to its prominent places and
-//! works; walls rise; and hot-spot towns are founded and advanced by the town development
-//! steps (`spots`). The next round's refinement and people pass read the result. Districts are
-//! cut once the rounds are done (`plan`).
+//! City guidance binds street edges, prominent places and works into household placement.
+//! Walls and major works develop during the society rounds.
 use super::work::{Inputs, Occurrence, Operation};
 use crate::{
     atlas::state::State,
-    execution::{ExecutionError, Projection},
+    execution::ExecutionError,
     field::{
-        people::{crafts, growth, work::habitable},
+        people::{
+            contract::{Absent, Condition, Source},
+            crafts, growth,
+            work::habitable,
+        },
         Field,
     },
     human::{catalogue::LayerId, HumanField},
@@ -17,47 +17,59 @@ use crate::{
     town::templates::{Selection, SiteEvidence},
 };
 use std::{io, rc::Rc};
-mod features;
-mod plan;
-pub(super) mod spots;
+mod works;
 
 /// Relief across the core that makes two usable levels of one city, in metres.
 const LEVELS: f64 = 30.;
 
-pub(super) fn growth(input: Rc<Inputs>, field: &Projection<State, Field>) -> Operation {
-    let field = field.clone();
-    let operation = growth::operation(Rc::new(Field::human_operations()));
-    let seed = input.seed;
+pub(crate) fn gather(
+    operation: crate::execution::Command<
+        State,
+        crate::field::people::pass::Inputs<crate::field::people::gather::Placement>,
+    >,
+    seed: i32,
+) -> crate::execution::Command<
+    State,
+    crate::field::people::pass::Inputs<crate::field::people::gather::Placement>,
+> {
     crate::execution::Command::with_inputs(
-        "refinement.city-growth",
-        crate::execution::CommandKind::Event,
+        "human.land.gather",
+        crate::execution::CommandKind::Work,
         vec![],
-        move |scope, _: &Occurrence| {
-            if scope.state().scope.city.is_none() {
-                return Ok(());
-            }
-            let selection = template(scope.state_mut(), seed)?;
-            let guidance = {
-                let field = scope.state().field();
-                let mesh = field.mesh();
+        move |scope,
+              input: &crate::field::people::pass::Inputs<
+            crate::field::people::gather::Placement,
+        >| {
+            let mut input = input.clone();
+            if scope.state().scope.city.is_some() {
+                let selection = template(scope.state_mut(), seed, CITY_ORIGIN)?;
+                let state = scope.state();
+                let mesh = state.field().mesh();
                 let [ox, oy] = mesh.origin();
-                growth::Guidance {
+                input.city = Some(Rc::new(growth::Guidance {
                     weight: (0..mesh.len())
                         .map(|cell| {
                             let [x, y] = mesh.position(cell);
                             selection.city_affinity([x + ox, y + oy])
                         })
                         .collect(),
-                    reach: ((2. * selection.quarter() / mesh.cell_span()).ceil() as usize)
-                        .clamp(2, 8),
-                    places: places_at(scope.state(), mesh.len()),
-                }
-            };
-            scope.project(&field).run(&operation, &guidance)?;
-            trace_people(scope.state(), "after city growth")?;
-            let round = scope.state().regional.as_ref().map_or(0, |r| r.round);
-            raise_walls(scope.state_mut(), &selection, seed, round)?;
+                    places: places_at(state, mesh.len()),
+                }));
+            }
+            scope.run(&operation, &input)?;
+            trace_people(scope.state(), "after placing households")?;
             Ok(())
+        },
+    )
+}
+
+pub(super) fn walls(input: Rc<Inputs>) -> Operation {
+    city_step(
+        "refinement.city-walls",
+        input.seed,
+        |state, selection, seed| {
+            let round = state.regional.as_ref().map_or(0, |r| r.round);
+            raise_walls(state, selection, seed, round)
         },
     )
 }
@@ -85,12 +97,6 @@ fn wall_runs(state: &State) -> io::Result<Vec<(Faces, Faces)>> {
     }
     let busiest = ways.iter().copied().fold(0., f64::max).max(f64::EPSILON);
     ways.iter_mut().for_each(|w| *w /= busiest);
-    // The hot-spot towns' thoroughfares are the city's own ways: a wall opens a gate on them.
-    for street in state.town.towns.iter().flat_map(|t| t.streets()) {
-        for cell in spots::cells_along(mesh, &street.points) {
-            ways[cell] = 1.;
-        }
-    }
     let neighbours = |cell| [0, 1, 2].map(|edge| mesh.neighbor(cell, edge));
     let mut runs = Vec::new();
     for wall in &regional.city.walls {
@@ -220,11 +226,7 @@ pub(crate) fn places(
     let places = match kind {
         Kind::CityWall => wall_places(state).map(|(walls, _)| walls),
         Kind::CityGate => wall_places(state).map(|(_, gates)| gates),
-        Kind::CityPlace => plan::place_records(state),
-        Kind::CityDistrict => plan::district_records(state),
-        Kind::MajorWork => plan::work_records(state),
-        Kind::CityThoroughfare => features::thoroughfare_records(state),
-        Kind::CityBlock => features::block_records(state),
+        Kind::MajorWork => works::work_records(state),
         _ => Ok(Vec::new()),
     }?;
     let city = state.regional.as_ref().map(|r| &r.city);
@@ -235,22 +237,21 @@ pub(crate) fn places(
             "records": places.len(),
             "towns": state.town.towns.len(),
             "works": city.map_or(0, |c| c.works.len()),
-            "districtCells": city.map_or(0, |c| c.districts.iter().filter(|&&l| l != u8::MAX).count()),
         }),
     );
     Ok(places)
 }
 
 /// The settlement a city map was opened at, as its captured record tells it.
-pub(super) struct Settlement {
-    pub(super) centre: [f64; 2],
+pub(crate) struct Settlement {
+    pub(crate) centre: [f64; 2],
     /// The radius of its built ground, at least the least a city map opens on.
     pub(super) built_radius: f64,
     /// Its census.
     pub(super) people: Option<f64>,
 }
 /// The city map's settlement, read by the identity its captured record took.
-pub(super) fn settlement(state: &State) -> io::Result<Option<Settlement>> {
+pub(crate) fn settlement(state: &State) -> io::Result<Option<Settlement>> {
     use atlas_map::Geometry;
     let Some(city) = state.scope.city.as_ref() else {
         return Ok(None);
@@ -262,8 +263,13 @@ pub(super) fn settlement(state: &State) -> io::Result<Option<Settlement>> {
     let Some(feature) = found else {
         return Ok(None);
     };
-    let Geometry::Point { coordinates } = &feature.geometry else {
-        return Ok(None);
+    let coordinates = match &feature.geometry {
+        Geometry::Point { coordinates } => *coordinates,
+        Geometry::Polygon { .. } | Geometry::MultiPolygon { .. } => state
+            .spatial
+            .interior_position(&feature.geometry)
+            .map_err(io::Error::other)?,
+        _ => return Ok(None),
     };
     let [x, y, _] = coordinates.coordinates();
     let number = |key: &str| {
@@ -275,9 +281,7 @@ pub(super) fn settlement(state: &State) -> io::Result<Option<Settlement>> {
     let built = number("builtKm2").unwrap_or(0.).max(0.);
     Ok(Some(Settlement {
         centre: [x, y],
-        built_radius: (built * 1e6 / std::f64::consts::PI)
-            .sqrt()
-            .max(crate::town::city::LEAST_RADIUS / crate::town::city::SURROUNDINGS),
+        built_radius: (built * 1e6 / std::f64::consts::PI).sqrt().max(600.), // Minimum radius of the template's site survey, in metres.
         people: number("settlementPopulation").or_else(|| number("population")),
     }))
 }
@@ -410,11 +414,7 @@ fn places_at(state: &State, n: usize) -> Vec<f64> {
         return draw;
     };
     let mesh = state.field().mesh();
-    let cells = city
-        .places
-        .iter()
-        .map(|p| p.spot)
-        .chain(city.works.iter().map(|&(_, cell)| cell as usize));
+    let cells = city.works.iter().map(|&(_, cell)| cell as usize);
     for cell in cells.filter(|&c| c < n) {
         for next in (0..3).filter_map(|edge| mesh.neighbor(cell, edge)) {
             draw[next] = f64::max(draw[next], 0.5);
@@ -438,51 +438,30 @@ fn city_step(
             if scope.state().scope.city.is_none() {
                 return Ok(());
             }
-            let selection = template(scope.state_mut(), seed)?;
+            let selection = template(scope.state_mut(), seed, CITY_ORIGIN)?;
             run(scope.state_mut(), &selection, seed)?;
             Ok(())
         },
     )
 }
 
-/// Each round's hot spots: towns founded where the fields concentrate, and the city's works
-/// sited and taken up by the towns beside them.
-pub(super) fn spots_step(input: Rc<Inputs>) -> Operation {
-    city_step("refinement.city-spots", input.seed, spots::found)
+/// Site the city's existing major works before the later rounds distribute residents.
+pub(super) fn works_step(input: Rc<Inputs>) -> Operation {
+    city_step("refinement.city-works", input.seed, works::site)
 }
 
-/// After each round's town steps: the landmarks the hot-spot towns built, and the towns'
-/// blocks and thoroughfares taken up by the people layers, so the next round's refinement and
-/// growth start from the city the towns built.
-pub(super) fn places_step(input: Rc<Inputs>, field: &Projection<State, Field>) -> Operation {
-    let field = field.clone();
-    let operation = crate::field::people::quarters::operation(Rc::new(Field::human_operations()));
-    let seed = input.seed;
-    crate::execution::Command::with_inputs(
-        "refinement.city-places",
-        crate::execution::CommandKind::Event,
-        vec![],
-        move |scope, _: &Occurrence| {
-            if scope.state().scope.city.is_none() {
-                return Ok(());
-            }
-            let selection = template(scope.state_mut(), seed)?;
-            spots::record(scope.state_mut(), &selection)?;
-            let quarters = spots::quarters(scope.state(), &selection)?;
-            trace_people(scope.state(), "before quarters")?;
-            scope.project(&field).run(&operation, &quarters)?;
-            trace_people(scope.state(), "after quarters")?;
-            Ok(())
-        },
-    )
+#[derive(Clone, Copy)]
+enum CitySource {
+    CapturedSettlement,
+}
+impl Source for CitySource {
+    type Value = Settlement;
 }
 
-/// The city's last step after its rounds: districts cut round its hot-spot towns.
-pub(super) fn plan_step(input: Rc<Inputs>) -> Operation {
-    city_step("refinement.city-plan", input.seed, |state, selection, _| {
-        plan::plan(state, selection)
-    })
-}
+const CITY_ORIGIN: Condition<CitySource> = Condition::From {
+    source: CitySource::CapturedSettlement,
+    absent: Absent::Error("A city map holds the settlement it was opened at"),
+};
 
 /// A deterministic draw in [0, 1) for a city decision at a round.
 fn draw(seed: i32, round: usize, salt: u32) -> f64 {
@@ -494,7 +473,11 @@ fn draw(seed: i32, round: usize, salt: u32) -> f64 {
 }
 
 /// The city's template, chosen once from the city's own site and kept for later rounds.
-fn template(state: &mut State, seed: i32) -> Result<Selection, ExecutionError> {
+fn template(
+    state: &mut State,
+    seed: i32,
+    origin: Condition<CitySource>,
+) -> Result<Selection, ExecutionError> {
     if let Some(selection) = state
         .regional
         .as_ref()
@@ -502,7 +485,13 @@ fn template(state: &mut State, seed: i32) -> Result<Selection, ExecutionError> {
     {
         return Ok(selection);
     }
-    let site = survey(state)?;
+    let Some(settlement) = origin.bind(|source| match source {
+        CitySource::CapturedSettlement => settlement(state),
+    })?
+    else {
+        return Err(io::Error::other("City template requires a settlement site").into());
+    };
+    let site = survey(state, settlement)?;
     let selection = Selection::choose(site, draw(seed, 0, 1));
     if let Some(regional) = state.regional.as_mut() {
         regional.city.template = Some(selection.clone());
@@ -613,19 +602,14 @@ fn raise_walls(
 
 /// Founding evidence read at city scale: the city's centre, its usable shore and levels, the
 /// ways that reach its core, worked land around it and the magic practised there.
-fn survey(state: &State) -> io::Result<SiteEvidence> {
+fn survey(state: &State, settlement: Settlement) -> io::Result<SiteEvidence> {
     let field = state.field();
     let mesh = field.mesh();
-    let Some(Settlement {
+    let Settlement {
         centre,
         built_radius,
         ..
-    }) = settlement(state)?
-    else {
-        return Err(io::Error::other(
-            "A city map holds the settlement it was opened at",
-        ));
-    };
+    } = settlement;
     let core = built_radius;
     let [ox, oy] = mesh.origin();
     let at = |cell| {
@@ -716,4 +700,27 @@ fn practices(field: &Field, cell: usize, evidence: &mut SiteEvidence) -> io::Res
         evidence.practice[i] = crafts::practised(field, craft, cell)?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn city_guidance_uses_the_captured_settlement() {
+        let capture = CITY_ORIGIN
+            .bind(|CitySource::CapturedSettlement| {
+                Ok(Some(Settlement {
+                    centre: [250.0, 50.0],
+                    built_radius: 30.0,
+                    people: Some(100.0),
+                }))
+            })
+            .unwrap()
+            .unwrap();
+        assert_eq!(capture.centre, [250.0, 50.0]);
+        let missing = CITY_ORIGIN.bind(|_| Ok(None));
+        assert!(
+            matches!(missing, Err(err) if err.to_string() == "A city map holds the settlement it was opened at")
+        );
+    }
 }

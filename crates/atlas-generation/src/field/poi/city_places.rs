@@ -172,7 +172,7 @@ pub fn thoroughfare<S: CatalogueState<Schedule> + 'static, Schedule: 'static>() 
         kind: Kind::CityThoroughfare,
         name: "Thoroughfare",
         distinct: "A major way of a city map; a district map's streets are its own.",
-        arises: "Grown by the town development of the city's hot spots, at city fidelity.",
+        arises: "Connects the developed city to its approaches, destinations and block streets.",
         publishes: "Publish each thoroughfare's line with its class.",
         journeys: "The city's journeys run along its thoroughfares.",
     })
@@ -183,7 +183,7 @@ pub fn block<S: CatalogueState<Schedule> + 'static, Schedule: 'static>() -> Entr
         name: "City block",
         distinct:
             "A block of a city map with one use; its houses and premises are a district map's.",
-        arises: "Built up by the town development of the city's hot spots, at city fidelity.",
+        arises: "Developed from district land served by the city's street network.",
         publishes: "Publish each block's outline with its use and the people it houses.",
         journeys: "Journeys reach a block from the thoroughfares round it.",
     })
@@ -194,7 +194,7 @@ pub fn place<S: CatalogueState<Schedule> + 'static, Schedule: 'static>() -> Entr
         name: "City landmark",
         distinct:
             "A place from the settlement catalogue that a city map shows at its rough location.",
-        arises: "Built by the town development of a hot spot where the city map shows its kind.",
+        arises: "Supported by its precinct's activity and the place's local site conditions.",
         publishes:
             "Publish each at its rough location, with its catalogue place, symbol and ground.",
         journeys: "City places draw journeys from across the city.",
@@ -205,8 +205,8 @@ pub fn district<S: CatalogueState<Schedule> + 'static, Schedule: 'static>() -> E
         kind: Kind::CityDistrict,
         name: "District",
         distinct: "A part of a city map with its own character, which opens as its own map.",
-        arises: "Cut round the city's strongest centres, parting along water, walls, main roads and changes of character.",
-        publishes: "Publish each district as a region with its population, density, wealth and specializations.",
+        arises: "Partitions the developed city along major ways and barriers.",
+        publishes: "Publish each district's outline, population, density and built ground.",
         journeys: "Journeys cross between districts on the city's ways.",
     })
 }

@@ -6,6 +6,7 @@
 | [Materials and processes](../MATERIALS-AND-PROCESSES-ARCHITECTURE.md) | Working design for materials and processes, and the method for analysing interactions across the system              |
 | [Generation workflows](generation-workflows.md)                       | How world and regional generation work: processes, epochs, physical, ecology, magic, society                         |
 | [Generation modules](generation-modules.md)                           | Feature modules, recipes, process contracts, validity ledger and publication                                         |
+| [Process contract inventory](design/process-contracts/README.md)      | Editable process requirements, map-scale strategies, society review decisions and module scopes                      |
 | [LAN backend](lan-backend.md)                                         | Build, database roles, private HTTPS and persistent storage                                                          |
 | [Local atlas](local-atlas.md)                                         | Native server, database and kept verification world for development checks that need a generated map                 |
 | [Architecture canvas](architecture/subsystems.arconis)                | Source-linked Arconis diagrams on layers: platform, jobs, wizard, epochs, people, questions, ground, regions, schema |

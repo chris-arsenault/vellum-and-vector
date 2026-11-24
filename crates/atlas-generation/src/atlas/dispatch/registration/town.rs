@@ -50,6 +50,7 @@ pub fn specifications() -> io::Result<Vec<Specification>> {
     result.extend(
         crate::processes::town::STEPS
             .iter()
+            .filter(|s| !matches!(s.id, "town.movement" | "town.construction"))
             .map(|s| Specification::new(s.id, "atlas:workspace", "", true)),
     );
     result.push(Specification::new(
@@ -64,6 +65,7 @@ pub fn specifications() -> io::Result<Vec<Specification>> {
         "",
         true,
     ));
+    result.push(crate::processes::town::urban::registration::publication_specification());
     Ok(result)
 }
 pub fn register(
@@ -74,17 +76,29 @@ pub fn register(
         Specification::new("town.cultivation", "atlas:workspace", "", true),
         town::cultivation(),
     ))?;
-    registry.register(Process::command(
-        initialization()?,
-        operations.initialize.clone(),
-        settings,
-    ))?;
+    let legacy_initial = operations.initialize.clone();
+    let initialize = crate::execution::Command::with_inputs(
+        "town.initialize",
+        crate::execution::CommandKind::Work,
+        vec![],
+        move |scope, input: &Settings| {
+            if !crate::processes::town::urban::capture_street(scope.state_mut())? {
+                scope.run(&legacy_initial, input)?;
+            }
+            Ok(())
+        },
+    );
+    registry.register(Process::command(initialization()?, initialize, settings))?;
     for (id, operation) in &operations.steps {
+        if matches!(*id, "town.movement" | "town.construction") {
+            continue;
+        }
         registry.register(Process::unit(
             Specification::new(id, "atlas:workspace", "", true),
             operation.clone(),
         ))?;
     }
+    crate::processes::town::urban::registration::register(registry, Some(operations))?;
     registry.register(Process::command(
         specification()?,
         town::operation(),

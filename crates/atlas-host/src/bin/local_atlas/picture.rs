@@ -120,6 +120,39 @@ impl Canvas {
     pub fn height(&self) -> u32 {
         self.pixmap.height()
     }
+    /// Paint a published categorical raster in its world coordinates, inside the map edge.
+    pub fn surface(&mut self, image: &Pixmap, bounds: atlas_map::Bounds, footprint: &Geometry) {
+        let Some(path) = self.path(&parts(footprint), true) else {
+            return;
+        };
+        let atlas_map::Bounds(w, s, e, n) = bounds;
+        let (x, y) = self.pixel([w, n]);
+        let transform = Transform::from_row(
+            ((e - w) * self.scale / f64::from(image.width())) as f32,
+            0.,
+            0.,
+            ((n - s) * self.scale / f64::from(image.height())) as f32,
+            x,
+            y,
+        );
+        let paint = Paint {
+            shader: tiny_skia::Pattern::new(
+                image.as_ref(),
+                tiny_skia::SpreadMode::Pad,
+                tiny_skia::FilterQuality::Nearest,
+                1.,
+                transform,
+            ),
+            ..Paint::default()
+        };
+        self.pixmap.fill_path(
+            &path,
+            &paint,
+            FillRule::EvenOdd,
+            Transform::identity(),
+            None,
+        );
+    }
     fn pixel(&self, [x, y]: Point) -> (f32, f32) {
         (
             ((x - self.frame.west) * self.scale) as f32,

@@ -59,7 +59,7 @@ pub use ecology::{EcologicalWork, EcologyPhase};
 pub use extraction::{Deliveries, GeographicPublication};
 pub use regional_ecology::RegionalEcology;
 pub use regional_initialization::CapturedRegion;
-pub use regional_people::{RegionalLiving, RegionalRecording};
+pub use regional_people::RegionalRecording;
 pub use settings::Settings;
 // hpc-exempt: world record identities, settings and publication metadata; fields remain typed bands.
 use std::{
@@ -102,6 +102,28 @@ pub struct Scope {
     pub city: Option<crate::features::context::CityRefinement>,
 }
 impl Scope {
+    pub(crate) fn settled_outline(&self) -> &Geometry {
+        self.city
+            .as_ref()
+            .and_then(|city| city.settled_outline.as_ref())
+            .or(self.outline.as_ref())
+            .unwrap_or(&self.footprint)
+    }
+
+    pub(crate) fn process_map_type(&self) -> crate::processes::strategies::MapType {
+        use crate::processes::strategies::MapType;
+
+        if self.world_geography {
+            MapType::World
+        } else if self.city.is_some() {
+            MapType::City
+        } else if self.real_scale.is_some() {
+            MapType::Street
+        } else {
+            MapType::Region
+        }
+    }
+
     pub fn validate_ancestry(&self) -> io::Result<()> {
         for &area in self.area_parents.keys() {
             let mut seen = BTreeSet::new();
@@ -236,13 +258,10 @@ pub struct Regional {
 /// major works, sited in its first round; and the districts cut after its last.
 #[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct City {
+    #[serde(default)]
+    pub urban: crate::processes::town::urban::Urban,
     pub template: Option<crate::town::templates::Selection>,
     pub walls: Vec<crate::town::walls::Wall>,
-    /// The cells of the hot-spot towns' centres, largest town first.
-    pub spots: Vec<u32>,
-    pub places: Vec<crate::town::city::Placed>,
-    /// Each cell's district; `u8::MAX` where none reaches.
-    pub districts: Vec<u8>,
     pub works: Vec<(crate::town::catalogue::works::WorkFamily, u32)>,
 }
 impl Regional {

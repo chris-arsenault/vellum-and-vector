@@ -2,13 +2,18 @@
 use atlas_generation::{
     answers::QuestionBook,
     atlas::context::{Epoch, HumanEra},
-    execution::{ExecutionError, ExecutionResult, Executor},
+    execution::{Command, ExecutionError, ExecutionResult, Executor},
     field::{
         inheritance::{self, Inputs},
-        people::{classifier, era_places, land_processes, questions, travel, work},
+        people::{
+            classifier, era_places,
+            facts::{passes_for, Facts},
+            feed, gather, goods, history, land, land_processes, pass, questions, travel, work,
+        },
         Field, FieldSeed,
     },
     lattice::WorldLatticeOptions,
+    processes::strategies::{Contract, Source, Strategy, Timing},
     rock::ground::observers::GroundObservers,
     scale::MapScale,
     storage::{BlockCache, BlockScratch, Coverage, SharedCache},
@@ -243,17 +248,47 @@ fn run(home: &Path, reference_width: bool) -> ExecutionResult<()> {
         {
             continue;
         }
-        executor.run_with(
-            &operations.era,
-            &land_processes::Era {
-                years: era.years,
-                mobility: era.mobility,
-            },
-        )?;
+        let site = executor.state().process_site();
+        for event in history::MEET_GROUND.select(site, Timing::Elapsed)? {
+            executor.run_with(&operations.meet, &event)?;
+        }
+        let passes = passes_for(era.years);
+        let facts = Facts::settled(era.years / passes as f64, era.mobility);
+        let pass = &operations.pass;
+        for _ in 0..passes {
+            executor.run_with(&pass.settle, &facts)?;
+            historical(&mut executor, goods::TRADE, &pass.trade, facts)?;
+            historical(&mut executor, feed::PROVISION, &pass.feed, facts)?;
+            historical(&mut executor, land::DEMOGRAPHY, &pass.grow, facts)?;
+            historical(&mut executor, gather::MOVEMENT, &pass.gather, facts)?;
+            historical(&mut executor, land::BUILT_GROUND, &pass.harden, facts)?;
+            historical(&mut executor, land::MAINTENANCE, &pass.maintenance, facts)?;
+            executor.run_with(&pass.dwell, &facts)?;
+        }
         census(&executor, &era.id)?;
     }
     Ok(())
 }
+fn historical<A: Copy, I: Source + Copy, B: Source + Copy>(
+    executor: &mut Executor<Field>,
+    owner: Contract<A, I, B>,
+    command: &Command<Field, pass::Inputs<Strategy<A, I, B>>>,
+    facts: Facts,
+) -> ExecutionResult<()> {
+    for strategy in owner.select(executor.state().process_site(), Timing::Elapsed)? {
+        executor.run_with(
+            command,
+            &pass::Inputs {
+                facts,
+                strategy,
+                parent: Default::default(),
+                city: None,
+            },
+        )?;
+    }
+    Ok(())
+}
+
 fn main() -> Result<(), ExecutionError> {
     let home = std::env::args_os()
         .nth(1)

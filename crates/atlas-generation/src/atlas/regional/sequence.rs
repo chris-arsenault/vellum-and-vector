@@ -58,37 +58,23 @@ fn refresh(catalogue: &Catalogue, context: &Context<'_>, occurrence: &str) -> io
 pub fn sequence(catalogue: &Catalogue, context: &Context<'_>) -> io::Result<Sequence> {
     rounds(catalogue, context, false)
 }
-/// A city round's own steps after its people pass: growth and walls, the hot spots' towns
-/// founded and advanced by a few town development rounds, and the prominent places they built.
+/// City walls follow the changing occupation. Site the city's major works on its ground.
 fn city_round(occurrence: &str, round: usize) -> Sequence {
-    let mut body = vec![
+    vec![
         invocation(
-            "refinement.city-growth",
+            "refinement.city-walls",
             occurrence,
             Values::from_iter([("round".into(), round.into())]),
         ),
-        invocation("refinement.city-spots", occurrence, Values::new()),
-    ];
-    // The town steps' occurrences stay outside `town/`, so they make no town previews.
-    for town_round in 0..super::city::spots::TOWN_ROUNDS {
-        let path = format!("{occurrence}/hot-spot-town-{town_round}");
-        for id in crate::processes::town::operation_ids() {
-            body.push(invocation(id, &path, Values::new()));
-        }
-    }
-    body.push(invocation(
-        "refinement.city-places",
-        occurrence,
-        Values::new(),
-    ));
-    body
+        invocation("refinement.city-works", occurrence, Values::new()),
+    ]
 }
-/// A city map develops as a region does, with its city steps after each round's people pass:
-/// growth, walls and the hot spots' towns read where people, ways and centres stand, and the
-/// next round's refinement reads what they changed.
+/// City guidance contributes to household placement during the society group. Walls and
+/// the hot spots' towns read its result before the next refinement round.
 pub fn city(catalogue: &Catalogue, context: &Context<'_>) -> io::Result<Sequence> {
     rounds(catalogue, context, true)
 }
+// Arconis: docs/architecture/subsystems.arconis#item=rg_people — compose the present-ground society owners in each regional development round.
 fn rounds(catalogue: &Catalogue, context: &Context<'_>, city: bool) -> io::Result<Sequence> {
     let context = Context {
         policy: Policy::Regional,
@@ -161,6 +147,17 @@ fn rounds(catalogue: &Catalogue, context: &Context<'_>, city: bool) -> io::Resul
             &occurrence,
             Values::from_iter([("people".into(), society.into())]),
         ));
+        if society {
+            for id in [
+                "human.land.trade",
+                "human.land.feed",
+                "human.land.gather",
+                "human.land.harden",
+                "settlement.built-maintenance",
+            ] {
+                body.push(invocation(id, &occurrence, Values::new()));
+            }
+        }
         if city {
             body.extend(city_round(&occurrence, round));
         }
@@ -171,7 +168,14 @@ fn rounds(catalogue: &Catalogue, context: &Context<'_>, city: bool) -> io::Resul
         )?);
     }
     if city {
-        body.push(invoke("refinement.city-plan", Values::new()));
+        for (slot, occurrence) in [
+            ("city.routes", "primary"),
+            ("city.partition", "partition"),
+            ("city.blocks", "blocks"),
+            ("city.routes", "block-access"),
+        ] {
+            body.extend(group(slot, occurrence, 0.)?);
+        }
     }
     body.extend(refresh(catalogue, &context, "final")?);
     for slot in [
@@ -202,6 +206,9 @@ fn rounds(catalogue: &Catalogue, context: &Context<'_>, city: bool) -> io::Resul
         body.push(invoke("human.population-present", Values::new()));
     }
     body.push(invoke("atlas.names", Values::new()));
+    if city {
+        body.extend(group("city.publish", "final", 0.)?);
+    }
     Ok(body)
 }
 /// A real-scale map (ADR 0016) develops its land with the same processes as a region: the
@@ -244,7 +251,7 @@ mod tests {
     use crate::atlas::features::{Selected, Selection};
 
     #[test]
-    fn every_city_round_runs_growth_then_its_hot_spot_towns_then_records_their_places() {
+    fn city_develops_one_partition_and_connects_its_blocks_before_publication() {
         let catalogue = Catalogue::default();
         let selection = Selection::from([(
             "built.layout".into(),
@@ -274,20 +281,25 @@ mod tests {
         let at = |id: &str| ids.iter().position(|i| i == id).unwrap();
         for round in 1..=DEVELOPMENT_EXPOSURE.len() {
             let r = format!("round-{round}");
-            let growth = at(&format!("{r}/refinement.city-growth"));
-            let spots = at(&format!("{r}/refinement.city-spots"));
-            let built = at(&format!("{r}/hot-spot-town-0/town.construction"));
-            let places = at(&format!("{r}/refinement.city-places"));
-            assert!(growth < spots && spots < built && built < places);
-            // The next round's refinement reads what the round's towns did.
-            if round < DEVELOPMENT_EXPOSURE.len() {
-                assert!(places < at(&format!("round-{}/refinement.round", round + 1)));
-            }
+            let growth = at(&format!("{r}/human.land.gather"));
+            let walls = at(&format!("{r}/refinement.city-walls"));
+            assert!(growth < walls && walls < at(&format!("{r}/refinement.city-works")));
         }
-        // Districts are cut once, after the last round's places.
-        let last = DEVELOPMENT_EXPOSURE.len();
-        assert!(at(&format!("round-{last}/refinement.city-places")) < at("refinement.city-plan"));
-        // No town step runs under `town/`, so a city map makes no town previews.
-        assert!(ids.iter().all(|id| !id.starts_with("town/")));
+        let order = [
+            format!("round-{}/human.land.gather", DEVELOPMENT_EXPOSURE.len()),
+            "primary/built.layout/city.routes/town.movement".into(),
+            "partition/built.layout/city.partition/town.districts".into(),
+            "blocks/built.layout/city.blocks/town.construction".into(),
+            "block-access/built.layout/city.routes/town.movement".into(),
+            "final/built.layout/city.publish/town.urban-geography".into(),
+        ];
+        assert!(order.windows(2).all(|pair| at(&pair[0]) < at(&pair[1])));
+        assert_eq!(
+            ids.iter()
+                .filter(|id| id.ends_with("/town.districts"))
+                .count(),
+            1
+        );
+        assert!(ids.iter().all(|id| !id.contains("hot-spot-town")));
     }
 }

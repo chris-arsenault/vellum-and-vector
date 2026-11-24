@@ -50,6 +50,7 @@ const CENTRE: f64 = 1_500.;
 /// What the map pictures draw, in drawing order.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum Layer {
+    Park,
     Water,
     River,
     Field,
@@ -59,8 +60,10 @@ enum Layer {
     Square,
     Way,
     Wall,
-    /// A district's outline, over the blocks and ways it parts.
     District,
+    /// Major routes often follow district edges. Keep their carriageways visible.
+    Avenue,
+    CityDistrict,
     Building,
     /// A point place: a landmark or major work, marked at a fixed size in pixels.
     Mark,
@@ -80,7 +83,7 @@ struct Drawn {
     width: f64,
     colour: &'static str,
 }
-fn drawn(feature: &MapFeature) -> Option<Drawn> {
+fn drawn(feature: &MapFeature, real_scale: bool) -> Option<Drawn> {
     let mean_width = |fallback: f64| {
         feature
             .attributes
@@ -91,6 +94,8 @@ fn drawn(feature: &MapFeature) -> Option<Drawn> {
             .map_or(fallback, |w| w.iter().sum::<f64>() / w.len() as f64)
     };
     let (layer, width, colour) = match feature.kind.as_str() {
+        "park" => (Layer::Park, 0., "#a8bd90"),
+        "square" if feature.name.as_deref() == Some("Common green") => (Layer::Park, 0., "#b4c39a"),
         "ocean" | "sea" | "lake" | "pool" | "lagoon" | "reservoir" => (Layer::Water, 0., WATER),
         "river" | "stream" | "canal" => (Layer::River, 8., WATER),
         "field" => (Layer::Field, 0., FIELD.0),
@@ -100,7 +105,13 @@ fn drawn(feature: &MapFeature) -> Option<Drawn> {
         "trail" => (Layer::Way, mean_width(2.5), "#a08f6a"),
         "footpath" => (Layer::Way, mean_width(1.5), FOOTPATH),
         "road" => (Layer::Way, 8., "#8a7350"),
-        "thoroughfare" => (Layer::Way, mean_width(12.), "#5b4a36"),
+        "thoroughfare" => match feature.attributes.get("class").and_then(Value::as_str) {
+            Some("Avenue" | "Approach" | "Civic approach") => {
+                (Layer::Avenue, mean_width(12.), "#fff1cf")
+            }
+            _ => (Layer::Way, mean_width(6.), "#f4e5c9"),
+        },
+        "cityBlock" if real_scale => (Layer::Block, 0., "#ddd7be"),
         "cityBlock" => (
             Layer::Block,
             0.,
@@ -113,9 +124,10 @@ fn drawn(feature: &MapFeature) -> Option<Drawn> {
             ),
         ),
         "cityWall" => (Layer::Wall, 8., "#3b2f28"),
-        "district" => (Layer::District, 6., "#2f5d8a"),
+        "district" if real_scale => (Layer::District, 1., "#627679"),
+        "district" => (Layer::CityDistrict, 1., "#334f64"),
         "majorWork" => (Layer::Mark, 14., "#1d1d1d"),
-        "cityPlace" => (Layer::Mark, 9., "#b0306a"),
+        "cityPlace" => (Layer::Mark, 4., "#853c55"),
         "building" => (
             Layer::Building,
             0.,
@@ -139,12 +151,16 @@ fn drawn(feature: &MapFeature) -> Option<Drawn> {
 fn draw(canvas: &mut Canvas, things: &[Drawn]) {
     for thing in things {
         match thing.layer {
-            Layer::Water => canvas.fill(&thing.geometry, thing.colour, None),
+            Layer::Park | Layer::Water => canvas.fill(&thing.geometry, thing.colour, None),
             Layer::River | Layer::Way => {
                 canvas.outline(&thing.geometry, thing.width, 0.7, thing.colour)
             }
-            Layer::Wall | Layer::District => {
-                canvas.outline(&thing.geometry, thing.width, 2., thing.colour)
+            Layer::Wall => canvas.outline(&thing.geometry, thing.width, 2., thing.colour),
+            Layer::District => canvas.outline(&thing.geometry, thing.width, 1.2, thing.colour),
+            Layer::CityDistrict => canvas.outline(&thing.geometry, thing.width, 2.6, thing.colour),
+            Layer::Avenue => {
+                canvas.outline(&thing.geometry, thing.width + 2., 2.8, "#80694e");
+                canvas.outline(&thing.geometry, thing.width, 1.6, thing.colour);
             }
             Layer::Block => canvas.fill(&thing.geometry, thing.colour, Some((PLOT.1, 0.6))),
             Layer::Mark => canvas.mark(&thing.geometry, thing.width, thing.colour),
@@ -217,6 +233,7 @@ pub fn report(server: &Server, reference: &MapRef, directory: &Path) -> io::Resu
     ];
     let spaces = map["spaces"].as_array().cloned().unwrap_or_default();
     let primary = text(&map["primarySpaceId"]);
+    let real_scale = !map["realScale"].is_null();
     // hpc-exempt: published kind counts by space and layer, each in first-seen order.
     let mut counts = BTreeMap::<(String, String), Vec<(String, usize)>>::new();
     // hpc-exempt: towns by name, in first-seen order of their buildings.
@@ -273,7 +290,7 @@ pub fn report(server: &Server, reference: &MapRef, directory: &Path) -> io::Resu
                 town.sum[0] += (w + e) / 2.;
                 town.sum[1] += (s + n) / 2.;
             }
-            things.extend(drawn(&feature));
+            things.extend(drawn(&feature, real_scale));
         })?;
     }
     for (name, town) in &towns {
@@ -315,17 +332,53 @@ pub fn report(server: &Server, reference: &MapRef, directory: &Path) -> io::Resu
     things.sort_by_key(|thing| thing.layer);
     let mut written = vec![picture(
         &things,
-        Frame::around(bounds, 4. / 3., 0., 0.),
+        Frame::around(bounds, 4. / 3., if real_scale { 0.04 } else { 0. }, 0.),
         directory,
         "map.png",
     )?];
     if let Some(city) = &city {
-        written.push(picture(
-            &things,
-            Frame::around(city.0, 4. / 3., 0.05, CENTRE),
-            directory,
-            "city.png",
-        )?);
+        if let Some(layer) = layers
+            .iter()
+            .find(|l| !real_scale && l["id"] == "raster:finalSurface" && l["spaceId"] == primary)
+        {
+            let mut canvas = Canvas::new(
+                PICTURE,
+                Frame::around(bounds, 4. / 3., 0.04, CENTRE),
+                "#f3f1e9",
+            )?;
+            let layer: atlas_map::MapLayer = serde_json::from_value(layer.clone())?;
+            let footprint = serde_json::from_value(map["footprint"].clone())?;
+            let image = surface_image(server, reference, &layer)?;
+            canvas.surface(&image, layer.bounds, &footprint);
+            draw(&mut canvas, &things);
+            let path = directory.join("city.png");
+            canvas.save(&path)?;
+            written.push(path.display().to_string());
+        } else {
+            written.push(picture(
+                &things,
+                Frame::around(city.0, 4. / 3., 0.05, CENTRE),
+                directory,
+                "city.png",
+            )?);
+        }
+        if real_scale && things.iter().any(|thing| thing.layer == Layer::Building) {
+            let [centre]: [atlas_map::GeometryResult; 1] = server.call(
+                "maps/read",
+                &json!({"method":"geometries", "args":[reference, primary, [
+                    {"operation":"interior", "geometry":map["footprint"]}
+                ]]}),
+            )?;
+            if let atlas_map::GeometryResult::Position(centre) = centre {
+                let [x, y, _] = centre.coordinates();
+                written.push(picture(
+                    &things,
+                    Frame::centred([x, y], 500., 4. / 3.),
+                    directory,
+                    "district-detail.png",
+                )?);
+            }
+        }
     }
     // The town with the most occupied buildings, whole and at its centre.
     if let Some((_, town)) = towns.iter().max_by_key(|(_, town)| town.buildings) {
@@ -361,4 +414,59 @@ fn picture(things: &[Drawn], frame: Frame, directory: &Path, file: &str) -> io::
 }
 fn text(value: &Value) -> String {
     value.as_str().unwrap_or_default().to_owned()
+}
+
+fn surface_image(
+    server: &Server,
+    reference: &MapRef,
+    layer: &atlas_map::MapLayer,
+) -> io::Result<tiny_skia::Pixmap> {
+    use atlas_gis::raster_values::Raster;
+    let atlas_map::LayerSource::Raster(source) = &layer.source else {
+        return Err(io::Error::other("Land cover needs a raster"));
+    };
+    let band = |name| {
+        source
+            .bands
+            .iter()
+            .zip(&source.band_indices)
+            .find(|(b, _)| b.id == name)
+    };
+    let (classes, value) =
+        band("value").ok_or_else(|| io::Error::other("Land cover needs a value band"))?;
+    let coverage = band("coverage").map(|(_, index)| *index);
+    let colors: BTreeMap<_, _> = classes
+        .categories
+        .iter()
+        .filter_map(|class| {
+            Some((
+                class.value,
+                crate::picture::colour(class.color.as_deref()?)
+                    .to_color_u8()
+                    .premultiply(),
+            ))
+        })
+        .collect();
+    let bytes = server.get(&format!(
+        "/api/maps/{}/{}/assets/{}",
+        reference.map_id, reference.revision, source.asset_id
+    ))?;
+    let mut raster = Raster::new(io::Cursor::new(bytes))?;
+    let mut image = tiny_skia::Pixmap::new(source.width, source.height)
+        .ok_or_else(|| io::Error::other("Empty land cover image"))?;
+    for (index, pixel) in image.pixels_mut().iter_mut().enumerate() {
+        let at = (
+            (index % source.width as usize) as u32,
+            (index / source.width as usize) as u32,
+        );
+        if let Some(band) = coverage {
+            if raster.sample(band, at)? <= 0. {
+                continue;
+            }
+        }
+        if let Some(color) = colors.get(&(raster.sample(*value, at)? as i32)) {
+            *pixel = *color;
+        }
+    }
+    Ok(image)
 }

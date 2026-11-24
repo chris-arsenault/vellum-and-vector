@@ -12,6 +12,137 @@ use crate::{
 };
 use std::io;
 impl HumanLayers {
+    /// Transfer developed land to the places using it. Open ground receives it first.
+    /// Where households take cultivated land, its former use occupies the vacated area.
+    pub(super) fn place_land(
+        &mut self,
+        action: &super::operations::LandPlacement,
+        coverage: &mut Coverage,
+    ) -> io::Result<()> {
+        if !catalogue::facts(action.kind).area {
+            return Err(io::Error::other("Land placement requires an area layer"));
+        }
+        let movement = &action.movement;
+        let stock = self.bands.layers[action.kind as usize].snapshot()?;
+        let mut arrivals = coverage.scratch(self.mesh.len(), 0.0);
+        let mut departures = coverage.scratch(self.mesh.len(), 0.0);
+        for from in 0..self.mesh.len() {
+            let to = movement.targets.get(from)?;
+            if !self.ground(to) {
+                continue;
+            }
+            let to = to as usize;
+            let outgoing = stock.get(from)? * unit(movement.share.get(from)?);
+            departures.set(from, outgoing)?;
+            arrivals.set(
+                to,
+                arrivals.get(to)? + outgoing * self.mesh.area(from) / self.mesh.area(to),
+            )?;
+        }
+        let mut displaced = coverage.scratch(self.mesh.len(), 0.0);
+        for cell in 0..self.mesh.len() {
+            let incoming = arrivals.get(cell)?;
+            if incoming > 0.0 {
+                displaced.set(
+                    cell,
+                    ((incoming - self.free_area(cell)?) / incoming).clamp(0.0, 1.0),
+                )?;
+            }
+        }
+        let farm = self.bands.layers[LayerId::Farmland as usize].snapshot()?;
+        let herd = self.bands.layers[LayerId::Pasture as usize].snapshot()?;
+        for from in 0..self.mesh.len() {
+            let to = movement.targets.get(from)?;
+            if !self.ground(to) {
+                continue;
+            }
+            let to = to as usize;
+            let crop = if action.kind == LayerId::Farmland {
+                0.0
+            } else {
+                farm.get(to)?
+            };
+            let grazing = if action.kind == LayerId::Pasture {
+                0.0
+            } else {
+                herd.get(to)?
+            };
+            let worked = crop + grazing;
+            if worked <= 0.0 {
+                continue;
+            }
+            let exchanged = departures.get(from)? * displaced.get(to)?;
+            for (kind, share) in [
+                (LayerId::Farmland, crop / worked),
+                (LayerId::Pasture, grazing / worked),
+            ] {
+                let land = &mut self.bands.layers[kind as usize];
+                land.set(
+                    to,
+                    land.get(to)? - exchanged * share * self.mesh.area(from) / self.mesh.area(to),
+                )?;
+                land.set(from, land.get(from)? + exchanged * share)?;
+            }
+        }
+        for cell in 0..self.mesh.len() {
+            self.bands.layers[action.kind as usize].set(
+                cell,
+                stock.get(cell)? - departures.get(cell)? + arrivals.get(cell)?,
+            )?;
+        }
+        Ok(())
+    }
+
+    /// Resolve finer sites of already ruined fabric, including the surviving stock,
+    /// burial depth and language associated with its developed area.
+    pub(super) fn place_ruins(
+        &mut self,
+        action: &super::operations::Placement,
+        coverage: &mut Coverage,
+    ) -> io::Result<()> {
+        let [area, capital, depth] = &self.bands.remains;
+        let area = area.snapshot()?;
+        let capital = capital.snapshot()?;
+        let depth = depth.snapshot()?;
+        let tongue = self.bands.ruin_tongue.snapshot()?;
+        let mut largest = coverage.scratch(self.mesh.len(), 0.0);
+        for cell in 0..self.mesh.len() {
+            let left = if self.ground(action.targets.get(cell)?) {
+                unit(action.share.get(cell)?)
+            } else {
+                0.0
+            };
+            let retained = area.get(cell)? * (1.0 - left);
+            largest.set(cell, retained)?;
+            self.bands.remains[0].set(cell, retained)?;
+            self.bands.remains[1].set(cell, capital.get(cell)? * (1.0 - left))?;
+        }
+        for cell in 0..self.mesh.len() {
+            let target = action.targets.get(cell)?;
+            if !self.ground(target) {
+                continue;
+            }
+            let to = target as usize;
+            let share = unit(action.share.get(cell)?) * self.mesh.area(cell) / self.mesh.area(to);
+            let arrived = area.get(cell)? * share;
+            if arrived <= 0.0 {
+                continue;
+            }
+            let before = self.bands.remains[0].get(to)?;
+            let combined = before + arrived;
+            let cover =
+                (self.bands.remains[2].get(to)? * before + depth.get(cell)? * arrived) / combined;
+            self.bands.remains[2].set(to, cover)?;
+            self.bands.remains[0].set(to, combined)?;
+            let works = self.bands.remains[1].get(to)? + capital.get(cell)? * share;
+            self.bands.remains[1].set(to, works)?;
+            if arrived > largest.get(to)? {
+                largest.set(to, arrived)?;
+                self.bands.ruin_tongue.set(to, tongue.get(cell)?)?;
+            }
+        }
+        Ok(())
+    }
     pub(super) fn move_layer(&mut self, action: &Move, coverage: &mut Coverage) -> io::Result<()> {
         let carries = catalogue::facts(action.kind).carries_identity;
         let before = if carries {

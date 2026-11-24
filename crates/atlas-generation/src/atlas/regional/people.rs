@@ -3,41 +3,27 @@ use super::{
     work::{Inputs, Occurrence, Operation},
 };
 use crate::{
-    atlas::state::{RegionalLiving, RegionalRecording, State},
+    atlas::state::{RegionalRecording, State},
     execution::{Command, CommandKind, Projection},
     field::{refinement::people, Field},
 };
 use std::rc::Rc;
 
-// Arconis: docs/architecture/subsystems.arconis#item=rg_people — runs people's refinement processes each round: meet, then one settled pass.
 pub(super) fn effects(
     input: Rc<Inputs>,
     reads: &Reads,
     field: &Projection<State, Field>,
 ) -> Operation {
-    let field = field.clone();
+    let offers = crate::atlas::people::hold_place_offers(field);
     Command::with_inputs(
         "refinement.place-effects",
         CommandKind::Event,
         vec![reads.climate.dependency(), reads.water.dependency()],
         move |scope, step: &Occurrence| {
-            let work = &input.people;
-            let living = step.people.then(|| RegionalLiving {
-                land: &work.land,
-                questions: &work.questions,
-                parent: work.parent.as_deref(),
-                context: Rc::new(step.physical),
-            });
-            super::city::trace_people(scope.state(), "before people pass")?;
-            crate::field::people::yields::trace_food(scope.state().field(), "before people pass")?;
-            if let Some(readout) =
-                State::regional_place_effects(scope, &field, &input.causes, living)?
-            {
-                (input.progress)(1.0, &readout.land);
-                (input.progress)(1.0, &readout.message());
+            if step.people {
+                scope.run_with_context(&offers, &(), Rc::new(step.physical))?;
             }
-            super::city::trace_people(scope.state(), "after people pass")?;
-            Ok(())
+            State::regional_place_effects(scope, &input.causes)
         },
     )
 }
@@ -65,7 +51,6 @@ pub(super) fn publish(
                 scope,
                 &field,
                 RegionalRecording {
-                    land: &work.land,
                     record: &work.record,
                     settings: &work.settings,
                     context: Rc::new(step.physical),

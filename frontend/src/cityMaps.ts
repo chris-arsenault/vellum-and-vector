@@ -9,11 +9,22 @@ export function citySelection(
   settlement: PublishedFeature
 ): { selection: RegionSelection; city: CityChoice } | null {
   if (map.realScale || settlement.kind !== "settlement") return null;
-  if (settlement.geometry.type !== "Point") return null;
-  const [x, y] = settlement.geometry.coordinates;
+  const geometry = settlement.geometry;
+  const city = { settlement: settlement.id };
+  if (geometry.type === "Point") {
+    const [x, y] = geometry.coordinates;
+    return { selection: pointSelection(map, settlement.spaceId, [x, y]), city };
+  }
+  if (geometry.type !== "Polygon" && geometry.type !== "MultiPolygon") return null;
   return {
-    selection: pointSelection(map, settlement.spaceId, [x, y]),
-    city: { settlement: settlement.id },
+    city,
+    selection: {
+      parent: map.reference,
+      spaceId: settlement.spaceId,
+      geometry: geometry as RegionGeometry,
+      featureIds: [settlement.id],
+      regionPath: [],
+    },
   };
 }
 

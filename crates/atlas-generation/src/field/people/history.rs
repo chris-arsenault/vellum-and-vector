@@ -1,4 +1,9 @@
-use super::{land::mix, travel::length, work::working};
+use super::{
+    contract::{Absent, Condition, Contract, EffectTime, Product, Source, Strategy},
+    land::mix,
+    travel::length,
+    work::working,
+};
 use crate::{
     execution::{Command, CommandKind},
     field::{shared::Scalar as S, Field},
@@ -8,9 +13,41 @@ use crate::{
     },
     rock::ground::GroundField,
     scale::{LengthUnit, MapScale},
-    storage::Band,
+    storage::{Band, ReadBand},
 };
 use std::{io, rc::Rc};
+
+#[derive(Clone, Copy)]
+pub enum HazardStart {
+    WatchedGround,
+}
+impl Source for HazardStart {
+    type Value = [ReadBand<f64>; 3];
+}
+
+pub type HazardEvent = Strategy<(), HazardStart>;
+
+pub const MEET_GROUND: Contract<(), HazardStart> = Contract {
+    id: "human.land.meet",
+    effect: "Bury, expose and damage settled ground during world history",
+    reads: &[Product::GroundHazards, Product::WatchedGround],
+    writes: &[
+        Product::Layer(catalogue::LayerId::Population),
+        Product::Layer(catalogue::LayerId::Standing),
+    ],
+    catalog_id: "human.land.meet",
+    strategies: &[Strategy {
+        name: "hazard-event",
+        time: EffectTime::Event,
+        slot: "before the historical people pass",
+        initial: Condition::From {
+            source: HazardStart::WatchedGround,
+            absent: Absent::Empty,
+        },
+        boundary: Condition::None,
+        algorithm: (),
+    }],
+};
 
 // Arconis: docs/architecture/subsystems.arconis#item=pp_meet — records land that drowned, buried, scoured or struck people.
 pub struct Seen {
@@ -76,7 +113,7 @@ fn look(field: &mut Field) -> io::Result<()> {
 }
 pub struct Operations {
     pub watch: Command<Field>,
-    pub meet: Command<Field>,
+    pub meet: Command<Field, HazardEvent>,
 }
 impl Operations {
     pub fn new(owner: Rc<operations::Operations<Field>>) -> Self {
@@ -88,11 +125,20 @@ impl Operations {
                 |context, _| Ok(look(context.state_mut())?),
             ),
             meet: Command::with_inputs(
-                "human.land.meet",
+                MEET_GROUND.id,
                 CommandKind::Event,
                 vec![],
-                move |context, _| {
+                move |context, strategy: &HazardEvent| {
                     let field = context.state();
+                    let watched = strategy.initial.bind(|HazardStart::WatchedGround| {
+                        Ok(field.human_land_seen.as_ref().map(|seen| {
+                            [
+                                seen.laid.read_only(),
+                                seen.stripped.read_only(),
+                                seen.struck.read_only(),
+                            ]
+                        }))
+                    })?;
                     let mut covered = working(field);
                     let mut bared = working(field);
                     let mut wrecked = working(field);
@@ -107,13 +153,13 @@ impl Operations {
                             field.shared.scalar(S::IceThickness).get(cell)? / thick,
                         )?;
                         covered.set(cell, f64::from(under))?;
-                        if let Some(before) = &field.human_land_seen {
+                        if let Some([before_laid, before_stripped, before_struck]) = &watched {
                             let [laid, stripped, struck] = metres(field, cell)?;
                             if !under {
-                                covered.set(cell, since(laid, before.laid.get(cell)?))?;
+                                covered.set(cell, since(laid, before_laid.get(cell)?))?;
                             }
-                            bared.set(cell, since(stripped, before.stripped.get(cell)?))?;
-                            wrecked.set(cell, (struck - before.struck.get(cell)?).max(0.0))?;
+                            bared.set(cell, since(stripped, before_stripped.get(cell)?))?;
+                            wrecked.set(cell, (struck - before_struck.get(cell)?).max(0.0))?;
                         }
                     }
                     let mut striking = [0.0; 7];

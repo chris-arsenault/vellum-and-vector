@@ -579,7 +579,67 @@ const directions: readonly OwnerDirection[] = [
     direction:
       "people on finer maps roughly match the parent's because people's refinement processes produce roughly equal counts, as other refinement processes do",
     given: "2026-11-21",
-    marks: ["crates/atlas-generation/src/field/refinement/people.rs"],
+    marks: ["crates/atlas-generation/src/field/people/gather/placement.rs"],
+  },
+  {
+    direction: "each process implements the process contract in an extensible manner",
+    given: "2026-11-22",
+    marks: ["crates/atlas-generation/src/processes/strategies/contract.rs"],
+    test: "crates/atlas-generation/src/field/people/contract.rs",
+  },
+  {
+    direction: "a named strategy owns its map and metric applicability and each NoOp has a reason",
+    given: "2026-11-23",
+    marks: ["crates/atlas-generation/src/processes/strategies.rs"],
+    test: "crates/atlas-generation/src/processes/strategies/tests.rs",
+  },
+  {
+    direction:
+      "exactly Semantic, ClassificationPublication and LegacyUnmigrated are registered process categories",
+    given: "2026-11-23",
+    marks: ["crates/atlas-generation/src/atlas/dispatch/metadata.rs"],
+    test: "crates/atlas-generation/src/atlas/dispatch/schedule/tests.rs",
+  },
+  {
+    direction:
+      "the spreadsheet determines migration and existing registrations stay legacy until migrated",
+    given: "2026-11-23",
+    marks: ["crates/atlas-generation/src/atlas/dispatch.rs"],
+    test: "crates/atlas-generation/src/atlas/dispatch/schedule/tests.rs",
+  },
+  {
+    direction: "the city edge is defined by its settled extent, population density and geography",
+    given: "2026-11-24",
+    marks: ["crates/atlas-generation/src/town/city/outline.rs"],
+    test: "crates/atlas-generation/src/town/city/outline.rs",
+  },
+  {
+    direction:
+      "the city map has a margin around the settled outline for outskirts and natural areas",
+    given: "2026-11-24",
+    marks: ["crates/atlas-generation/src/town/city/outline.rs"],
+    test: "crates/atlas-generation/src/town/city/outline.rs",
+  },
+  {
+    direction: "cities should have 7-14 districts",
+    given: "2026-11-23",
+    marks: ["crates/atlas-generation/src/processes/town/urban/partition.rs"],
+    test: "crates/atlas-generation/src/processes/town/urban/partition.rs",
+  },
+  {
+    direction: "City district boundaries and identities are final at City scale",
+    given: "2026-11-23",
+    marks: [
+      "crates/atlas-generation/src/processes/town/urban/mod.rs",
+      "crates/atlas-host/src/regional_capture/records.rs",
+    ],
+    test: "crates/atlas-host/src/regional_capture/records.rs",
+  },
+  {
+    direction: "the orchestrator controls mutability during publication",
+    given: "2026-11-23",
+    marks: ["crates/atlas-generation/src/atlas/dispatch/publication.rs"],
+    test: "crates/atlas-generation/src/atlas/dispatch/schedule/tests.rs",
   },
   {
     direction: "on a topo map, ice fields must not block everything else out",

@@ -65,10 +65,11 @@ impl Generation {
         let operations = Operations::new(&mut runtime, features, input.operations)?;
         let products = ProductLedger::new(input.facts, operations.registry.products.clone())
             .map_err(|error| ExecutionError::Failed(format!("{error:?}")))?;
-        let diagnostics = super::dispatch::preflight::inspect(
+        let (_, diagnostics) = super::dispatch::preflight::inspect(
             &input.configuration,
             &operations.registry,
             products.clone(),
+            runtime.executor.state().field().process_site(),
         );
         if !diagnostics.is_empty() {
             return Err(ExecutionError::Failed(

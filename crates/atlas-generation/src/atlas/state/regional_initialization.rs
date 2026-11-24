@@ -101,7 +101,17 @@ impl State {
                 ..Default::default()
             })?
             .collect::<std::io::Result<Vec<_>>>()?;
+        let district =
+            self.scope.real_scale.is_some() && records.iter().any(|f| f.kind == "district");
         for mut feature in records {
+            // The Street map inherits the City's street plan. Bending neighboring blocks
+            // or their approach roads can pull them across the selected district boundary.
+            if district
+                && (crate::processes::town::urban::fixed_geography(&feature.kind)
+                    || matches!(feature.kind.as_str(), "road" | "trail"))
+            {
+                continue;
+            }
             if !bend_record(&mut feature, &bend, self.scope.area) {
                 continue;
             }

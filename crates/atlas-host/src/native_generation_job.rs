@@ -176,6 +176,7 @@ impl NativeJob {
                 private: services.inputs,
             },
             services.maps,
+            &services.assets,
             &workspace.source_features(),
             spatial,
         )?;

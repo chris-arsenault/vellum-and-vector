@@ -123,6 +123,16 @@ impl Inputs {
     ) -> io::Result<Samples> {
         let mut sampled = Samples::default();
         let mut remaining = channels::physical();
+        if self.parent.contains_key("populationCapacity") {
+            let mut harvest = channels::Channel::new(
+                "populationCapacity",
+                "people/square-kilometre",
+                &[],
+                "population",
+            );
+            harvest.discrete = true;
+            remaining.push(harvest);
+        }
         while let Some(channel) = remaining.pop() {
             let source = if channel.material {
                 self.material()
@@ -245,6 +255,13 @@ impl Samples {
                     1
                 },
             )?;
+        }
+        if let (Some(food), Some(farmland), Some(residents)) = (
+            self.bands.get("populationCapacity"),
+            self.bands.get("Farmland"),
+            self.bands.get("Population"),
+        ) {
+            seed.capture_harvest(food, farmland, residents)?;
         }
         seed.crust_formed = true;
         seed.ground.support_initialized = true;

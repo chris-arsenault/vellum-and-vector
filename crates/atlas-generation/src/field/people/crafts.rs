@@ -1,4 +1,8 @@
-use super::{facts::PEOPLE_PER_BUILT_KM2, work::working};
+use super::{
+    contract::{Dispatch, MapType, Rule, Timing},
+    facts::PEOPLE_PER_BUILT_KM2,
+    work::working,
+};
 use crate::{
     answers::{QuestionBook, Responder, ResponseKind},
     execution::{Command, CommandKind, ExecutionResult, QueryDependency},
@@ -170,9 +174,18 @@ pub fn sea_held_off(field: &Field, cell: usize) -> io::Result<f64> {
     }
     nearby(field, CRAFTS[2], cell)
 }
+pub(super) const LEARNING: Dispatch<()> = Dispatch {
+    id: "human.crafts.learn",
+    rules: &[
+        Rule::new(MapType::WORLD, Some(())).during(Timing::Elapsed),
+        Rule::new(MapType::WORLD, None).during(Timing::Present),
+        Rule::new(MapType::REFINED, None),
+    ],
+};
+
 pub fn learning(owner: Rc<operations::Operations<Field>>) -> Command<Field, f64> {
     Command::with_inputs(
-        "human.crafts.learn",
+        LEARNING.id,
         CommandKind::Elapsed,
         vec![],
         move |context, years: &f64| {

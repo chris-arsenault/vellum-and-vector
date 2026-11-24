@@ -46,6 +46,7 @@ describe("city and district maps", () => {
       )
     ).toBeNull();
     expect(citySelection(map, feature("district", square))).toBeNull();
+    expect(citySelection(map, feature("settlement", square))?.selection.geometry).toEqual(square);
   });
 
   it("a city map's district opens a real-scale map over its own outline", () => {

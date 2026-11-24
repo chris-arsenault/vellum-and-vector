@@ -7,6 +7,19 @@ use crate::{
 };
 use std::io;
 
+/// Current exposure affects the choice of ground even when no destructive event occurs.
+pub fn exposure(field: &Field, cell: usize) -> io::Result<f64> {
+    Ok(field.shared.scalar(S::FloodFrequency).get(cell)?.max(0.0)
+        + field.shared.scalar(S::Slope).get(cell)?.max(0.0)
+            * (1.0
+                + field
+                    .shared
+                    .scalar(S::IceThickness)
+                    .get(cell)?
+                    .max(0.0)
+                    .ln_1p()))
+}
+
 #[derive(Clone, Copy)]
 pub enum Hazard {
     Avalanche,

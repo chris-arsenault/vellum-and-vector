@@ -65,6 +65,7 @@ pub async fn capture(
             inputs: &stores.inputs,
         },
         stores.maps.access(),
+        &atlas_gis::map_files::MapFiles::new(root.join("map-assets")),
         records,
         &stores.spatial,
     )?;

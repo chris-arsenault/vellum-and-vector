@@ -5,23 +5,61 @@ use crate::{
     features::{FeatureReader, FeatureSelection},
     field::{
         people::{
+            contract::Timing,
             era_places,
-            facts::Facts,
-            land_processes, place_country,
+            feed::Market,
+            place_country,
             places::{Adopted, History, Places},
-            questions::Questions,
         },
         poi::reads,
         Field,
     },
-    reconstruction::Grid,
-    storage::{Band, ReadBand},
 };
 use atlas_map::Geometry;
 use serde_json::Value;
 use std::{cell::RefCell, io, rc::Rc};
 
 pub const DEVELOPMENT_EXPOSURE: [f64; 3] = [250.0, 60.0, 20.0];
+
+#[derive(Clone, Default)]
+pub struct Parent {
+    pub market: Option<Market>,
+    pub connections: Rc<Vec<crate::field::people::feed::Connection>>,
+    pub markets: Rc<Vec<(usize, f64)>>,
+}
+
+/// A captured settlement's census describes customers served by its market. Its
+/// residents still come exclusively from the sampled population layer.
+pub(crate) fn markets(
+    field: &Field,
+    features: &dyn FeatureReader,
+) -> io::Result<Vec<(usize, f64)>> {
+    let mut markets = Vec::new();
+    for feature in features.values(FeatureSelection {
+        kind: Some("settlement"),
+        ..Default::default()
+    })? {
+        let feature = feature?;
+        if !reads::inhabited(&feature) {
+            continue;
+        }
+        let Some(cell) = reads::feature_cell(field, &feature) else {
+            continue;
+        };
+        let census = number(
+            feature
+                .attributes
+                .get("settlementPopulation")
+                .or_else(|| feature.attributes.get("population")),
+            0.0,
+        )?;
+        if census > 0.0 {
+            markets.push((cell, census));
+        }
+    }
+    Ok(markets)
+}
+
 pub fn enabled(domains: &[String]) -> bool {
     domains
         .iter()
@@ -31,95 +69,6 @@ pub fn people_on(field: &Field) -> io::Result<f64> {
     (0..field.mesh.len()).try_fold(0.0, |sum, cell| {
         Ok(sum + field.people.people(cell)? * field.mesh.area(cell) / 1e6)
     })
-}
-fn feeds(field: &Field, yield_per_km2: &ReadBand<f64>) -> io::Result<f64> {
-    (0..field.mesh.len()).try_fold(0.0, |sum, cell| {
-        Ok(sum + yield_per_km2.get(cell)? * field.mesh.area(cell) / 1e6)
-    })
-}
-fn parent_groups(field: &Field, parent: &Grid) -> io::Result<Band<i32>> {
-    let mut groups = field.coverage.borrow_mut().allocate(-1);
-    let [ox, oy] = field.mesh.origin();
-    for cell in 0..field.mesh.len() {
-        let [x, y] = field.mesh.position(cell);
-        groups.set(
-            cell,
-            i32::try_from(parent.sample_index([x + ox, y + oy])?).map_err(io::Error::other)?,
-        )?;
-    }
-    Ok(groups)
-}
-pub struct PopulationReadout {
-    pub land: String,
-    pub before: f64,
-    pub met: f64,
-    pub after: f64,
-    pub supported: f64,
-    pub crops: f64,
-    pub herds: f64,
-    pub wild: f64,
-}
-impl PopulationReadout {
-    pub fn message(&self) -> String {
-        format!("People on the map: {} before the round, {} after its water and ice, {} after living it; the land as now used feeds {}; all under crops it would feed {}, under herds {}, left wild {}",
-            self.before, self.met, self.after, (self.supported + 0.5).floor(), (self.crops + 0.5).floor(), (self.herds + 0.5).floor(), (self.wild + 0.5).floor())
-    }
-}
-pub fn live(
-    executor: &mut CommandContext<'_, Field>,
-    operations: &land_processes::Operations,
-    questions: &Questions,
-    domains: &[String],
-    round: usize,
-    parent: Option<&Grid>,
-) -> ExecutionResult<Option<PopulationReadout>> {
-    if !enabled(domains) {
-        return Ok(None);
-    }
-    let before = (people_on(executor.state())? + 0.5).floor();
-    if before == 0.0 {
-        return Ok(None);
-    }
-    // owner-direction(2026-11-16): the agreement clause is that major landmarks in a parent map must appear and roughly agree with a child map; that is it
-    // owner-direction(2026-11-21): people on finer maps roughly match the parent's because people's refinement processes produce roughly equal counts, as other refinement processes do
-    // The parent's people are the starting conditions, drawn once over the finer land. Each
-    // round, people's refinement processes then run on the child as its other domains' do:
-    // people meet the round's water and ice, then live a settled pass over the round's
-    // exposure. No era is lived again, as no plate moves on a child.
-    if round == 1 {
-        if let Some(parent) = parent {
-            let groups = parent_groups(executor.state(), parent)?;
-            executor.run(&operations.inherited, &groups.read_only())?;
-        }
-    }
-    executor.run(&operations.meet, &())?;
-    let met = (people_on(executor.state())? + 0.5).floor();
-    let years = round
-        .checked_sub(1)
-        .and_then(|at| DEVELOPMENT_EXPOSURE.get(at))
-        .copied()
-        .unwrap_or(0.0);
-    executor.run(&operations.pass, &Facts::settled(years, 1.0))?;
-    let season = executor.query(&questions.season)?.values();
-    let land = format!(
-        "Land on the map: {}",
-        executor.state().land_readout(&season)?
-    );
-    let support = executor.query(&questions.support)?.values();
-    let crop = executor.query(&questions.crop)?.values();
-    let herd = executor.query(&questions.herd)?.values();
-    let wild = executor.query(&questions.wild)?.values();
-    let field = executor.state();
-    Ok(Some(PopulationReadout {
-        land,
-        before,
-        met,
-        after: (people_on(field)? + 0.5).floor(),
-        supported: feeds(field, &support)?,
-        crops: feeds(field, &crop)?,
-        herds: feeds(field, &herd)?,
-        wild: feeds(field, &wild)?,
-    }))
 }
 fn number(value: Option<&Value>, otherwise: f64) -> io::Result<f64> {
     match value.filter(|v| !v.is_null()) {
@@ -146,6 +95,7 @@ pub fn adopt_captured(
     parent_span: f64,
     places: &mut Places,
 ) -> io::Result<()> {
+    // owner-direction(2026-11-16): the agreement clause is that major landmarks in a parent map must appear and roughly agree with a child map; that is it
     for feature in features.values(FeatureSelection {
         area_id: Some(area),
         kind: Some("settlement"),
@@ -214,7 +164,6 @@ pub struct PlaceRecords {
 }
 pub fn record_places(
     executor: &mut CommandContext<'_, Field>,
-    land: &land_processes::Operations,
     record: &Command<Field, era_places::Setting>,
     settings: &PlaceSettings,
     records: PlaceRecords,
@@ -222,8 +171,6 @@ pub fn record_places(
     if people_on(executor.state())? <= 0.0 {
         return Ok(());
     }
-    // People meet the last round's water and ice before their places are read.
-    executor.run(&land.meet, &())?;
     let range = executor
         .state()
         .scale
@@ -245,12 +192,13 @@ pub fn record_places(
                 .unwrap_or_else(|| "present".into()),
             least,
             town: Some(settings.town),
+            timing: Timing::Present,
             country: place_country::Setting {
                 range,
                 // A road is judged against the towns this map can show: the threshold
                 // scales with the regional town threshold, as the towns themselves do.
                 road_travellers: settings.road_traffic * (least / settings.town).min(1.0),
-                years: DEVELOPMENT_EXPOSURE.iter().sum(),
+                years: 0.0,
             },
         },
     )

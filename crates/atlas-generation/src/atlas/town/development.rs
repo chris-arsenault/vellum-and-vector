@@ -363,72 +363,6 @@ fn buildable_shelves(
     component.retain(|&cell| ground.owner(points[cell]) == crate::town::ground::FREE);
     component
 }
-/// Founding sites a hot spot's town tries, nearest first.
-const SPOT_SITES: usize = 8;
-/// How a town is founded: a settlement commissions the major works its population band
-/// expects; a city map's hot spot takes only the city's works, which the city sites.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Founding {
-    Settlement,
-    HotSpot,
-}
-/// Towns founded at a city map's hot spots, at city fidelity, each under the city's template
-/// where it can found there and its own choice where it cannot. A spot with no habitable
-/// founding site founds none.
-pub(crate) fn found_at_spots(
-    state: &State,
-    spots: Vec<(crate::town::seat::Seat, Settings)>,
-) -> io::Result<Vec<Town>> {
-    if spots.is_empty() {
-        return Ok(Vec::new());
-    }
-    // A new town founds clear of the towns already standing, their streets and premises.
-    let mut ground = (*super::held_ground::HeldGround::default().occupied(state)?).clone();
-    for town in &state.town.towns {
-        for (i, street) in town.streets().iter().enumerate() {
-            ground.take_street(street, FIRST_STREET + i as u32);
-        }
-    }
-    let seats: Vec<_> = spots.iter().map(|(seat, _)| seat.clone()).collect();
-    let context = super::founding_site::Context::new(state, &seats)?;
-    let mut towns = Vec::new();
-    for (index, (seat, settings)) in spots.into_iter().enumerate() {
-        let found = |settings: &Settings| {
-            settle(
-                state,
-                seat.clone(),
-                &ground,
-                settings,
-                Survey {
-                    context: &context,
-                    seat: index,
-                    // A city map's towns build its blocks and thoroughfares.
-                    fidelity: state.town.fidelity,
-                },
-                Founding::HotSpot,
-            )
-        };
-        let own = Settings {
-            template: None,
-            ..settings
-        };
-        let town = match found(&settings)? {
-            Some(town) => Some(town),
-            None if settings.template.is_some() => found(&own)?,
-            None => None,
-        };
-        // The next spot founds clear of this town's streets and holdings.
-        if let Some(town) = &town {
-            for (i, street) in town.streets().iter().enumerate() {
-                ground.take_street(street, FIRST_STREET + i as u32);
-            }
-            let outlines: Vec<_> = town.holdings().iter().map(|h| h.outline.clone()).collect();
-            ground.mark_shapes(&outlines, crate::town::ground::PLOT, state.spatial.as_ref())?;
-        }
-        towns.extend(town);
-    }
-    Ok(towns)
-}
 /// The founding survey of the seats being settled, which of them this one is, and the
 /// fidelity its town is surveyed and founded at.
 #[derive(Clone, Copy)]
@@ -443,7 +377,6 @@ fn settle(
     ground: &crate::town::ground::Ground,
     settings: &Settings,
     survey: Survey<'_, '_>,
-    founding: Founding,
 ) -> io::Result<Option<Town>> {
     let fidelity = survey.fidelity;
     let scale = TownScale::new(fidelity);
@@ -451,15 +384,7 @@ fn settle(
     let draw =
         crate::field::poi::true_sizes::roll_bytes(&seat.key.to_bytes(), settings.seed as u64);
     let district = district_seat(state, &seat)?;
-    // A hot spot's town stands at the spot: only its nearest founding sites are tried.
-    let tries = match founding {
-        Founding::Settlement => usize::MAX,
-        Founding::HotSpot => SPOT_SITES,
-    };
-    for centre in habitable_sites(state, ground, &seat, scale)
-        .into_iter()
-        .take(tries)
-    {
+    for centre in habitable_sites(state, ground, &seat, scale) {
         let mut candidate = seat.clone();
         candidate.centre = centre;
         for arm in &mut candidate.arms {
@@ -513,9 +438,8 @@ fn settle(
                 if let Some(work) = settings.major_work {
                     crate::town::major_works::commission_requested(&mut town, settings.seed, work)?;
                 }
-                // A district's works were placed on its city map and arrive inherited; a hot
-                // spot's are the city's own.
-                if district.is_none() && founding == Founding::Settlement {
+                // A district inherits the works its city already commissioned.
+                if district.is_none() {
                     crate::town::major_works::commission(&mut town, settings.seed, &inherited);
                 }
                 return Ok(Some(town));
@@ -816,7 +740,6 @@ impl Operations {
                                 seat: i,
                                 fidelity: Fidelity::Street,
                             },
-                            Founding::Settlement,
                         )?
                         .ok_or_else(|| no_site(&name, settings))
                     })
@@ -1078,12 +1001,12 @@ impl Operations {
                                 Mechanism::Exposure(run) => run(town, &exposure)?,
                                 Mechanism::Clearance(run) => removals.extend(run(town, &exposure)?),
                             }
-                            if step.id == "town.maintenance" {
+                            if step.id == "town.premises-upkeep" {
                                 town.resolve_approaches(&walking_ground, spatial.as_ref())?;
                                 town.round += 1;
                             }
                         }
-                        if step.id == "town.maintenance" {
+                        if step.id == "town.premises-upkeep" {
                             let material_uses = super::providers::material_uses(state);
                             state.work_town_material(&material_uses)?;
                         }

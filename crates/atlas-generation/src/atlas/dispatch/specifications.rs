@@ -51,11 +51,12 @@ impl Catalogue {
         result
             .products
             .push(registration::ecology::response_product());
-        result.extend(registration::people::specifications())?;
+        result.extend(registration::people::specifications(regional))?;
         result.extend(registration::magic::specifications(systems))?;
         result.extend(registration::landmarks::specifications())?;
         result.insert(relief::specification())?;
         result.extend(local_magic::specifications()?)?;
+        result.extend(crate::processes::town::urban::registration::specifications())?;
         if regional {
             result.extend(registration::regional::specifications(&native)?)?;
             result.extend(registration::town::specifications()?)?;
@@ -66,6 +67,7 @@ impl Catalogue {
         Ok(result)
     }
     pub fn insert(&mut self, specification: Specification) -> io::Result<()> {
+        specification.validate_strategies()?;
         let key = (
             specification.contract.id.clone(),
             specification.contract.version.clone(),

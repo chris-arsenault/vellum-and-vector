@@ -133,6 +133,7 @@ impl BrowserJob {
                 private: &self.private,
             },
             &self.maps,
+            &self.assets,
             &self.records.source_features(),
             &spatial,
         )

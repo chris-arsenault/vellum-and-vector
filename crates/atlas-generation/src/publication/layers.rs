@@ -277,6 +277,16 @@ const UNDERGROUND: &[&str] = &["caves", "caveHexes", "caveWalls"];
 pub fn underground(layer_id: &str) -> bool {
     UNDERGROUND.contains(&layer_id.strip_prefix("vector:").unwrap_or(layer_id))
 }
+
+/// City squares and commons occupy the plots layer on the City's regional storage profile.
+// hpc-exempt: GIS layer declarations are keyed by catalogue identity.
+pub fn city_plots(layers: &mut BTreeMap<String, Layer>) {
+    if let Some(plots) = layers.get_mut("plots") {
+        if !plots.profiles.contains(&Profile::Region) {
+            plots.profiles.push(Profile::Region);
+        }
+    }
+}
 // hpc-exempt: the map layer catalogue is sparse metadata keyed by layer identity.
 pub fn builtin() -> BTreeMap<String, Layer> {
     VOCABULARY

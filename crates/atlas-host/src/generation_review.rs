@@ -78,6 +78,7 @@ impl PreparedRequest {
                 standalone_magic: !sources.is_empty(),
             },
             presentation::Context {
+                site: frame.frame().process_site()?,
                 inherited: frame.has_parent,
                 completed: request.geography.has_generated_geography(),
                 profile: frame.profile,

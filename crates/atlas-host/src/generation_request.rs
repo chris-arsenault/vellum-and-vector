@@ -56,7 +56,7 @@ pub struct MapFrame {
     pub boundary_mode: f64,
 }
 impl MapFrame {
-    fn frame(&self) -> Frame<'_> {
+    pub(crate) fn frame(&self) -> Frame<'_> {
         Frame {
             scope: &self.scope,
             chart: &self.chart,

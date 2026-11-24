@@ -24,7 +24,7 @@ pub struct Channel {
     pub material: bool,
 }
 impl Channel {
-    fn new(
+    pub(crate) fn new(
         name: impl Into<String>,
         unit: &'static str,
         owners: &'static [&'static str],

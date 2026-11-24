@@ -1,5 +1,9 @@
 // Arconis: docs/architecture/subsystems.arconis#item=c_season — answers crop and herd yields from what the land feeds.
-use super::{facts::LEAST_WILD, travel::length};
+use super::{
+    contract::{Dispatch, MapType, Rule, Timing},
+    facts::LEAST_WILD,
+    travel::length,
+};
 use crate::{
     answers::{QuestionBook, Responder, ResponseKind},
     execution::{ExecutionResult, Query, QueryDependency},
@@ -10,6 +14,20 @@ use crate::{
     water::{column::Store, soil},
 };
 use std::io;
+
+#[derive(Clone, Copy)]
+enum HarvestBasis {
+    CurrentYield,
+    SurveyedFarms,
+}
+
+const SUPPORT: Dispatch<HarvestBasis> = Dispatch {
+    id: "support",
+    rules: &[
+        Rule::new(MapType::WORLD, Some(HarvestBasis::CurrentYield)),
+        Rule::new(MapType::REFINED, Some(HarvestBasis::SurveyedFarms)),
+    ],
+};
 
 /// Residents fed per cultivated square kilometre. Intensive farming needs
 /// the soil, water, season and workable terrain to coincide on the same land.
@@ -25,6 +43,32 @@ pub(super) fn cultivated_yield(suitability: f64) -> f64 {
 fn worked_farmland(farmland: f64, residents_per_km2: f64) -> f64 {
     const FARM_KM2_PER_RESIDENT: f64 = 0.02;
     farmland.min(residents_per_km2 * FARM_KM2_PER_RESIDENT)
+}
+
+/// Present agricultural evidence from the captured parent. Land that stays farmed can
+/// realize its surveyed harvest where the local terrain and season can support it.
+pub(in crate::field) struct Harvest {
+    pub food: ReadBand<f64>,
+    pub farmland: ReadBand<f64>,
+    pub residents: ReadBand<f64>,
+}
+
+fn harvest(field: &Field, cell: usize, farmed: f64, crop: f64) -> io::Result<f64> {
+    let mut food = farmed * crop;
+    let basis = SUPPORT.select(field.process_site(), Timing::Present)?;
+    if let (Some(HarvestBasis::SurveyedFarms), Some(survey)) = (basis, &field.harvest) {
+        let before = worked_farmland(survey.farmland.get(cell)?, survey.residents.get(cell)?);
+        let existing = before.min(farmed);
+        if existing > 0.0 {
+            let wet = crop_factors(field, cell, 1.0)?;
+            let potential = cultivated_yield(wet.suitability()) * wet.quickened;
+            let surveyed = survey.food.get(cell)? / before;
+            // Coarse support includes other livelihoods. This estimate uses it only on
+            // still-worked farmland and never beyond what these crops could yield.
+            food += existing * (surveyed.min(potential) - crop).max(0.0);
+        }
+    }
+    Ok(food)
 }
 
 fn read(field: &Field, name: S, cell: usize) -> io::Result<f64> {
@@ -57,7 +101,7 @@ pub fn ways_of_living(field: &Field, cell: usize, yields: [f64; 4]) -> io::Resul
     );
     let open = wild_share(field, cell)?;
     Ok([
-        farmed * crop.max(0.0),
+        harvest(field, cell, farmed, crop.max(0.0))?,
         human(field, LayerId::Pasture, cell)? * herd.max(0.0),
         open * catch.max(0.0),
         open * (wild - catch).max(0.0),
@@ -290,7 +334,7 @@ pub fn respond(
         },
     )?;
     book.respond(
-        "support",
+        SUPPORT.id,
         Responder {
             by: "the land as it is used".into(),
             queries: vec![],
@@ -308,7 +352,7 @@ pub fn respond(
                     .view(HumanField::Layer(LayerId::BuiltUp))
                     .get(cell)?;
                 let worked = worked_farmland(crop, field.people.people(cell)?);
-                Ok(worked * answers.ask("cropYield")?
+                Ok(harvest(field, cell, worked, answers.ask("cropYield")?)?
                     + herd * answers.ask("herdYield")?
                     + (1.0 - crop - herd - built).max(0.0) * answers.ask("wildYield")?)
             })),

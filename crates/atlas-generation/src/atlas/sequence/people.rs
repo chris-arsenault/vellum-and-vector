@@ -1,9 +1,21 @@
 use super::{physical, Catalogue, Context, Epoch, Sequence, Values};
+use crate::field::people::facts::passes_for;
 use crate::{
     atlas::{context::HumanEra, features::operations},
     sequence::{Epoch as LoopEpoch, SequenceNode},
 };
 use std::io;
+
+pub(super) const HISTORICAL_PASS: &[&str] = &[
+    "human.land-settle",
+    "human.land.trade",
+    "human.land.feed",
+    "human.land.grow",
+    "human.land.gather",
+    "human.land.harden",
+    "settlement.built-maintenance",
+    "human.layers.dwell",
+];
 
 // Arconis: docs/architecture/subsystems.arconis#item=eras — composes the human eras loop, settling people era by era.
 pub fn people(context: &Context<'_>, epochs: &[Epoch], eras: &[HumanEra]) -> io::Result<Sequence> {
@@ -32,7 +44,20 @@ pub(super) fn era_loop(
         for era in eras {
             era.validate().map_err(io::Error::other)?;
         }
-        let mut body = operations(&["human.place-offers", "human.land-era"]);
+        let mut body = operations(&["human.place-offers", "human.land.meet"]);
+        let pass_count = eras.iter().map(|era| passes_for(era.years)).max().unwrap();
+        for pass in 0..pass_count {
+            for mut node in operations(HISTORICAL_PASS) {
+                if let SequenceNode::Process { id, operation } = &mut node {
+                    *id = format!("pass-{pass}/{id}");
+                    operation.when = Some(crate::recipe::Condition {
+                        variable: format!("peoplePass{pass}"),
+                        equals: true.into(),
+                    });
+                }
+                body.push(node);
+            }
+        }
         if context.enabled("ecology.living") {
             // The living land answers the era's clearing, abandonment and hunting.
             body.extend(operations(&["ecology.human-time"]));
@@ -55,10 +80,17 @@ pub(super) fn era_loop(
                     id: era.id.clone(),
                     duration: era.years,
                     parent_epoch: parent(era),
-                    variables: Values::from_iter([
-                        ("mobility".into(), era.mobility.into()),
-                        ("politicalCapacity".into(), era.political_capacity.into()),
-                    ]),
+                    variables: Values::from_iter(
+                        [
+                            ("mobility".into(), era.mobility.into()),
+                            ("politicalCapacity".into(), era.political_capacity.into()),
+                        ]
+                        .into_iter()
+                        .chain(
+                            (0..passes_for(era.years))
+                                .map(|pass| (format!("peoplePass{pass}"), true.into())),
+                        ),
+                    ),
                 })
                 .collect(),
         });

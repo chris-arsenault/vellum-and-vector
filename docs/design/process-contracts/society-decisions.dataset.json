@@ -1,0 +1,142 @@
+{
+  "schema": {
+    "keys": [
+      "Existing catalog ID"
+    ],
+    "fields": {
+      "Existing catalog ID": {
+        "type": "string"
+      },
+      "Disposition": {
+        "type": "string"
+      },
+      "Canonical responsibility": {
+        "type": "string"
+      },
+      "World: real historical evolution": {
+        "type": "string"
+      },
+      "Region: emergent spatial refinement": {
+        "type": "string"
+      },
+      "Reason / decisions": {
+        "type": "string"
+      }
+    }
+  },
+  "items": [
+    {
+      "Existing catalog ID": "human.land-inherit",
+      "Disposition": "Demote / retain coordination only",
+      "Canonical responsibility": "Non-semantic society startup/coordinator; generic sampler remains separate",
+      "World: real historical evolution": "No historical meaning; sampled fields are only initial state",
+      "Region: emergent spatial refinement": "Coordinate coupled society refinements; no combined Population/BuiltUp/Standing weighting",
+      "Reason / decisions": "Do not give one-shot apportionment causal ownership; legacy row kept until migration"
+    },
+    {
+      "Existing catalog ID": "human.city.growth",
+      "Disposition": "Fold / remove standalone process",
+      "Canonical responsibility": "human.land.gather — City-scale movement strategy",
+      "World: real historical evolution": "Historical migration belongs to land.gather",
+      "Region: emergent spatial refinement": "Street, edge and district access are refinement strategies of gather",
+      "Reason / decisions": "No separate 10-year city migration; Region must already have urban concentration"
+    },
+    {
+      "Existing catalog ID": "town.maintenance",
+      "Disposition": "Promote / rename across scales",
+      "Canonical responsibility": "settlement.built-maintenance — retained built-care and decay",
+      "World: real historical evolution": "Actual wealth-funded repair, neglect, weather, ecological or magical damage",
+      "Region: emergent spatial refinement": "Differentiated current usable/ruined standing stock without elapsed years",
+      "Reason / decisions": "One process across World/Region/City/Street; no duplicate maintenance simulator"
+    },
+    {
+      "Existing catalog ID": "human.land.gather",
+      "Disposition": "Keep / strengthen",
+      "Canonical responsibility": "Movement, concentration and population spatial organization",
+      "World: real historical evolution": "Movement/migration with elapsed time, changed census and worn routes",
+      "Region: emergent spatial refinement": "Repeated attraction↔capacity↔food↔trade feedback differentiates one coarse population cell into several kinds of places",
+      "Reason / decisions": "No imposed World point, no instant migration years, parent cell borders not barriers"
+    },
+    {
+      "Existing catalog ID": "human.land.trade",
+      "Disposition": "Keep / strengthen",
+      "Canonical responsibility": "Goods, markets and commercial connectivity",
+      "World: real historical evolution": "Evolve markets, routes, capital and traded goods with real history",
+      "Region: emergent spatial refinement": "Competing trade centers and corridors create construction investment and settlement pull",
+      "Reason / decisions": "Not a static 'market intensity' field or canned city-center feature"
+    },
+    {
+      "Existing catalog ID": "human.land.feed",
+      "Disposition": "Keep / strengthen",
+      "Canonical responsibility": "Crops, herds, food production and provisioning",
+      "World: real historical evolution": "Agricultural change, food production and historic famine through time",
+      "Region: emergent spatial refinement": "Differentiate rural land uses and incoming food access without reliving harvests or starvation",
+      "Reason / decisions": "Dense cities can be supplied beyond the child footprint"
+    },
+    {
+      "Existing catalog ID": "human.land.harden",
+      "Disposition": "Keep / fundamentally revise",
+      "Canonical responsibility": "Construction, built coverage, intensification and reuse",
+      "World: real historical evolution": "Funded development, maintenance decisions and abandonment of built land",
+      "Region: emergent spatial refinement": "BuiltUp and Standing rearranged by pressure, trade, land competition and exposure into farmsteads–dense urban form",
+      "Reason / decisions": "No fixed population→BuiltUp, no required physical building footprints"
+    },
+    {
+      "Existing catalog ID": "human.land.grow",
+      "Disposition": "Keep / elapsed only",
+      "Canonical responsibility": "Demographic births/deaths and viability",
+      "World: real historical evolution": "Actual population growth, disease, sustained famine or mortality over years",
+      "Region: emergent spatial refinement": "Pressure/viability provider or no-op; never births/deaths to resolve finer cells",
+      "Reason / decisions": "Do not use food or local capacity as instant population cap"
+    },
+    {
+      "Existing catalog ID": "human.land.meet",
+      "Disposition": "Keep / clarify damage",
+      "Canonical responsibility": "Physical/environmental effects on human-built stocks",
+      "World: real historical evolution": "New storm, flood, impact and magical changes cause genuine damage",
+      "Region: emergent spatial refinement": "Fine terrain differentiates present exposure and protection, without replaying a disaster",
+      "Reason / decisions": "Provides causes to built condition and displacement via existing writer"
+    },
+    {
+      "Existing catalog ID": "human.places.record",
+      "Disposition": "Keep / derived identity",
+      "Canonical responsibility": "Interpret emergent settlement and retain identity/history",
+      "World: real historical evolution": "Recognizes settlement formation during real eras",
+      "Region: emergent spatial refinement": "Recognize developed areas AFTER coupled numeric differentiation, match names and rough census",
+      "Reason / decisions": "Do not use invented World-level point center as refinement control"
+    },
+    {
+      "Existing catalog ID": "human.city.quarters",
+      "Disposition": "Keep / defer details",
+      "Canonical responsibility": "City/Street society↔town coupling",
+      "World: real historical evolution": "Not an independent World demographic process",
+      "Region: emergent spatial refinement": "Later block/route realization feeds shared numerical stock once City/Street fidelity exists",
+      "Reason / decisions": "No City-footprint prerequisite for Region urban differentiation"
+    },
+    {
+      "Existing catalog ID": "town.land-competition",
+      "Disposition": "Keep local / constrain scope",
+      "Canonical responsibility": "City/Street property and parcel competition",
+      "World: real historical evolution": "Broader numeric land scarcity already influences construction and settlement",
+      "Region: emergent spatial refinement": "Region capacity/crowding competition under land.harden; no parcels",
+      "Reason / decisions": "Do not multiply physical processes to invent regional land plots"
+    },
+    {
+      "Existing catalog ID": "town.construction",
+      "Disposition": "Keep local / defer",
+      "Canonical responsibility": "City/Street detailed structure construction",
+      "World: real historical evolution": "World/Region construction already has numerical built-land owner",
+      "Region: emergent spatial refinement": "Footprints and premises only when later requested",
+      "Reason / decisions": "No second numeric BuiltUp/Standing simulation"
+    },
+    {
+      "Existing catalog ID": "human.land-era",
+      "Disposition": "Keep coordinator / history only",
+      "Canonical responsibility": "Historical social-era scheduler",
+      "World: real historical evolution": "Runs true elapsed societal history",
+      "Region: emergent spatial refinement": "Different spatial-refinement coordinator, not fictitious elapsed years",
+      "Reason / decisions": "Eliminate 250/60/20-style pseudo social exposure from child simulation"
+    }
+  ]
+}
+

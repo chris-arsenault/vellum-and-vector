@@ -16,8 +16,8 @@ const REGIONAL_CONTEXT_FRACTION: f64 = 0.1;
 const MIN_HEXES_ACROSS: u32 = 10;
 const MAX_HEXES_ACROSS: u32 = 200;
 
-/// A child map is its selected outline. Generation also works a band of context around it,
-/// so coasts, rivers and nearby land develop across the edge; only the outline is published.
+/// The published outline includes the outskirts on a City map. Generation reads an
+/// additional band of parent context so coasts, rivers and land can develop across the edge.
 pub struct Footprint {
     pub outline: Geometry,
     pub extent: Geometry,
@@ -85,6 +85,34 @@ impl Selection<'_> {
                 extent,
             });
         }
+        let subject = if self.city.is_some() {
+            let bounds = chart
+                .compact_bounds(&subject, spatial)
+                .map_err(io::Error::other)?;
+            let city = atlas_generation::features::chart::working(
+                &subject,
+                bounds,
+                chart.cylindrical.then_some(chart.bounds.2 - chart.bounds.0),
+                spatial,
+            )
+            .map_err(io::Error::other)?;
+            let surroundings = atlas_generation::town::city::outline::surroundings(spatial, &city)?;
+            let mapped = chart
+                .geometry(&surroundings, spatial)
+                .map_err(io::Error::other)?;
+            polygonal(
+                spatial
+                    .overlay(
+                        &mapped,
+                        &as_geometry(&self.parent.footprint),
+                        Overlay::Intersection,
+                    )
+                    .map_err(io::Error::other)?,
+            )
+            .ok_or_else(|| io::Error::other("City surroundings lie outside the parent map"))?
+        } else {
+            subject
+        };
         let Bounds(w, s, e, n) = chart
             .compact_bounds(&subject, spatial)
             .map_err(io::Error::other)?;
@@ -122,16 +150,18 @@ impl Selection<'_> {
         .unwrap_or(on_domain);
         Ok(Footprint { outline, extent })
     }
-    pub(super) fn refinement_level(&self, spatial: &dyn SpatialKernel) -> io::Result<u32> {
+    pub(super) fn refinement_level(
+        &self,
+        outline: &Geometry,
+        spatial: &dyn SpatialKernel,
+    ) -> io::Result<u32> {
         if self.real_scale.is_some() {
             // A real-scale map leaves the regional ladder; it keeps its parent's level.
             return Ok(self.parent.region_scale.level);
         }
         if self.city.is_some() {
             // A city map refines to the level whose cells give its extent a region's count.
-            let area = spatial
-                .area(&as_geometry(&self.selection.geometry))
-                .map_err(io::Error::other)?;
+            let area = spatial.area(outline).map_err(io::Error::other)?;
             return Ok(
                 atlas_generation::atlas::resolution::Quality::level_for_extent(area)
                     .max(self.parent.region_scale.level + 1),

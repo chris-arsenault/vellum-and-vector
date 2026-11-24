@@ -23,53 +23,19 @@ its frame of hexes; one opened over a region covers that region.
 
 A city map is a regional refinement opened at a settlement (`RefinementRequest.city`) and
 reads that settlement by its captured record's identity: its centre, built radius and
-census. It covers the settlement's surroundings, two and a half times its built radius, as
-far as its parent map reaches, at the
+census. It uses the settlement's published footprint when one exists. Otherwise its edge
+follows the connected concentration of residents and built ground around the settlement,
+accounting for slope and standing water on the parent map. It opens at the
 regional level whose cells give that extent a region's triangle count. It runs the
-regional sequence with the city's own steps inside every round, after the round's people
-pass, so refinement and city development interleave:
+regional sequence. The society rounds refine population and built stock on the shared field.
+City template guidance influences household placement. Walls and commissioned works develop
+during those rounds.
 
-- **City growth** moves a share of the city's people toward where it grows, after the urban
-  cellular-automaton rules of SLEUTH: edge growth beside built land, road-influenced growth
-  along maintained ways, spreading centres, the draw of the city's prominent places and
-  major works, and resistance on steep ground. Walls rise in the same step.
-- **Hot-spot towns at city fidelity.** Where the round's refined social fields concentrate,
-  a town is founded by the ordinary town founding, under the city's template where it can
-  found, and sized by the share of the city's people round it. It develops at city
-  fidelity: the same town processes, with a plot a city block, a street a thoroughfare and
-  a holding a block's use standing for the premises it holds. Every hot-spot town runs a
-  few rounds of the ordinary town development steps, growing thoroughfares, business and
-  residential blocks and civic seats. The city's major works, as many as its population
-  band expects, are sited by their own rules in the first round and taken up by the
-  hot-spot town beside each, which builds round them.
-- **Coupling into the people layers.** After the town steps the towns' blocks and
-  thoroughfares are taken up by the people layers through the people owner: people move
-  toward blocks that house more people than live there, built ground rises to the blocks'
-  cover, and thoroughfares become maintained ways. Landmarks are the towns' places of a
-  kind the city map shows, one per kind family and town.
-
-The next round's refinement and growth start from what the towns changed. After the last round, districts gather round the strongest
-hot-spot towns, as many as the city's people call for, and part along water, walls, main
-roads and changes of character (a barrier-weighted shortest-path partition) over the built
-and walled city only.
-
-## Town fidelity
-
-Every length the town system declares is declared once, in street metres, with what it
-measures: a plot, the layout between plots, a holding's reach over its neighbours, a width,
-the ground's raster, or a distance people travel. A town carries its fidelity, and its scale
-(`town::scale::TownScale`) resolves each declared length by that fidelity's factor for the
-measure, as `MapScale` resolves a map process's measures. A fidelity is a row of factors:
-street fidelity is the unit, city fidelity sizes plots into blocks and streets into
-thoroughfares, and people walk as far at both. Major works keep their real size.
-
-## Templates at two levels
-
-A settlement template's layout rules are read in units: on a district map the plot depth,
-on a city map the template's quarter, which every template states. The same rules give
-a surveyors' ring frontages on a district map and ring roads on a city map. A large city
-chooses one template from its own site at its first growth round; its districts' towns
-take it where it can found.
+After the last round, movement connects genuine approaches and lays avenues across developed
+ground. Districts partition that ground along its routes and barriers. Construction divides
+the districts into serviced blocks and reserves public space. Movement takes up the streets
+those blocks require. The City publishes its district polygons, thoroughfares, blocks and
+reserved spaces, and retains the identity of existing districts and works.
 
 ## Walls
 
@@ -84,11 +50,8 @@ question, how many walls enclose a cell, conditions where places stand.
 
 Every place in the settlement catalogue states how it appears on a city map: shown, with its
 symbol, rough ground, the reading that raises it and the uses it seeds on a district map; or
-hidden, with the reason. Walls, gates, thoroughfares, blocks with their use, landmarks,
-districts and major works are entries of the place catalogue, which publishes them.
+hidden, with the reason. The City places prominent catalogue landmarks according to local use and site conditions.
 
 ## District maps
 
-A district opens as a real-scale map over its outline. Its town's seat is the captured
-district, with the district's people and built ground; its works arrive inherited from the
-city map.
+A district opens as a real-scale map over its outline. The Street map carries the published district, main streets, landmarks, open spaces and blocks by identity. Local lanes subdivide the blocks. Individual plots, yards and buildings follow their street frontages.

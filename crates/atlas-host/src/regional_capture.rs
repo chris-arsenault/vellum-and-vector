@@ -1,4 +1,5 @@
 //! Capture a pinned map's context once. Children own records and immutable resource aliases.
+mod city;
 mod context;
 mod fields;
 mod footprint;
@@ -210,13 +211,16 @@ impl Selection<'_> {
         }
         // owner-direction(2026-10-29): later parent changes leave children's captured inputs unchanged.
         area["map"] = json!({"sourceAreaId":parent,"sourceRevision":geography.version,
-            "sourceMap":self.parent.reference,"refinementLevel":self.refinement_level(spatial)?,"extent":region.footprint});
+            "sourceMap":self.parent.reference,"refinementLevel":self.refinement_level(&outline, spatial)?,"extent":region.footprint});
         if let Some(real) = &self.real_scale {
             area["map"]["realScale"] = serde_json::to_value(real)?;
         }
         if let Some(city) = &self.city {
             // The city map reads its settlement by the identity its captured record takes.
-            area["map"]["city"] = json!({"settlement": region.id("feature", city.settlement)});
+            area["map"]["city"] = json!(atlas_generation::features::context::CityRefinement {
+                settlement: region.id("feature", city.settlement),
+                settled_outline: Some(atlas_map::regions::as_geometry(&self.selection.geometry)),
+            });
         }
         let owners = geography
             .context()
@@ -230,9 +234,10 @@ impl Selection<'_> {
             resources: Vec::new(),
             geography: Vec::new(),
         };
+        let urban = self.city.is_some() || self.real_scale.is_some();
         let ids: BTreeMap<Id, Id> = features
             .iter()
-            .map(|feature| (feature.id, region.id("feature", feature.id)))
+            .map(|feature| (feature.id, records::capture_id(&region, feature, urban)))
             .collect();
         records::capture(&region, features, &ids, &mut result)
             .map_err(|error| io::Error::other(format!("Capturing records: {error}")))?;

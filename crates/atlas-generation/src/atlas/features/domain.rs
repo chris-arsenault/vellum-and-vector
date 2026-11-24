@@ -155,14 +155,22 @@ pub(super) fn features() -> Vec<Feature> {
         &[("present.people", "built.layout")],
     );
     built.parameters = &["townThreshold", "cityReach", "roadTraffic", "highways"];
-    built
-        .slots
-        .extend(["town.initialize", "town.develop", "town.publish"]);
+    built.slots.extend([
+        "town.initialize",
+        "town.develop",
+        "town.publish",
+        "city.routes",
+        "city.partition",
+        "city.blocks",
+        "city.publish",
+    ]);
     built.processes.extend(
         [
             "town.initialize",
             "town.cultivation",
             "real-scale.settlement",
+            "town.districts",
+            "town.urban-geography",
         ]
         .map(str::to_owned),
     );
@@ -184,7 +192,15 @@ pub(super) fn features() -> Vec<Feature> {
             ids.extend(crate::processes::town::operation_ids());
             operations(&ids)
         }
-        "town.publish" => operations(&["town.cultivation", "real-scale.settlement"]),
+        "town.publish" => operations(&[
+            "town.cultivation",
+            "real-scale.settlement",
+            "town.urban-geography",
+        ]),
+        "city.routes" => operations(&["town.movement"]),
+        "city.partition" => operations(&["town.districts"]),
+        "city.blocks" => operations(&["town.construction"]),
+        "city.publish" => operations(&["town.urban-geography"]),
         "present.people" => operations(&["built.layout"]),
         _ => vec![],
     });

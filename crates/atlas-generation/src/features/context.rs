@@ -32,11 +32,14 @@ pub struct MapOwnership {
 }
 /// A city map: a regional refinement over one settlement and its surroundings, refined to
 /// the cell size the scale contract gives that extent.
-#[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CityRefinement {
     /// The settlement the city map was opened at: its captured record on the city map.
     pub settlement: Id,
+    /// The captured settlement inside the city map's wider area of land and water.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub settled_outline: Option<Geometry>,
 }
 /// A real-scale map's captured choices: its kind, hex size and the detail it was laid at.
 #[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]

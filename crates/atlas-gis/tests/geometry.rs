@@ -45,6 +45,11 @@ fn native_geometry_keeps_multipart_buffers_and_linear_referencing() {
         geometries: vec![polygon(0.0, 0.0, 2.0), polygon(1.0, 0.0, 2.0)],
     };
     assert!(spatial.buffer(&geometry, 0.5).unwrap().is_some());
+    // After the setback, this parcel has no interior at the declared precision.
+    assert!(spatial
+        .buffer(&polygon(0.0, 0.0, 8.0), -3.99999)
+        .unwrap()
+        .is_none());
     let combined = spatial
         .union_all(&[polygon(0.0, 0.0, 2.0), polygon(5.0, 5.0, 0.0001)])
         .unwrap()
