@@ -621,6 +621,12 @@ const directions: readonly OwnerDirection[] = [
     test: "crates/atlas-generation/src/town/city/outline.rs",
   },
   {
+    direction: "City processes interact across rounds by reading and writing shared numeric fields",
+    given: "2026-11-24",
+    marks: ["crates/atlas-generation/src/processes/town/urban/fields.rs"],
+    test: "crates/atlas-generation/src/atlas/regional/sequence.rs",
+  },
+  {
     direction: "cities should have 7-14 districts",
     given: "2026-11-23",
     marks: ["crates/atlas-generation/src/processes/town/urban/partition.rs"],

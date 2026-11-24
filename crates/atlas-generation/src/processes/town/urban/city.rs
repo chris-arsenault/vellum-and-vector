@@ -1,4 +1,5 @@
 use super::{
+    fields::{CityFields, RESIDENTS_PER_BUILT_KM2},
     geometry::{self, divide_by, faces, pos, xy},
     ground, Element, Urban,
 };
@@ -16,14 +17,14 @@ use std::io;
 
 // At City scale an avenue serves several neighborhoods; a block groups multiple
 // Street-scale premises. Developed ground also calls for access in employment areas.
-const AVENUE_RESIDENTS: f64 = 2_400.;
-const BLOCK_RESIDENTS: f64 = 240.;
-const RESIDENTS_PER_BUILT_KM2: f64 = 10_000.;
+const AVENUE_RESIDENTS: f64 = 1_200.;
+const BLOCK_RESIDENTS: f64 = 32.;
 
 /// Estimate residents and developed ground across this face. Resample each child so a
 /// dense neighborhood in one corner does not set the spacing for the whole district.
 fn access_demand(
     state: &State,
+    fields: &CityFields,
     face: &Geometry,
     residents_per_face: f64,
     largest_area: f64,
@@ -49,9 +50,13 @@ fn access_demand(
     }
     let mut weight = 0.;
     let mut moment = [0.; 2];
+    let f = state.field();
+    let land = f.people().view(HumanField::Layer(LayerId::BuiltUp));
     for &point in &points {
-        let (people, built, _) = ground(state, point)?;
-        let load = (people.max(0.) + built.max(0.) * RESIDENTS_PER_BUILT_KM2) * 0.5;
+        let Some(c) = cell_at(f.mesh(), xy(point)) else {
+            continue;
+        };
+        let load = fields.route_demand(c, f.people().people(c)?, land.get(c)?);
         let [x, y] = xy(point);
         weight += load;
         moment[0] += (x - w) * load;
@@ -336,7 +341,7 @@ pub(super) fn primary(
     urban.orientation = angle;
     for (i, ward) in initial.iter().enumerate() {
         let division = divide_by(kernel, ward, angle, 901 + i as u64, |face| {
-            access_demand(state, face, AVENUE_RESIDENTS, precinct_area)
+            access_demand(state, &urban.fields, face, AVENUE_RESIDENTS, precinct_area)
         })?;
         urban.routes.extend(
             division
@@ -387,6 +392,7 @@ pub(super) fn primary(
             urban.routes.push(route);
         }
     }
+    urban.fields.record_routes(state, &urban.routes)?;
     urban.domain = Some(domain);
     Ok(())
 }
@@ -455,9 +461,15 @@ pub(super) fn districts(
             .map_err(io::Error::other)?;
         let mut residents = 0.;
         let mut developed = 0.;
+        let mut service_load = 0.;
         for (cell, m2) in ids.into_iter().zip(areas) {
-            residents += f.people().people(cell)? * m2 / 1e6;
+            let local_people = f.people().people(cell)?;
+            residents += local_people * m2 / 1e6;
             developed += built.get(cell)? * m2 / 1e6;
+            service_load += urban.fields.access(cell)
+                * (local_people + RESIDENTS_PER_BUILT_KM2 * urban.fields.frontage(cell))
+                * m2
+                / 1e6;
         }
         let area = kernel.area(&g).map_err(io::Error::other)?;
         if area <= 0. {
@@ -474,6 +486,7 @@ pub(super) fn districts(
             area,
             residents,
             built: developed,
+            service_load,
             works,
         });
     }
@@ -539,6 +552,33 @@ pub(super) fn districts(
     }
     Ok(())
 }
+
+pub(super) fn record_activity(state: &State, urban: &mut Urban) -> io::Result<()> {
+    let zones = urban
+        .districts
+        .iter()
+        .map(|d| (&d.geometry, &d.attributes))
+        .chain(
+            urban
+                .captured
+                .iter()
+                .filter(|f| f.kind == "district")
+                .map(|f| (&f.geometry, &f.attributes)),
+        )
+        .map(|(g, a)| {
+            let value = |name| {
+                a.get(name)
+                    .and_then(serde_json::Value::as_f64)
+                    .unwrap_or_default()
+            };
+            (
+                g,
+                0.5 * (value("densityPerKm2") + RESIDENTS_PER_BUILT_KM2 * value("builtShare")),
+            )
+        });
+    urban.fields.record_districts(state, zones)
+}
+
 pub(super) fn blocks(
     state: &State,
     urban: &mut Urban,
@@ -623,7 +663,7 @@ pub(super) fn blocks(
             &Geometry::GeometryCollection { geometries },
             angle,
             43 + i as u64,
-            |face| access_demand(state, face, BLOCK_RESIDENTS, f64::INFINITY),
+            |face| access_demand(state, &urban.fields, face, BLOCK_RESIDENTS, f64::INFINITY),
         )?;
         let mut prominent = None;
         for way in division.ways {
@@ -666,7 +706,14 @@ pub(super) fn blocks(
             let market = access > 0.65 && civic < 320. && sample < 0.38;
             // Sparse tracts retain their existing ground cover away from serviced
             // frontage. A gap in development need not be a designed market or green.
-            if people < 650. && built < 0.06 && access < 0.45 && civic > 320. {
+            let Some(c) = cell_at(mesh, xy(anchor)) else {
+                continue;
+            };
+            let walking = urban.fields.access(c);
+            let activity = urban.fields.activity(c);
+            let standing_share = standing / crate::human::catalogue::FULL_STANDING_PER_BUILT_KM2;
+            let supported = people / 1200. + (built + standing_share) / 0.12;
+            if supported * (0.25 + walking + activity / (1200. + activity)) < 1. && civic > 320. {
                 continue;
             }
             let common = sample < 0.04;
@@ -706,6 +753,8 @@ pub(super) fn blocks(
                 ("density", people.into()),
                 ("standing", standing.into()),
                 ("builtShare", built.into()),
+                ("walkingAccess", walking.into()),
+                ("districtActivity", activity.into()),
                 ("orientation", angle.into()),
                 ("urbanPlan", true.into()),
             ] {
@@ -720,7 +769,7 @@ pub(super) fn blocks(
             urban.landmarks.push(place);
         }
     }
-    Ok(())
+    urban.fields.record_frontage(state, &urban.blocks)
 }
 
 /// The supported use and the catalogue's local conditions decide which city landmark

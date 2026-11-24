@@ -160,6 +160,9 @@ fn rounds(catalogue: &Catalogue, context: &Context<'_>, city: bool) -> io::Resul
         }
         if city {
             body.extend(city_round(&occurrence, round));
+            for slot in ["city.routes", "city.partition", "city.blocks"] {
+                body.extend(group(slot, &occurrence, 0.)?);
+            }
         }
         body.extend(group(
             "water.routing",
@@ -168,14 +171,7 @@ fn rounds(catalogue: &Catalogue, context: &Context<'_>, city: bool) -> io::Resul
         )?);
     }
     if city {
-        for (slot, occurrence) in [
-            ("city.routes", "primary"),
-            ("city.partition", "partition"),
-            ("city.blocks", "blocks"),
-            ("city.routes", "block-access"),
-        ] {
-            body.extend(group(slot, occurrence, 0.)?);
-        }
+        body.extend(group("city.routes", "block-access", 0.)?);
     }
     body.extend(refresh(catalogue, &context, "final")?);
     for slot in [
@@ -284,12 +280,19 @@ mod tests {
             let growth = at(&format!("{r}/human.land.gather"));
             let walls = at(&format!("{r}/refinement.city-walls"));
             assert!(growth < walls && walls < at(&format!("{r}/refinement.city-works")));
+            let order = [
+                "city.routes/town.movement",
+                "city.partition/town.districts",
+                "city.blocks/town.construction",
+            ]
+            .map(|operation| at(&format!("{r}/built.layout/{operation}")));
+            assert!(walls < order[0] && order.windows(2).all(|p| p[0] < p[1]));
         }
         let order = [
-            format!("round-{}/human.land.gather", DEVELOPMENT_EXPOSURE.len()),
-            "primary/built.layout/city.routes/town.movement".into(),
-            "partition/built.layout/city.partition/town.districts".into(),
-            "blocks/built.layout/city.blocks/town.construction".into(),
+            format!(
+                "round-{}/built.layout/city.blocks/town.construction",
+                DEVELOPMENT_EXPOSURE.len()
+            ),
             "block-access/built.layout/city.routes/town.movement".into(),
             "final/built.layout/city.publish/town.urban-geography".into(),
         ];
@@ -298,7 +301,7 @@ mod tests {
             ids.iter()
                 .filter(|id| id.ends_with("/town.districts"))
                 .count(),
-            1
+            DEVELOPMENT_EXPOSURE.len()
         );
         assert!(ids.iter().all(|id| !id.contains("hot-spot-town")));
     }

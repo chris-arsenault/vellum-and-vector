@@ -9,6 +9,7 @@ pub(super) struct Precinct {
     pub area: f64,
     pub residents: f64,
     pub built: f64,
+    pub service_load: f64,
     pub works: usize,
 }
 
@@ -81,7 +82,7 @@ pub(super) fn partition(
     // give a busy precinct more weight than the same area at the fringe.
     let mut weights: Vec<_> = precincts
         .iter()
-        .map(|p| p.area / 1000. + p.residents + p.built * 3500.)
+        .map(|p| p.area / 1000. + p.residents + p.built * 3500. + p.service_load)
         .collect();
     let mut works: Vec<_> = precincts.iter().map(|p| p.works).collect();
     for _ in count.max(1)..members.len() {
@@ -147,6 +148,7 @@ mod tests {
                     area: 10_000.,
                     residents: 300.,
                     built: 0.004,
+                    service_load: 0.,
                     works: 0,
                 }
             })

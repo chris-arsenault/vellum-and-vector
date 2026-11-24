@@ -31,10 +31,12 @@ regional sequence. The society rounds refine population and built stock on the s
 City template guidance influences household placement. Walls and commissioned works develop
 during those rounds.
 
-After the last round, movement connects genuine approaches and lays avenues across developed
-ground. Districts partition that ground along its routes and barriers. Construction divides
-the districts into serviced blocks and reserves public space. Movement takes up the streets
-those blocks require. The City publishes its district polygons, thoroughfares, blocks and
+In each City development round, movement connects approaches and lays avenues, then records
+walking access across the terrain. Districts partition the served ground and record local
+activity. Construction uses those fields with population and standing stock to place developed
+frontage and open space. Occupied frontage and district activity carry over on the lattice
+and influence where the following round lays its routes. After the last round movement takes
+up the streets serving the final blocks. The City publishes its district polygons, thoroughfares, blocks and
 reserved spaces, and retains the identity of existing districts and works.
 
 ## Walls

@@ -110,8 +110,13 @@ fn owners() -> [Registration; 3] {
         make(
             "town.movement",
             "Connect urban approaches and occupied frontages",
-            &[Product::Travel, Product::CityBlocks],
-            &[Product::Roads],
+            &[
+                Product::Travel,
+                Product::CityBlocks,
+                Product::DistrictActivity,
+                Product::OccupiedFrontage,
+            ],
+            &[Product::Roads, Product::CityAccess],
             MOVEMENT,
         ),
         make(
@@ -119,11 +124,13 @@ fn owners() -> [Registration; 3] {
             "Partition settled ground into persistent districts",
             &[
                 Product::Roads,
+                Product::CityAccess,
+                Product::OccupiedFrontage,
                 Product::SettlementRecords,
                 Product::Layer(crate::human::catalogue::LayerId::Population),
                 Product::Layer(crate::human::catalogue::LayerId::BuiltUp),
             ],
-            &[Product::Districts],
+            &[Product::Districts, Product::DistrictActivity],
             DISTRICTS,
         ),
         make(
@@ -132,10 +139,17 @@ fn owners() -> [Registration; 3] {
             &[
                 Product::Roads,
                 Product::Districts,
+                Product::DistrictActivity,
+                Product::CityAccess,
                 Product::Layer(crate::human::catalogue::LayerId::BuiltUp),
                 Product::Layer(crate::human::catalogue::LayerId::Standing),
             ],
-            &[Product::CityBlocks, Product::Premises, Product::OpenSpace],
+            &[
+                Product::CityBlocks,
+                Product::Premises,
+                Product::OpenSpace,
+                Product::OccupiedFrontage,
+            ],
             BUILD,
         ),
     ]
@@ -174,10 +188,20 @@ pub fn register(registry: &mut Registry, operations: Option<&Operations>) -> io:
                     return Ok(());
                 };
                 let mut urban = std::mem::take(&mut region.city.urban);
+                let round = region.round;
                 let result = (|| -> io::Result<()> {
-                    if matches!(input.algorithm, Task::Primary) && urban.domain.is_some() {
-                        urban.routes.append(&mut urban.proposed_access);
-                        return Ok(());
+                    if matches!(input.algorithm, Task::Primary) {
+                        if urban.layout_round == Some(round) {
+                            urban.routes.append(&mut urban.proposed_access);
+                            return Ok(());
+                        }
+                        // Start a fresh candidate layout on this round's geography.
+                        // The numerical fields carry the previous layout's effects.
+                        urban = super::Urban {
+                            fields: std::mem::take(&mut urban.fields),
+                            layout_round: Some(round),
+                            ..Default::default()
+                        };
                     }
                     let Some(domain) = input.initial.bind(|source| match source {
                         Origin::Developed => city::envelope(state),
@@ -192,6 +216,7 @@ pub fn register(registry: &mut Registry, operations: Option<&Operations>) -> io:
                         )),
                     })?
                     else {
+                        urban.fields = Default::default();
                         return Ok(());
                     };
                     let boundary = input
@@ -226,7 +251,10 @@ pub fn register(registry: &mut Registry, operations: Option<&Operations>) -> io:
                         .unwrap_or_default();
                     match input.algorithm {
                         Task::Primary => city::primary(state, &mut urban, domain, boundary),
-                        Task::Districts => city::districts(state, &mut urban, &domain, boundary),
+                        Task::Districts => {
+                            city::districts(state, &mut urban, &domain, boundary)?;
+                            city::record_activity(state, &mut urban)
+                        }
                         Task::Blocks => city::blocks(state, &mut urban, &domain, &boundary),
                         Task::Circulation => street::circulation(
                             state,

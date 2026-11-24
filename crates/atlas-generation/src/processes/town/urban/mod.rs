@@ -1,5 +1,6 @@
 //! Permanent urban geometry at City scale and its local realization on Street maps.
 mod city;
+mod fields;
 pub mod geometry;
 mod partition;
 pub mod registration;
@@ -45,6 +46,10 @@ impl Element {
 }
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Urban {
+    #[serde(default)]
+    fields: fields::CityFields,
+    #[serde(default)]
+    layout_round: Option<usize>,
     domain: Option<Geometry>,
     routes: Vec<Element>,
     proposed_access: Vec<Element>,
