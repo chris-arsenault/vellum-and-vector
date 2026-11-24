@@ -27,6 +27,7 @@ pub(super) fn routes(
     frame: &Geometry,
     approaches: Vec<Feature>,
 ) -> io::Result<()> {
+    super::places::destinations(state, u)?;
     let f = state.field();
     let mesh = f.mesh();
     let policy = policy(state)?;
@@ -86,6 +87,31 @@ pub(super) fn routes(
         .map(|s| (s.cell, s.name.clone()))
         .collect();
     stops.extend(u.programs.iter().map(|p| (p.cell, p.name.clone())));
+    stops.extend(u.interior.iter().map(|(c, p)| (*c, p.name.clone())));
+    let positions: Vec<_> = points.iter().copied().map(pos).collect();
+    let mut green = vec![false; n];
+    for park in &u.parks {
+        let covered = state
+            .spatial
+            .covers_points(&park.geometry, &positions)
+            .map_err(io::Error::other)?;
+        let entrance = (0..n)
+            .filter(|&c| {
+                !covered[c]
+                    && !claims[c].reserved
+                    && (0..3).any(|edge| mesh.neighbor(c, edge).is_some_and(|b| covered[b]))
+            })
+            .max_by(|&a, &b| {
+                let access = |c: usize| u.fields.access[c] + claims[c].home + claims[c].work;
+                access(a).total_cmp(&access(b))
+            });
+        if let Some(c) = entrance {
+            stops.push((c, park.name.clone()));
+        }
+        for (held, on) in green.iter_mut().zip(covered) {
+            *held |= on;
+        }
+    }
     if let Some((a, b, name)) = policy.connector() {
         for role in [a, b] {
             if let Some(c) = policy.site.point(role).and_then(|p| cell_at(mesh, p)) {
@@ -118,15 +144,10 @@ pub(super) fn routes(
     let mut effort = Vec::with_capacity(n);
     for c in 0..n {
         let x = claims[c];
-        use super::programs::Role;
-        let role = super::programs::at(u, c).map(|p| p.role);
-        let prior = u.fields.stencil[c];
-        let access_cost = match role {
-            Some(Role::Estates | Role::Fortified) => 1. + 0.9 * prior,
-            Some(Role::Exchange | Role::Workshops) => 1. / (1. + 0.95 * prior),
-            _ => 1.,
-        };
-        effort.push(if !habitable(f, c)? {
+        let demand =
+            super::programs::at(u, c).map_or(0., |p| p.demands_at(position(mesh, c)).access);
+        let access_cost = (-0.45 * demand * u.fields.stencil[c]).exp();
+        effort.push(if !habitable(f, c)? || green[c] && !network[c] {
             f64::INFINITY
         } else {
             access_cost
@@ -273,7 +294,7 @@ pub(super) fn routes(
         &mut cost,
         f64::INFINITY,
         |_, _| Ok(()),
-        |a, b, e| Ok(mesh.edge_length(a, e) * (effort[a] + effort[b]) * 0.5 * crossing(a, b)),
+        |a, b, e| Ok(mesh.edge_length(a, e) * (1. + slope.get(b)?.max(0.) * 4.) * crossing(a, b)),
     )?;
     u.fields.access = (0..n)
         .map(|c| Ok(1. / (1. + (cost.get(c)? / 400.).powi(2))))

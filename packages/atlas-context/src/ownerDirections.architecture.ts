@@ -647,9 +647,9 @@ const directions: readonly OwnerDirection[] = [
     test: "crates/atlas-generation/src/atlas/regional/sequence.rs",
   },
   {
-    direction: "cities should have 7-14 districts",
-    given: "2026-11-23",
-    marks: ["crates/atlas-generation/src/processes/town/urban/partition.rs"],
+    direction: "geography and social processes determine district count and districts cover all districtable ground",
+    given: "2026-11-24",
+    marks: ["crates/atlas-generation/src/processes/town/urban/programs.rs"],
     test: "crates/atlas-generation/src/processes/town/urban/partition.rs",
   },
   {

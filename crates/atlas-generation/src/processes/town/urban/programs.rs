@@ -1,14 +1,13 @@
 //! Districts compete for sites before investment, movement and construction resolve their geography.
 use super::{
     fields::{neighborhood, policy, position},
-    geometry::{pos, xy},
-    partition::target,
+    geometry::pos,
     Urban,
 };
 use crate::{
     atlas::state::State,
     features::Feature,
-    field::{people::work::habitable, refinement::courses::cell_at},
+    field::people::work::habitable,
     human::{
         catalogue::{LayerId, FULL_STANDING_PER_BUILT_KM2},
         HumanField,
@@ -18,28 +17,38 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::io;
 
-pub(super) use crate::town::templates::district::Role;
+use crate::town::templates::district::{Category, Demands, Evidence, Trope, CATALOG};
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(super) struct Program {
-    pub role: Role,
+    pub economic: Trope,
+    pub social: Trope,
+    pub traits: Vec<Trope>,
+    pub evidence: serde_json::Value,
+    pub demands: Demands,
+    #[serde(default)]
+    pub sites: Vec<(Trope, [f64; 2])>,
     pub cell: usize,
     pub name: String,
     pub reach: f64,
     pub strength: f64,
+}
+impl Program {
+    pub fn demands_at(&self, point: [f64; 2]) -> Demands {
+        let mut demand = self.demands;
+        for &(kind, site) in &self.sites {
+            let distance = (point[0] - site[0]).hypot(point[1] - site[1]);
+            let influence = (1. - distance / (self.reach * 0.5)).max(0.);
+            demand.add_site(kind, influence);
+        }
+        demand
+    }
 }
 pub(super) fn at(urban: &Urban, cell: usize) -> Option<&Program> {
     urban
         .fields
         .program
         .get(cell)
-        .and_then(|&index| urban.programs.get(index as usize))
-}
-#[derive(Clone)]
-struct Offer {
-    role: Role,
-    cell: usize,
-    quality: f64,
-    name: Option<String>,
+        .and_then(|&index| urban.programs.get(index))
 }
 
 pub(super) fn compete(state: &State, u: &mut Urban, sponsors: Vec<Feature>) -> io::Result<()> {
@@ -62,44 +71,7 @@ pub(super) fn compete(state: &State, u: &mut Urban, sponsors: Vec<Feature>) -> i
             .collect();
     }
     if u.programs.is_empty() {
-        let census = crate::atlas::regional::city::settlement(state)?
-            .and_then(|s| s.people)
-            .unwrap_or(0.);
-        let count = target(census);
-        let area = state
-            .spatial
-            .area(state.scope.settled_outline())
-            .map_err(io::Error::other)?;
-        let reach = (area / count as f64).sqrt().max(mesh.spacing());
-        let offers = offers(state, u, template, sponsors, reach)?;
-        // A supported use can repeat where it has a separate constituency and site.
-        for _ in 0..count {
-            let mut best = None;
-            let mut high = 0.;
-            for offer in &offers {
-                let mut peers = 0;
-                let mut near: f64 = 2.;
-                for program in &u.programs {
-                    if program.role == offer.role {
-                        peers += 1;
-                    }
-                    near = near.min(mesh.physical_distance(program.cell, offer.cell) / reach);
-                }
-                let score = offer.quality * near.min(1.6).powi(2) / (1. + peers as f64 * 0.8);
-                if score > high {
-                    best = Some(offer);
-                    high = score;
-                }
-            }
-            let Some(best) = best else { break };
-            u.programs.push(Program {
-                role: best.role,
-                cell: best.cell,
-                name: best.name.clone().unwrap_or_else(|| best.role.name().into()),
-                reach,
-                strength: 1.,
-            });
-        }
+        u.programs = found(state, u, template, sponsors)?;
     }
     for program in &mut u.programs {
         if let Some(claim) = u.fields.claims.get(program.cell) {
@@ -134,101 +106,234 @@ pub(super) fn compete(state: &State, u: &mut Urban, sponsors: Vec<Feature>) -> i
     );
     Ok(())
 }
-fn offers(
+fn found(
     state: &State,
     u: &Urban,
     template: &Selection,
-    sponsors: Vec<Feature>,
-    reach: f64,
-) -> io::Result<Vec<Offer>> {
+    mut sources: Vec<Feature>,
+) -> io::Result<Vec<Program>> {
     let f = state.field();
     let mesh = f.mesh();
-    let built = f.people().view(HumanField::Layer(LayerId::BuiltUp));
-    let standing = f.people().view(HumanField::Layer(LayerId::Standing));
+    let band = |id| f.people().view(HumanField::Layer(id));
+    let built = band(LayerId::BuiltUp);
+    let capital = band(LayerId::Standing);
+    let farm = band(LayerId::Farmland);
     let ways = f.people().view(HumanField::KeptLine);
-    let mut choices = Vec::new();
-    for c in 0..mesh.len() {
-        if u.fields.stencil[c] < 0.65 || !habitable(f, c)? {
-            continue;
+    let points: Vec<_> = (0..mesh.len()).map(|c| position(mesh, c)).collect();
+    let mut support = vec![0.; mesh.len()];
+    let mut residents = 0.;
+    let mut assets = 0.;
+    for (c, v) in support.iter_mut().enumerate() {
+        let p = f.people().people(c)?;
+        let b = built.get(c)?;
+        if u.fields.stencil[c] > 0.5 && habitable(f, c)? && p > 0. && b > 0. {
+            residents += p * mesh.area(c);
+            assets += capital.get(c)? * mesh.area(c);
+            *v = u.fields.stencil[c]
+                * (p.ln_1p() + 2. * b.sqrt() + ways.get(c)?.sqrt())
+                * template.city_affinity(points[c]).sqrt();
         }
-        let p = position(mesh, c);
-        let people = f.people().people(c)?;
-        let stock = built.get(c)?;
-        if people <= 0. || stock <= 0. {
-            continue;
-        }
-        let condition = standing.get(c)? / FULL_STANDING_PER_BUILT_KM2 / (0.015 + stock);
-        let crowd = people / (500. + 6500. * stock);
-        let trade = f.goods_turnover(c)?;
-        for (role, need) in [
-            (Role::Tenements, crowd / (0.45 + condition)),
-            (Role::Estates, condition / (0.25 + crowd)),
-            (Role::Workshops, stock.sqrt() * (0.5 + condition) * 2.),
-            (Role::Exchange, (trade + ways.get(c)?.sqrt()).sqrt()),
-        ] {
-            if need <= 0. {
-                continue;
+    }
+    // owner-direction(2026-11-24): geography and social processes determine district count and districts cover all districtable ground
+    let area = state
+        .spatial
+        .area(state.scope.settled_outline())
+        .map_err(io::Error::other)?;
+    let reach = (template.quarter() * (area / std::f64::consts::PI).sqrt()).sqrt() * 2.4;
+    let reach = reach.max(mesh.spacing() * 2.);
+    for retained in super::values(state, "district")? {
+        let positions: Vec<_> = points.iter().copied().map(pos).collect();
+        for (score, held) in support.iter_mut().zip(
+            state
+                .spatial
+                .covers_points(&retained.geometry, &positions)
+                .map_err(io::Error::other)?,
+        ) {
+            if held {
+                *score = 0.;
             }
-            let affinity = template.district_affinity(role, p);
-            let quality = need.min(2.5) * affinity.sqrt() * u.fields.stencil[c];
-            choices.push(Offer {
-                role,
-                cell: c,
-                quality,
-                name: None,
-            });
         }
     }
-    let mut anchored = |role, at, name: String| {
-        if let Some(c) = cell_at(mesh, at).filter(|&c| u.fields.stencil[c] > 0.5) {
-            choices.push(Offer {
-                role,
-                cell: c,
-                quality: 5.,
-                name: Some(name),
-            });
+    let centres = crate::town::city::hot_spots(&support, &points, reach, usize::MAX);
+    for feature in super::selected(state, None)? {
+        if feature_trope(&feature).is_some() && !sources.iter().any(|f| f.id == feature.id) {
+            sources.push(feature);
         }
-    };
-    for s in sponsors {
-        let p = state
-            .spatial
-            .interior_position(&s.geometry)
-            .map_err(io::Error::other)?;
-        anchored(Role::Civic, xy(p), format!("{} precinct", s.name));
     }
-    for &(work, c) in &state.regional.as_ref().unwrap().city.works {
-        anchored(
-            Role::Civic,
-            position(mesh, c as usize),
-            format!("{} precinct", work.label()),
-        );
-    }
-    if let Some(p) = template
-        .enclosed_seat()
-        .and_then(|a| template.site.point(a))
-    {
-        anchored(Role::Fortified, p, "Citadel ward".into());
-    }
-    use crate::town::{catalogue::PlaceRules, templates::FounderUse};
-    for founder in template.kernel() {
-        let Some(at) = template.site.founding_point(founder.anchor, reach) else {
-            continue;
-        };
-        if let FounderUse::Place(kind) = founder.use_ {
-            let place = kind.definition();
-            if matches!(place.activity, Activity::Trade | Activity::Production) {
-                let role = if place.activity == Activity::Trade {
-                    Role::Exchange
-                } else {
-                    Role::Workshops
-                };
-                if let Some(c) = cell_at(mesh, at) {
-                    if f.people().people(c)? > 0. && built.get(c)? > 0. {
-                        anchored(role, at, format!("{} quarter", place.label));
-                    }
+    let seed = state
+        .scope
+        .city
+        .as_ref()
+        .map_or(0, |s| s.settlement.0 as i32);
+    let mut programs = Vec::new();
+    for c in centres {
+        let point = points[c];
+        let b = built.get(c)?;
+        let location = atlas_map::regions::point(pos(point));
+        let mut facts = Vec::new();
+        let mut sites = Vec::new();
+        for source in &sources {
+            if let Some(id) = feature_trope(source) {
+                if state
+                    .spatial
+                    .distance(&location, &source.geometry)
+                    .map_err(io::Error::other)?
+                    < reach * 0.65
+                {
+                    let [_, nearest] = state
+                        .spatial
+                        .nearest_points(&location, &source.geometry)
+                        .map_err(io::Error::other)?;
+                    sites.push((id, super::geometry::xy(nearest)));
+                    facts.push((id, source.id.to_string()));
                 }
             }
         }
+        let near = |at: [f64; 2]| (at[0] - point[0]).hypot(at[1] - point[1]) < reach;
+        let route = ways.get(c)?.max(0.).sqrt()
+            + f64::from(template.site.approaches.iter().copied().any(near));
+        for (id, site, evidence) in [
+            (
+                Trope::Flood,
+                template.site.works.floodplain,
+                "survey:floodplain",
+            ),
+            (Trope::Veil, template.site.door, "survey:door"),
+            (
+                Trope::Greenwood,
+                template.site.grove.filter(|_| template.site.medium[3] > 0.),
+                "survey:greenwood",
+            ),
+        ] {
+            if let Some(at) = site.filter(|&at| near(at)) {
+                facts.push((id, evidence.into()));
+                sites.push((id, at));
+            }
+        }
+        let tenure = template.tenure(Activity::Household, point, template.quarter());
+        let trade = f.goods_turnover(c)?.ln_1p();
+        use crate::{
+            field::poi::values::Benefit,
+            human::identity::{Tradition, IDENTITY_SLOTS},
+        };
+        let offer = |kind| {
+            f.place_offers()
+                .map_or(Ok(0.), |offers| offers.benefit(kind, c))
+        };
+        let industry = f64::from(template.site.industry.is_some_and(near)) + offer(Benefit::Power)?;
+        let supplies = offer(Benefit::Materials)? + trade;
+        let mut contacts = 0.;
+        let mut craft = 0.;
+        for slot in 0..IDENTITY_SLOTS {
+            let group = f.people().identity(slot);
+            let people = group.people.get(c)?;
+            if group.traditions[Tradition::Craft as usize].get(c)? > 0 {
+                craft += people;
+            }
+            let known = group.traditions[Tradition::Known as usize].get(c)?;
+            if known > 0 && known != group.traditions[Tradition::Tongue as usize].get(c)? {
+                contacts += people;
+            }
+        }
+        let people = f.people().people(c)?;
+        let craft = (industry + craft / people.max(1.)) * supplies.sqrt();
+        if craft > 0. && tenure == crate::town::templates::Tenure::Common {
+            facts.push((Trope::Guild, "local:cooperative-production".into()));
+        }
+        if contacts > 0. && trade * route > 0. {
+            facts.push((
+                Trope::Outlanders,
+                "local:trade-and-language-contacts".into(),
+            ));
+        }
+        let e = Evidence {
+            wealth: capital.get(c)?
+                / people.max(1.)
+                / (assets / residents.max(1.)).max(f64::EPSILON),
+            crowd: people / (500. + b * 6500.),
+            capital: capital.get(c)? / FULL_STANDING_PER_BUILT_KM2 / (0.015 + b),
+            built: b,
+            trade,
+            food: farm.get(c)? + f64::from(template.site.cultivated) * route,
+            route,
+            tenure,
+            free: template.site.free_tenure,
+            craft,
+            sources: facts,
+        };
+        let draw = |category: Category, salt: i32| {
+            CATALOG
+                .iter()
+                .filter(|r| r.category == category)
+                .filter_map(|r| {
+                    let w = e.weight(r.id)
+                        * template
+                            .affinity(r.id.activity(), point, template.quarter())
+                            .max(0.);
+                    let roll =
+                        crate::noise::hash_unit(seed ^ salt ^ r.id as i32, point[0], point[1]);
+                    (w > 0.).then(|| (r, -roll.max(f64::MIN_POSITIVE).ln() / w))
+                })
+                .min_by(|a, b| a.1.total_cmp(&b.1))
+                .map(|(r, _)| r)
+        };
+        let (Some(econ), Some(social)) = (draw(Category::Economic, 19), draw(Category::Social, 97))
+        else {
+            continue;
+        };
+        let traits: Vec<_> = CATALOG
+            .iter()
+            .filter(|r| {
+                r.category == Category::Trait
+                    && e.weight(r.id) > 0.
+                    && sites
+                        .iter()
+                        .filter(|(kind, _)| *kind == r.id)
+                        .any(|(_, at)| {
+                            let distance = (point[0] - at[0]).hypot(point[1] - at[1]);
+                            let weight = (1. - distance / reach).max(0.) * e.weight(r.id);
+                            crate::noise::hash_unit(seed ^ r.id as i32, point[0], point[1])
+                                < 1. - (-2. * weight).exp()
+                        })
+            })
+            .map(|r| r.id)
+            .collect();
+        let mut demands = Demands::default();
+        sites.retain(|(kind, _)| traits.contains(kind));
+        for id in [econ.id, social.id] {
+            id.contribute(&mut demands);
+        }
+        let evidence = serde_json::json!({"anchor":point,"peoplePerKm2":f.people().people(c)?,"builtShare":b,"standingPerBuilt":e.capital,"relativeAssetsPerResident":e.wealth,
+            "trade":trade,"food":e.food,"route":route,"tenure":tenure,"sources":e.sources,"traitSites":sites,"makers":craft,"languageContacts":contacts,"economicType":econ.name,"socialType":social.name});
+        programs.push(Program {
+            economic: econ.id,
+            social: social.id,
+            traits,
+            demands,
+            evidence,
+            sites,
+            cell: c,
+            name: econ.name.clone(),
+            reach,
+            strength: 1.,
+        });
     }
-    Ok(choices)
+    Ok(programs)
+}
+fn feature_trope(f: &Feature) -> Option<Trope> {
+    use crate::field::poi::catalogue::{settlement_use, SettlementUse::*};
+    Some(match settlement_use(f)? {
+        Discontinuity => Trope::Veil,
+        EncroachingWood => Trope::Greenwood,
+        Burial => Trope::Ossuary,
+        Floodplain => Trope::Flood,
+        FreshWater => Trope::Spring,
+        Remains => Trope::Ruins,
+        FormerDefence => Trope::Wall,
+        Residence => Trope::Resident,
+        NestingGround => Trope::Rookery,
+        Learning => Trope::Scribe,
+        Guild => Trope::Guild,
+        Refuge => Trope::Outlanders,
+    })
 }

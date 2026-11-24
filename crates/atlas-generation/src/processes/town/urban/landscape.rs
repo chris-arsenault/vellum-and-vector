@@ -5,6 +5,7 @@ use super::{
     geometry::pos,
     Element, Urban,
 };
+use crate::spatial::Overlay;
 use crate::{
     atlas::state::State,
     features::Feature,
@@ -85,42 +86,40 @@ pub(super) fn develop(
         };
         main[c] = occupied + 1.25 * demand;
         let strength = program.map_or(0., |p| p.strength) * demand;
-        // Gardens require maintained grounds and leave substantially more land open.
-        // Workshops follow useful transport, while crowded housing draws from the
-        // ratio of households to standing fabric across the neighborhood.
-        layers[0][c] = occupied;
-        layers[1][c] = occupied * (x.crowd / (0.55 + x.investment)).min(2.);
-        layers[2][c] = occupied * (x.investment / (0.35 + x.crowd)).min(1.7) * (1. - 0.55 * access);
-        layers[3][c] = occupied * (x.work + 0.2) * access;
-        layers[4][c] = occupied * x.work / (0.55 + x.home) * (0.4 + 0.6 * access);
-        use super::programs::Role;
-        if let Some(p) = program {
-            let distance = mesh.physical_distance(c, p.cell) / p.reach;
-            let local = (1. - distance).clamp(0., 1.);
-            let privileged = occupied * strength;
-            match p.role {
-                Role::Tenements => {
-                    layers[1][c] += privileged * (2.0 + x.crowd);
-                    layers[3][c] *= 0.35;
-                }
-                Role::Estates => {
-                    layers[2][c] += privileged * (2.3 + x.investment);
-                    layers[1][c] *= 0.16;
-                    layers[3][c] *= 0.25;
-                }
-                Role::Exchange => layers[3][c] += privileged * (0.35 + 1.7 * access),
-                Role::Workshops => {
-                    layers[4][c] += privileged * (1. + x.work);
-                    layers[3][c] *= 0.30;
-                }
-                Role::Civic | Role::Fortified => {
-                    layers[0][c] *= 1. - 0.75 * local * strength.min(1.);
-                    layers[1][c] *= 0.30;
-                }
-            }
+        let demands = program
+            .map(|program| program.demands_at(position(mesh, c)))
+            .unwrap_or_default();
+        let local = program.map_or(0., |p| {
+            1. / (1. + (mesh.physical_distance(c, p.cell) / p.reach).powi(2))
+        });
+        let strength = strength * (0.4 + 0.6 * local);
+        let labour = x.work / (1. + x.home + x.work);
+        let density = x.crowd / (0.4 + x.crowd + x.investment);
+        let affluent = x.investment / (0.35 + x.investment + x.crowd);
+        let [px, py] = position(mesh, c);
+        let texture = crate::noise::unit_noise(px, py, 71, template.quarter() * 3., 2);
+        let bids = [
+            0.72 + 0.4 * (1. - demand),
+            density * (0.8 + 0.3 * texture) + strength * demands.housing * (0.45 + 0.55 * density),
+            affluent * (0.7 + 0.45 * texture)
+                + strength * demands.gardens * (0.45 + affluent * 0.6),
+            access * (labour + strength * demands.trade + 0.35),
+            labour * (0.6 + 0.6 * texture) + strength * demands.workshops * (0.5 + 0.65 * access),
+        ];
+        layers[0][c] = occupied - 0.40;
+        for kind in 1..bids.len() {
+            let other = bids
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| *i != kind)
+                .map(|(_, v)| *v)
+                .fold(0., f64::max);
+            layers[kind][c] = (occupied - 0.4).min(bids[kind] - other);
         }
     }
     let mut masks: Vec<Geometry> = reserved.iter().map(|f| f.geometry.clone()).collect();
+    let park_shapes: Vec<_> = u.parks.iter().map(|p| p.geometry.clone()).collect();
+    let park_mask = k.union_all(&park_shapes).map_err(io::Error::other)?;
     for (i, s) in u.sponsors.iter().enumerate() {
         let strength: Vec<_> = (0..n)
             .map(|c| {
@@ -133,13 +132,32 @@ pub(super) fn develop(
             .collect();
         if let Some(shape) = contour(state, &strength, 0.37)? {
             if let Some(shape) = buildable(k, shape, reserved)? {
+                let shape = if let Some(mask) = &park_mask {
+                    let Some(shape) = k
+                        .overlay(&shape, mask, Overlay::Difference)
+                        .map_err(io::Error::other)?
+                        .and_then(atlas_map::regions::polygon)
+                    else {
+                        continue;
+                    };
+                    shape
+                } else {
+                    shape
+                };
                 let mut area = ground(shape.clone(), "Civic precinct");
                 area.name = format!("{} precinct", s.name);
                 area.attributes
                     .insert("sponsor".into(), s.source.clone().into());
                 u.blocks.push(area);
-                masks.push(shape);
+                masks.push(shape.clone());
                 if let Some(court) = contour(state, &strength, 0.72)? {
+                    let Some(court) = k
+                        .overlay(&court, &shape, Overlay::Intersection)
+                        .map_err(io::Error::other)?
+                        .and_then(atlas_map::regions::polygon)
+                    else {
+                        continue;
+                    };
                     let mut court = Element::new(court, "square", &format!("{} court", s.name));
                     court
                         .attributes
@@ -149,11 +167,15 @@ pub(super) fn develop(
             }
         }
     }
+    for park in &u.parks {
+        masks.push(park.geometry.clone());
+        u.open.push(park.clone());
+    }
     let reserved_land = k.union_all(&masks).map_err(io::Error::other)?;
     let mut occupied = None;
-    // Draw the specialized grounds first and remove them from the general occupation.
-    for (kind, threshold) in [(3, 0.8), (1, 1.15), (2, 0.72), (4, 0.75), (0, 0.40)] {
-        let Some(mut geometry) = contour(state, &layers[kind], threshold)? else {
+    // Local bids decide contested uses. General settlement fills the residual ground.
+    for kind in [1, 2, 3, 4, 0] {
+        let Some(mut geometry) = contour(state, &layers[kind], 0.)? else {
             continue;
         };
         for mask in [reserved_land.as_ref(), occupied.as_ref()]
@@ -265,6 +287,9 @@ pub(super) fn develop(
             let mut site = Element::new(point(at), "cityPlace", use_);
             site.attributes.insert("use".into(), use_.into());
             u.landmarks.push(site);
+            continue;
+        }
+        if !peripheral {
             continue;
         }
         let use_ = if peripheral && x.farm > 0.12 {

@@ -335,7 +335,10 @@ pub fn register(registry: &mut Registry, operations: Option<&Operations>) -> io:
                                     .filter(|f| {
                                         f.kind != "district"
                                             && (f.protected
-                                                || matches!(f.kind.as_str(), "square" | "building"))
+                                                || matches!(
+                                                    f.kind.as_str(),
+                                                    "square" | "park" | "building"
+                                                ))
                                     })
                                     .cloned()
                                     .collect(),

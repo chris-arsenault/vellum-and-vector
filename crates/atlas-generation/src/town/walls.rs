@@ -15,6 +15,10 @@ pub const GATE: f64 = 0.1;
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Wall {
     pub round: usize,
+    #[serde(default)]
+    pub era: Option<String>,
+    #[serde(default)]
+    pub outgrown: bool,
     /// Enclosed cells, ascending.
     pub inside: Vec<u32>,
 }
@@ -182,6 +186,8 @@ mod tests {
         let open = vec![true; w * h];
         let first = enclosed(&built, &open, 5 * w + 5, grid(w, h));
         let old = Wall {
+            era: None,
+            outgrown: false,
             round: 1,
             inside: (0..w * h).filter(|&c| first[c]).map(|c| c as u32).collect(),
         };
@@ -195,6 +201,8 @@ mod tests {
         assert!(share > 0.5);
         let second = enclosed(&built, &open, 5 * w + 5, grid(w, h));
         let new = Wall {
+            era: None,
+            outgrown: false,
             round: 2,
             inside: (0..w * h)
                 .filter(|&c| second[c])

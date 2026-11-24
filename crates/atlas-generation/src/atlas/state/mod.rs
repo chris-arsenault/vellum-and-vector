@@ -264,7 +264,7 @@ pub struct City {
     pub walls: Vec<crate::town::walls::Wall>,
     #[serde(default)]
     pub gate_crossings: Vec<u32>,
-    pub works: Vec<(crate::town::catalogue::works::WorkFamily, u32)>,
+    pub works: Vec<crate::town::major_works::CityWork>,
 }
 impl Regional {
     pub fn new(field: &Field, domains: Vec<String>, parent_span: f64) -> io::Result<Self> {

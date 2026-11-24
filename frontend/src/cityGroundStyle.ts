@@ -12,6 +12,8 @@ const palette: Record<string, [string, string]> = {
 
 export function cityGroundStyle(feature: RenderFeature, ink = false, labels = false) {
   const text = labels ? new Text({ text: feature.name }) : undefined;
+  if (feature.kind === "park")
+    return new Style({ text, fill: new Fill({ color: ink ? "#cbd1bf" : "#99b285" }) });
   if (feature.kind === "district")
     return new Style({ text, stroke: new Stroke({ color: "#455b62", width: 1.2 }) });
   if (feature.kind !== "urbanGround") return undefined;

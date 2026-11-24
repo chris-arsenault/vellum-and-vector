@@ -7,6 +7,7 @@ pub mod geometry;
 mod investment;
 mod landscape;
 mod partition;
+mod places;
 mod programs;
 pub mod registration;
 mod street;
@@ -63,6 +64,10 @@ pub struct Urban {
     inherited_defenses: Vec<Geometry>,
     #[serde(default)]
     destinations: Vec<usize>,
+    #[serde(default)]
+    parks: Vec<Element>,
+    #[serde(default)]
+    interior: Vec<(usize, Element)>,
     domain: Option<Geometry>,
     routes: Vec<Element>,
     frontages: Vec<Element>,
@@ -89,6 +94,7 @@ impl Urban {
             .chain(&self.plots)
             .chain(&self.buildings)
             .chain(&self.landmarks)
+            .chain(self.interior.iter().map(|(_, place)| place))
     }
     pub fn captured(&self) -> &[Feature] {
         &self.captured
@@ -104,6 +110,7 @@ pub fn fixed_geography(kind: &str) -> bool {
             | "urbanGround"
             | "cityWall"
             | "cityGate"
+            | "park"
             | "square"
             | "cityPlace"
             | "majorWork"
@@ -198,6 +205,7 @@ pub fn capture_street(state: &mut State) -> io::Result<bool> {
         "cityWall",
         "cityGate",
         "thoroughfare",
+        "park",
         "square",
         "majorWork",
         "cityPlace",

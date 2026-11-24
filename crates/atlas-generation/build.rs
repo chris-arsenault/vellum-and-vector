@@ -49,6 +49,10 @@ fn main() {
                 "reason": scope["NoOp justification"]
             }));
         }
+        // Proposed strategies remain in the design review until adopted for execution.
+        if record["Contract status"] == "Proposed" {
+            continue;
+        }
         policies.push(json!({
             "process": record["Process ID"], "id": record["Strategy ID"],
             "kind": record["Strategy kind"], "clock": record["Clock"],
@@ -57,6 +61,22 @@ fn main() {
         }));
     }
     let out = PathBuf::from(env::var_os("OUT_DIR").unwrap());
+    let catalog = "../../docs/design/process-contracts/district-types.dataset.json";
+    println!("cargo:rerun-if-changed={catalog}");
+    let districts: Value = serde_json::from_slice(&fs::read(catalog).unwrap()).unwrap();
+    let entries: Vec<_> = districts["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(
+            |row| json!({"Type ID":row["Type ID"], "Category":row["Category"], "Name":row["Name"]}),
+        )
+        .collect();
+    fs::write(
+        out.join("district-types.json"),
+        serde_json::to_vec(&entries).unwrap(),
+    )
+    .unwrap();
     fs::write(
         out.join("process-strategies.json"),
         serde_json::to_vec(&policies).unwrap(),

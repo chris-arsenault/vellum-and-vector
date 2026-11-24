@@ -38,7 +38,7 @@ pub(crate) fn publish(output: Publication<'_>, _: &Input) -> ExecutionResult<()>
             "district" | "cityPlace" => "settlements",
             "thoroughfare" => "roads",
             "urbanGround" | "cityBlock" => "landUse",
-            "square" | "yard" => "plots",
+            "square" | "park" | "yard" => "plots",
             "building" => "structures",
             other => {
                 return Err(io::Error::other(format!("Unknown urban geography {other}")).into())

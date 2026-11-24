@@ -9,7 +9,7 @@ pub(super) struct CityFields {
     #[serde(default)]
     pub stencil: Vec<f64>,
     #[serde(default)]
-    pub program: Vec<u8>,
+    pub program: Vec<usize>,
     pub access: Vec<f64>,
     pub claims: Vec<Claims>,
     pub developed: Vec<f64>,

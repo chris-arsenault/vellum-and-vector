@@ -1,6 +1,51 @@
 use super::{contract::Entry, kinds::Kind};
 use std::io;
 
+/// Which existing use of this site can influence the surrounding settlement.
+pub(crate) enum SettlementUse {
+    Discontinuity,
+    EncroachingWood,
+    Burial,
+    Floodplain,
+    FreshWater,
+    Remains,
+    FormerDefence,
+    Residence,
+    NestingGround,
+    Learning,
+    Guild,
+    Refuge,
+}
+
+pub(crate) fn settlement_use(feature: &crate::features::Feature) -> Option<SettlementUse> {
+    use SettlementUse::*;
+    let kind = feature
+        .attributes
+        .get("poi")
+        .and_then(|v| v.as_str())
+        .unwrap_or(&feature.kind);
+    match kind {
+        "tear" | "door" => Some(Discontinuity),
+        "greenwoodStand" | "deepwood" => Some(EncroachingWood),
+        "ossuary" | "burialGround" => Some(Burial),
+        "floodplain" | "floodBasin" => Some(Floodplain),
+        "spring" => Some(FreshWater),
+        "ruin" => Some(Remains),
+        "cityWall"
+            if feature.attributes.get("outgrown").and_then(|v| v.as_bool()) == Some(true) =>
+        {
+            Some(FormerDefence)
+        }
+        "notableResident" => Some(Residence),
+        "rookery" => Some(NestingGround),
+        "archive" => Some(Learning),
+        "institution" if feature.attributes.contains_key("languageId") => Some(Learning),
+        "guild" => Some(Guild),
+        "refuge" | "diaspora" => Some(Refuge),
+        _ => None,
+    }
+}
+
 pub trait CatalogueState<Schedule>: super::carry::CarryState<Schedule> {
     fn catalogue(&self) -> &Catalogue<Self, Schedule>;
     fn parent_cell_span(&self) -> f64;

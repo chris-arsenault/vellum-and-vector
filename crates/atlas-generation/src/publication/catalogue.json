@@ -131,6 +131,7 @@
     ["field", "plots", "Fields", "Plots and fields", "Land use"],
     ["yard", "plots", "Yards and gardens", "Plots and fields", "Land use"],
     ["square", "plots", "Squares and markets", "Plots and fields", "Open spaces"],
+    ["park", "plots", "Parks and commons", "Plots and fields", "Open spaces"],
     ["street", "roads", "Streets and lanes", "Transport and water infrastructure", "Streets"],
     ["bridge", "structures", "Bridges", "Structures and interiors", "Structures"],
     ["gate", "structures", "Gates", "Structures and interiors", "Connections"],

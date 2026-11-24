@@ -42,6 +42,15 @@ pub(super) fn resolve(
             *flag |= other;
         }
     }
+    for park in &urban.parks {
+        let cover = state
+            .spatial
+            .covers_points(&park.geometry, &positions)
+            .map_err(io::Error::other)?;
+        for (flag, on) in held.iter_mut().zip(cover) {
+            *flag |= on;
+        }
+    }
     fields.access.resize(mesh.len(), 0.);
     fields.developed.resize(mesh.len(), 0.);
     fields.civic.resize(mesh.len(), 0.);
@@ -108,17 +117,12 @@ pub(super) fn resolve(
             .program
             .get(c)
             .and_then(|&id| urban.programs.get(id as usize));
-        use super::programs::Role;
         let strength = program.map_or(0., |p| p.strength) * stencil;
-        let household = match program.map(|p| p.role) {
-            Some(Role::Tenements) => 1. + 1.8 * strength,
-            Some(Role::Estates) => 1. + 0.3 * strength,
-            _ => 1.,
-        };
-        let employment = match program.map(|p| p.role) {
-            Some(Role::Exchange | Role::Workshops) => 1. + 1.25 * strength,
-            _ => 1.,
-        };
+        let demand = program
+            .map(|program| program.demands_at(p))
+            .unwrap_or_default();
+        let household = 1. + strength * (demand.housing + 0.3 * demand.gardens);
+        let employment = 1. + strength * (demand.trade + demand.workshops);
         fields.claims.push(Claims {
             home: homes * household * (0.65 + 2.65 * stencil),
             work: work * employment * (0.75 + 1.55 * stencil),

@@ -48,6 +48,15 @@ pub struct InheritedWork {
     pub anchor: Point,
     pub design: Option<WorkDesign>,
 }
+/// City-scale commission whose program and location are fixed before publication.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CityWork {
+    pub family: WorkFamily,
+    pub cell: u32,
+    pub design: WorkDesign,
+    pub established: Option<String>,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Commission {
     pub family: WorkFamily,

@@ -58,14 +58,7 @@ pub(super) fn districts(
             }
         })
         .collect();
-    let headcount = claims
-        .iter()
-        .zip(&inside)
-        .enumerate()
-        .filter(|(_, (_, on))| **on)
-        .map(|(c, (q, _))| q.people * mesh.area(c) / 1e6)
-        .sum();
-    let desired = super::partition::target(headcount);
+    let desired = urban.programs.len().max(1);
     let spacing = (kernel.area(domain).map_err(io::Error::other)? / (desired * 5) as f64).sqrt();
     let mut sites: Vec<_> = hot_spots(&load, &points, spacing.max(mesh.spacing()), usize::MAX)
         .into_iter()
@@ -137,8 +130,8 @@ pub(super) fn districts(
         .regional
         .iter()
         .flat_map(|r| &r.city.works)
-        .map(|(_, cell)| {
-            let [x, y] = mesh.position(*cell as usize);
+        .map(|work| {
+            let [x, y] = mesh.position(work.cell as usize);
             Position::xy(ox + x, oy + y)
         })
         .collect();
@@ -179,8 +172,7 @@ pub(super) fn districts(
                 mesh,
                 xy(kernel.interior_position(&g).map_err(io::Error::other)?),
             )
-            .and_then(|c| urban.fields.program.get(c).copied())
-            .map(usize::from),
+            .and_then(|c| urban.fields.program.get(c).copied()),
             shape: g.clone(),
             area,
             residents,
@@ -201,35 +193,32 @@ pub(super) fn districts(
         .filter(|r| r.attributes.get("class").and_then(|v| v.as_str()) == Some("Approach"))
         .map(|r| r.geometry.clone())
         .collect();
-    let retained = urban
-        .captured
-        .iter()
-        .filter(|f| f.kind == "district")
-        .count();
-    let count = urban.programs.len().saturating_sub(retained);
-    if count == 0 {
+    if urban.programs.is_empty() {
         return Ok(());
     }
-    for (number, program) in urban.programs.iter().take(count).enumerate() {
-        let location = atlas_map::regions::point(positions[program.cell]);
-        let mut nearest = None;
-        for (i, precinct) in precincts
-            .iter()
-            .enumerate()
-            .filter(|(_, p)| p.anchor.is_none())
-        {
-            let distance = kernel
-                .distance(&location, &precinct.shape)
-                .map_err(io::Error::other)?;
-            if nearest.is_none_or(|(_, best)| distance < best) {
-                nearest = Some((i, distance));
-            }
+    let mut available: Vec<_> = (0..precincts.len()).collect();
+    for (number, program) in urban.programs.iter().enumerate() {
+        if available.is_empty() {
+            break;
         }
-        if let Some((i, _)) = nearest {
-            precincts[i].anchor = Some(number);
+        let shapes: Vec<_> = available
+            .iter()
+            .map(|&i| precincts[i].shape.clone())
+            .collect();
+        let index = kernel.index(&shapes).map_err(io::Error::other)?;
+        if let Some(i) = index
+            .nearest(positions[program.cell])
+            .map_err(io::Error::other)?
+        {
+            precincts[available.swap_remove(i)].anchor = Some(number);
         }
     }
-    let districts = super::partition::partition(kernel, &precincts, &approaches, count)?;
+    let origin = crate::atlas::regional::city::captured_settlement(state)?;
+    let culture = origin
+        .as_ref()
+        .and_then(|s| s.attributes.get("namingCulture"))
+        .and_then(|v| v.as_str());
+    let districts = super::partition::partition(kernel, &precincts, &approaches)?;
     for (i, group) in districts.into_iter().enumerate() {
         let members = group.precincts.iter().map(|&j| &precincts[j]);
         let residents: f64 = members.clone().map(|p| p.residents).sum();
@@ -244,13 +233,19 @@ pub(super) fn districts(
             .program
             .and_then(|j| urban.programs.get(j))
             .ok_or_else(|| io::Error::other("District lost its founding program"))?;
-        let mut district = Element::new(g, "district", &format!("{} {}", program.name, i + 1));
-        district
-            .attributes
-            .insert("districtType".into(), program.role.name().into());
-        district.attributes.insert(
-            "districtProgram".into(),
-            serde_json::to_value(program).map_err(io::Error::other)?,
+        let name = state
+            .naming
+            .work(
+                &state.scope,
+                &format!("district-{}", program.cell),
+                "ward",
+                points[program.cell],
+                culture,
+            )?
+            .name;
+        let mut district = Element::new(g, "district", &name);
+        district.attributes.insert("districtProgram".into(),
+            serde_json::json!({"economic":program.economic,"social":program.social,"traits":program.traits,"evidence":program.evidence,"demands":program.demands}),
         );
         district.attributes.insert(
             "settlementTemplate".into(),

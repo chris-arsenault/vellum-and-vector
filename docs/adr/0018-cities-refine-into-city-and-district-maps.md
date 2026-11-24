@@ -35,11 +35,13 @@ The captured settled outline gives the interior a strong preference for urban de
 The surrounding countryside can support farms, road stops and satellites. The founding
 policy and the settlement's existing people, capital, institutions and approaches give
 rise to district programs before roads and land use settle. Each program competes for a
-site and shapes the demands on land, investment, access and construction. Each round
+site. Its economic activity and social identity are independent weighted choices from eligible
+catalogue entries. Optional traits require evidence at an actual site. These choices change
+land claims, investment, access and construction. Each round
 reads the previous round's occupied ground and access on the shared lattice.
 
 After these rounds, the City partitions the principal settlement into permanent districts
-around the programs that shaped it, preserving public courts and geographic obstacles.
+around the programs that shaped it, preserving public courts, parks and geographic obstacles.
 The City publishes district types and polygons, broad developed tracts, major roads,
 open grounds and significant sites.
 
@@ -49,7 +51,7 @@ A city raises a wall round the built land joined to its heart, courtyards within
 where its template guards or seats power, its people can build, and its built land stands
 unwalled; a template with an enclosed seat raises an inner wall first. A wall's run leaves
 out faces that water or steep ground defends and opens gates where maintained ways cross.
-Every wall stands once raised, so an outgrown wall stays inside the city. The enclosure
+A former enclosure can stand inside the city that outgrew it. The captured settlement history bounds its date and extent, and ruined stretches can disappear. The enclosure
 question, how many walls enclose a cell, conditions where places stand.
 
 ## The catalogue's large-scale slot

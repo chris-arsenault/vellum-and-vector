@@ -16,16 +16,6 @@ pub(super) struct Precinct {
     pub anchor: Option<usize>,
 }
 
-// owner-direction(2026-11-23): cities should have 7-14 districts
-pub(super) const DISTRICT_COUNT: std::ops::RangeInclusive<usize> = 7..=14;
-
-pub(super) fn target(residents: f64) -> usize {
-    // A larger settled population supports more district centres.
-    let scale = residents / (residents + 100_000.);
-    DISTRICT_COUNT.start()
-        + (scale * (DISTRICT_COUNT.end() - DISTRICT_COUNT.start()) as f64).round() as usize
-}
-
 pub(super) struct District {
     pub precincts: Vec<usize>,
     pub neighbors: Vec<usize>,
@@ -38,7 +28,6 @@ pub(super) fn partition(
     kernel: &dyn SpatialKernel,
     precincts: &[Precinct],
     approaches: &[Geometry],
-    count: usize,
 ) -> io::Result<Vec<District>> {
     let shapes: Vec<_> = precincts.iter().map(|p| p.shape.clone()).collect();
     let index = kernel.index(&shapes).map_err(io::Error::other)?;
@@ -92,7 +81,7 @@ pub(super) fn partition(
     let mut works: Vec<_> = precincts.iter().map(|p| p.works).collect();
     let mut anchors: Vec<_> = precincts.iter().map(|p| p.anchor).collect();
     let mut programs: Vec<_> = precincts.iter().map(|p| p.program).collect();
-    for _ in count.max(1)..members.len() {
+    loop {
         let Some(i) = (0..members.len())
             .filter(|&i| !edges[i].is_empty() && anchors[i].is_none())
             .min_by(|&a, &b| weights[a].total_cmp(&weights[b]))
@@ -169,12 +158,16 @@ mod tests {
                     works: 0,
                     character: 0.,
                     program: None,
-                    anchor: None,
+                    anchor: (i % 25 == 0).then_some(i / 25),
                 }
             })
             .collect();
-        let groups = partition(&kernel, &precincts, &[], target(30_000.)).unwrap();
-        assert!(DISTRICT_COUNT.contains(&groups.len()));
+        let groups = partition(&kernel, &precincts, &[]).unwrap();
+        assert_eq!(groups.len(), 4);
+        assert_eq!(
+            groups.iter().map(|g| g.precincts.len()).sum::<usize>(),
+            precincts.len()
+        );
         for group in groups {
             assert!(group.precincts.len() > 1 && !group.neighbors.is_empty());
             let shapes: Vec<_> = group

@@ -123,16 +123,16 @@ pub fn districts(
     n: usize,
     cost: impl Fn(usize, usize) -> f64,
     neighbours: impl Fn(usize) -> [Option<usize>; 3],
-) -> Vec<u8> {
+) -> Vec<usize> {
     use std::cmp::Reverse;
     use std::collections::BinaryHeap;
-    let mut label = vec![u8::MAX; n];
+    let mut label = vec![usize::MAX; n];
     let mut best = vec![f64::INFINITY; n];
     // hpc-exempt: a priority frontier over the lattice, popped in cost order.
     let mut frontier = BinaryHeap::new();
-    for (i, &seed) in seeds.iter().enumerate().take(u8::MAX as usize) {
+    for (i, &seed) in seeds.iter().enumerate() {
         best[seed] = 0.;
-        label[seed] = i as u8;
+        label[seed] = i;
         frontier.push(Reverse((Ordered(0.), seed)));
     }
     while let Some(Reverse((Ordered(d), cell))) = frontier.pop() {
@@ -324,7 +324,7 @@ mod tests {
         // Ground outside the built city joins no district.
         let built = |_: usize, b: usize| if b >= 7 { f64::INFINITY } else { 1. };
         let city = districts(&[2, 5], n, built, line);
-        assert!(city[7..].iter().all(|&l| l == u8::MAX));
-        assert!(city[..7].iter().all(|&l| l != u8::MAX));
+        assert!(city[7..].iter().all(|&l| l == usize::MAX));
+        assert!(city[..7].iter().all(|&l| l != usize::MAX));
     }
 }

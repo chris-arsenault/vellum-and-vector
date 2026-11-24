@@ -65,7 +65,7 @@ pub(super) fn circulation(
             for r in urban
                 .captured
                 .iter()
-                .filter(|r| matches!(r.kind.as_str(), "square" | "cityWall"))
+                .filter(|r| matches!(r.kind.as_str(), "square" | "park" | "cityWall"))
             {
                 let reserve = if r.kind == "cityWall" {
                     kernel.buffer(&r.geometry, 3.).map_err(io::Error::other)?

@@ -34,28 +34,88 @@ pub(super) fn site(state: &mut State, selection: &Selection, seed: i32) -> io::R
         .spatial
         .covers_points(extent, &points)
         .map_err(io::Error::other)?;
-    let mut cells = Vec::new();
-    let mut candidates = Vec::new();
+    let mut available = inside;
+    let field = state.field();
+    let capital = field.people().view(crate::human::HumanField::Layer(
+        crate::human::catalogue::LayerId::Standing,
+    ));
+    let ways = field.people().view(crate::human::HumanField::KeptLine);
     let mut population = 0.;
-    for (cell, p) in points.into_iter().enumerate() {
-        if !inside[cell] || !habitable(state.field(), cell)? {
+    for (cell, open) in available.iter_mut().enumerate() {
+        *open &= habitable(field, cell)?;
+        if !*open {
             continue;
         }
         population += state.field().people().people(cell)? * mesh.area(cell) / 1e6;
-        cells.push(cell);
-        candidates.push(Geometry::Point { coordinates: p });
     }
     let total = super::settlement(state)?
         .and_then(|s| s.people)
         .unwrap_or(population);
-    let index = state.spatial.index(&candidates).map_err(io::Error::other)?;
+
+    let town = super::captured_settlement(state)?;
+    let radius =
+        (state.spatial.area(extent).map_err(io::Error::other)? / std::f64::consts::PI).sqrt();
     let mut works = Vec::new();
     for (family, [x, y]) in city_works(&selection.site, total, seed) {
-        if let Some(i) = index
-            .nearest(Position::xy(x, y))
-            .map_err(io::Error::other)?
-        {
-            works.push((family, cells[i] as u32));
+        let reach = family
+            .definition()
+            .sponsor_reach()
+            .max(selection.quarter() * 2.);
+        let [ox, oy] = mesh.origin();
+        let mut best: Option<(usize, f64)> = None;
+        let mut backing = 0.;
+        for cell in mesh.cells_within([x - ox, y - oy], reach) {
+            if !available[cell] {
+                continue;
+            }
+            let funds = capital.get(cell)? * mesh.area(cell) / 1e6;
+            backing += funds;
+            let residents = field.people().people(cell)? * mesh.area(cell) / 1e6;
+            if funds <= 0. || residents <= 0. {
+                continue;
+            }
+            let [px, py, _] = points[cell].coordinates();
+            let distance = (px - x).hypot(py - y);
+            let score = (1. + funds.ln_1p()) * (1. + ways.get(cell)?.sqrt())
+                / (1. + (distance / reach * 3.).powi(2));
+            if best.is_none_or(|(_, b)| score > b) {
+                best = Some((cell, score));
+            }
+        }
+        let grounds_cost =
+            family.city().ground / 1e6 * crate::human::catalogue::FULL_STANDING_PER_BUILT_KM2;
+        if backing < grounds_cost {
+            continue;
+        }
+        if let Some((site, _)) = best {
+            let anchor = position(state, site);
+            let [cx, cy] = selection.site.centre;
+            let established = town
+                .as_ref()
+                .and_then(|t| {
+                    super::occupation_era(
+                        t,
+                        radius,
+                        (anchor[0] - cx).hypot(anchor[1] - cy),
+                        family.city().ground.sqrt(),
+                    )
+                })
+                .map(str::to_owned);
+            works.push(crate::town::major_works::CityWork {
+                family,
+                cell: site as u32,
+                design: family.definition().design(
+                    &selection.site,
+                    anchor,
+                    &[],
+                    seed.wrapping_add(family as i32),
+                ),
+                established,
+            });
+            let separation = family.city().ground.sqrt() + mesh.spacing();
+            for c in mesh.cells_within(mesh.position(site), separation) {
+                available[c] = false;
+            }
         }
     }
     state.regional.as_mut().unwrap().city.works = works;
@@ -74,7 +134,8 @@ pub(super) fn work_records(state: &State) -> io::Result<Vec<Place>> {
         return Ok(Vec::new());
     };
     let mut records = Vec::new();
-    for (index, &(family, cell)) in city.works.iter().enumerate() {
+    for (index, work) in city.works.iter().enumerate() {
+        let (family, cell) = (work.family, work.cell);
         let appearance = family.city();
         let [x, y] = position(state, cell as usize);
         let mut attributes = crate::features::records::Attributes::new();
@@ -82,6 +143,10 @@ pub(super) fn work_records(state: &State) -> io::Result<Vec<Place>> {
         attributes.insert("majorWorkFamily".into(), family.key().into());
         attributes.insert("symbol".into(), appearance.symbol.into());
         attributes.insert("groundM2".into(), appearance.ground.into());
+        attributes.insert("workDesign".into(), serde_json::json!(work.design));
+        if let Some(era) = &work.established {
+            attributes.insert("establishedInEra".into(), era.clone().into());
+        }
         let key = format!("major-work-{index}");
         let feature = generated(
             state,

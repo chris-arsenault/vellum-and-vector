@@ -124,7 +124,11 @@ fn wall_runs(state: &State) -> io::Result<Vec<(Faces, Faces)>> {
         ways.push(kept.get(cell)?);
     }
     let busiest = ways.iter().copied().fold(0., f64::max).max(f64::EPSILON);
-    ways.iter_mut().for_each(|w| *w /= busiest);
+    if regional.city.gate_crossings.is_empty() {
+        ways.iter_mut().for_each(|w| *w /= busiest);
+    } else {
+        ways.fill(0.);
+    }
     for &c in &regional.city.gate_crossings {
         ways[c as usize] = 1.;
     }
@@ -135,7 +139,23 @@ fn wall_runs(state: &State) -> io::Result<Vec<(Faces, Faces)>> {
         for &cell in &wall.inside {
             inside[cell as usize] = true;
         }
-        runs.push(run(&inside, &defended, &ways, neighbours));
+        let (mut faces, gates) = run(&inside, &defended, &ways, neighbours);
+        if wall.era.is_some() && wall.outgrown {
+            let ruin = field.people().view(HumanField::RuinedBuiltUp);
+            let mut kept = Vec::new();
+            for face in faces {
+                if ruin.get(face.inside)?
+                    <= field
+                        .people()
+                        .view(HumanField::Layer(LayerId::BuiltUp))
+                        .get(face.inside)?
+                {
+                    kept.push(face)
+                }
+            }
+            faces = kept;
+        }
+        runs.push((faces, gates));
     }
     Ok(runs)
 }
@@ -195,6 +215,19 @@ pub(crate) fn wall_places(
             continue;
         };
         let mut attributes = crate::features::records::Attributes::new();
+        if let Some(era) = &wall.era {
+            attributes.insert("builtInEra".into(), era.clone().into());
+        }
+        attributes.insert("outgrown".into(), wall.outgrown.into());
+        attributes.insert(
+            "condition".into(),
+            if wall.outgrown {
+                "reused interior defenses"
+            } else {
+                "maintained"
+            }
+            .into(),
+        );
         attributes.insert("raisedInRound".into(), wall.round.into());
         attributes.insert("enclosedCells".into(), wall.inside.len().into());
         attributes.insert("gates".into(), openings.len().into());
@@ -282,16 +315,37 @@ pub(crate) struct Settlement {
     pub(crate) people: Option<f64>,
 }
 /// The city map's settlement, read by the identity its captured record took.
-pub(crate) fn settlement(state: &State) -> io::Result<Option<Settlement>> {
-    use atlas_map::Geometry;
+pub(crate) fn captured_settlement(state: &State) -> io::Result<Option<crate::features::Feature>> {
     let Some(city) = state.scope.city.as_ref() else {
         return Ok(None);
     };
-    let found = match state.records.source_features.as_deref() {
-        Some(source) => source.get(city.settlement)?,
-        None => state.records.features.get(city.settlement)?,
-    };
-    let Some(feature) = found else {
+    match state.records.source_features.as_deref() {
+        Some(source) => source.get(city.settlement),
+        None => state.records.features.get(city.settlement),
+    }
+}
+/// Earliest recorded settlement large enough to have reached and supported this site.
+pub(crate) fn occupation_era(
+    town: &crate::features::Feature,
+    radius: f64,
+    distance: f64,
+    support: f64,
+) -> Option<&str> {
+    let history = town.attributes.get("history")?.as_array()?;
+    let population = town.attributes.get("settlementPopulation")?.as_f64()?;
+    let required = support.max(population * (distance / radius.max(1.)).powi(2));
+    history
+        .iter()
+        .find(|era| {
+            era.get("townsfolk")
+                .and_then(|p| p.as_f64())
+                .is_some_and(|p| p >= required)
+        })
+        .and_then(|era| era.get("era")?.as_str())
+}
+pub(crate) fn settlement(state: &State) -> io::Result<Option<Settlement>> {
+    use atlas_map::Geometry;
+    let Some(feature) = captured_settlement(state)? else {
         return Ok(None);
     };
     let coordinates = match &feature.geometry {
@@ -445,7 +499,7 @@ fn places_at(state: &State, n: usize) -> Vec<f64> {
         return draw;
     };
     let mesh = state.field().mesh();
-    let cells = city.works.iter().map(|&(_, cell)| cell as usize);
+    let cells = city.works.iter().map(|work| work.cell as usize);
     for cell in cells.filter(|&c| c < n) {
         for next in (0..3).filter_map(|edge| mesh.neighbor(cell, edge)) {
             draw[next] = f64::max(draw[next], 0.5);
@@ -629,6 +683,15 @@ pub(crate) fn propose_walls(
         (city, citadel, capital)
     };
     let mut proposals = Vec::new();
+    if state
+        .regional
+        .as_ref()
+        .is_some_and(|r| r.city.walls.is_empty())
+    {
+        if let Some(wall) = historic_wall(state, selection, round, capital)? {
+            proposals.push(wall);
+        }
+    }
     for cells in [citadel_wall, city_wall].into_iter().flatten() {
         let inside: Vec<u32> = (0..cells.len())
             .filter(|&c| cells[c])
@@ -650,7 +713,11 @@ pub(crate) fn propose_walls(
                 .flat_map(|r| &r.city.walls)
                 .any(|old| old.inside == inside)
             {
-                proposals.push(Wall { round, inside });
+                proposals.push(Wall {
+                    round,
+                    inside,
+                    ..Default::default()
+                });
             }
         }
     }
@@ -659,6 +726,105 @@ pub(crate) fn propose_walls(
 
 /// Founding evidence read at city scale: the city's centre, its usable shore and levels, the
 /// ways that reach its core, worked land around it and the magic practised there.
+/// Recover the already elapsed defensive footprint from the town's first funded era.
+fn historic_wall(
+    state: &State,
+    selection: &Selection,
+    round: usize,
+    capital: f64,
+) -> io::Result<Option<crate::town::walls::Wall>> {
+    use crate::field::people::work::working;
+    let Some(town) = captured_settlement(state)? else {
+        return Ok(None);
+    };
+    let contested = town
+        .attributes
+        .get("contestedBy")
+        .is_some_and(|v| !v.is_null());
+    let authority = town
+        .attributes
+        .get("polityId")
+        .is_some_and(|v| !v.is_null());
+    if !(selection.site.guarded || selection.enclosed_seat().is_some() || contested && authority)
+        || capital <= 0.
+    {
+        return Ok(None);
+    }
+    let Some(history) = town.attributes.get("history").and_then(|v| v.as_array()) else {
+        return Ok(None);
+    };
+    let Some((era, early)) = history
+        .iter()
+        .filter_map(|h| Some((h.get("era")?.as_str()?, h.get("townsfolk")?.as_f64()?)))
+        .find(|(_, p)| *p >= 1000.)
+    else {
+        return Ok(None);
+    };
+    let people = town
+        .attributes
+        .get("settlementPopulation")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(early);
+    if people <= early {
+        return Ok(None);
+    }
+    let f = state.field();
+    let mesh = f.mesh();
+    let Some(heart) = crate::field::refinement::courses::cell_at(mesh, selection.site.centre)
+    else {
+        return Ok(None);
+    };
+    let area = state
+        .spatial
+        .area(state.scope.settled_outline())
+        .map_err(io::Error::other)?;
+    let reach = (area * early / people / std::f64::consts::PI).sqrt();
+    let mut cost = working(f);
+    for c in 0..mesh.len() {
+        cost.set(c, f64::INFINITY)?;
+    }
+    cost.set(heart, 0.)?;
+    let slope = f.shared().scalar(crate::field::shared::Scalar::Slope);
+    let built = f.people().view(HumanField::Layer(LayerId::BuiltUp));
+    crate::metric::search::search(
+        mesh,
+        [heart],
+        &mut cost,
+        reach,
+        |_, _| Ok(()),
+        |_, b, _| {
+            if !habitable(f, b)? {
+                return Ok(f64::INFINITY);
+            }
+            Ok(mesh.spacing() * (1. + slope.get(b)?.max(0.) * 5.) / (0.6 + built.get(b)?.sqrt()))
+        },
+    )?;
+    let mut inside = Vec::new();
+    let mut perimeter = 0.;
+    for c in 0..mesh.len() {
+        if !cost.get(c)?.is_finite() {
+            continue;
+        }
+        inside.push(c as u32);
+        for e in 0..3 {
+            if let Some(b) = mesh.neighbor(c, e) {
+                if !cost.get(b)?.is_finite() {
+                    perimeter += mesh.edge_length(c, e);
+                }
+            }
+        }
+    }
+    let funded = capital * (early / people).sqrt() * 0.15;
+    let masonry = perimeter * 8. / 1e6 * crate::human::catalogue::FULL_STANDING_PER_BUILT_KM2;
+    Ok(
+        (inside.len() > 1 && masonry <= funded).then(|| crate::town::walls::Wall {
+            round,
+            inside,
+            era: Some(era.into()),
+            outgrown: people > early * 2.,
+        }),
+    )
+}
 fn survey(state: &State, settlement: Settlement) -> io::Result<SiteEvidence> {
     let field = state.field();
     let mesh = field.mesh();

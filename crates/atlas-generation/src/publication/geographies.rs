@@ -194,7 +194,12 @@ const GROUPS: &[Group] = &[
         ],
         false,
     ),
-    ("built.layout", "plots", &["field", "yard", "square"], false),
+    (
+        "built.layout",
+        "plots",
+        &["field", "yard", "square", "park"],
+        false,
+    ),
 ];
 pub fn bindings(input: &Inputs<'_>, inherited_layers: &[String]) -> Vec<Binding> {
     let humans = ["human.cultures", "human.politics", "built.layout"]
