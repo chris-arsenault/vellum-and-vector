@@ -1,3 +1,4 @@
+import { cityGroundStyle } from "./cityGroundStyle";
 import { Circle, Fill, Stroke, Style, Text } from "ol/style.js";
 import GeoJSON from "ol/format/GeoJSON.js";
 import Point from "ol/geom/Point.js";
@@ -187,6 +188,7 @@ function specialStyle(f: RenderFeature, c: DrawnStyleContext) {
     return new Style({ stroke: new Stroke({ color: "#8d8170", width: 0.7, lineDash: [2, 5] }) });
   if (f.kind === "ocean") return new Style({ fill: new Fill({ color: "#00000000" }) });
   return (
+    cityGroundStyle(f, c.view.style === "ink") ??
     biomeStyle(f, c.view.style === "ink") ??
     drawnPlace(f, c.view.style === "ink", c.drawing.placeAnchor)
   );

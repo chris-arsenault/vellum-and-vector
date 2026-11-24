@@ -159,9 +159,12 @@ pub(super) fn features() -> Vec<Feature> {
         "town.initialize",
         "town.develop",
         "town.publish",
+        "city.programs",
+        "city.claims",
+        "city.invest",
         "city.routes",
         "city.partition",
-        "city.blocks",
+        "city.landscape",
         "city.publish",
     ]);
     built.processes.extend(
@@ -197,9 +200,22 @@ pub(super) fn features() -> Vec<Feature> {
             "real-scale.settlement",
             "town.urban-geography",
         ]),
+        "city.claims" => operations(&["town.land-competition"]),
+        "city.invest" => operations(&["town.collective-investment"]),
         "city.routes" => operations(&["town.movement"]),
-        "city.partition" => operations(&["town.districts"]),
-        "city.blocks" => operations(&["town.construction"]),
+        "city.programs" | "city.partition" => vec![invoke(
+            "town.districts",
+            Values::from_iter([(
+                "strategy".into(),
+                (if slot == "city.programs" {
+                    "district-programs"
+                } else {
+                    "district-partition"
+                })
+                .into(),
+            )]),
+        )],
+        "city.landscape" => operations(&["town.construction"]),
         "city.publish" => operations(&["town.urban-geography"]),
         "present.people" => operations(&["built.layout"]),
         _ => vec![],

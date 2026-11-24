@@ -66,6 +66,17 @@ it("distinguishes political seats without using zoom to add or remove settlement
   }
 });
 
+it("shows occupied City ground with labels off and leaves district interiors visible", () => {
+  const ground = { ...river([]), geometry: rectangle(0, 0, 100, 100), kind: "urbanGround" };
+  const paint = (use: string) =>
+    styles({ ...ground, attributes: { groundUse: use } }, 100)[0]
+      .getFill()
+      ?.getColor();
+  expect(paint("Civic precinct")).toBeTruthy();
+  expect(paint("Crowded housing")).not.toEqual(paint("Civic precinct"));
+  expect(styles({ ...ground, kind: "district" }, 100)[0].getFill()).toBeFalsy();
+});
+
 it("uses physical bank widths and the longitudinal width profile at close zoom", () => {
   const feature = river([50, 100, 200]);
   expect(width(feature, 1)).toEqual([75, 150]);

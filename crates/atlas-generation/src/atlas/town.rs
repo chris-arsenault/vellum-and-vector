@@ -2,7 +2,7 @@ pub use crate::town::{
     addresses, geometry, ground, growth, lanes, network, plots, seat, settings, story, wards,
 };
 pub mod development;
-mod founding_site;
+pub(crate) mod founding_site;
 mod held_ground;
 mod providers;
 pub mod site;

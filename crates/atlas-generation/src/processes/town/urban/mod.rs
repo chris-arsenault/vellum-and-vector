@@ -1,17 +1,20 @@
 //! Permanent urban geometry at City scale and its local realization on Street maps.
+mod circulation;
 mod city;
+mod claims;
 mod fields;
 pub mod geometry;
+mod investment;
+mod landscape;
 mod partition;
+mod programs;
 pub mod registration;
 mod street;
 use crate::{
     atlas::state::State,
     features::{records::Attributes, Feature, FeatureSelection},
-    field::refinement::courses::cell_at,
-    human::{catalogue::LayerId, HumanField},
 };
-use atlas_map::{Geometry, Position};
+use atlas_map::Geometry;
 use serde::{Deserialize, Serialize};
 use std::io;
 
@@ -47,12 +50,21 @@ impl Element {
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Urban {
     #[serde(default)]
+    programs: Vec<programs::Program>,
+    #[serde(default)]
     fields: fields::CityFields,
     #[serde(default)]
     layout_round: Option<usize>,
+    #[serde(default)]
+    sponsors: Vec<investment::Site>,
+    #[serde(default)]
+    defense: Vec<crate::town::walls::Wall>,
+    #[serde(default)]
+    inherited_defenses: Vec<Geometry>,
+    #[serde(default)]
+    destinations: Vec<usize>,
     domain: Option<Geometry>,
     routes: Vec<Element>,
-    proposed_access: Vec<Element>,
     frontages: Vec<Element>,
     districts: Vec<Element>,
     blocks: Vec<Element>,
@@ -63,7 +75,6 @@ pub struct Urban {
     captured: Vec<Feature>,
     street_round: usize,
     district_child: bool,
-    orientation: f64,
 }
 impl Urban {
     pub fn district_child(&self) -> bool {
@@ -90,6 +101,9 @@ pub fn fixed_geography(kind: &str) -> bool {
         "district"
             | "thoroughfare"
             | "cityBlock"
+            | "urbanGround"
+            | "cityWall"
+            | "cityGate"
             | "square"
             | "cityPlace"
             | "majorWork"
@@ -162,21 +176,6 @@ fn reservations(state: &State) -> io::Result<Vec<Feature>> {
         })
         .collect())
 }
-fn ground(state: &State, point: Position) -> io::Result<(f64, f64, f64)> {
-    let f = state.field();
-    let Some(c) = cell_at(f.mesh(), geometry::xy(point)) else {
-        return Ok((0., 0., 0.));
-    };
-    Ok((
-        f.people().people(c)?,
-        f.people()
-            .view(HumanField::Layer(LayerId::BuiltUp))
-            .get(c)?,
-        f.people()
-            .view(HumanField::Layer(LayerId::Standing))
-            .get(c)?,
-    ))
-}
 pub fn capture_street(state: &mut State) -> io::Result<bool> {
     let Some(regional) = &state.regional else {
         return Ok(false);
@@ -195,6 +194,9 @@ pub fn capture_street(state: &mut State) -> io::Result<bool> {
     for kind in [
         "district",
         "cityBlock",
+        "urbanGround",
+        "cityWall",
+        "cityGate",
         "thoroughfare",
         "square",
         "majorWork",
@@ -212,7 +214,15 @@ pub fn capture_street(state: &mut State) -> io::Result<bool> {
     }
     let district_child = captured.iter().any(|f| f.kind == "district");
     if district_child {
-        let urban = &mut state.regional.as_mut().unwrap().city.urban;
+        let city = &mut state.regional.as_mut().unwrap().city;
+        if let Some(saved) = captured
+            .iter()
+            .filter(|f| f.kind == "district")
+            .find_map(|f| f.attributes.get("templatePolicy"))
+        {
+            city.template = Some(serde_json::from_value(saved.clone()).map_err(io::Error::other)?);
+        }
+        let urban = &mut city.urban;
         urban.district_child = true;
         urban.captured = captured;
     }

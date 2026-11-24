@@ -50,7 +50,7 @@ pub fn specifications() -> io::Result<Vec<Specification>> {
     result.extend(
         crate::processes::town::STEPS
             .iter()
-            .filter(|s| !matches!(s.id, "town.movement" | "town.construction"))
+            .filter(|s| !crate::processes::town::urban::registration::owns(s.id))
             .map(|s| Specification::new(s.id, "atlas:workspace", "", true)),
     );
     result.push(Specification::new(
@@ -77,20 +77,34 @@ pub fn register(
         town::cultivation(),
     ))?;
     let legacy_initial = operations.initialize.clone();
-    let initialize = crate::execution::Command::with_inputs(
-        "town.initialize",
-        crate::execution::CommandKind::Work,
-        vec![],
-        move |scope, input: &Settings| {
-            if !crate::processes::town::urban::capture_street(scope.state_mut())? {
-                scope.run(&legacy_initial, input)?;
-            }
-            Ok(())
-        },
-    );
-    registry.register(Process::command(initialization()?, initialize, settings))?;
+    let initialize =
+        crate::execution::Command::<crate::atlas::state::State, (Settings, bool)>::with_inputs(
+            "town.initialize",
+            crate::execution::CommandKind::Work,
+            vec![],
+            move |scope, (input, inherit): &(Settings, bool)| {
+                if *inherit {
+                    crate::atlas::regional::city::inherit_policy(
+                        scope.state_mut(),
+                        input.seed,
+                        input.template,
+                    )?;
+                } else if !crate::processes::town::urban::capture_street(scope.state_mut())? {
+                    scope.run(&legacy_initial, input)?;
+                }
+                Ok(())
+            },
+        );
+    registry.register(Process::command(initialization()?, initialize, |input| {
+        use crate::processes::strategies::{at, definitions, Kind, MapType, Timing};
+        let inherited = input.site.map_type == MapType::City
+            && at(definitions("town.initialize")?, input.site, Timing::Present)?
+                .iter()
+                .any(|row| row.kind == Kind::Inherited && row.id == "city-template-policy");
+        Ok((settings(input)?, inherited))
+    }))?;
     for (id, operation) in &operations.steps {
-        if matches!(*id, "town.movement" | "town.construction") {
+        if crate::processes::town::urban::registration::owns(id) {
             continue;
         }
         registry.register(Process::unit(

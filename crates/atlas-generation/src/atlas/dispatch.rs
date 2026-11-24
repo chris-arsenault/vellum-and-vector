@@ -95,7 +95,18 @@ impl Specification {
             .context
             .duration()
             .is_some_and(|duration| duration > 0.0);
-        let selected = semantic.select(site, elapsed)?;
+        let mut selected = semantic.select(site, elapsed)?;
+        if let crate::sequence::StageKind::Process(call) = &stage.kind {
+            if let Some(wanted) = call.parameters.get("strategy").and_then(|v| v.as_str()) {
+                selected.retain(|s| s.name == wanted);
+                if selected.is_empty() {
+                    return Err(io::Error::other(format!(
+                        "{} has no applicable strategy {wanted}",
+                        self.contract.id
+                    )));
+                }
+            }
+        }
         if selected
             .iter()
             .any(|strategy| strategy.time == EffectTime::SpatialIteration)
@@ -236,6 +247,14 @@ impl Process {
                 Timing::Present
             };
             for strategy in owner.select(input.site, timing)? {
+                if input
+                    .parameters
+                    .get("strategy")
+                    .and_then(|v| v.as_str())
+                    .is_some_and(|selected| selected != strategy.name)
+                {
+                    continue;
+                }
                 let value = bind(input, strategy)?;
                 runtime.executor.run_with_context(
                     &command,

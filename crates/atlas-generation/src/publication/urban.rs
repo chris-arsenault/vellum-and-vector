@@ -10,6 +10,19 @@ pub(crate) fn publish(output: Publication<'_>, _: &Input) -> ExecutionResult<()>
     let Some(urban) = output.urban else {
         return Ok(());
     };
+    if let (Some(city), Some(policy)) = (&output.scope.city, output.template) {
+        if let Some(mut seat) = output.features.get(city.settlement)?.filter(|f| {
+            f.area_id == output.scope.area && f.state == FeatureState::Generated && !f.protected
+        }) {
+            seat.attributes
+                .insert("settlementTemplate".into(), policy.selected.name().into());
+            seat.attributes.insert(
+                "templatePolicy".into(),
+                serde_json::to_value(policy).map_err(io::Error::other)?,
+            );
+            output.features.put(seat)?;
+        }
+    }
     for saved in urban.captured() {
         if output.features.get(saved.id)?.is_some_and(|f| {
             f.area_id == output.scope.area && (f.protected || f.state == FeatureState::Authored)
@@ -24,7 +37,7 @@ pub(crate) fn publish(output: Publication<'_>, _: &Input) -> ExecutionResult<()>
         let layer = match e.kind.as_str() {
             "district" | "cityPlace" => "settlements",
             "thoroughfare" => "roads",
-            "cityBlock" => "landUse",
+            "urbanGround" | "cityBlock" => "landUse",
             "square" | "yard" => "plots",
             "building" => "structures",
             other => {

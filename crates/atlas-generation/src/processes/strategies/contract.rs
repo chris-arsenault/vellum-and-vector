@@ -54,8 +54,14 @@ pub enum Product {
     GroundHazards,
     WatchedGround,
     CityBlocks,
+    UrbanGround,
+    LandClaims,
+    CivicPrecincts,
+    DefenseWorks,
     CityAccess,
     DistrictActivity,
+    DistrictPrograms,
+    SettledOutline,
     OccupiedFrontage,
     Districts,
     Premises,
@@ -140,6 +146,7 @@ impl<A: Copy, I: Source + Copy, B: Source + Copy> Contract<A, I, B> {
                     let algorithm = self.binding(&definition.id)?;
                     algorithm.validate(definition)?;
                 }
+                Kind::Unspecified if self.binding(&definition.id).is_ok() => {}
                 Kind::Unspecified | Kind::Deferred => {
                     return Err(io::Error::other(format!(
                         "{} / {} is {:?}",
@@ -157,9 +164,9 @@ impl<A: Copy, I: Source + Copy, B: Source + Copy> Contract<A, I, B> {
         }
         for (i, strategy) in self.strategies.iter().enumerate() {
             if self.strategies[..i].iter().any(|s| s.name == strategy.name)
-                || !catalog
-                    .iter()
-                    .any(|d| d.kind == Kind::Algorithm && d.id == strategy.name)
+                || !catalog.iter().any(|d| {
+                    matches!(d.kind, Kind::Algorithm | Kind::Unspecified) && d.id == strategy.name
+                })
             {
                 return Err(io::Error::other(format!(
                     "Unmatched or duplicate algorithm {} / {}",
@@ -174,6 +181,9 @@ impl<A: Copy, I: Source + Copy, B: Source + Copy> Contract<A, I, B> {
         let mut algorithms = Vec::new();
         for definition in at(definitions(self.catalog_id)?, site, timing)? {
             match definition.kind {
+                Kind::Unspecified if self.binding(&definition.id).is_ok() => {
+                    algorithms.push(self.binding(&definition.id)?)
+                }
                 Kind::Algorithm => algorithms.push(self.binding(&definition.id)?),
                 Kind::Unspecified | Kind::Deferred => {
                     return Err(io::Error::other(format!(

@@ -126,7 +126,6 @@ const COMMANDS: &[(&str, CommandSelect, bool)] = &[
     ("ecology-initialize", |w| &w.ecology_initialize, true),
     ("ecology-develop", |w| &w.ecology_develop, true),
     ("place-effects", |w| &w.place_effects, true),
-    ("city-walls", |w| &w.city_walls, true),
     ("city-works", |w| &w.city_works, true),
     ("magic-map", |w| &w.magic_map, false),
     ("identity", |w| &w.identity, false),

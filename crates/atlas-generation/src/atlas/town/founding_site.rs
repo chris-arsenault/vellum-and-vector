@@ -24,7 +24,7 @@ pub(super) struct Context<'a> {
     inherited: Vec<Vec<InheritedWork>>,
     doors: Vec<crate::links::Link>,
 }
-fn observe_landscape(
+pub(crate) fn observe_landscape(
     land: &mut crate::town::major_works::WorkLandscape,
     field: &crate::field::Field,
     cell: usize,
@@ -211,7 +211,7 @@ impl<'a> Context<'a> {
             if self.seats.nearest(point).map_err(io::Error::other)? != Some(seat_index) {
                 continue;
             }
-            observe_feature(state, ground, f, p, &mut evidence)?;
+            observe_feature(state, ground.owner(p) == WATER, f, p, &mut evidence)?;
         }
         if evidence.industry.is_some() && evidence.shore.is_some() && evidence.submerged.is_none() {
             // A shore crew can build a vented lock on shallow bed held free of water by local divers.
@@ -222,9 +222,9 @@ impl<'a> Context<'a> {
     }
 }
 
-fn observe_feature(
+pub(crate) fn observe_feature(
     state: &State,
-    ground: &Ground,
+    submerged: bool,
     f: &Feature,
     p: Point,
     evidence: &mut SiteEvidence,
@@ -234,7 +234,7 @@ fn observe_feature(
         .get("habitat")
         .and_then(|v| v.as_str())
         .is_some_and(|h| h.eq_ignore_ascii_case("submerged"))
-        && ground.owner(p) == WATER
+        && submerged
     {
         evidence.submerged.get_or_insert(p);
     }

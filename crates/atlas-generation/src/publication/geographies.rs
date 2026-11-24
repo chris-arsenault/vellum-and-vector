@@ -136,6 +136,7 @@ const GROUPS: &[Group] = &[
             "conservation",
             "burning",
             "mine",
+            "urbanGround",
             "cityBlock",
         ],
         false,

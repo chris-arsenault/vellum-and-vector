@@ -1,4 +1,4 @@
-use super::{city, street, values};
+use super::{circulation, city, claims, investment, landscape, programs, street, values};
 use crate::{
     atlas::{
         dispatch::{Process, Registry, Schedule, SemanticRegistration, Specification},
@@ -15,14 +15,18 @@ use std::io;
 #[derive(Clone, Copy)]
 enum Task {
     Primary,
+    Claims,
+    Civic,
+    Defense,
+    Pending,
+    Programs,
     Districts,
-    Blocks,
+    Landscape,
     Circulation,
     Premises,
 }
 #[derive(Clone, Copy)]
 enum Origin {
-    Developed,
     Partition,
     Frame,
 }
@@ -31,6 +35,8 @@ impl Source for Origin {
 }
 #[derive(Clone, Copy)]
 enum Boundary {
+    Sponsors,
+    Defenses,
     Approaches,
     Districts,
     CityStreets,
@@ -65,7 +71,7 @@ const MOVEMENT: &[UrbanStrategy] = &[
     strategy(
         "principal-routes",
         Task::Primary,
-        Origin::Developed,
+        Origin::Frame,
         Boundary::Approaches,
     ),
     strategy(
@@ -75,23 +81,70 @@ const MOVEMENT: &[UrbanStrategy] = &[
         Boundary::CityStreets,
     ),
 ];
-const DISTRICTS: &[UrbanStrategy] = &[strategy(
-    "district-partition",
-    Task::Districts,
-    Origin::Partition,
-    Boundary::Districts,
-)];
+const DISTRICTS: &[UrbanStrategy] = &[
+    strategy(
+        "district-programs",
+        Task::Programs,
+        Origin::Frame,
+        Boundary::Sponsors,
+    ),
+    strategy(
+        "district-partition",
+        Task::Districts,
+        Origin::Partition,
+        Boundary::Districts,
+    ),
+];
 const BUILD: &[UrbanStrategy] = &[
     strategy(
         "urban-blocks",
-        Task::Blocks,
-        Origin::Partition,
+        Task::Landscape,
+        Origin::Frame,
         Boundary::Land,
     ),
     strategy("premises", Task::Premises, Origin::Frame, Boundary::Land),
 ];
 type Registration = SemanticRegistration<Task, Origin, Boundary>;
-fn owners() -> [Registration; 3] {
+const CARRIED: UrbanStrategy = strategy(
+    "pending-unassigned",
+    Task::Pending,
+    Origin::Frame,
+    Boundary::Land,
+);
+const CLAIMS: &[UrbanStrategy] = &[
+    strategy(
+        "city-area-claims",
+        Task::Claims,
+        Origin::Frame,
+        Boundary::Land,
+    ),
+    CARRIED,
+];
+const INVEST: &[UrbanStrategy] = &[
+    strategy(
+        "civic-precincts",
+        Task::Civic,
+        Origin::Frame,
+        Boundary::Sponsors,
+    ),
+    strategy(
+        "defensive-enclosures",
+        Task::Defense,
+        Origin::Frame,
+        Boundary::Defenses,
+    ),
+    CARRIED,
+];
+pub(crate) fn owns(id: &str) -> bool {
+    matches!(
+        id,
+        "town.movement"
+            | "town.construction"
+            | "town.land-competition"
+            | "town.collective-investment"
+    )
+}
+fn owners() -> [Registration; 5] {
     let make = |id, effect, reads, writes, strategies| Registration {
         owner: Contract {
             id,
@@ -108,12 +161,41 @@ fn owners() -> [Registration; 3] {
     };
     [
         make(
+            "town.land-competition",
+            "Resolve competing area claims",
+            &[
+                Product::DistrictPrograms,
+                Product::SettledOutline,
+                Product::CityAccess,
+                Product::OccupiedFrontage,
+                Product::CivicPrecincts,
+            ],
+            &[Product::LandClaims],
+            CLAIMS,
+        ),
+        make(
+            "town.collective-investment",
+            "Commit supported public and defensive works",
+            &[
+                Product::DistrictPrograms,
+                Product::LandClaims,
+                Product::SettlementRecords,
+                Product::CityAccess,
+            ],
+            &[Product::CivicPrecincts, Product::DefenseWorks],
+            INVEST,
+        ),
+        make(
             "town.movement",
             "Connect urban approaches and occupied frontages",
             &[
                 Product::Travel,
+                Product::LandClaims,
+                Product::CivicPrecincts,
+                Product::DefenseWorks,
                 Product::CityBlocks,
-                Product::DistrictActivity,
+                Product::DistrictPrograms,
+                Product::SettledOutline,
                 Product::OccupiedFrontage,
             ],
             &[Product::Roads, Product::CityAccess],
@@ -121,7 +203,7 @@ fn owners() -> [Registration; 3] {
         ),
         make(
             "town.districts",
-            "Partition settled ground into persistent districts",
+            "Form district programs, then partition developed urban ground around them",
             &[
                 Product::Roads,
                 Product::CityAccess,
@@ -130,22 +212,25 @@ fn owners() -> [Registration; 3] {
                 Product::Layer(crate::human::catalogue::LayerId::Population),
                 Product::Layer(crate::human::catalogue::LayerId::BuiltUp),
             ],
-            &[Product::Districts, Product::DistrictActivity],
+            &[Product::Districts, Product::DistrictPrograms],
             DISTRICTS,
         ),
         make(
             "town.construction",
-            "Develop serviced blocks and their premises",
+            "Develop occupied ground and realize commissioned works or street premises",
             &[
                 Product::Roads,
-                Product::Districts,
-                Product::DistrictActivity,
+                Product::DistrictPrograms,
+                Product::SettledOutline,
+                Product::LandClaims,
+                Product::CivicPrecincts,
+                Product::DefenseWorks,
                 Product::CityAccess,
                 Product::Layer(crate::human::catalogue::LayerId::BuiltUp),
                 Product::Layer(crate::human::catalogue::LayerId::Standing),
             ],
             &[
-                Product::CityBlocks,
+                Product::UrbanGround,
                 Product::Premises,
                 Product::OpenSpace,
                 Product::OccupiedFrontage,
@@ -172,6 +257,12 @@ pub fn register(registry: &mut Registry, operations: Option<&Operations>) -> io:
             CommandKind::Work,
             vec![],
             move |scope, input: &UrbanStrategy| {
+                if matches!(input.algorithm, Task::Pending) {
+                    if let Some(op) = &standalone {
+                        scope.run(op, &())?;
+                    }
+                    return Ok(());
+                }
                 let state: &mut State = scope.state_mut();
                 if matches!(input.algorithm, Task::Circulation | Task::Premises)
                     && !state
@@ -190,22 +281,12 @@ pub fn register(registry: &mut Registry, operations: Option<&Operations>) -> io:
                 let mut urban = std::mem::take(&mut region.city.urban);
                 let round = region.round;
                 let result = (|| -> io::Result<()> {
-                    if matches!(input.algorithm, Task::Primary) {
-                        if urban.layout_round == Some(round) {
-                            urban.routes.append(&mut urban.proposed_access);
-                            return Ok(());
-                        }
-                        // Start a fresh candidate layout on this round's geography.
-                        // The numerical fields carry the previous layout's effects.
-                        urban = super::Urban {
-                            fields: std::mem::take(&mut urban.fields),
-                            layout_round: Some(round),
-                            ..Default::default()
-                        };
-                    }
                     let Some(domain) = input.initial.bind(|source| match source {
-                        Origin::Developed => city::envelope(state),
-                        Origin::Partition => Ok(urban.domain.clone()),
+                        Origin::Partition => Ok(urban
+                            .domain
+                            .clone()
+                            .or_else(|| state.scope.outline.clone())
+                            .or_else(|| Some(state.scope.footprint.clone()))),
                         Origin::Frame => Ok(Some(
                             state
                                 .scope
@@ -225,8 +306,21 @@ pub fn register(registry: &mut Registry, operations: Option<&Operations>) -> io:
                             Ok(Some(match source {
                                 Boundary::Approaches => {
                                     let mut roads = super::ground_routes(state)?;
+                                    if roads.is_empty() {
+                                        roads.extend(values(state, "road")?);
+                                    }
                                     roads.extend(values(state, "thoroughfare")?);
                                     roads
+                                }
+                                Boundary::Sponsors => {
+                                    let mut sponsors = values(state, "institution")?;
+                                    sponsors.extend(values(state, "majorWork")?);
+                                    sponsors
+                                }
+                                Boundary::Defenses => {
+                                    let mut works = values(state, "cityWall")?;
+                                    works.extend(values(state, "cityGate")?);
+                                    works
                                 }
                                 Boundary::Districts => values(state, "district")?,
                                 Boundary::CityStreets => urban
@@ -250,12 +344,23 @@ pub fn register(registry: &mut Registry, operations: Option<&Operations>) -> io:
                         })?
                         .unwrap_or_default();
                     match input.algorithm {
-                        Task::Primary => city::primary(state, &mut urban, domain, boundary),
-                        Task::Districts => {
-                            city::districts(state, &mut urban, &domain, boundary)?;
-                            city::record_activity(state, &mut urban)
+                        Task::Pending => unreachable!(),
+                        Task::Claims => claims::resolve(state, &mut urban, &domain, &boundary),
+                        Task::Civic => investment::civic(state, &mut urban, &domain, boundary),
+                        Task::Defense => investment::defense(state, &mut urban, &domain, boundary),
+                        Task::Primary if urban.layout_round == Some(round) => {
+                            circulation::crossings(state, &urban)
                         }
-                        Task::Blocks => city::blocks(state, &mut urban, &domain, &boundary),
+                        Task::Primary => {
+                            circulation::routes(state, &mut urban, &domain, boundary)?;
+                            urban.layout_round = Some(round);
+                            Ok(())
+                        }
+                        Task::Programs => programs::compete(state, &mut urban, boundary),
+                        Task::Districts => city::districts(state, &mut urban, boundary),
+                        Task::Landscape => {
+                            landscape::develop(state, &mut urban, &domain, &boundary)
+                        }
                         Task::Circulation => street::circulation(
                             state,
                             &mut urban,

@@ -1,4 +1,5 @@
 //! A site's founding evidence, feasible kernels and ranked alternatives survive in the town.
+pub(crate) mod district;
 mod kernel;
 mod rules;
 mod streets;

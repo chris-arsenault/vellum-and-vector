@@ -627,6 +627,26 @@ const directions: readonly OwnerDirection[] = [
     test: "crates/atlas-generation/src/atlas/regional/sequence.rs",
   },
   {
+    direction:
+      "City districts partition the developed main settlement after competing processes; ordinary streets and blocks belong to district maps",
+    given: "2026-11-24",
+    marks: ["crates/atlas-generation/src/atlas/regional/sequence.rs"],
+    test: "crates/atlas-generation/src/atlas/regional/sequence.rs",
+  },
+  {
+    given: "2026-11-24",
+    direction:
+      "retain the City stencil as a very strong interior development prior with supported outskirts",
+    marks: ["crates/atlas-generation/src/processes/town/urban/programs.rs"],
+  },
+  {
+    given: "2026-11-24",
+    direction:
+      "district programs shape City geography before permanent district boundaries are drawn",
+    marks: ["crates/atlas-generation/src/atlas/regional/sequence.rs"],
+    test: "crates/atlas-generation/src/atlas/regional/sequence.rs",
+  },
+  {
     direction: "cities should have 7-14 districts",
     given: "2026-11-23",
     marks: ["crates/atlas-generation/src/processes/town/urban/partition.rs"],

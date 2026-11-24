@@ -549,7 +549,7 @@ fn ways_in(
     }
     Ok((arms, strategic))
 }
-fn story(feature: &Feature, ways: usize, guarded: bool) -> Story {
+pub(crate) fn story(feature: &Feature, ways: usize, guarded: bool) -> Story {
     let attributes = &feature.attributes;
     let site = text(feature, "siteKind").unwrap_or_default();
     let history = attributes

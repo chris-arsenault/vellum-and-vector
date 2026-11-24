@@ -56,6 +56,7 @@ enum Layer {
     Field,
     /// A city block, coloured by its use.
     Block,
+    CityGround,
     Plot,
     Square,
     Way,
@@ -111,6 +112,18 @@ fn drawn(feature: &MapFeature, real_scale: bool) -> Option<Drawn> {
             }
             _ => (Layer::Way, mean_width(6.), "#f4e5c9"),
         },
+        "urbanGround" => (
+            Layer::CityGround,
+            0.,
+            match feature.attributes.get("groundUse").and_then(Value::as_str) {
+                Some("Crowded housing") => "#aa7557",
+                Some("Garden housing") => "#b9c69b",
+                Some("Trade frontage") => "#c8915d",
+                Some("Working ground") => "#aaa394",
+                Some("Civic precinct") => "#ad9cb4",
+                _ => "#debf9c",
+            },
+        ),
         "cityBlock" if real_scale => (Layer::Block, 0., "#ddd7be"),
         "cityBlock" => (
             Layer::Block,
@@ -126,6 +139,7 @@ fn drawn(feature: &MapFeature, real_scale: bool) -> Option<Drawn> {
         "cityWall" => (Layer::Wall, 8., "#3b2f28"),
         "district" if real_scale => (Layer::District, 1., "#627679"),
         "district" => (Layer::CityDistrict, 1., "#334f64"),
+        "cityGate" => (Layer::Mark, 3., "#584335"),
         "majorWork" => (Layer::Mark, 14., "#1d1d1d"),
         "cityPlace" => (Layer::Mark, 4., "#853c55"),
         "building" => (
@@ -157,11 +171,12 @@ fn draw(canvas: &mut Canvas, things: &[Drawn]) {
             }
             Layer::Wall => canvas.outline(&thing.geometry, thing.width, 2., thing.colour),
             Layer::District => canvas.outline(&thing.geometry, thing.width, 1.2, thing.colour),
-            Layer::CityDistrict => canvas.outline(&thing.geometry, thing.width, 2.6, thing.colour),
+            Layer::CityDistrict => canvas.outline(&thing.geometry, thing.width, 1.2, thing.colour),
             Layer::Avenue => {
                 canvas.outline(&thing.geometry, thing.width + 2., 2.8, "#80694e");
                 canvas.outline(&thing.geometry, thing.width, 1.6, thing.colour);
             }
+            Layer::CityGround => canvas.fill(&thing.geometry, thing.colour, None),
             Layer::Block => canvas.fill(&thing.geometry, thing.colour, Some((PLOT.1, 0.6))),
             Layer::Mark => canvas.mark(&thing.geometry, thing.width, thing.colour),
             Layer::Field => canvas.fill(&thing.geometry, thing.colour, Some((FIELD.1, 0.6))),

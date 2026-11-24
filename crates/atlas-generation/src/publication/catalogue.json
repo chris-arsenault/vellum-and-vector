@@ -138,6 +138,7 @@
     ["cityGate", "structures", "City gates", "Structures and interiors", "Fortifications"],
     ["cityPlace", "settlements", "City landmarks", "Settlements and sites", "City places"],
     ["thoroughfare", "roads", "Thoroughfares", "Transport and water infrastructure", "Streets"],
+    ["urbanGround", "landUse", "Urban ground", "Land use and extraction", "City landscape"],
     ["cityBlock", "landUse", "City blocks", "Land use and extraction", "City blocks"],
     ["district", "settlements", "Districts", "Settlements and sites", "Districts"],
     ["majorWork", "settlements", "Major works", "Settlements and sites", "Major works"],

@@ -11,6 +11,9 @@ pub(super) struct Precinct {
     pub built: f64,
     pub service_load: f64,
     pub works: usize,
+    pub character: f64,
+    pub program: Option<usize>,
+    pub anchor: Option<usize>,
 }
 
 // owner-direction(2026-11-23): cities should have 7-14 districts
@@ -26,6 +29,7 @@ pub(super) fn target(residents: f64) -> usize {
 pub(super) struct District {
     pub precincts: Vec<usize>,
     pub neighbors: Vec<usize>,
+    pub program: Option<usize>,
 }
 
 /// A shared street can become an internal street of a district. A long shared edge
@@ -84,19 +88,24 @@ pub(super) fn partition(
         .iter()
         .map(|p| p.area / 1000. + p.residents + p.built * 3500. + p.service_load)
         .collect();
+    let mut character: Vec<_> = precincts.iter().map(|p| p.character).collect();
     let mut works: Vec<_> = precincts.iter().map(|p| p.works).collect();
+    let mut anchors: Vec<_> = precincts.iter().map(|p| p.anchor).collect();
+    let mut programs: Vec<_> = precincts.iter().map(|p| p.program).collect();
     for _ in count.max(1)..members.len() {
         let Some(i) = (0..members.len())
-            .filter(|&i| !edges[i].is_empty())
+            .filter(|&i| !edges[i].is_empty() && anchors[i].is_none())
             .min_by(|&a, &b| weights[a].total_cmp(&weights[b]))
         else {
             break;
         };
         let score = |j: usize| {
             let two_centres = works[i] > 0 && works[j] > 0;
-            edges[i][&j]
+            let affinity = if programs[i] == programs[j] { 6. } else { 1. };
+            affinity * edges[i][&j]
                 / (areas[i] + areas[j]).sqrt()
                 / (weights[i] + weights[j]).sqrt()
+                / (1. + (character[i] - character[j]).abs())
                 / if two_centres { 3. } else { 1. }
         };
         let j = *edges[i]
@@ -113,6 +122,13 @@ pub(super) fn partition(
         }
         let absorbed = std::mem::take(&mut members[i]);
         members[j].extend(absorbed);
+        character[j] = (character[j] * areas[j] + character[i] * areas[i]) / (areas[i] + areas[j]);
+        if anchors[j].is_none() && areas[i] > areas[j] {
+            programs[j] = programs[i];
+        }
+        if anchors[j].is_none() {
+            anchors[j] = anchors[i];
+        }
         areas[j] += areas[i];
         weights[j] += weights[i];
         works[j] += works[i];
@@ -124,6 +140,7 @@ pub(super) fn partition(
         .iter()
         .map(|&i| District {
             precincts: std::mem::take(&mut members[i]),
+            program: anchors[i].or(programs[i]),
             neighbors: edges[i]
                 .keys()
                 .map(|j| roots.binary_search(j).unwrap())
@@ -150,6 +167,9 @@ mod tests {
                     built: 0.004,
                     service_load: 0.,
                     works: 0,
+                    character: 0.,
+                    program: None,
+                    anchor: None,
                 }
             })
             .collect();

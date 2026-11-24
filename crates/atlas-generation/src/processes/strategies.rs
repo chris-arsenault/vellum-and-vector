@@ -54,7 +54,8 @@ impl Definition {
         if self.id.trim().is_empty() || self.scopes.is_empty() {
             return Err(invalid("missing strategy ID or applicability"));
         }
-        if (self.kind == Kind::Algorithm) != self.clock.is_some()
+        if (self.kind == Kind::Algorithm && self.clock.is_none())
+            || (!matches!(self.kind, Kind::Algorithm | Kind::Inherited) && self.clock.is_some())
             || (self.order.is_some() && self.kind != Kind::Algorithm)
         {
             return Err(invalid("invalid clock or composition order"));

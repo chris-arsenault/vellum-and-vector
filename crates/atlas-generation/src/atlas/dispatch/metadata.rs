@@ -48,6 +48,16 @@ impl<A: Copy, I: Copy + Source, B: Copy + Source> SemanticRegistration<A, I, B> 
     pub fn specification(&self) -> super::Specification {
         let mut spec = super::Specification::new(self.owner.id, self.requires, self.produces, true)
             .scheduled(self.module, self.schedule);
+        if self.owner.strategies.len() > 1 {
+            let choices: Vec<_> = self.owner.strategies.iter().map(|s| s.name).collect();
+            spec.parameters.insert(
+                "strategy".into(),
+                serde_json::from_value(
+                    serde_json::json!({"type":"enum","required":false,"choices":choices}),
+                )
+                .expect("named strategy choices"),
+            );
+        }
         spec.category = Category::Semantic(Semantic::new(self.owner));
         spec
     }

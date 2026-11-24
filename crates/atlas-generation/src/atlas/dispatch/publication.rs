@@ -12,6 +12,7 @@ use crate::{
 pub struct Publication<'a> {
     field: &'a Field,
     pub scope: &'a Scope,
+    pub template: Option<&'a crate::town::templates::Selection>,
     pub urban: Option<&'a crate::processes::town::urban::Urban>,
     pub features: &'a mut dyn FeatureWorkspace,
     pub networks: &'a mut dyn NetworkWorkspace,
@@ -37,6 +38,10 @@ pub(super) fn command(id: &str, publish: Publish) -> Command<State, Input> {
             Publication {
                 field: state.physical.executor.state(),
                 scope: &state.scope,
+                template: state
+                    .regional
+                    .as_ref()
+                    .and_then(|r| r.city.template.as_ref()),
                 urban: state.regional.as_ref().map(|r| &r.city.urban),
                 features: state.records.features.as_mut(),
                 networks: state.records.networks.as_mut(),

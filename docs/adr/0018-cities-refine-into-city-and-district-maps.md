@@ -31,13 +31,17 @@ regional sequence. The society rounds refine population and built stock on the s
 City template guidance influences household placement. Walls and commissioned works develop
 during those rounds.
 
-In each City development round, movement connects approaches and lays avenues, then records
-walking access across the terrain. Districts partition the served ground and record local
-activity. Construction uses those fields with population and standing stock to place developed
-frontage and open space. Occupied frontage and district activity carry over on the lattice
-and influence where the following round lays its routes. After the last round movement takes
-up the streets serving the final blocks. The City publishes its district polygons, thoroughfares, blocks and
-reserved spaces, and retains the identity of existing districts and works.
+The captured settled outline gives the interior a strong preference for urban development.
+The surrounding countryside can support farms, road stops and satellites. The founding
+policy and the settlement's existing people, capital, institutions and approaches give
+rise to district programs before roads and land use settle. Each program competes for a
+site and shapes the demands on land, investment, access and construction. Each round
+reads the previous round's occupied ground and access on the shared lattice.
+
+After these rounds, the City partitions the principal settlement into permanent districts
+around the programs that shaped it, preserving public courts and geographic obstacles.
+The City publishes district types and polygons, broad developed tracts, major roads,
+open grounds and significant sites.
 
 ## Walls
 
@@ -56,4 +60,4 @@ hidden, with the reason. The City places prominent catalogue landmarks according
 
 ## District maps
 
-A district opens as a real-scale map over its outline. The Street map carries the published district, main streets, landmarks, open spaces and blocks by identity. Local lanes subdivide the blocks. Individual plots, yards and buildings follow their street frontages.
+A district opens as a real-scale map over its outline. The Street map inherits the district identity, type and boundary, its major roads, landmarks, open spaces and developed ground. Local circulation divides that ground into blocks. Individual plots, yards and buildings follow their street frontages.

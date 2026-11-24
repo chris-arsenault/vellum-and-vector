@@ -3075,10 +3075,6 @@
           "Map-specific fields": {}
         },
         {
-          "Map type": "City",
-          "Map-specific fields": {}
-        },
-        {
           "Map type": "Street",
           "Map-specific fields": {}
         }
@@ -3148,17 +3144,17 @@
       "Process ID": "town.movement",
       "Shared contract": {
         "Active / no-op": "Active — connected City circulation",
-        "Behavior / strategy": "Connect genuine external approaches, trade edges, waterfronts, institutional anchors, urban population/activity concentrations and reserved commons via a coherent route hierarchy. Favor connectedness and functional reachability over decorative local paths. Major routes and crossings establish partition edges, while districts and construction refine their use and add required links. Allow organic or constrained geometry from terrain/tenure rather than imposed star graphs or a single template.",
-        "Boundary condition handling": "Terminate routes only at justified destinations or continuing external connections; otherwise connect the network.",
-        "Boundary condition source": "Continuation of external trade/road/water access and retained named crossings.",
+        "Behavior / strategy": "Carry inherited external/major routes, crossings and named transport through the City stencil, major districts and the surrounding countryside. While City geometry is still plastic, read the selected town template AND active typed district programs from town.districts: administrative/civic districts can draw major ceremonial or administrative approaches, markets/freight quarters attract high-capacity corridors, defended religious compounds favor controlled entries, high-investment estates can favor spacious protected arteries, and crowded/poorly invested quarters may have constrained through-access. These are physical expressions of actually eligible and supported district types, not decorative styles stamped after streets are drawn. The City stencil makes dense inner-city connectivity and destination service much more likely than an equal-area countryside patch, but roads continue beyond it to genuine hamlets, farm access, waystations, ports, gates and external trade. Negotiate major rights, terrain, natural barriers and funded walls/gates; preserve historical roads and connectivity. Co-iterate with other City phenomena and freeze only the major network. Local streets/blocks/alleys remain Street.",
+        "Boundary condition handling": "Continue genuine outside links and keep crossing rights; unresolved external supply remains an explicit missing context, never a fictional dead end or invented external route.",
+        "Boundary condition source": "Routes, markets, clients, imports, water crossings, threats and settlement connections continuing outside the City-map frame; retained wall/gate crossings and authored ways.",
         "Execution mode": "Present spatial network generation",
-        "External context provider": "Society access/travel, institutional and economic destinations, districtable domain and terrain.",
-        "Initial condition handling": "Retain and adapt inherited connectivity; no re-founding of independent disconnected hot-spot road networks.",
-        "Initial condition source": "Region-era route/KeptLine evidence, City numerical urban activity and existing crossings, road identities and GIS authored lines.",
-        "Review notes": "During each City round, retain continuing approaches and use local population, built cover, occupied frontage and district activity to lay avenues. Write terrain-sensitive walking access to the shared lattice. Take up the service streets of the final blocks.",
-        "Scale-specific phenomena": "Primary thoroughfare/approach/crossing skeleton, corridors and neighborhood access hierarchy across the urban domain.",
-        "Scheduling / interactions": "Propose primary skeleton before space-fill districts; then iteratively adapt network to district and City block accessibility, without redoing City district boundaries after freeze.",
-        "Spatial footprint / scope": "Whole City developed domain plus routes extending to its surroundings and beyond computational edge.",
+        "External context provider": "Travel/trade owner, selected template, City stencil, district-programs, collective civic/defense projects, City land claims, construction, water/terrain and real outer connections.",
+        "Initial condition handling": "Keep actual upstream connectivity and existing roads/works; run new route proposals through real access and rights, without refounding mini-town networks or treating City outline/district perimeter as a barrier.",
+        "Initial condition source": "Inherited named primary roads, bridges, external/trade routes, strong City stencil, selected founding-template geometry policy, early district type programs and actual institution/economic destinations, terrain and retained walls/gates.",
+        "Review notes": "Active district types MUST influence route form, not be assigned as labels after geometry. The stencil establishes high central road/activity demand but not a closed city border.",
+        "Scale-specific phenomena": "City-wide primary road/travel network linking urban neighborhoods and the surrounding countryside, including gate and natural-barrier crossings and route-dependent peripheral activity.",
+        "Scheduling / interactions": "Run in feedback with district-programs, area claims, investment and construction; revise major routes to materially express supported district identity and stencil concentration before final district partition. Preserve roads outside stencil, real gates and boundary continuations.",
+        "Spatial footprint / scope": "Whole City generated context including main city, fringe, suburban/satellite settlements and relevant external approaches; not clipped to the district partition or an urban stencil.",
         "Time / iteration semantics": "Iterate city network layout and local connectivity, not extra road-wear decades or migration."
       },
       "Strategy ID": "principal-routes",
@@ -3184,14 +3180,14 @@
       "Process ID": "town.movement",
       "Shared contract": {
         "Active / no-op": "Active — local streets/paths",
-        "Behavior / strategy": "Resolve local circulation within inherited City districts and principal thoroughfares, fitting individual fronts, yards and civic entries. New alleys/paths serve actual local destinations and connect to fixed major routes.",
+        "Behavior / strategy": "Within inherited final City district boundaries, City main roads, walls/gates, and City area-scale uses, develop a connected local street/laneway/path network as actual district blocks and premises take shape. Respect the inherited template's district-level alignment/access and tenure policies. Link active entrances, yards, commercial frontage, work sites and internal civic entries to retained primary routes. Do not assume City already generated individual blocks, and do not move City district or wall boundaries.",
         "Boundary condition handling": "Maintain externally continued paths, reject decorative severed links.",
         "Boundary condition source": "Named routes, connections, entrances across Street crop.",
         "Execution mode": "Present local spatial realization",
         "External context provider": "Local construction uses, terrain, rights and numerical travel.",
         "Initial condition handling": "Respect major roads and crossings, locally subdivide where accessible, do not move City districts.",
-        "Initial condition source": "Retained City street hierarchy and exact district/open-space polygons; coarser access demand.",
-        "Review notes": "Open local lanes through captured City blocks, joining their ends to retained City streets at the frontage. Ordinary standalone settlements continue growing streets from their inhabited kernel.",
+        "Initial condition source": "Persistent City district/open-space polygons, major roads and gates, area-scale development/function, template's district rules, terrain and inherited numeric context.",
+        "Review notes": "Owner City-only scope defers individual blocks and their internal access until district/Street generation. Existing City provides district geometry, land-use character, principal roads, walls/gates and major works—not individual blocks. Ordinary standalone settlements still form local access from viable founding kernels.",
         "Scale-specific phenomena": "Fine streets, alleys, footpaths, entrances, service access inside inherited permanent districts.",
         "Scheduling / interactions": "Iterate locally with Street construction/land competition; City district geometry is fixed.",
         "Spatial footprint / scope": "Street frame; district boundaries are final, and routes may continue outside the crop.",
@@ -3291,10 +3287,6 @@
           "Map-specific fields": {}
         },
         {
-          "Map type": "City",
-          "Map-specific fields": {}
-        },
-        {
           "Map type": "Street",
           "Map-specific fields": {}
         }
@@ -3313,10 +3305,6 @@
         },
         {
           "Map type": "Region",
-          "Map-specific fields": {}
-        },
-        {
-          "Map type": "City",
           "Map-specific fields": {}
         },
         {
@@ -3388,18 +3376,18 @@
       "Contract status": "Specified",
       "Process ID": "town.construction",
       "Shared contract": {
-        "Active / no-op": "Active — connected City blocks and precincts",
-        "Behavior / strategy": "Fill viable portions of City districts with connected block/precinct-scale land forms oriented to movement network and local economies. Numerically inherited developed land/capital conditions expected developed intensity and amount, but geometric arrangement may be uneven: compact housing, commercial frontage, industrial yards, institutional precincts, parks and market commons. Reserve explicit voids rather than filling every polygon; maintain sensible transitions to rural fringes. Reuse established works and adapt to barriers. This is its own City-block generator, not a Street plot algorithm enlarged to fit.",
-        "Boundary condition handling": "Service/workplace demand may originate outside crop; existing named institutions retain sites. Do not invent trade resources or mandatory dense blocks where unsupported.",
-        "Boundary condition source": "City external supply/market/travel context and crossings, material/rights constraints, retained civic sites.",
+        "Active / no-op": "Active — City broad development, precincts and defended works",
+        "Behavior / strategy": "Use the captured City stencil as a STRONG spatial prior for the main city and an active, type-bearing district program from town.districts as a spatial form instruction. INSIDE the stencil, generally concentrate the available built coverage and standing works into coherent urban land use/intensity with purposeful unbuilt voids: a crowded/underfunded quarter is compact and rough in its area-scale footprint, an affluent estate quarter keeps broad grounds and separation, a civic/administrative type commands legible monumental/public precincts, an artisan/market district takes frontage and working yards, and unusual founding templates can drive distinct supported forms. These are examples, not mandatory types; each actual district must visibly embody its supported dominant role. The selected town template and economics condition eligibility. OUTSIDE the stencil, allow much lower but nonzero support for suburbs/gate settlements, road markets, farmsteads, waystations, guardposts and rural farms where inhabitants, access, economic or civic needs warrant; do not randomly decorate wilderness. Internal vs external contrast should be clearly visible on the City overview, except where strong local causal factors override it. The same spatial passes allow opposing institutional/land claims and competing routes to redirect development. Resolve real City-scale civic/major works and a distinct supported defensive wall stage with gates from investment and movement, never a stencil-drawn wall. Use inherited people/BuiltUp/Standing, materials/capital, route/tenure and existing history without another census or historical era. Leave ordinary block rectangles, local streets, lots and houses to district/Street refinement; neither final district polygons nor walls act as development masks.",
+        "Boundary condition handling": "Continue legitimate development and services to supported places outside the main districted body and across the City computational edge via real external context. Never infer that the map's selected outline or a fortification forbids all outside building.",
+        "Boundary condition source": "Captured City hinterland's food/trade/roads, neighboring settlements and employment, incoming supply/capacity and established named connections; physical coastline/barriers and prior walls.",
         "Execution mode": "Present spatial fabric realization",
-        "External context provider": "Land competition, livelihood/market demand, society built stock, institutions, movement, terrain and rights.",
-        "Initial condition handling": "Use developed stock as scale and condition constraint, not one-to-one matching of footprint or a mandate to create headcount. Retain fixed district ownership and authorized open/communal space.",
-        "Initial condition source": "City numeric Population, BuiltUp, Standing and ruined state; district geometry, circulation, functional/demand pressures and retained/authored works.",
-        "Review notes": "Read walking access and district activity together with local population, built cover and standing stock. Reserve open ground on poorly supported sites. Write occupied frontage from the realized urban polygons to the shared lattice for the next round.",
-        "Scale-specific phenomena": "Block-scale coherent urban fabric within established districts, with purposeful internal open space and variation in density and land use.",
-        "Scheduling / interactions": "Follow preliminary circulation/district partition; trade and land competition influence local block allocation, then feedback can refine routes and open space before City districts are finalized.",
-        "Spatial footprint / scope": "Built/developable parts of full City districts; explicitly protected voids and nonurban outskirts remain open.",
+        "External context provider": "Society stock/census and economic offers, City stencil/selected template, town.districts/district-programs, land competition, civic/fortification investment, movement, physical landscape and GIS authority.",
+        "Initial condition handling": "Condition numeric built intensity on stencil strongly enough to make the main urban body clearly distinct from rural surroundings while allowing substantial type-specific open ground inside and supported development outside. Respect actual stock/land and don't invent an extra epoch.",
+        "Initial condition source": "City Region-sampled numerical Population/BuiltUp/Standing and activity/ruins; authoritative City stencil as strong inside/outside preference; EARLY district type programs, selected settlement template policy, land competition, sponsor/civic/defensive commitments, main routes, water/terrain, existing GIS geography.",
+        "Review notes": "The preceding no-stencil interpretation was WRONG. The City stencil is a strong built-coverage/urban-form condition across the viable interior, not a construction permission mask. Districts are causal typed programs with intentionally legible exaggerated form, not labels/classification.",
+        "Scale-specific phenomena": "Strongly stencil-influenced developed urban body with distinctive typed district morphologies, real voids, optional walls and viable peri-urban/rural satellite development.",
+        "Scheduling / interactions": "Read district type programs EARLY; co-iterate construction with competition, investment, defense and movement. Return actual built/open/intensity forms to those district programs; reserve physically meaningful open spaces and works; finalize types/geometry with town.districts/district-partition after feedback.",
+        "Spatial footprint / scope": "Entire City map's generated geography. Strong interior stencil bias, sparse conditional outskirts; no city stencil clipping for legitimate outer sites.",
         "Time / iteration semantics": "Spatial composition/feedback iterations; do not accumulate centuries of new buildings or arbitrary extra census."
       },
       "Strategy ID": "urban-blocks",
@@ -3425,17 +3413,17 @@
       "Process ID": "town.construction",
       "Shared contract": {
         "Active / no-op": "Active — local premises and structures",
-        "Behavior / strategy": "Resolve the City block-scale built fabric into individual lot and premise geometry according to inherited local functions, construction stock and constraints. Local passages and private yards can emerge without altering authoritative district boundaries or fabricating additional historic construction.",
+        "Behavior / strategy": "Resolve local streets/blocks/plots/premises and individual buildings from the inherited district's FINAL authoritative primary type/program, City-developed intensity, template district-level rules, major works/precincts, major routes and gates; make local morphology a clear detailed continuation of the City district's exaggerated, causally supported type (crowded housing, spacious grounds, monumental public squares, working yards, guarded compounds or other eligible forms) instead of generating generic uniform plots and naming them afterward. Preserve published City district edges, main roads, walls, reserved voids and named works. No duplicate population/capital or historical time.",
         "Boundary condition handling": "Carry across crop and preserve street/district crossing; don't sever outside urban services.",
         "Boundary condition source": "Adjacent street/parcel continuation, external amenities and supply, GIS named features.",
         "Execution mode": "Present local spatial detail realization",
         "External context provider": "Local movement, occupation, tenure, construction/use catalog, land competition and landscape.",
-        "Initial condition handling": "Carry existing block and institutional identities; refine into premises without inventing residents, work stock or a new founding history.",
-        "Initial condition source": "City district/void polygons, developed block-scale fabric, numerical BuiltUp/Standing/ruin state, retained authored structures.",
-        "Review notes": "Place individual premises along accessible edges within the inherited block use. Keep their private yards, entrances and parent block identity on the Street map.",
-        "Scale-specific phenomena": "Actual plots, buildings, yards, entrances and workshops within City-resolved districts, blocks, open spaces and major roads.",
+        "Initial condition handling": "Retain the City district identity, major route network, walls and institutional geometry. Distinguish authoritative City uses from not-yet-resolved blocks; do not invent City block IDs to satisfy an absent input, create inhabitants or replay building history.",
+        "Initial condition source": "Final City district shape, stable generated type and detailed spatial obligations, constructed-land intensity, settlement template, numeric society stock, City roads/walls/major works and authored features.",
+        "Review notes": "A district's type must survive as a constraint on the fine street/block geometry and be visibly recognizable beyond its City map; preserve authoritative district boundaries.",
+        "Scale-specific phenomena": "District-local interconnected street blocks, premises, yards, workshop lots, civic building compounds and individual structures inside resolved City geography.",
         "Scheduling / interactions": "Street movement and site competition supply frontage; construction refines premises; upkeep/livelihood respond. City boundaries and external streets stay fixed.",
-        "Spatial footprint / scope": "Within fixed City district outlines and established block geometry as constrained by local streets and open-space ownership.",
+        "Spatial footprint / scope": "Fixed City district footprints and purposeful open spaces; inherited external routes/defenses respected while internal blocks and premises arise at Street fidelity.",
         "Time / iteration semantics": "No added historical construction era or duplicate weathering on Street opening."
       },
       "Strategy ID": "premises",
@@ -4258,20 +4246,21 @@
       "Contract status": "Specified",
       "Process ID": "town.districts",
       "Shared contract": {
-        "Active / no-op": "Active — authoritative final City district geography",
-        "Behavior / strategy": "Derive city districtable domain from Region→City developed landscape, terrain and access. Reserve explicit supported void/open areas (rivers, parks, commons, markets, civic grounds, protected land); partition remaining urban land into contiguous, edge-sharing districts by constrained polygonal space-filling/tessellation influenced by activity centers, major thoroughfares and barriers. Make districts a complete set of persistent GIS polygons, not a grow-from-hotspot classification or single-cell labels. District open-space features may be inside district boundaries; rural land outside the city remains outside the districtable domain. Resolve district character via uses/pressures, not canned templates.",
-        "Boundary condition handling": "Keep established routes, barriers and ownership; if a critical external connection is absent, do not invent one.",
-        "Boundary condition source": "External approaches and transport, terrain/water/walls, civic rights, existing published authored districts.",
+        "Active / no-op": "Active — final geometry of strongly typed generative City districts",
+        "Behavior / strategy": "This is the FINAL GEOMETRY strategy of a generative Semantic district process, NOT a classification or GIS publication operation. Run AFTER the companion district-programs strategy has selected viable strong district types under founding-template rules and those type programs have influenced City land-competition, civic/defense investments, major movement and construction over spatial feedback passes. Treat the existing City stencil as a strong organizing and built-intensity prior for the principal urban body, not as a hard constraint on development outside it. Gather the viable, competing district programs with their explicit roles, anchors, rights, physical signatures and spatial pressure; retain authored districts and built/civic history. Perform constrained space filling with meaningful voids across the urban districtable body into 7–14 permanent, coherent, nonoverlapping adjacent district polygons; let barriers, rivers, main routes, walls/gates, active programs, occupied/ceremonial land, template axes and city character decide where each type is embodied. A district's dominant type, physical expression, major open spaces and important relationships are AUTHORITATIVE generated data, not labels inferred from density after a neutral partition. Type boundaries can be exaggerated and sharply distinct to suit the setting, while retaining viable mixed uses and physically supported transitions. Do not tile the entire countryside or force road stops and farms into districts. Preserve parks, markets, sacred ground, commons and water as intentional open/void forms within the partition. After finalization, publish same types/edges/IDs for Street inheritance. Districts themselves do not own population/BuiltUp/Standing or draw building footprints.",
+        "Boundary condition handling": "Retain genuine connections and memberships across the cropped City frame; do not force suburban or rural sites into an artificial district, or stop development at the district perimeter.",
+        "Boundary condition source": "Outside approaches, past city walls, neighboring town/market connections and regional settlements, river/terrain continuations, authored precinct and district rights across the map edge.",
         "Execution mode": "Present spatial organization / definitive geometry",
-        "External context provider": "Society fields, city circulation, land rights/institutions, terrain and authored GIS.",
-        "Initial condition handling": "Use inherited developed stock to scope overall urban envelope and potential district sizes, not as a literal triangle-by-triangle district shape. Existing authoritative district geometry is carried/preserved.",
-        "Initial condition source": "Refined numeric BuiltUp/Standing/Population, established city context, retained named/authored geography and initial routes.",
-        "Review notes": "Each City round groups adjoining precincts using residents, built ground, civic centres, walking access and occupied frontage. Write the district's service demand to its reachable ground. Publish the final 7–14 districts and preserve authored boundaries. Street captures them by identity.",
-        "Scale-specific phenomena": "Constrained space-filling partition of the City's urbanized territory with deliberate, spatially meaningful voids.",
-        "Scheduling / interactions": "Initial primary circulation -> City district space-fill with voids -> City construction -> local access/land-use adjustments -> finalize authoritative district geometry. Subsequent Street levels cannot repartition.",
-        "Spatial footprint / scope": "Entire developed urban domain of City map; accommodate water and nondeveloped outskirts.",
+        "External context provider": "Earlier town.districts/district-programs strategy, selected founding template, land-right and economic claims, real constructed intensity and precincts, movement, defense, terrain and GIS named places.",
+        "Initial condition handling": "The stencil strongly locates the main urban body, while later development may occur outside. Preserve the earlier generated district role/type proposals and their physical consequences instead of assigning type to an already cut map; keep existing authored districts.",
+        "Initial condition source": "Existing City stencil as strong prior; district-programs proposed types/claims and their feedback from movement, construction, land competition and civic/defensive investment; inherited numeric Population/BuiltUp/Standing, template, named sites, roads/walls/gates, authorship and terrain.",
+        "Review notes": "Owner correction: Final space filling is one stage of a Semantic generator, not a ClassificationPublication substitute. Explicit exaggerated type morphology and template-provided role guidance already shape upstream geometry. City stencil strongly predicts internal urban coverage; not a zero-outside boundary.",
+        "Scale-specific phenomena": "Permanent authoritative polygon tessellation of distinctive, already-active district programs and deliberate open spaces on the stencil-influenced main urban body.",
+        "Scheduling / interactions": "FIRST town.districts/district-programs selects and evolves type programs alongside area claims, movement, civic/defensive work and construction; THEN this strategy resolves the permanent 7–14 piece type-bearing space-filling partition without erasing those programs. Only subsequent ClassificationPublication steps name/render/publish the ALREADY generated district identities, role and geography.",
+        "Spatial footprint / scope": "Main strongly stencil-influenced districtable urban territory only; countryside, satellites and supported outer sites remain allowed outside it.",
         "Time / iteration semantics": "Iterate geometric partition with access/building feedback; freeze/publish City districts once. No new elapsed social history."
       },
+      "Composition order": 2,
       "Strategy ID": "district-partition",
       "Strategy kind": "Algorithm",
       "Clock": "Present",
@@ -4295,14 +4284,14 @@
       "Process ID": "town.districts",
       "Shared contract": {
         "Active / no-op": "Carry only — final City districts",
-        "Behavior / strategy": "Reuse and clip the authoritative City district polygons and their void/open-space reservations; generate finer roads/buildings inside them without redrawing district edges.",
+        "Behavior / strategy": "Inherit and spatially clip the authoritative City district polygon and stable ID, its deliberately generated primary type/program and physically expressive City-scale outcomes, meaningful reserved commons/precincts, permanent main roads, walls/gates and inherited founding-template district-level rules. The local district/Street processes develop streets, blocks and premises in ways that continue to embody the district's already-final City-level type, not reclassify its character. Boundaries and type cannot be replaced or redrawn by street-scale refinement.",
         "Boundary condition handling": "Carry continuation across map edges without inventing new subdivisions.",
         "Boundary condition source": "Adjacent City district geometry and crossings extending beyond Street footprint.",
         "Execution mode": "Inheritance / read-only boundary input",
         "External context provider": "GIS district geometry, City circulation and inherited records.",
         "Initial condition handling": "Preserve the exact district boundaries in the same world coordinates; partial footprint clips for display without changing identity.",
-        "Initial condition source": "Authoritative parent City district and reserved open-space polygons, stable identities.",
-        "Review notes": "Capture the parent district identity and outline. Clip the visible portion for a partial Street map. The local access and premises strategies consume that same geometry.",
+        "Initial condition source": "Persistent City district polygon, type/program/role and morphological obligations, civic/public voids, major roads and gates, authored identities and selected template's district rules.",
+        "Review notes": "District type and geometry are FINAL City-authoritative state, not just a classification to be rederived or overwritten at Street scale.",
         "Scale-specific phenomena": "District geometry and identity are already fully resolved at City scale.",
         "Scheduling / interactions": "Provide district/void geometry as fixed constraints to Street movement, plots and construction.",
         "Spatial footprint / scope": "The Street map's portion of inherited City districts.",
@@ -4310,6 +4299,184 @@
       },
       "Strategy ID": "inherit-districts",
       "Strategy kind": "Inherited"
+    },
+    {
+      "Applicability": [
+        {
+          "Map type": "City",
+          "Map-specific fields": {
+            "Max resolution (m)": 6324.5553,
+            "Min resolution (m)": 0
+          },
+          "Resolution": "Regional"
+        }
+      ],
+      "Clock": "Present",
+      "Contract status": "Specified",
+      "Process ID": "town.initialize",
+      "Required bindings": [
+        "initial",
+        "boundary"
+      ],
+      "Shared contract": {
+        "Active / no-op": "Active — inherit/resolve founding template policy",
+        "Behavior / strategy": "Read/carry the settlement's selected and historically legitimate founding template, kernel and rights; if genuinely absent, resolve one eligible selection from founding-site evidence without inventing a founding epoch. The template declares BOTH a City-level spatial policy AND an eligible district-program vocabulary: candidate strong district roles/types, conditions under which they may arise, characteristic urban form/voids/access/fortification/tenure implications, incompatible or competing uses and corresponding district/Street-level refinement rules. For instance, a cliff citadel can favor distinct guarded upper and suppliers' lower districts when habitable shelves and labor exist; a surveyors' ring can favor strongly axial chartered districts, open arcs and routes without stamping a complete circular map; a treaty market can admit distinct exchange and separately controlled quarters where actual opposing communities exist. This is not a mandatory list of districts or free creation of institutions/resources: town.districts uses the candidate programs to choose actual eligible types that shape the city through feedback. Preserve template provenance; major works are separately commissioned and sited by their own supported catalogue rules.",
+        "Boundary condition handling": "Keep real named connections and physical preconditions; do not pretend an absent ferry, stable door or shore access exists.",
+        "Boundary condition source": "Parent/nearby roads, shore/river connections, neighboring cultures/claims/rights and magical door destinations when supported.",
+        "External context provider": "Town founding and template declarations, settlement history/GIS identity and site conditions, POI/major-work catalog eligibility, culture/political rights and real physical/magical affordances.",
+        "Initial condition handling": "Keep original selected template/authoring if present; only resolve a missing selection from actual eligible site evidence, not arbitrary default ideology or a novel city center. No added people/years.",
+        "Initial condition source": "Captured settlement identity/kernel, any selected template, surviving rights, founding history, named institutions/works, site elevation/water/access, external exchanges and applicable magical medium/practice.",
+        "Review notes": "Templates supply strongly expressive potential district programs and constraints, not finished district polygons. This is already selected once; no separate mid-refinement re-foundation.",
+        "Scale-specific phenomena": "Inherited founding template as active source of City-wide development policy and eligible, physically expressive district role programs, with future district/Street rules.",
+        "Scheduling / interactions": "Bind selected template and its district-type eligibility/morphology rules BEFORE town.districts/district-programs forms candidate types and before other City spatial processes. Continue supplying the same rule questions during City feedback and later district/Street refinement.",
+        "Spatial footprint / scope": "City settlement and relevant mapped approaches; record retained policy for Street refinements.",
+        "Time / iteration semantics": "Present-state inheritance/selection only; no elapsed founding years."
+      },
+      "Strategy ID": "city-template-policy",
+      "Strategy kind": "Inherited"
+    },
+    {
+      "Applicability": [
+        {
+          "Map type": "City",
+          "Map-specific fields": {
+            "Max resolution (m)": 6324.5553,
+            "Min resolution (m)": 0
+          },
+          "Resolution": "Regional"
+        }
+      ],
+      "Clock": "Present",
+      "Contract status": "Specified",
+      "Process ID": "town.collective-investment",
+      "Required bindings": [
+        "initial",
+        "boundary"
+      ],
+      "Shared contract": {
+        "Active / no-op": "Active — civic commitments and precinct claims",
+        "Behavior / strategy": "Respond to inherited named/candidate public institutions, actual patrons, civic needs, sponsors and selected template policy, INCLUDING the early type-bearing district programs. Where evidence supports a civic/sacred/administrative/learned district, negotiate a meaningful spatial precinct: courts, gardens, gathering squares, public grounds, symbolic approaches, connected service buildings and tenure boundaries on City scale. A district is allowed to be a conspicuous EMBODIMENT of its institution or purpose rather than an average scattering of 100-m civic blocks; stylize its geometric prominence strongly while preserving viable means, rights and actual works. Civic investment can reject or reshape district programs without legitimate sponsors, funds, institution or access; a district's name alone cannot fabricate a royal palace, temple, school, guards or magical structure. Give approved precinct rights and destination needs back to movement, construction, land competition and town.districts, BEFORE City district polygons finalize.",
+        "Boundary condition handling": "Retain external support/catchment when present and signal unknown support rather than assuming it away.",
+        "Boundary condition source": "Sponsors, customers and constituency outside the City frame, public travel/services, political claims crossing the city border.",
+        "External context provider": "Existing institution/patron and POI/major-work catalogue, selected template, early town.districts type programs, public rights, society investment/Standing and external constituency.",
+        "Initial condition handling": "Honor existing commitments and authored sites; use actual inherited resources and institutions, not fresh centuries of investment.",
+        "Initial condition source": "Captured named institutions, sites, major works, community/political demand, wealth/Standing and available means, area-scale livelihood and population, template/cultural rights and existing public spaces.",
+        "Review notes": "An eligible administrative/religious/civic district's type must be physically legible from major grounds and approaches, but budget/history/site eligibility remain real constraints.",
+        "Scale-specific phenomena": "Substantial civic, institutional and shared-service precinct rights/land reserves that shape roads, public open space and development.",
+        "Scheduling / interactions": "Co-iterate civic precinct proposals with district-programs, land claims, route access and developed land before final district space filling; no civic post-hoc use-label radius.",
+        "Spatial footprint / scope": "Main city plus credible outer institutions/works; a precinct may extend beyond the urban core.",
+        "Time / iteration semantics": "Present-state allocation of inherited commitments; no new elapsed public-works history."
+      },
+      "Composition order": 1,
+      "Strategy ID": "civic-precincts",
+      "Strategy kind": "Algorithm"
+    },
+    {
+      "Applicability": [
+        {
+          "Map type": "City",
+          "Map-specific fields": {
+            "Max resolution (m)": 6324.5553,
+            "Min resolution (m)": 0
+          },
+          "Resolution": "Regional"
+        }
+      ],
+      "Clock": "Present",
+      "Contract status": "Specified",
+      "Process ID": "town.collective-investment",
+      "Required bindings": [
+        "initial",
+        "boundary"
+      ],
+      "Shared contract": {
+        "Active / no-op": "Active — funded defensive-wall/enclosure decisions",
+        "Behavior / strategy": "As a distinct City investment decision stage, read actual threat/defensibility, sponsors/control, inherited historic defenses, available means/terrain, selected template enclosure policies, and the spatial needs of early district programs—citadel, controlled inner seat or guarded guild/common precincts can justify distinct defensive alignments. Choose none, partial, compound/inner, historical/outgrown or multiple wall projects where causes support them. District role can intensify or redirect legitimate defensive claims, but must not conjure free fortification. Physical walls are realized by construction; movement negotiates usable gates/crossings, and their material/access effects feed back into district viability and boundaries. The strong City stencil helps identify potentially protected concentrations but DOES NOT directly draw or require a wall. Suburbs and supported wayside sites may exist beyond any defenses.",
+        "Boundary condition handling": "Respect real connections and defense geography; do not invent attackers, outside supply, or routes to force a wall.",
+        "Boundary condition source": "External threats, hinterland approaches, connected towns/trade, neighboring rulers, coast/water defenses and authored boundary walls.",
+        "External context provider": "Society/defense, inherited fortifications and named rights, city stencil and template, early district-programs, civic sponsors, movement and terrain/water.",
+        "Initial condition handling": "Preserve already-existing walls, guard sites and inherited enclosed claims. New unrepresented spatial detail may be resolved without starting an invented historical siege or building campaign.",
+        "Initial condition source": "Actual institutional authority and defense need, historical wall GIS, named fortresses, civic/financial/material stock, terrain/rivers, template policy and trade/approach network.",
+        "Review notes": "Do not erase the separate City defensive phase. The city stencil and the defensive perimeter are distinct; walls are OPTIONAL actual constructed works, possibly several or partial.",
+        "Scale-specific phenomena": "Supported defensive projects: no wall, one or multiple partial/full walls, inner compounds, old retained rings and gate/crossing needs independent of district boundary.",
+        "Scheduling / interactions": "During coupled City development: consider district and template enclosure needs plus actual threat/means -> propose plausible defensive works -> construction realizes wall segments -> movement resolves gates -> resulting enclosure feeds district programs, land competition and local development -> final district partition.",
+        "Spatial footprint / scope": "City and its defensible built sites, including inner seats and outlying guard/defensive stations where supported.",
+        "Time / iteration semantics": "Present-state resolution of supported existing/historical works; no additional elapsed wall-building years."
+      },
+      "Composition order": 2,
+      "Strategy ID": "defensive-enclosures",
+      "Strategy kind": "Algorithm"
+    },
+    {
+      "Applicability": [
+        {
+          "Map type": "City",
+          "Map-specific fields": {
+            "Max resolution (m)": 6324.5553,
+            "Min resolution (m)": 0
+          },
+          "Resolution": "Regional"
+        }
+      ],
+      "Clock": "Present",
+      "Contract status": "Specified",
+      "Process ID": "town.land-competition",
+      "Required bindings": [
+        "initial",
+        "boundary"
+      ],
+      "Shared contract": {
+        "Active / no-op": "Active — overlapping City-scale land claims",
+        "Behavior / strategy": "Resolve overlapping and competing City-scale land, tenure and economic claims over present inhabitants, employment, BuiltUp/Standing, wealth/crowding, existing rights and selected settlement-template constraints. The City stencil provides a strong prior toward urban land demand and related built concentration INSIDE while supported outer farms, road settlements and gate suburbs remain possible OUTSIDE. Read active town.districts type programs: e.g. an eligible civic center presses for public precincts, a wealthy estate district reserves spacious tenure, crowded housing presses intensity, a guild district competes for service and productive frontage. Type programs exert real spatial pressure and take part in claim arbitration before routes and construction settle; conversely, unavailable rights, insufficient investment or physical barriers can weaken a proposed type. Publish viable area rights/intensity/reservation guidance to movement, investment, construction and final district geometry, not generic archetype labels or detailed Street parcels.",
+        "Boundary condition handling": "Respect external land/service claims and leave ambiguous rights unresolved when not supported; no artificial cutoff at urban core or City map boundary.",
+        "Boundary condition source": "Outside landholders, trade/workplace demands, adjoining jurisdiction and cultivated supply, major approach routes.",
+        "External context provider": "Society owner, City stencil, district-programs, template tenure policy, investment, regional economic support, terrain and main circulation.",
+        "Initial condition handling": "Treat numeric stocks and inherited rights as facts, not as exact building allocations; do not introduce a new population field or retroactive history.",
+        "Initial condition source": "Inherited occupation and social/economic states, strong City stencil, early selected town.districts role programs, template and property/public rights, major roads and sites, physical barriers, authored land uses.",
+        "Review notes": "Typed districts are an active competing input, and the City stencil is a high-weight interior development preference rather than an absolute map mask.",
+        "Scale-specific phenomena": "Territory-scale neighborhood character, development intensity and public/private/common land competition before City street/district geometry is fixed.",
+        "Scheduling / interactions": "Co-iterate area claims with district-programs, construction, public investment and main roads; pressures inside the stencil normally dominate developed land, but outside activity can win where routes/gates/work/cultivation justify it. Send feedback to strengthen/redirect eligible district programs BEFORE final partition.",
+        "Spatial footprint / scope": "Across City urban body, suburbs, outskirts and supported satellite/roadside settlement, not only inside a district.",
+        "Time / iteration semantics": "Present-state spatial claims/negotiation, no elapsed social or construction years."
+      },
+      "Strategy ID": "city-area-claims",
+      "Strategy kind": "Algorithm"
+    },
+    {
+      "Applicability": [
+        {
+          "Map type": "City",
+          "Map-specific fields": {
+            "Max resolution (m)": 6324.5553,
+            "Min resolution (m)": 0
+          },
+          "Resolution": "Regional"
+        }
+      ],
+      "Clock": "Present",
+      "Contract status": "Specified",
+      "Process ID": "town.districts",
+      "Required bindings": [
+        "initial",
+        "boundary"
+      ],
+      "Shared contract": {
+        "Active / no-op": "Active — generative district types and competing morphology",
+        "Behavior / strategy": "Execute EARLY in City formation and co-iterate BEFORE the geometry is settled. (1) Read the selected settlement/founding template's eligible district-program vocabulary (dominant roles, rights, social/civic/physical needs, indicative built intensity, open-space arrangement, network/fortification relationships and distinctive morphological signature), inherited/authored district types, society concentrations, major works and credible institutions. (2) Select an appropriate diversity of 7–14 distinct provisional district instances with clear PRIMARY roles/types, real supporting conditions/anchors and spatial aspirations; use conditioned competition/selection, not a quota that every city must include a slum, noble district, trade ward or civic precinct. Where justified by available people, wealth, rights, sponsors, culture, hazards and template, choose expressive district types; a cathedral precinct may be monumental, a citadel ward fortified, a dense under-resourced quarter labyrinthine, a wealthy residential district spacious or a trade ward visibly organized for freight. These ARE causally grounded intentionally exaggerated physical identities, not labels added to neutral geometry; allow supporting mixed uses inside each. (3) Represent each provisional district as a coherent area-scale program with candidate anchors, type/identity, spatial influence over the strongly stencil-favored urban interior, reserved/open land and needed access/defense, and demands on construction, land-competition, movement and collective investment. (4) Those owners actively respond in repeated current-state spatial passes; receive feasibility, economic activity, access and built-form feedback, intensify or weaken a type, move/reconfigure candidate extents and negotiate boundaries. Economic/resource/historical conditions can defeat ineligible proposed types. Do NOT generate a completed district polygon from a point-growth flood or tile the whole countryside. (5) Once physical pressures and type programs have shaped the urban morphology, invoke town.districts/district-partition to make the FINAL authoritative void-aware space-filling district polygons from the active programs. City stencil is a strong dense development prior, not a zero-outside build rule. Districts are the causal source of type-specific form; classification/publication merely exports the final identity and geometry.",
+        "Boundary condition handling": "Keep true outside access, rights and context and allow city-edge roads/outlying settlement without treating stencil or map outline as impassable. Do not invent off-map patrons, funding, religions or production.",
+        "Boundary condition source": "Actual external roads/markets/clients, influential neighboring settlements, river/harbor crossings, outside rights/people, authored district continuation and surrounding physical/magical conditions.",
+        "External context provider": "Template-policy handoff from town.initialize, society numeric/ownership and economic/POI signals, City stencil, actual access/terrain and GIS identity; reciprocal construction, movement, investment and land-competition feedback.",
+        "Initial condition handling": "Apply the stencil as strong preference for the main urban body and district siting. Preserve authored districts and real institutions. Select only roles compatible with the template and actual site/people/capacity/history evidence; type may be bold without conjuring its missing causes. No new historical founding event or census.",
+        "Initial condition source": "Inherited selected city founding template and its City/district policies; persistent named and authored district identity if present; strong City stencil/captured urban envelope; Region→City Population/BuiltUp/Standing/ruins, wealth/crowding, functions, terrain, roads/gates, real institutions, POIs/major works and adjacent/hinterland opportunities.",
+        "Review notes": "USER REQUIREMENT: This is a Semantic generation STRATEGY, not classification, labeling or post-hoc district recognition. The setting deliberately exaggerates district character: a district should physically embody its primary eligible type at City overview fidelity. The settlement template is a major source of eligible district identities and morphology; underlying causal evidence remains necessary. Strong stencil interior development, not hard clipping outside.",
+        "Scale-specific phenomena": "Early strong district archetype/program selection with causal exaggerated type-specific area-scale geometry pressure and compatible permanent later City identities.",
+        "Scheduling / interactions": "First after City template/site and numerical context: generate type programs; iterate with City land competition, collective civic/defense investment, main movement and construction, including historic/optional walls. Final district-partition only AFTER character has materially influenced geography; pass permanent type/identity to Street.",
+        "Spatial footprint / scope": "Main City stencil-influenced urban body; provisional roles may reach gates/adjacent development without prohibiting viable countryside activity.",
+        "Time / iteration semantics": "Repeat present-state spatial claim/demand feedback while City geometry forms, never a new episode of history."
+      },
+      "Composition order": 1,
+      "Strategy ID": "district-programs",
+      "Strategy kind": "Algorithm"
     }
   ]
 }

@@ -58,17 +58,6 @@ fn refresh(catalogue: &Catalogue, context: &Context<'_>, occurrence: &str) -> io
 pub fn sequence(catalogue: &Catalogue, context: &Context<'_>) -> io::Result<Sequence> {
     rounds(catalogue, context, false)
 }
-/// City walls follow the changing occupation. Site the city's major works on its ground.
-fn city_round(occurrence: &str, round: usize) -> Sequence {
-    vec![
-        invocation(
-            "refinement.city-walls",
-            occurrence,
-            Values::from_iter([("round".into(), round.into())]),
-        ),
-        invocation("refinement.city-works", occurrence, Values::new()),
-    ]
-}
 /// City guidance contributes to household placement during the society group. Walls and
 /// the hot spots' towns read its result before the next refinement round.
 pub fn city(catalogue: &Catalogue, context: &Context<'_>) -> io::Result<Sequence> {
@@ -99,6 +88,9 @@ fn rounds(catalogue: &Catalogue, context: &Context<'_>, city: bool) -> io::Resul
     .collect::<Sequence>();
     body.extend(group("terrain.refinement", "detail", span)?);
     body.extend(group("initialize.ecology", "detail", span)?);
+    if city {
+        body.extend(group("town.initialize", "city-policy", 0.)?);
+    }
     for round in 1..=DEVELOPMENT_EXPOSURE.len() {
         let occurrence = format!("round-{round}");
         body.push(invocation(
@@ -159,10 +151,26 @@ fn rounds(catalogue: &Catalogue, context: &Context<'_>, city: bool) -> io::Resul
             }
         }
         if city {
-            body.extend(city_round(&occurrence, round));
-            for slot in ["city.routes", "city.partition", "city.blocks"] {
+            body.push(invocation(
+                "refinement.city-works",
+                &occurrence,
+                Values::new(),
+            ));
+            // owner-direction(2026-11-24): district programs shape City geography before permanent district boundaries are drawn
+            for slot in [
+                "city.programs",
+                "city.claims",
+                "city.invest",
+                "city.routes",
+                "city.landscape",
+            ] {
                 body.extend(group(slot, &occurrence, 0.)?);
             }
+            body.extend(group(
+                "city.routes",
+                &format!("{occurrence}/crossings"),
+                0.,
+            )?);
         }
         body.extend(group(
             "water.routing",
@@ -171,7 +179,8 @@ fn rounds(catalogue: &Catalogue, context: &Context<'_>, city: bool) -> io::Resul
         )?);
     }
     if city {
-        body.extend(group("city.routes", "block-access", 0.)?);
+        // owner-direction(2026-11-24): City districts partition the developed main settlement after competing processes; ordinary streets and blocks belong to district maps
+        body.extend(group("city.partition", "final", 0.)?);
     }
     body.extend(refresh(catalogue, &context, "final")?);
     for slot in [
@@ -247,7 +256,7 @@ mod tests {
     use crate::atlas::features::{Selected, Selection};
 
     #[test]
-    fn city_develops_one_partition_and_connects_its_blocks_before_publication() {
+    fn city_resolves_ground_and_crossings_each_round_before_the_final_partition() {
         let catalogue = Catalogue::default();
         let selection = Selection::from([(
             "built.layout".into(),
@@ -278,30 +287,38 @@ mod tests {
         for round in 1..=DEVELOPMENT_EXPOSURE.len() {
             let r = format!("round-{round}");
             let growth = at(&format!("{r}/human.land.gather"));
-            let walls = at(&format!("{r}/refinement.city-walls"));
-            assert!(growth < walls && walls < at(&format!("{r}/refinement.city-works")));
+            let works = at(&format!("{r}/refinement.city-works"));
+            assert!(growth < works);
             let order = [
+                "city.programs/town.districts",
+                "city.claims/town.land-competition",
+                "city.invest/town.collective-investment",
                 "city.routes/town.movement",
-                "city.partition/town.districts",
-                "city.blocks/town.construction",
+                "city.landscape/town.construction",
             ]
             .map(|operation| at(&format!("{r}/built.layout/{operation}")));
-            assert!(walls < order[0] && order.windows(2).all(|p| p[0] < p[1]));
+            assert!(works < order[0] && order.windows(2).all(|p| p[0] < p[1]));
+            assert!(
+                order[3]
+                    < at(&format!(
+                        "{r}/crossings/built.layout/city.routes/town.movement"
+                    ))
+            );
         }
         let order = [
             format!(
-                "round-{}/built.layout/city.blocks/town.construction",
+                "round-{}/built.layout/city.landscape/town.construction",
                 DEVELOPMENT_EXPOSURE.len()
             ),
-            "block-access/built.layout/city.routes/town.movement".into(),
+            "final/built.layout/city.partition/town.districts".into(),
             "final/built.layout/city.publish/town.urban-geography".into(),
         ];
         assert!(order.windows(2).all(|pair| at(&pair[0]) < at(&pair[1])));
         assert_eq!(
             ids.iter()
-                .filter(|id| id.ends_with("/town.districts"))
+                .filter(|id| id.ends_with("city.partition/town.districts"))
                 .count(),
-            DEVELOPMENT_EXPOSURE.len()
+            1
         );
         assert!(ids.iter().all(|id| !id.contains("hot-spot-town")));
     }

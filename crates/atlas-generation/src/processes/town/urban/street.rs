@@ -27,59 +27,113 @@ pub(super) fn circulation(
 ) -> io::Result<()> {
     let kernel = state.spatial.as_ref();
     let road_index = kernel.index(roads).map_err(io::Error::other)?;
+    let has_blocks = urban.captured.iter().any(|f| f.kind == "cityBlock");
     let blocks: Vec<_> = urban
         .captured
         .iter()
-        .filter(|f| f.kind == "cityBlock")
+        .filter(|f| {
+            if has_blocks {
+                f.kind == "cityBlock"
+            } else {
+                f.kind == "urbanGround"
+            }
+        })
         .collect();
     let start = blocks.len() * urban.street_round / DEVELOPMENT_ROUNDS;
     let end = blocks.len() * (urban.street_round + 1) / DEVELOPMENT_ROUNDS;
     for (i, block) in blocks.iter().enumerate().take(end).skip(start) {
+        let at = kernel
+            .interior_position(&block.geometry)
+            .map_err(io::Error::other)?;
+        let policy = state
+            .regional
+            .as_ref()
+            .and_then(|r| r.city.template.as_ref());
+        let aligned = policy
+            .and_then(|p| p.align(xy(at)))
+            .map(|v| v[1].atan2(v[0]));
         let density = number(block, "density", 1200.);
-        let angle = number(block, "orientation", 0.);
+        let angle = aligned.unwrap_or_else(|| number(block, "orientation", 0.));
         let spacing = 50. + 32. / (1. + density / 1600.);
-        let division = divide(
-            kernel,
-            &block.geometry,
-            spacing * spacing,
-            angle,
-            i as u64 + 317,
-        )?;
-        for way in division.ways {
-            for mut trace in boundary_lines(&way) {
-                if trace.len() < 2 {
-                    continue;
+        let pieces = if has_blocks {
+            vec![block.geometry.clone()]
+        } else {
+            let frame_land = kernel
+                .overlay(&block.geometry, frame, Overlay::Intersection)
+                .map_err(io::Error::other)?;
+            let Some(mut land) = frame_land else { continue };
+            for r in urban
+                .captured
+                .iter()
+                .filter(|r| matches!(r.kind.as_str(), "square" | "cityWall"))
+            {
+                let reserve = if r.kind == "cityWall" {
+                    kernel.buffer(&r.geometry, 3.).map_err(io::Error::other)?
+                } else {
+                    Some(r.geometry.clone())
+                };
+                if let Some(g) = reserve {
+                    land = kernel
+                        .overlay(&land, &g, Overlay::Difference)
+                        .map_err(io::Error::other)?
+                        .unwrap_or(Geometry::GeometryCollection { geometries: vec![] });
                 }
-                for at in [0, trace.len() - 1] {
-                    let p = trace[at];
-                    let Some(j) = road_index.nearest(p).map_err(io::Error::other)? else {
-                        continue;
-                    };
-                    let [_, on] = kernel
-                        .nearest_points(&point(p), &roads[j])
-                        .map_err(io::Error::other)?;
-                    if distance(xy(p), xy(on)) <= 6.
-                        && kernel
-                            .covers_points(frame, &[on])
-                            .map_err(io::Error::other)?[0]
-                    {
-                        trace[at] = on;
-                    }
-                }
-                urban.routes.push(Element::way(
-                    Geometry::LineString { coordinates: trace },
-                    "thoroughfare",
-                    "Local lane",
-                    3.5,
-                ));
             }
-        }
-        for shape in division.faces {
-            let mut lot = Element::new(shape, "yard", "Frontage");
-            lot.attributes = block.attributes.clone();
-            lot.attributes
-                .insert("parentBlock".into(), block.id.to_string().into());
-            urban.frontages.push(lot);
+            super::geometry::faces(kernel, &land, roads)?
+        };
+        for piece in pieces {
+            let division = divide(kernel, &piece, spacing * spacing, angle, i as u64 + 317)?;
+            for way in division.ways {
+                for mut trace in boundary_lines(&way) {
+                    if trace.len() < 2 {
+                        continue;
+                    }
+                    for at in [0, trace.len() - 1] {
+                        let p = trace[at];
+                        let Some(j) = road_index.nearest(p).map_err(io::Error::other)? else {
+                            continue;
+                        };
+                        let [_, on] = kernel
+                            .nearest_points(&point(p), &roads[j])
+                            .map_err(io::Error::other)?;
+                        if distance(xy(p), xy(on)) <= 6.
+                            && kernel
+                                .covers_points(frame, &[on])
+                                .map_err(io::Error::other)?[0]
+                        {
+                            trace[at] = on;
+                        }
+                    }
+                    urban.routes.push(Element::way(
+                        Geometry::LineString { coordinates: trace },
+                        "thoroughfare",
+                        "Local lane",
+                        3.5,
+                    ));
+                }
+            }
+            for shape in division.faces {
+                if !has_blocks {
+                    let mut local = Element::new(shape.clone(), "cityBlock", "Street block");
+                    local.attributes = block.attributes.clone();
+                    local
+                        .attributes
+                        .insert("parentGround".into(), block.id.to_string().into());
+                    urban.blocks.push(local);
+                }
+                let mut lot = Element::new(shape, "yard", "Frontage");
+                lot.attributes = block.attributes.clone();
+                lot.attributes.insert(
+                    if has_blocks {
+                        "parentBlock"
+                    } else {
+                        "parentGround"
+                    }
+                    .into(),
+                    block.id.to_string().into(),
+                );
+                urban.frontages.push(lot);
+            }
         }
     }
     urban.street_round += 1;
@@ -150,7 +204,8 @@ pub(super) fn premises(
         };
         let usage = lot
             .attributes
-            .get("use")
+            .get("groundUse")
+            .or_else(|| lot.attributes.get("use"))
             .and_then(|v| v.as_str())
             .unwrap_or("residential");
         let density = lot
@@ -165,9 +220,9 @@ pub(super) fn premises(
             .unwrap_or(0.);
         let seed = (urban.street_round * 7919 + i * 157) as u64;
         let width = match usage {
-            "business" => 10.,
-            "industry" => 16.,
-            "civic" => 20.,
+            "business" | "Trade frontage" => 10.,
+            "industry" | "Working ground" => 16.,
+            "civic" | "Civic precinct" => 20.,
             _ => 7.5,
         };
         let coverage = (0.12 + 0.48 * density / (density + 1200.) + 0.4 * built / (built + 0.09))

@@ -63,15 +63,43 @@ pub(crate) fn gather(
     )
 }
 
-pub(super) fn walls(input: Rc<Inputs>) -> Operation {
-    city_step(
-        "refinement.city-walls",
-        input.seed,
-        |state, selection, seed| {
-            let round = state.regional.as_ref().map_or(0, |r| r.round);
-            raise_walls(state, selection, seed, round)
-        },
-    )
+pub(crate) fn inherit_policy(
+    state: &mut State,
+    seed: i32,
+    requested: Option<crate::town::templates::Template>,
+) -> Result<(), ExecutionError> {
+    use crate::town::templates::Template;
+    let id = state
+        .scope
+        .city
+        .as_ref()
+        .ok_or_else(|| io::Error::other("City policy requires its captured settlement"))?
+        .settlement;
+    let record = match state.records.source_features.as_deref() {
+        Some(source) => source.get(id)?,
+        None => state.records.features.get(id)?,
+    };
+    if let Some(policy) = record
+        .as_ref()
+        .and_then(|r| r.attributes.get("templatePolicy"))
+    {
+        state.regional.as_mut().unwrap().city.template =
+            Some(serde_json::from_value(policy.clone()).map_err(io::Error::other)?);
+        return Ok(());
+    }
+    let saved = record
+        .as_ref()
+        .and_then(|r| r.attributes.get("settlementTemplate"))
+        .and_then(|v| v.as_str())
+        .and_then(Template::from_name);
+    let mut selection = template(state, seed, CITY_ORIGIN)?;
+    if let Some(chosen) = saved.or(requested) {
+        if saved.is_some() || selection.ranked.iter().any(|c| c.template == chosen) {
+            selection.selected = chosen;
+        }
+    }
+    state.regional.as_mut().unwrap().city.template = Some(selection);
+    Ok(())
 }
 
 /// Slope at which ground defends a wall's face on its own, rise over run.
@@ -97,6 +125,9 @@ fn wall_runs(state: &State) -> io::Result<Vec<(Faces, Faces)>> {
     }
     let busiest = ways.iter().copied().fold(0., f64::max).max(f64::EPSILON);
     ways.iter_mut().for_each(|w| *w /= busiest);
+    for &c in &regional.city.gate_crossings {
+        ways[c as usize] = 1.;
+    }
     let neighbours = |cell| [0, 1, 2].map(|edge| mesh.neighbor(cell, edge));
     let mut runs = Vec::new();
     for wall in &regional.city.walls {
@@ -248,7 +279,7 @@ pub(crate) struct Settlement {
     /// The radius of its built ground, at least the least a city map opens on.
     pub(super) built_radius: f64,
     /// Its census.
-    pub(super) people: Option<f64>,
+    pub(crate) people: Option<f64>,
 }
 /// The city map's settlement, read by the identity its captured record took.
 pub(crate) fn settlement(state: &State) -> io::Result<Option<Settlement>> {
@@ -491,7 +522,21 @@ fn template(
     else {
         return Err(io::Error::other("City template requires a settlement site").into());
     };
-    let site = survey(state, settlement)?;
+    let mut site = survey(state, settlement)?;
+    let city = state.scope.city.as_ref().unwrap();
+    let saved = match state.records.source_features.as_deref() {
+        Some(source) => source.get(city.settlement)?,
+        None => state.records.features.get(city.settlement)?,
+    };
+    if let Some(place) = saved {
+        let guarded = site.guarded
+            || place.attributes.get("fortress").and_then(|v| v.as_bool()) == Some(true);
+        let story = crate::atlas::town::site::story(&place, site.approaches.len(), guarded);
+        site.guarded = story.guarded;
+        site.seat = story.seat;
+        site.old = story.old();
+        site.planned = story.planned();
+    }
     let selection = Selection::choose(site, draw(seed, 0, 1));
     if let Some(regional) = state.regional.as_mut() {
         regional.city.template = Some(selection.clone());
@@ -509,14 +554,13 @@ const OUTGROWN: f64 = 0.35;
 /// Walls rise where their causes meet: a template that keeps a seat of power or guards its
 /// ground, a city large enough to build them, and built land standing unwalled. The ruling
 /// compound or citadel a template encloses gets its own inner wall in the first round.
-fn raise_walls(
-    state: &mut State,
+pub(crate) fn propose_walls(
+    state: &State,
     selection: &Selection,
-    seed: i32,
     round: usize,
-) -> io::Result<()> {
+) -> io::Result<Vec<crate::town::walls::Wall>> {
     use crate::town::walls::{enclosed, outgrown, Wall};
-    let (city_wall, citadel_wall) = {
+    let (city_wall, citadel_wall, capital) = {
         let field = state.field();
         let mesh = field.mesh();
         let [ox, oy] = mesh.origin();
@@ -529,11 +573,14 @@ fn raise_walls(
         let mut built = Vec::with_capacity(mesh.len());
         let mut open = Vec::with_capacity(mesh.len());
         let mut people = 0.;
+        let mut capital = 0.;
+        let standing = field.people().view(HumanField::Layer(LayerId::Standing));
         let mut heart = (f64::INFINITY, 0);
         for cell in 0..mesh.len() {
             built.push(built_band.get(cell)?.clamp(0., 1.));
             open.push(habitable(field, cell)?);
             people += field.people().people(cell)? * mesh.area(cell) / 1e6;
+            capital += standing.get(cell)? * mesh.area(cell) / 1e6;
             let p = at(cell);
             let d = (p[0] - centre[0]).hypot(p[1] - centre[1]);
             if d < heart.0 && open[cell] {
@@ -554,22 +601,18 @@ fn raise_walls(
                 share
             }
         };
-        let inclination = if selection.enclosed_seat().is_some() {
-            0.9
-        } else if selection.site.guarded || selection.site.seat || selection.site.upper.is_some() {
-            0.6
-        } else {
-            0.35
-        };
+        let sponsored = selection.site.guarded
+            || selection.enclosed_seat().is_some()
+            || (selection.site.seat && selection.site.upper.is_some());
         let able = ((people - BUILDERS) / (WALLED_CITY - BUILDERS)).clamp(0., 1.);
-        let raise = draw(seed, round, 2) < inclination * need * able;
+        let raise = sponsored && capital > 0. && need * able > 0.3;
         let city = raise.then(|| {
             enclosed(&built, &open, heart.1, |c| {
                 [0, 1, 2].map(|edge| mesh.neighbor(c, edge))
             })
         });
         // A template's enclosed seat is walled on its own in the first round.
-        let citadel = (round <= 1 && walls.is_empty())
+        let citadel = (round <= 1 && walls.is_empty() && capital > 0.)
             .then(|| {
                 let anchor = selection.site.point(selection.enclosed_seat()?)?;
                 let radius = selection.enclosure_radius(selection.quarter())?;
@@ -583,21 +626,35 @@ fn raise_walls(
                 )
             })
             .flatten();
-        (city, citadel)
+        (city, citadel, capital)
     };
-    let Some(regional) = state.regional.as_mut() else {
-        return Ok(());
-    };
+    let mut proposals = Vec::new();
     for cells in [citadel_wall, city_wall].into_iter().flatten() {
         let inside: Vec<u32> = (0..cells.len())
             .filter(|&c| cells[c])
             .map(|c| c as u32)
             .collect();
-        if !inside.is_empty() {
-            regional.city.walls.push(Wall { round, inside });
+        let mesh = state.field().mesh();
+        let length: f64 = inside
+            .iter()
+            .flat_map(|c| (0..3).map(move |edge| (*c as usize, edge)))
+            .filter(|&(c, e)| mesh.neighbor(c, e).is_some_and(|neighbor| !cells[neighbor]))
+            .map(|(c, e)| mesh.edge_length(c, e))
+            .sum();
+        // A wall competes for standing works in proportion to its length and defended area.
+        let masonry = length * 8. / 1e6 * crate::human::catalogue::FULL_STANDING_PER_BUILT_KM2;
+        if !inside.is_empty() && masonry <= capital * 0.15 {
+            if !state
+                .regional
+                .iter()
+                .flat_map(|r| &r.city.walls)
+                .any(|old| old.inside == inside)
+            {
+                proposals.push(Wall { round, inside });
+            }
         }
     }
-    Ok(())
+    Ok(proposals)
 }
 
 /// Founding evidence read at city scale: the city's centre, its usable shore and levels, the
@@ -637,7 +694,20 @@ fn survey(state: &State, settlement: Settlement) -> io::Result<SiteEvidence> {
         if d > core {
             continue;
         }
-        if !habitable(field, cell)? {
+        let dry = habitable(field, cell)?;
+        let terrain = if dry {
+            crate::town::ground::FREE
+        } else {
+            crate::town::ground::WATER
+        };
+        crate::atlas::town::founding_site::observe_landscape(
+            &mut evidence.works,
+            field,
+            cell,
+            terrain,
+            p,
+        )?;
+        if !dry {
             if evidence.shore.is_none_or(|s| distance(s) > d) {
                 evidence.shore = Some(p);
             }
@@ -653,6 +723,56 @@ fn survey(state: &State, settlement: Settlement) -> io::Result<SiteEvidence> {
     if relief.high.0 - relief.low.0 > LEVELS {
         evidence.upper = Some(relief.high.1);
         evidence.lower = Some(relief.low.1);
+    }
+    let source = state.records.source_features.as_deref();
+    let selection = crate::features::FeatureSelection {
+        area_id: source.is_none().then_some(state.scope.area),
+        kind: None,
+        layer_id: None,
+    };
+    let records = match source {
+        Some(reader) => reader.values(selection)?,
+        None => state.records.features.values(selection)?,
+    };
+    for record in records {
+        let feature = record?;
+        if feature.kind == "road"
+            && feature
+                .attributes
+                .get("strategic")
+                .and_then(|v| v.as_bool())
+                == Some(true)
+        {
+            let centre = atlas_map::regions::point(atlas_map::Position::xy(centre[0], centre[1]));
+            evidence.guarded |= state
+                .spatial
+                .distance(&centre, &feature.geometry)
+                .map_err(io::Error::other)?
+                <= core;
+        }
+        if state.catalogue.offers_for(&feature).is_none()
+            && !feature.attributes.contains_key("tenure")
+            && !feature.attributes.contains_key("habitat")
+        {
+            continue;
+        }
+        let at = state
+            .spatial
+            .interior_position(&feature.geometry)
+            .map_err(io::Error::other)?;
+        let [x, y, _] = at.coordinates();
+        if distance([x, y]) > core {
+            continue;
+        }
+        if let Some(c) = crate::field::refinement::courses::cell_at(mesh, [x, y]) {
+            crate::atlas::town::founding_site::observe_feature(
+                state,
+                !habitable(field, c)?,
+                &feature,
+                [x, y],
+                &mut evidence,
+            )?;
+        }
     }
     evidence.approaches = approaches;
     evidence.cultivated = farmland > 0.;
