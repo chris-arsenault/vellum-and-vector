@@ -10,6 +10,7 @@ use crate::{
     field::people::work::habitable,
     human::{
         catalogue::{LayerId, FULL_STANDING_PER_BUILT_KM2},
+        identity::{Tradition, IDENTITY_SLOTS},
         HumanField,
     },
     town::{catalogue::Activity, templates::Selection},
@@ -31,7 +32,7 @@ pub(super) struct Program {
     pub evidence: serde_json::Value,
     pub demands: Demands,
     #[serde(default)]
-    pub origin_candidates: Vec<(Trope, [f64; 2], String)>,
+    pub origin_candidates: OriginCandidates,
     pub cell: usize,
     pub name: String,
     pub reach: f64,
@@ -125,25 +126,8 @@ fn found(
 ) -> io::Result<Vec<Program>> {
     let f = state.field();
     let mesh = f.mesh();
-    let band = |id| f.people().view(HumanField::Layer(id));
-    let built = band(LayerId::BuiltUp);
-    let capital = band(LayerId::Standing);
-    let ways = f.people().view(HumanField::KeptLine);
     let points: Vec<_> = (0..mesh.len()).map(|c| position(mesh, c)).collect();
-    let mut support = vec![0.; mesh.len()];
-    let mut residents = 0.;
-    let mut assets = 0.;
-    for (c, v) in support.iter_mut().enumerate() {
-        let p = f.people().people(c)?;
-        let b = built.get(c)?;
-        if u.fields.stencil[c] > 0.5 && habitable(f, c)? && p > 0. && b > 0. {
-            residents += p * mesh.area(c);
-            assets += capital.get(c)? * mesh.area(c);
-            *v = u.fields.stencil[c]
-                * (p.ln_1p() + 2. * b.sqrt() + ways.get(c)?.sqrt())
-                * template.city_affinity(points[c]).sqrt();
-        }
-    }
+    let (mut support, assets, residents) = district_support(state, u, template, &points)?;
     // owner-direction(2026-11-24): geography and social processes determine district count and districts cover all districtable ground
     let area = state
         .spatial
@@ -151,23 +135,7 @@ fn found(
         .map_err(io::Error::other)?;
     // owner-direction(2026-11-24): tune how far a district centre serves, leaving the district count to the city.
     let reach = catchment(template.quarter(), area, mesh.spacing(), catchment_scale);
-    let mut draws = Draws::default();
-    for retained in super::values(state, "district")? {
-        if let Some(program) = retained.attributes.get("districtProgram") {
-            draws.include_retained(program);
-        }
-        let positions: Vec<_> = points.iter().copied().map(pos).collect();
-        for (score, held) in support.iter_mut().zip(
-            state
-                .spatial
-                .covers_points(&retained.geometry, &positions)
-                .map_err(io::Error::other)?,
-        ) {
-            if held {
-                *score = 0.;
-            }
-        }
-    }
+    let mut draws = retained_draws(state, &points, &mut support)?;
     let centres = crate::town::city::hot_spots(&support, &points, reach, usize::MAX);
     for feature in super::selected(state, None)? {
         if feature_trope(&feature).is_some() && !sources.iter().any(|f| f.id == feature.id) {
@@ -189,28 +157,7 @@ fn found(
         let point = points[c];
         let ground = DistrictGround::read(state, u, c, reach)?;
         let b = ground.built;
-        let location = atlas_map::regions::point(pos(point));
-        let mut facts = Vec::new();
-        let mut sites = Vec::new();
-        for source in &sources {
-            if let Some(id) = feature_trope(source) {
-                if state
-                    .spatial
-                    .distance(&location, &source.geometry)
-                    .map_err(io::Error::other)?
-                    < reach * 0.65
-                {
-                    if CATALOG.iter().any(|e| e.id == id && e.localized_origin) {
-                        let [_, nearest] = state
-                            .spatial
-                            .nearest_points(&location, &source.geometry)
-                            .map_err(io::Error::other)?;
-                        sites.push((id, super::geometry::xy(nearest), source.id.to_string()));
-                    }
-                    facts.push((id, source.id.to_string()));
-                }
-            }
-        }
+        let (mut facts, mut sites) = nearby_sources(state, &sources, reach, point)?;
         let near = |at: [f64; 2]| (at[0] - point[0]).hypot(at[1] - point[1]) < reach;
         let route = ground.ways.sqrt()
             + template
@@ -239,29 +186,14 @@ fn found(
         }
         let tenure = template.tenure(Activity::Household, point, template.quarter());
         let trade = ground.trade;
-        use crate::{
-            field::poi::values::Benefit,
-            human::identity::{Tradition, IDENTITY_SLOTS},
-        };
+        use crate::field::poi::values::Benefit;
         let offer = |kind| {
             f.place_offers()
                 .map_or(Ok(0.), |offers| offers.benefit(kind, c))
         };
         let industry = f64::from(template.site.industry.is_some_and(near)) + offer(Benefit::Power)?;
         let supplies = offer(Benefit::Materials)? + trade;
-        let mut contacts = 0.;
-        let mut craft = 0.;
-        for slot in 0..IDENTITY_SLOTS {
-            let group = f.people().identity(slot);
-            let people = group.people.get(c)?;
-            if group.traditions[Tradition::Craft as usize].get(c)? > 0 {
-                craft += people;
-            }
-            let known = group.traditions[Tradition::Known as usize].get(c)?;
-            if known > 0 && known != group.traditions[Tradition::Tongue as usize].get(c)? {
-                contacts += people;
-            }
-        }
+        let (contacts, craft) = craft_and_contacts(f, c)?;
         let craft = (industry + craft / f.people().people(c)?.max(1.)) * supplies.sqrt();
         let people = ground.people;
         if craft > 0. && tenure == crate::town::templates::Tenure::Common {
@@ -342,24 +274,114 @@ fn found(
     programs.sort_by_key(|(rank, _)| *rank);
     Ok(programs.into_iter().map(|(_, p)| p).collect())
 }
+
+fn district_support(
+    state: &State,
+    u: &Urban,
+    template: &Selection,
+    points: &[[f64; 2]],
+) -> io::Result<(Vec<f64>, f64, f64)> {
+    let f = state.field();
+    let mesh = f.mesh();
+    let band = |id| f.people().view(HumanField::Layer(id));
+    let built = band(LayerId::BuiltUp);
+    let capital = band(LayerId::Standing);
+    let ways = f.people().view(HumanField::KeptLine);
+    let mut support = vec![0.; mesh.len()];
+    let mut residents = 0.;
+    let mut assets = 0.;
+    for (c, v) in support.iter_mut().enumerate() {
+        let p = f.people().people(c)?;
+        let b = built.get(c)?;
+        if u.fields.stencil[c] > 0.5 && habitable(f, c)? && p > 0. && b > 0. {
+            residents += p * mesh.area(c);
+            assets += capital.get(c)? * mesh.area(c);
+            *v = u.fields.stencil[c]
+                * (p.ln_1p() + 2. * b.sqrt() + ways.get(c)?.sqrt())
+                * template.city_affinity(points[c]).sqrt();
+        }
+    }
+    Ok((support, assets, residents))
+}
+
+fn craft_and_contacts(f: &crate::field::Field, c: usize) -> Result<(f64, f64), io::Error> {
+    let mut contacts = 0.;
+    let mut craft = 0.;
+    for slot in 0..IDENTITY_SLOTS {
+        let group = f.people().identity(slot);
+        let people = group.people.get(c)?;
+        if group.traditions[Tradition::Craft as usize].get(c)? > 0 {
+            craft += people;
+        }
+        let known = group.traditions[Tradition::Known as usize].get(c)?;
+        if known > 0 && known != group.traditions[Tradition::Tongue as usize].get(c)? {
+            contacts += people;
+        }
+    }
+    Ok((contacts, craft))
+}
+
+type SourceFacts = Vec<(Trope, String)>;
+type OriginCandidates = Vec<(Trope, [f64; 2], String)>;
+
+fn nearby_sources(
+    state: &State,
+    sources: &[Feature],
+    reach: f64,
+    point: [f64; 2],
+) -> Result<(SourceFacts, OriginCandidates), io::Error> {
+    let location = atlas_map::regions::point(pos(point));
+    let mut facts = Vec::new();
+    let mut sites = Vec::new();
+    for source in sources {
+        if let Some(id) = feature_trope(source) {
+            if state
+                .spatial
+                .distance(&location, &source.geometry)
+                .map_err(io::Error::other)?
+                < reach * 0.65
+            {
+                if CATALOG.iter().any(|e| e.id == id && e.localized_origin) {
+                    let [_, nearest] = state
+                        .spatial
+                        .nearest_points(&location, &source.geometry)
+                        .map_err(io::Error::other)?;
+                    sites.push((id, super::geometry::xy(nearest), source.id.to_string()));
+                }
+                facts.push((id, source.id.to_string()));
+            }
+        }
+    }
+    Ok((facts, sites))
+}
+
+fn retained_draws(
+    state: &State,
+    points: &[[f64; 2]],
+    support: &mut [f64],
+) -> Result<Draws, io::Error> {
+    let mut draws = Draws::default();
+    for retained in super::values(state, "district")? {
+        if let Some(program) = retained.attributes.get("districtProgram") {
+            draws.include_retained(program);
+        }
+        let positions: Vec<_> = points.iter().copied().map(pos).collect();
+        for (score, held) in support.iter_mut().zip(
+            state
+                .spatial
+                .covers_points(&retained.geometry, &positions)
+                .map_err(io::Error::other)?,
+        ) {
+            if held {
+                *score = 0.;
+            }
+        }
+    }
+    Ok(draws)
+}
 fn catchment(quarter: f64, settled_area: f64, spacing: f64, scale: f64) -> f64 {
     let city_radius = (settled_area / std::f64::consts::PI).sqrt();
     (scale * (quarter * city_radius).sqrt()).max(2. * spacing)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::catchment;
-    #[test]
-    fn catchment_scale_groups_nearby_centres_without_limiting_distant_ones() {
-        let candidates = [[0., 0.], [2800., 0.], [7700., 0.]];
-        let found = |scale| {
-            let reach = catchment(90., std::f64::consts::PI * 10_000_f64.powi(2), 100., scale);
-            crate::town::city::hot_spots(&[3., 2., 1.], &candidates, reach, usize::MAX)
-        };
-        assert_eq!(found(2.4), vec![0, 1, 2]);
-        assert_eq!(found(3.6), vec![0, 2]);
-    }
 }
 
 fn feature_trope(f: &Feature) -> Option<Trope> {
@@ -378,4 +400,19 @@ fn feature_trope(f: &Feature) -> Option<Trope> {
         Guild => Trope::Guild,
         Refuge => Trope::Outlanders,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::catchment;
+    #[test]
+    fn catchment_scale_groups_nearby_centres_without_limiting_distant_ones() {
+        let candidates = [[0., 0.], [2800., 0.], [7700., 0.]];
+        let found = |scale| {
+            let reach = catchment(90., std::f64::consts::PI * 10_000_f64.powi(2), 100., scale);
+            crate::town::city::hot_spots(&[3., 2., 1.], &candidates, reach, usize::MAX)
+        };
+        assert_eq!(found(2.4), vec![0, 1, 2]);
+        assert_eq!(found(3.6), vec![0, 2]);
+    }
 }

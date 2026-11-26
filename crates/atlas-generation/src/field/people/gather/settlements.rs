@@ -75,16 +75,7 @@ fn neighbourhoods(parcels: &[Parcel], towns: &[SettlementCensus]) -> (Vec<Vec<us
     let mut threshold = vec![0.; towns.len()];
     let mut front = KeyedHeap::new([Direction::Ascending], Direction::Ascending);
     for (town, survey) in towns.iter().enumerate() {
-        let anchor = &parcels[survey.cell];
-        let seed = if anchor.dry {
-            Some(survey.cell)
-        } else {
-            anchor.ways[..anchor.adjacent]
-                .iter()
-                .map(|&(to, _)| to)
-                .filter(|&to| parcels[to].dry)
-                .max_by(|&a, &b| parcels[a].support.total_cmp(&parcels[b].support))
-        };
+        let seed = settlement_anchor(parcels, survey);
         if let Some(cell) = seed {
             if owner[cell] != usize::MAX && towns[owner[cell]].townspeople >= survey.townspeople {
                 continue;
@@ -120,6 +111,20 @@ fn neighbourhoods(parcels: &[Parcel], towns: &[SettlementCensus]) -> (Vec<Vec<us
         groups,
         owner.iter().map(|&town| town != usize::MAX).collect(),
     )
+}
+
+fn settlement_anchor(parcels: &[Parcel], survey: &SettlementCensus) -> Option<usize> {
+    let anchor = &parcels[survey.cell];
+    let seed = if anchor.dry {
+        Some(survey.cell)
+    } else {
+        anchor.ways[..anchor.adjacent]
+            .iter()
+            .map(|&(to, _)| to)
+            .filter(|&to| parcels[to].dry)
+            .max_by(|&a, &b| parcels[a].support.total_cmp(&parcels[b].support))
+    };
+    seed
 }
 
 // owner-direction(2026-11-25): a full city's population must account for the named city's townspeople.

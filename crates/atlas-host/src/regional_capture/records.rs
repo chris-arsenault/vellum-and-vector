@@ -314,10 +314,7 @@ mod tests {
         capture(&region, features, &ids, &mut output).unwrap();
         let names: Vec<_> = output.features.iter().map(|f| f.name.as_str()).collect();
         assert_eq!(names, ["west", "east", "field", "Market quarter"]);
-        let quarter = &output.features[3];
-        assert_eq!(quarter.id, district_id);
-        assert_eq!(quarter.geometry, district_shape);
-        assert!(quarter.protected && quarter.state == State::Authored);
+        assert_retained_quarter(&output.features[3], district_id, &district_shape);
         let east = &output.features[1];
         assert_eq!(east.id, ids[&Id::from_name("east")]);
         assert_eq!(east.place_id, Some(Id::from_name("east")));
@@ -330,5 +327,11 @@ mod tests {
         assert_eq!(output.nodes.len(), 3);
         assert_eq!(output.reaches.len(), 2);
         assert_eq!(output.reaches[0].end, output.reaches[1].start);
+    }
+
+    fn assert_retained_quarter(quarter: &Feature, id: Id, shape: &Geometry) {
+        assert_eq!(quarter.id, id);
+        assert_eq!(&quarter.geometry, shape);
+        assert!(quarter.protected && quarter.state == State::Authored);
     }
 }

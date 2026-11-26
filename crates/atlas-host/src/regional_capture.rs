@@ -4,7 +4,7 @@ mod context;
 mod fields;
 mod footprint;
 mod map;
-pub use map::capture;
+pub use map::{capture, PublishedMap};
 mod records;
 use crate::{
     generation_document::Document, generation_frame::Geography, numerical_resource::Descriptor,

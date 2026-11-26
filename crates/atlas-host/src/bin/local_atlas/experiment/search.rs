@@ -134,9 +134,11 @@ mod tests {
 
     #[test]
     fn bisection_brackets_a_threshold_in_both_directions() {
+        let target = 3.27;
         for sign in [-1., 1.] {
-            let [low, high] = bisect([0., 10.], 0.01, 3.14 * sign, &mut |x| Ok(x * sign)).unwrap();
-            assert!((low..=high).contains(&3.14));
+            let [low, high] =
+                bisect([0., 10.], 0.01, target * sign, &mut |x| Ok(x * sign)).unwrap();
+            assert!((low..=high).contains(&target));
             assert!(high - low <= 0.01);
         }
     }

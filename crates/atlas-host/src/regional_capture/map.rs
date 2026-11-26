@@ -13,12 +13,16 @@ use atlas_generation::{
 };
 use atlas_gis::map_store::{FeatureQuery, MapAccess};
 use std::io;
+pub struct PublishedMap<'a> {
+    pub maps: &'a dyn MapAccess,
+    pub files: &'a atlas_gis::map_files::MapFiles,
+}
+
 pub fn capture(
     selection: Selection<'_>,
     document: Document,
     inputs: &impl Source,
-    maps: &dyn MapAccess,
-    files: &atlas_gis::map_files::MapFiles,
+    PublishedMap { maps, files }: PublishedMap<'_>,
     records: &dyn FeatureReader,
     spatial: &dyn SpatialKernel,
 ) -> io::Result<Capture> {

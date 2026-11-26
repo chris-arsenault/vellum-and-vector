@@ -96,6 +96,36 @@ impl<A: Copy> Dispatch<A> {
     }
 }
 
+/// A matched inactive rule returns None. Missing or ambiguous coverage is an error.
+pub(crate) fn select_rule<A: Copy>(
+    id: &str,
+    rules: &[Rule<A>],
+    site: Site,
+    timing: Timing,
+) -> io::Result<Option<A>> {
+    let mut selected = rules.iter().filter(|rule| {
+        rule.maps.contains(&site.map_type)
+            && rule.resolution.contains(site.cell_metres)
+            && rule.timing.is_none_or(|when| when == timing)
+    });
+    let describe = || {
+        format!(
+            "{} at {:?} / {} m / {:?}",
+            id, site.map_type, site.cell_metres, timing
+        )
+    };
+    let rule = selected
+        .next()
+        .ok_or_else(|| io::Error::other(format!("No process disposition for {}", describe())))?;
+    if selected.next().is_some() {
+        return Err(io::Error::other(format!(
+            "Overlapping process dispositions for {}",
+            describe()
+        )));
+    }
+    Ok(rule.behavior)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -176,6 +206,10 @@ mod tests {
             assert!(band.contains(upper));
             assert!(!band.contains(upper.next_up()));
         }
+    }
+
+    #[test]
+    fn quality_constructors_select_their_scale_band() {
         for quality in [Quality::Draft, Quality::Standard, Quality::Fine] {
             assert!(ScaleBand::World.contains(quality.cell_span(Profile::World).unwrap()));
             for level in [1, 4, 7] {
@@ -210,34 +244,4 @@ mod tests {
             .unwrap_err();
         assert_eq!(err.to_string(), "unreadable");
     }
-}
-
-/// A matched inactive rule returns None. Missing or ambiguous coverage is an error.
-pub(crate) fn select_rule<A: Copy>(
-    id: &str,
-    rules: &[Rule<A>],
-    site: Site,
-    timing: Timing,
-) -> io::Result<Option<A>> {
-    let mut selected = rules.iter().filter(|rule| {
-        rule.maps.contains(&site.map_type)
-            && rule.resolution.contains(site.cell_metres)
-            && rule.timing.is_none_or(|when| when == timing)
-    });
-    let describe = || {
-        format!(
-            "{} at {:?} / {} m / {:?}",
-            id, site.map_type, site.cell_metres, timing
-        )
-    };
-    let rule = selected
-        .next()
-        .ok_or_else(|| io::Error::other(format!("No process disposition for {}", describe())))?;
-    if selected.next().is_some() {
-        return Err(io::Error::other(format!(
-            "Overlapping process dispositions for {}",
-            describe()
-        )));
-    }
-    Ok(rule.behavior)
 }

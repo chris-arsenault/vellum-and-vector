@@ -127,13 +127,10 @@ pub(super) fn resolve(
             crate::town::walls::enclosure(&state.regional.as_ref().unwrap().city.walls, c);
         let investment = (1. + 0.20 * f64::from(enclosed))
             * (standing / (b + 0.015)).max(0.)
-            * (0.75 + 0.25 * tenure[c].max(0.).min(1.));
+            * (0.75 + 0.25 * tenure[c].clamp(0., 1.));
         let crowd = people / (600. + b * 5500. + standing * 9000.);
         let stencil = fields.stencil[c];
-        let program = fields
-            .program
-            .get(c)
-            .and_then(|&id| urban.programs.get(id as usize));
+        let program = fields.program.get(c).and_then(|&id| urban.programs.get(id));
         let strength = program.map_or(0., |p| p.strength) * stencil;
         let land = crate::town::templates::district::DistrictLand {
             wet: (scalar(Scalar::FloodplainIntensity).get(c)? / 1000.)

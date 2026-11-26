@@ -159,8 +159,7 @@ impl Surface<'_> {
     fn refine(
         &self,
         path: &[usize],
-        a: Point,
-        b: Point,
+        [a, b]: [Point; 2],
         way: &[bool],
         style: Alignment,
         out: &mut Vec<Point>,
@@ -209,8 +208,8 @@ impl Surface<'_> {
             out.push(b);
             return;
         }
-        self.refine(&path[..=half], a, best.1, way, style, out);
-        self.refine(&path[half..], best.1, b, way, style, out);
+        self.refine(&path[..=half], [a, best.1], way, style, out);
+        self.refine(&path[half..], [best.1, b], way, style, out);
     }
 
     fn round_bends(&self, points: &[Point], way: &[bool]) -> Vec<Point> {
@@ -276,21 +275,8 @@ pub(super) fn route_connections(
     }
     // Keep the continuity of a real line even where it crosses a triangle vertex.
     let mut links = vec![Vec::new(); way.len()];
-    let record = |road: &Element, links: &mut [Vec<usize>], way: &mut [bool]| {
-        let cells = super::grades::ground_cells(s.mesh, road);
-        for &c in &cells {
-            way[c] = true;
-        }
-        // Consecutive abutments link the two banks without seeding a junction beneath the deck.
-        for p in cells.windows(2) {
-            if p[0] != p[1] && !links[p[0]].contains(&p[1]) {
-                links[p[0]].push(p[1]);
-                links[p[1]].push(p[0]);
-            }
-        }
-    };
     for road in roads.iter() {
-        record(road, &mut links, way);
+        record_road(s.mesh, road, &mut links, way);
     }
     let mut graph = vec![Vec::new(); stops.len()];
     for connection in plan.connections {
@@ -316,55 +302,14 @@ pub(super) fn route_connections(
         graph[a].push((b, length));
         graph[b].push((a, length));
         let mut i = 0;
-        while i + 1 < path.len() {
-            if links[path[i]].contains(&path[i + 1]) {
-                used.extend_from_slice(&path[i..=i + 1]);
-                i += 1;
-                continue;
-            }
-            let first = i;
-            i += 1;
-            while i + 1 < path.len() && !way[path[i]] {
-                i += 1;
-            }
-            let last = i;
+        while let Some([first, last]) = next_unbuilt_section(&path, way, &links, &mut i, &mut used)
+        {
             let segment = &path[first..=last];
-            let mut ends = [s.points[path[first]], s.points[path[last]]];
-            // A junction joins the actual retained polyline, also when its course is sub-cell.
-            let shapes: Vec<_> = roads.iter().flat_map(super::grades::ground_parts).collect();
-            if !shapes.is_empty() {
-                let index = state.spatial.index(&shapes).map_err(io::Error::other)?;
-                for (v, c) in [(0, path[first]), (1, path[last])] {
-                    if !way[c] {
-                        continue;
-                    }
-                    let p = pos(ends[v]);
-                    if let Some(j) = index.nearest(p).map_err(io::Error::other)? {
-                        let [_, snap] = state
-                            .spatial
-                            .nearest_points(&point(p), &shapes[j])
-                            .map_err(io::Error::other)?;
-                        ends[v] = xy(snap);
-                    }
-                }
-            }
+            let ends = join_existing_roads(state, s, way, roads, &path, [first, last])?;
             if distance(ends[0], ends[1]) < 1e-6 && segment.len() == 2 {
                 continue;
             }
-            let mut points = vec![ends[0]];
-            s.refine(segment, ends[0], ends[1], way, style, &mut points);
-            if style == Alignment::Curved {
-                points = s.round_bends(&points, way);
-            }
-            let tolerance = if style == Alignment::Curved {
-                0.025
-            } else {
-                0.10
-            };
-            let course = state
-                .spatial
-                .resample_trace(&line(&points), s.mesh.spacing() * tolerance, None)
-                .map_err(io::Error::other)?;
+            let course = survey_alignment(state, s, way, style, segment, ends)?;
             let width = 9. + 4. * (1. + direct / 1000.).ln();
             let connection =
                 survey.connections(state.spatial.as_ref(), course, width, roads, &|a, b| {
@@ -378,7 +323,7 @@ pub(super) fn route_connections(
                 );
             }
             for mut road in connection.built {
-                record(&road, &mut links, way);
+                record_road(s.mesh, &road, &mut links, way);
                 used.extend(super::grades::ground_cells(s.mesh, &road));
                 road.attributes
                     .insert("alignment".into(), style.name().into());
@@ -399,6 +344,77 @@ pub(super) fn route_connections(
             traffic[c] += weight;
         }
     }
+    size_corridors(s, way, roads, &traffic);
+    Ok(traffic)
+}
+
+fn next_unbuilt_section(
+    path: &[usize],
+    way: &[bool],
+    links: &[Vec<usize>],
+    i: &mut usize,
+    used: &mut Vec<usize>,
+) -> Option<[usize; 2]> {
+    while *i + 1 < path.len() {
+        let first = *i;
+        *i += 1;
+        if links[path[first]].contains(&path[*i]) {
+            used.extend_from_slice(&path[first..=*i]);
+            continue;
+        }
+        while *i + 1 < path.len() && !way[path[*i]] {
+            *i += 1;
+        }
+        return Some([first, *i]);
+    }
+    None
+}
+
+fn record_road(
+    mesh: &TriangularLattice,
+    road: &Element,
+    links: &mut [Vec<usize>],
+    way: &mut [bool],
+) {
+    let cells = super::grades::ground_cells(mesh, road);
+    for &c in &cells {
+        way[c] = true;
+    }
+    // Consecutive abutments link the two banks without seeding a junction beneath the deck.
+    for p in cells.windows(2) {
+        if p[0] != p[1] && !links[p[0]].contains(&p[1]) {
+            links[p[0]].push(p[1]);
+            links[p[1]].push(p[0]);
+        }
+    }
+}
+
+fn survey_alignment(
+    state: &State,
+    s: &Surface<'_>,
+    way: &[bool],
+    style: Alignment,
+    segment: &[usize],
+    ends: [[f64; 2]; 2],
+) -> Result<atlas_map::Geometry, io::Error> {
+    let mut points = vec![ends[0]];
+    s.refine(segment, ends, way, style, &mut points);
+    if style == Alignment::Curved {
+        points = s.round_bends(&points, way);
+    }
+    let tolerance = if style == Alignment::Curved {
+        0.025
+    } else {
+        0.10
+    };
+    let course = state
+        .spatial
+        .resample_trace(&line(&points), s.mesh.spacing() * tolerance, None)
+        .map_err(io::Error::other)?;
+    Ok(course)
+}
+
+fn size_corridors(s: &Surface<'_>, way: &[bool], roads: &mut [Element], traffic: &[f64]) {
     // Width and access respond to the trips a corridor carries, including the
     // passages reused by later journeys. Reassess use on each development round.
     let occupied = way.iter().filter(|&&v| v).count().max(1);
@@ -421,7 +437,35 @@ pub(super) fn route_connections(
             stations.fill(width.into());
         }
     }
-    Ok(traffic)
+}
+
+fn join_existing_roads(
+    state: &State,
+    s: &Surface<'_>,
+    way: &[bool],
+    roads: &[Element],
+    path: &[usize],
+    [first, last]: [usize; 2],
+) -> Result<[[f64; 2]; 2], io::Error> {
+    let mut ends = [s.points[path[first]], s.points[path[last]]];
+    let shapes: Vec<_> = roads.iter().flat_map(super::grades::ground_parts).collect();
+    if !shapes.is_empty() {
+        let index = state.spatial.index(&shapes).map_err(io::Error::other)?;
+        for (v, c) in [(0, path[first]), (1, path[last])] {
+            if !way[c] {
+                continue;
+            }
+            let p = pos(ends[v]);
+            if let Some(j) = index.nearest(p).map_err(io::Error::other)? {
+                let [_, snap] = state
+                    .spatial
+                    .nearest_points(&point(p), &shapes[j])
+                    .map_err(io::Error::other)?;
+                ends[v] = xy(snap);
+            }
+        }
+    }
+    Ok(ends)
 }
 
 #[cfg(test)]

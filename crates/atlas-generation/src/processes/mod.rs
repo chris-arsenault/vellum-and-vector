@@ -10,7 +10,7 @@ pub mod rock_history;
 pub mod runner;
 pub mod slopes;
 pub mod solution;
-pub mod streams;
 pub mod strategies;
+pub mod streams;
 pub mod town;
 pub mod weathering;

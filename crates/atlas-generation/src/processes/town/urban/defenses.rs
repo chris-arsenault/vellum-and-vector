@@ -140,11 +140,6 @@ pub(super) fn invest(state: &State, u: &Urban) -> io::Result<Vec<Wall>> {
         return Ok(walls);
     }
     let mesh = state.field().mesh();
-    let area = state
-        .spatial
-        .area(state.scope.settled_outline())
-        .map_err(io::Error::other)?;
-    let positions: Vec<_> = (0..mesh.len()).map(|c| pos(position(mesh, c))).collect();
     let mut occupied = Vec::with_capacity(mesh.len());
     let mut supporters = 0.;
     let mut capital = 0.;
@@ -171,64 +166,22 @@ pub(super) fn invest(state: &State, u: &Urban) -> io::Result<Vec<Wall>> {
     let capacity =
         capital / (crate::human::catalogue::FULL_STANDING_PER_BUILT_KM2 * 8. / 1e6) * 0.15;
     let spent: f64 = walls.iter().map(Wall::funded).sum();
-    let mut budget = (capacity - spent).max(0.).min(supporters * 0.12);
-    if budget > 0.
-        && walls
-            .iter()
-            .all(|w| w.sections.iter().all(|s| s.built >= s.cost))
-    {
-        let reach = (area.sqrt() * 0.055).max(2. * mesh.spacing());
-        let pressure: Vec<_> = (0..mesh.len())
-            .map(|c| neighborhood(mesh, [&occupied], c, reach)[0])
-            .collect();
-        let values: Vec<_> = pressure
-            .iter()
-            .zip(&u.fields.stencil)
-            .filter(|(_, s)| **s > 0.5)
-            .map(|(v, _)| *v)
-            .collect();
-        let order = crate::hpc::radix_order(
-            &[crate::hpc::NumericKey::Float(&values)],
-            crate::hpc::Direction::Ascending,
-        )
-        .map_err(io::Error::other)?;
-        let mut best = None;
-        for fraction in [0.32, 0.56, 0.76] {
-            if values.is_empty() {
-                break;
-            }
-            let level = values[order[((values.len() - 1) as f64 * fraction) as usize]];
-            let Some(shape) = contour(state, &pressure, level.max(f64::EPSILON))? else {
-                continue;
-            };
-            for poly in parts(&shape) {
-                if let Some((value, wall)) = proposal(state, u, poly, &positions, &walls, area)? {
-                    if value > 0.12 && best.as_ref().is_none_or(|(v, _)| value > *v) {
-                        best = Some((value, wall));
-                    }
-                }
-            }
-        }
-        if let Some((_, wall)) = best {
-            walls.push(wall);
-        }
-    }
-    for w in &mut walls {
-        let residents: f64 = w
-            .inside
-            .iter()
-            .map(|&c| u.fields.claims[c as usize].people * mesh.area(c as usize) / 1e6)
-            .sum();
-        w.outgrown |= w.round < r.round && residents < 0.45 * supporters;
-        // Resolve the inherited present condition once from local evidence. Repeated
-        // spatial passes neither manufacture extra years of decay nor refund old work.
-        if w.outgrown {
-            for s in &mut w.sections {
-                let x = u.fields.claims[s.cell];
-                let loss = (x.ruin - x.built).max(0.) / (0.01 + x.ruin + x.built);
-                s.disused = s.disused.max(s.built * loss);
-            }
-        }
+    let budget = (capacity - spent).max(0.).min(supporters * 0.12);
+    choose_enclosure(state, u, &mut walls, &occupied, budget)?;
+    fund_sections(u, r, &mut walls, mesh, supporters, budget);
+    Ok(walls)
+}
+
+fn fund_sections(
+    u: &Urban,
+    r: &crate::atlas::state::Regional,
+    walls: &mut [Wall],
+    mesh: &crate::lattice::TriangularLattice,
+    supporters: f64,
+    mut budget: f64,
+) {
+    for w in walls {
+        assess_disuse(u, r.round, w, mesh, supporters);
         let mut bids = crate::hpc::KeyedHeap::new(
             [crate::hpc::Direction::Descending],
             crate::hpc::Direction::Ascending,
@@ -272,5 +225,85 @@ pub(super) fn invest(state: &State, u: &Urban) -> io::Result<Vec<Wall>> {
         }
         w.lines = w.sections.iter().filter_map(Section::standing).collect();
     }
-    Ok(walls)
+}
+
+fn assess_disuse(
+    u: &Urban,
+    round: usize,
+    w: &mut Wall,
+    mesh: &crate::lattice::TriangularLattice,
+    supporters: f64,
+) {
+    let residents: f64 = w
+        .inside
+        .iter()
+        .map(|&c| u.fields.claims[c as usize].people * mesh.area(c as usize) / 1e6)
+        .sum();
+    w.outgrown |= w.round < round && residents < 0.45 * supporters;
+    // Resolve the inherited present condition once from local evidence. Repeated
+    // spatial passes neither manufacture extra years of decay nor refund old work.
+    if w.outgrown {
+        for s in &mut w.sections {
+            let x = u.fields.claims[s.cell];
+            let loss = (x.ruin - x.built).max(0.) / (0.01 + x.ruin + x.built);
+            s.disused = s.disused.max(s.built * loss);
+        }
+    }
+}
+
+fn choose_enclosure(
+    state: &State,
+    u: &Urban,
+    walls: &mut Vec<Wall>,
+    occupied: &[f64],
+    budget: f64,
+) -> io::Result<()> {
+    let mesh = state.field().mesh();
+    let area = state
+        .spatial
+        .area(state.scope.settled_outline())
+        .map_err(io::Error::other)?;
+    let positions: Vec<_> = (0..mesh.len()).map(|c| pos(position(mesh, c))).collect();
+    if budget > 0.
+        && walls
+            .iter()
+            .all(|w| w.sections.iter().all(|s| s.built >= s.cost))
+    {
+        let reach = (area.sqrt() * 0.055).max(2. * mesh.spacing());
+        let pressure: Vec<_> = (0..mesh.len())
+            .map(|c| neighborhood(mesh, [occupied], c, reach)[0])
+            .collect();
+        let values: Vec<_> = pressure
+            .iter()
+            .zip(&u.fields.stencil)
+            .filter(|(_, s)| **s > 0.5)
+            .map(|(v, _)| *v)
+            .collect();
+        let order = crate::hpc::radix_order(
+            &[crate::hpc::NumericKey::Float(&values)],
+            crate::hpc::Direction::Ascending,
+        )
+        .map_err(io::Error::other)?;
+        let mut best = None;
+        for fraction in [0.32, 0.56, 0.76] {
+            if values.is_empty() {
+                break;
+            }
+            let level = values[order[((values.len() - 1) as f64 * fraction) as usize]];
+            let Some(shape) = contour(state, &pressure, level.max(f64::EPSILON))? else {
+                continue;
+            };
+            for poly in parts(&shape) {
+                if let Some((value, wall)) = proposal(state, u, poly, &positions, walls, area)? {
+                    if value > 0.12 && best.as_ref().is_none_or(|(v, _)| value > *v) {
+                        best = Some((value, wall));
+                    }
+                }
+            }
+        }
+        if let Some((_, wall)) = best {
+            walls.push(wall);
+        }
+    }
+    Ok(())
 }

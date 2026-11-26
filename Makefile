@@ -94,6 +94,13 @@ local-down:
 local-world:
 	scripts/local-atlas.sh world
 
+.PHONY: local-city city-views
+local-city:
+	bash scripts/city-reference.sh develop "$(or $(CITY),nishi)" "$(NAME)"
+
+city-views:
+	bash scripts/city-reference.sh views "$(or $(CITY),nishi)" "$(INPUT)" "$(COMPARE)" "$(OUT)"
+
 local-real:
 	scripts/local-atlas.sh real --at $(AT) --hex $(or $(HEX),100m) --across $(or $(ACROSS),50) --kind $(or $(KIND),ground)
 

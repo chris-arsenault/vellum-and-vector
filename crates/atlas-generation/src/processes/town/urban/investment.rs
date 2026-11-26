@@ -210,79 +210,12 @@ fn commons(state: &State, u: &Urban, parcel_weight: f64) -> io::Result<Vec<super
         .field()
         .ground()
         .view(crate::rock::ground::GroundField::Elevation);
-    for (index, p) in u.programs.iter().enumerate() {
-        let civic = u
-            .sponsors
-            .iter()
-            .any(|s| mesh.physical_distance(p.cell, s.cell) < p.reach);
-        let stewardship =
-            p.demands.commons + f64::from(civic) * 0.9 + f64::from(template.site.free_tenure) * 0.4;
-        let mut scores = vec![0.; mesh.len()];
-        for c in mesh.cells_within(mesh.position(p.cell), p.reach) {
-            let x = u.fields.claims[c];
-            if u.fields.program[c] != index
-                || !u.fields.inside[c]
-                || x.reserved
-                || u.fields.stencil[c] < 0.65
-                || u.fields.civic[c] > 0.35
-            {
-                continue;
-            }
-            let care = stewardship + (x.demands.commons - p.demands.commons);
-            let [xpos, ypos] = position(mesh, c);
-            // Variation in unrecorded field parcels matters most on uniform ground.
-            let fallow = crate::noise::unit_noise(xpos, ypos, 4829, template.quarter(), 2);
-            scores[c] = care
-                * (0.1 + f64::from(wooded[c]) + trees.get(c)?.max(0.).sqrt() + x.farm.sqrt())
-                * (0.3 + x.investment)
-                * (0.55 + fallow)
-                / (1. + x.built * 4. + u.fields.access[c]);
-        }
-        let Some((site, &bid)) = scores.iter().enumerate().max_by(|a, b| a.1.total_cmp(b.1)) else {
-            continue;
-        };
-        if bid <= 0.15 {
-            continue;
-        }
-        // The endowment buys adjoining land. Favor the affordable field or terrace
-        // at the boundary of the common, wherever that boundary currently lies.
-        let extent = (template.quarter() + mesh.spacing()) * (1. + stewardship.sqrt());
-        let mut budget = 1.6 * extent.powi(2);
-        let mut footprint = vec![0.; mesh.len()];
-        let mut frontier = KeyedHeap::new([Direction::Descending], Direction::Ascending);
-        let height = elevation.get(site)?;
-        scores[site] = 0.;
-        let mut offer = |cell: usize| -> io::Result<Option<f64>> {
-            let local = std::mem::take(&mut scores[cell]);
-            if local <= 0. {
-                return Ok(None);
-            }
-            let rise = crate::scale::MapScale::metres(
-                (elevation.get(cell)? - height).abs(),
-                crate::scale::LengthUnit::Native,
-            );
-            let access = mesh.physical_distance(cell, site) / extent;
-            let terrace = rise / (template.quarter() * 0.06);
-            Ok(Some(
-                (local / bid).powf(parcel_weight) / (1. + terrace + 0.25 * access * access),
-            ))
-        };
-        frontier.push(site as u32, [1.]);
-        while let Some((cell, [value])) = frontier.pop() {
-            let cell = cell as usize;
-            let price = mesh.area(cell) / value;
-            if price > budget {
-                break;
-            }
-            budget -= price;
-            footprint[cell] = 1.;
-            for neighbor in (0..3).filter_map(|edge| mesh.neighbor(cell, edge)) {
-                if let Some(value) = offer(neighbor)? {
-                    frontier.push(neighbor as u32, [value]);
-                }
-            }
-        }
-        if let Some(g) = super::landscape::contour(state, &footprint, 0.5)? {
+    let mut record_park = |p: &super::programs::Program,
+                           civic: bool,
+                           site: usize,
+                           footprint: &[f64]|
+     -> Result<(), io::Error> {
+        if let Some(g) = super::landscape::contour(state, footprint, 0.5)? {
             for part in atlas_map::regions::parts(&g) {
                 let mut park = super::Element::new(
                     part,
@@ -326,9 +259,93 @@ fn commons(state: &State, u: &Urban, parcel_weight: f64) -> io::Result<Vec<super
                 parks.push(park);
             }
         }
+        Ok(())
+    };
+    let acquire_parcels = |stewardship: f64,
+                           mut scores: Vec<f64>,
+                           site: usize,
+                           bid: f64|
+     -> Result<Vec<f64>, io::Error> {
+        let extent = (template.quarter() + mesh.spacing()) * (1. + stewardship.sqrt());
+        let mut budget = 1.6 * extent.powi(2);
+        let mut footprint = vec![0.; mesh.len()];
+        let mut frontier = KeyedHeap::new([Direction::Descending], Direction::Ascending);
+        let height = elevation.get(site)?;
+        scores[site] = 0.;
+        let mut offer = |cell: usize| -> io::Result<Option<f64>> {
+            let local = std::mem::take(&mut scores[cell]);
+            if local <= 0. {
+                return Ok(None);
+            }
+            let rise = crate::scale::MapScale::metres(
+                (elevation.get(cell)? - height).abs(),
+                crate::scale::LengthUnit::Native,
+            );
+            let access = mesh.physical_distance(cell, site) / extent;
+            let terrace = rise / (template.quarter() * 0.06);
+            Ok(Some(
+                (local / bid).powf(parcel_weight) / (1. + terrace + 0.25 * access * access),
+            ))
+        };
+        frontier.push(site as u32, [1.]);
+        while let Some((cell, [value])) = frontier.pop() {
+            let cell = cell as usize;
+            let price = mesh.area(cell) / value;
+            if price > budget {
+                break;
+            }
+            budget -= price;
+            footprint[cell] = 1.;
+            for neighbor in (0..3).filter_map(|edge| mesh.neighbor(cell, edge)) {
+                if let Some(value) = offer(neighbor)? {
+                    frontier.push(neighbor as u32, [value]);
+                }
+            }
+        }
+        Ok(footprint)
+    };
+    for (index, p) in u.programs.iter().enumerate() {
+        let civic = u
+            .sponsors
+            .iter()
+            .any(|s| mesh.physical_distance(p.cell, s.cell) < p.reach);
+        let stewardship =
+            p.demands.commons + f64::from(civic) * 0.9 + f64::from(template.site.free_tenure) * 0.4;
+        let mut scores = vec![0.; mesh.len()];
+        for c in mesh.cells_within(mesh.position(p.cell), p.reach) {
+            let x = u.fields.claims[c];
+            if u.fields.program[c] != index
+                || !u.fields.inside[c]
+                || x.reserved
+                || u.fields.stencil[c] < 0.65
+                || u.fields.civic[c] > 0.35
+            {
+                continue;
+            }
+            let care = stewardship + (x.demands.commons - p.demands.commons);
+            let [xpos, ypos] = position(mesh, c);
+            // Variation in unrecorded field parcels matters most on uniform ground.
+            let fallow = crate::noise::unit_noise(xpos, ypos, 4829, template.quarter(), 2);
+            scores[c] = care
+                * (0.1 + f64::from(wooded[c]) + trees.get(c)?.max(0.).sqrt() + x.farm.sqrt())
+                * (0.3 + x.investment)
+                * (0.55 + fallow)
+                / (1. + x.built * 4. + u.fields.access[c]);
+        }
+        let Some((site, &bid)) = scores.iter().enumerate().max_by(|a, b| a.1.total_cmp(b.1)) else {
+            continue;
+        };
+        if bid <= 0.15 {
+            continue;
+        }
+        // The endowment buys adjoining land. Favor the affordable field or terrace
+        // at the boundary of the common, wherever that boundary currently lies.
+        let footprint = acquire_parcels(stewardship, scores, site, bid)?;
+        record_park(p, civic, site, &footprint)?;
     }
     Ok(parks)
 }
+
 pub(super) fn defense(
     state: &State,
     urban: &mut Urban,

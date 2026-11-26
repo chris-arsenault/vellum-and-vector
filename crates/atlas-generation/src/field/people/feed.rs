@@ -539,7 +539,7 @@ mod tests {
     #[test]
     fn contract_provisions_present_households_from_a_finite_market() {
         use super::*;
-        use crate::field::people::contract::{MapType, ScaleBand, Site, Timing};
+        use crate::field::people::contract::{MapType, Site, Timing};
 
         let capture = Market {
             surplus: 60.0,
@@ -571,6 +571,16 @@ mod tests {
             );
             assert!(PROVISION.select(site, Timing::Elapsed).unwrap().is_empty());
         }
+    }
+
+    #[test]
+    fn elapsed_world_provisions_select_growth() {
+        use super::*;
+        use crate::field::people::contract::{MapType, ScaleBand, Site, Timing};
+        let capture = Market {
+            surplus: 60.0,
+            demand: 40.0,
+        };
         let world = Site {
             map_type: MapType::World,
             cell_metres: ScaleBand::World.endpoints().0,

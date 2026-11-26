@@ -141,6 +141,22 @@ When generation code changes what a world stores, the kept world may no longer o
 `scripts/local-atlas.sh world --fresh` creates a new one, and
 `scripts/local-atlas.sh reset` deletes the volume and every stored file.
 
+## City references for Street work
+
+`make city-views CITY=mitsu` redraws the accepted City from its retained inputs. The other presets are `nishi`, `vila` and `kikuchihara`. Nishi, Mitsu and Vila read completed native experiment trials offline. Kikuchihara reads its published City through the local atlas on the first export. The renderer uses `uv` to install its declared plotting dependencies.
+
+Each drawing command prints its output directory. It contains an overview, districts with principal roads and POIs, parks, walls and gates, and roads over population and elevation. `districts.csv` gives the name, roles, traits, population and an interior point in world metres for each numbered district. To compare two trials or published maps in the same figure, pass their directories as `INPUT` and `COMPARE`. Both panels use the same field colour scale. `OUT` selects the output directory.
+
+To generate a **published City that can parent Street maps**, start the local atlas and run the following from the repository root. The preset reuses the recursive regional parent, or prepares its missing levels from the kept `Density-world`. Presets look in the current worktree and the shared atlas. The named world, published parents, and retained trials are local atlas data. The recipes and plotting code live in `scripts/city-reference.sh` and `scripts/city-views.py`. Use a fresh map name on each development run.
+
+```sh
+make local-up
+make local-city CITY=mitsu NAME=Mitsu-street-parent
+make city-views INPUT=.artifacts/local-atlas/maps/Mitsu-street-parent
+```
+
+Choose a district from that published map’s `views/districts.csv`. Pass its `x,y` to `scripts/local-atlas.sh real --outline --parent Mitsu-street-parent --at x,y` to list the selectable regions. Repeat with `--choice N --hex 30m --name Mitsu-street-study` using the number printed for that district. A trial directory is useful for offline comparison. A Street child needs the published map reference.
+
 ## Process experiments
 
 Build the harness once. The experiment commands use that binary directly and read trial

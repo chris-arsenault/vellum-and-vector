@@ -24,9 +24,6 @@ pub(in super::super) fn district_origins(
         .covers_points(ground, positions)
         .map_err(io::Error::other)?;
     let field = state.field();
-    let wet = field.shared().scalar(Scalar::WetlandCover);
-    let flood = field.shared().scalar(Scalar::FloodplainIntensity);
-    let slope = field.shared().scalar(Scalar::Slope);
     let mut origins = Vec::new();
     for kind in kinds {
         let mut source = None;
@@ -44,31 +41,7 @@ pub(in super::super) fn district_origins(
             }
         }
         if at.is_none() {
-            let mut best = f64::INFINITY;
-            for (c, _) in inside.iter().enumerate().filter(|(_, held)| **held) {
-                if !habitable(field, c)? {
-                    continue;
-                }
-                let [x, y, _] = positions[c].coordinates();
-                let weight = match kind.id {
-                    Trope::Spring => {
-                        (0.1 + 3. * wet.get(c)? + flood.get(c)? / 1000.) / (1. + slope.get(c)?)
-                    }
-                    Trope::Resident => field.people().people(c)?.ln_1p(),
-                    _ => unreachable!("unknown localized district origin"),
-                };
-                if weight <= 0. {
-                    continue;
-                }
-                let score = -hash_unit(program.cell as i32 ^ kind.id as i32, x, y)
-                    .max(f64::MIN_POSITIVE)
-                    .ln()
-                    / weight;
-                if score < best {
-                    best = score;
-                    at = Some([x, y]);
-                }
-            }
+            at = locate_origin(program, positions, &inside, field, kind.id)?;
         }
         let point = match at {
             Some(point) => point,
@@ -83,24 +56,75 @@ pub(in super::super) fn district_origins(
         if let Some(key) = source {
             origin["featureId"] = json!(key);
         }
-        if kind.id == Trope::Resident {
-            let occupation = match program.economic {
-                Trope::Bazaar => "merchant",
-                Trope::Artificer => "master artisan",
-                Trope::Freight => "caravan master",
-                Trope::Granary => "grain factor",
-                Trope::Inn => "innkeeper",
-                Trope::Scribe => "scholar",
-                _ => unreachable!("A founded district has an economic role"),
-            };
-            let key = format!("district-trait-{}-Resident-resident", program.cell);
-            let resident = state
-                .naming
-                .work(&state.scope, &key, occupation, point, culture)?
-                .name;
-            origin["resident"] = json!({"name": resident, "role": occupation});
-        }
+        resident_occupation(state, program, culture, kind, point, &mut origin)?;
         origins.push(origin);
     }
     Ok(origins)
+}
+
+fn locate_origin(
+    program: &Program,
+    positions: &[Position],
+    inside: &[bool],
+    field: &crate::field::Field,
+    kind: Trope,
+) -> io::Result<Option<[f64; 2]>> {
+    let wet = field.shared().scalar(Scalar::WetlandCover);
+    let flood = field.shared().scalar(Scalar::FloodplainIntensity);
+    let slope = field.shared().scalar(Scalar::Slope);
+    let mut best = f64::INFINITY;
+    let mut at = None;
+    for (c, _) in inside.iter().enumerate().filter(|(_, held)| **held) {
+        if !habitable(field, c)? {
+            continue;
+        }
+        let [x, y, _] = positions[c].coordinates();
+        let weight = match kind {
+            Trope::Spring => {
+                (0.1 + 3. * wet.get(c)? + flood.get(c)? / 1000.) / (1. + slope.get(c)?)
+            }
+            Trope::Resident => field.people().people(c)?.ln_1p(),
+            _ => unreachable!("unknown localized district origin"),
+        };
+        if weight <= 0. {
+            continue;
+        }
+        let score = -hash_unit(program.cell as i32 ^ kind as i32, x, y)
+            .max(f64::MIN_POSITIVE)
+            .ln()
+            / weight;
+        if score < best {
+            best = score;
+            at = Some([x, y]);
+        }
+    }
+    Ok(at)
+}
+
+fn resident_occupation(
+    state: &State,
+    program: &Program,
+    culture: Option<&str>,
+    kind: &crate::town::templates::district::Entry,
+    point: [f64; 2],
+    origin: &mut Value,
+) -> Result<(), io::Error> {
+    if kind.id == Trope::Resident {
+        let occupation = match program.economic {
+            Trope::Bazaar => "merchant",
+            Trope::Artificer => "master artisan",
+            Trope::Freight => "caravan master",
+            Trope::Granary => "grain factor",
+            Trope::Inn => "innkeeper",
+            Trope::Scribe => "scholar",
+            _ => unreachable!("A founded district has an economic role"),
+        };
+        let key = format!("district-trait-{}-Resident-resident", program.cell);
+        let resident = state
+            .naming
+            .work(&state.scope, &key, occupation, point, culture)?
+            .name;
+        origin["resident"] = json!({"name": resident, "role": occupation});
+    }
+    Ok(())
 }

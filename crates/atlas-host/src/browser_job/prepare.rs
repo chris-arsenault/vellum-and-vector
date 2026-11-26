@@ -132,8 +132,10 @@ impl BrowserJob {
                 resources: self.resources.as_ref(),
                 private: &self.private,
             },
-            &self.maps,
-            &self.assets,
+            regional_capture::PublishedMap {
+                maps: &self.maps,
+                files: &self.assets,
+            },
             &self.records.source_features(),
             &spatial,
         )

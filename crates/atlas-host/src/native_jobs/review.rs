@@ -69,8 +69,10 @@ pub(super) fn review(settings: &Settings, mut action: Action) -> io::Result<Valu
                 resources: &resources,
                 private: &inputs,
             },
-            &maps,
-            &settings.assets,
+            regional_capture::PublishedMap {
+                maps: &maps,
+                files: &settings.assets,
+            },
             &records.source_features(),
             &spatial,
         )?;

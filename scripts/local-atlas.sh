@@ -130,7 +130,7 @@ supervise() {
 
 server_up() {
   command -v cmake >/dev/null || { echo "Put CMake on PATH to build the native server" >&2; exit 1; }
-  (cd "$root" && cargo build --release -p atlas-host --bin atlas_server)
+  (cd "$root" && cargo build --release -p atlas-host --bin atlas_server --bin local_atlas)
   server_down
   local url="postgresql://%s:%s@127.0.0.1:$database_port/%s"
   mkdir -p "$home/map-assets" "$home/generation-resources" "$home/scratch"
@@ -187,6 +187,14 @@ profile() {
 }
 
 case "${1:-}" in
+  --built)
+    shift
+    if [[ ! -x "$root/target/release/local_atlas" ]]; then
+      echo "Run make local-up to build the server and its matching local atlas harness." >&2
+      exit 1
+    fi
+    exec "$root/target/release/local_atlas" "$@"
+    ;;
   profile)
     profile "${2:-30}"
     ;;

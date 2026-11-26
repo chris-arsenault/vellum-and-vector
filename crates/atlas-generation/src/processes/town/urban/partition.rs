@@ -1,8 +1,10 @@
 //! Join road-bounded precincts into city districts over shared, traversable edges.
 use crate::spatial::{Overlay, SpatialKernel};
 use atlas_map::Geometry;
-// hpc-exempt: shared borders form a sparse graph between GIS precincts.
-use std::{collections::BTreeMap, io};
+use std::io;
+
+// hpc-exempt: a GIS precinct has contact costs only for the few precincts sharing an edge.
+type BorderCosts = std::collections::BTreeMap<usize, f64>;
 
 pub(super) struct Precinct {
     pub shape: Geometry,
@@ -42,82 +44,10 @@ pub(super) fn partition(
     boundary_weight: f64,
 ) -> io::Result<Vec<District>> {
     let shapes: Vec<_> = precincts.iter().map(|p| p.shape.clone()).collect();
-    let index = kernel.index(&shapes).map_err(io::Error::other)?;
-    let approach_index = kernel.index(approaches).map_err(io::Error::other)?;
-    // hpc-exempt: only edge-sharing polygon neighbors have a contact length.
-    let mut edges = vec![BTreeMap::<usize, f64>::new(); shapes.len()];
-    for (i, shape) in shapes.iter().enumerate() {
-        let bounds = kernel.bounds(shape).map_err(io::Error::other)?;
-        for j in index
-            .query(bounds)
-            .map_err(io::Error::other)?
-            .into_iter()
-            .filter(|&j| j > i)
-        {
-            let Some(edge) = kernel
-                .overlay(shape, &shapes[j], Overlay::Intersection)
-                .map_err(io::Error::other)?
-            else {
-                continue;
-            };
-            // Two precincts can share a border and also touch at an isolated corner.
-            // Only the linear contact can carry a through road or join the precincts.
-            let coordinates = atlas_map::regions::boundary_lines(&edge);
-            if coordinates.is_empty() {
-                continue;
-            }
-            let edge = Geometry::MultiLineString { coordinates };
-            let length = kernel.length(&edge).map_err(io::Error::other)?;
-            if length <= 0. {
-                continue;
-            }
-            let mut main: f64 = 0.;
-            for road in approach_index
-                .query(kernel.bounds(&edge).map_err(io::Error::other)?)
-                .map_err(io::Error::other)?
-            {
-                if let Some(shared) = kernel
-                    .overlay(&edge, &approaches[road], Overlay::Intersection)
-                    .map_err(io::Error::other)?
-                {
-                    main += kernel.length(&shared).map_err(io::Error::other)?;
-                }
-            }
-            let contact = length - 0.85 * main.min(length);
-            edges[i].insert(j, contact);
-            edges[j].insert(i, contact);
-        }
-    }
+    let edges = shared_edges(kernel, approaches, &shapes)?;
     // Grow from established centres along the precinct graph. Merging unclaimed
     // ground first can give a whole neighborhood to the last centre it touches.
-    let mut seeds: Vec<_> = (0..precincts.len())
-        .filter(|&i| precincts[i].anchor.is_some())
-        .collect();
-    let mut seen = vec![false; precincts.len()];
-    for start in 0..precincts.len() {
-        if seen[start] {
-            continue;
-        }
-        let mut stack = vec![start];
-        seen[start] = true;
-        let mut anchored = false;
-        let mut strongest = start;
-        while let Some(i) = stack.pop() {
-            anchored |= precincts[i].anchor.is_some();
-            if precincts[i].residents > precincts[strongest].residents {
-                strongest = i;
-            }
-            for &j in edges[i].keys() {
-                if !seen[j] {
-                    seen[j] = true;
-                    stack.push(j);
-                }
-            }
-        }
-        if !anchored {
-            seeds.push(strongest);
-        }
-    }
+    let seeds = district_seeds(precincts, &edges);
     let centres = shapes
         .iter()
         .map(|shape| kernel.interior_position(shape))
@@ -177,6 +107,91 @@ pub(super) fn partition(
         }
     }
     Ok(groups)
+}
+
+fn district_seeds(precincts: &[Precinct], edges: &[BorderCosts]) -> Vec<usize> {
+    let mut seeds: Vec<_> = (0..precincts.len())
+        .filter(|&i| precincts[i].anchor.is_some())
+        .collect();
+    let mut seen = vec![false; precincts.len()];
+    for start in 0..precincts.len() {
+        if seen[start] {
+            continue;
+        }
+        let mut stack = vec![start];
+        seen[start] = true;
+        let mut anchored = false;
+        let mut strongest = start;
+        while let Some(i) = stack.pop() {
+            anchored |= precincts[i].anchor.is_some();
+            if precincts[i].residents > precincts[strongest].residents {
+                strongest = i;
+            }
+            for &j in edges[i].keys() {
+                if !seen[j] {
+                    seen[j] = true;
+                    stack.push(j);
+                }
+            }
+        }
+        if !anchored {
+            seeds.push(strongest);
+        }
+    }
+    seeds
+}
+
+fn shared_edges(
+    kernel: &dyn SpatialKernel,
+    approaches: &[Geometry],
+    shapes: &[Geometry],
+) -> io::Result<Vec<BorderCosts>> {
+    let index = kernel.index(shapes).map_err(io::Error::other)?;
+    let approach_index = kernel.index(approaches).map_err(io::Error::other)?;
+    let mut edges = vec![BorderCosts::new(); shapes.len()];
+    for (i, shape) in shapes.iter().enumerate() {
+        let bounds = kernel.bounds(shape).map_err(io::Error::other)?;
+        for j in index
+            .query(bounds)
+            .map_err(io::Error::other)?
+            .into_iter()
+            .filter(|&j| j > i)
+        {
+            let Some(edge) = kernel
+                .overlay(shape, &shapes[j], Overlay::Intersection)
+                .map_err(io::Error::other)?
+            else {
+                continue;
+            };
+            // Two precincts can share a border and also touch at an isolated corner.
+            // Only the linear contact can carry a through road or join the precincts.
+            let coordinates = atlas_map::regions::boundary_lines(&edge);
+            if coordinates.is_empty() {
+                continue;
+            }
+            let edge = Geometry::MultiLineString { coordinates };
+            let length = kernel.length(&edge).map_err(io::Error::other)?;
+            if length <= 0. {
+                continue;
+            }
+            let mut main: f64 = 0.;
+            for road in approach_index
+                .query(kernel.bounds(&edge).map_err(io::Error::other)?)
+                .map_err(io::Error::other)?
+            {
+                if let Some(shared) = kernel
+                    .overlay(&edge, &approaches[road], Overlay::Intersection)
+                    .map_err(io::Error::other)?
+                {
+                    main += kernel.length(&shared).map_err(io::Error::other)?;
+                }
+            }
+            let contact = length - 0.85 * main.min(length);
+            edges[i].insert(j, contact);
+            edges[j].insert(i, contact);
+        }
+    }
+    Ok(edges)
 }
 
 #[cfg(all(test, not(target_arch = "wasm32")))]

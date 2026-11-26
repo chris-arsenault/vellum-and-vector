@@ -318,6 +318,11 @@ mod tests {
             charter.tenure(Activity::Household, [50., 0.], 10.),
             Tenure::Common
         );
+    }
+
+    #[test]
+    fn ring_charters_reserve_the_centre_and_align_outer_quarters() {
+        let mut charter = Selection::commons([0., 0.]);
         charter.selected = Template::Ring;
         assert_eq!(charter.affinity(Activity::Trade, [30., 0.], 10.), 0.);
         assert_eq!(charter.city_affinity(charter.site.centre), 0.);

@@ -181,8 +181,10 @@ impl NativeJob {
                 resources,
                 private: services.inputs,
             },
-            services.maps,
-            &services.assets,
+            regional_capture::PublishedMap {
+                maps: services.maps,
+                files: &services.assets,
+            },
             &workspace.source_features(),
             spatial,
         )?;

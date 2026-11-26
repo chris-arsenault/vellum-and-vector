@@ -368,10 +368,9 @@ fn production_recipes_keep_each_registered_caller_and_epoch_boundary() {
                     if path
                         .last()
                         .is_some_and(|part| part.starts_with("feedback-"))
+                        && !path.pop()?.ends_with("/1")
                     {
-                        if !path.pop()?.ends_with("/1") {
-                            return None;
-                        }
+                        return None;
                     }
                     Some((path, stage.context.duration()))
                 })

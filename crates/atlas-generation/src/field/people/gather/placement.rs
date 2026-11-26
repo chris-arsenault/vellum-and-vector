@@ -297,35 +297,6 @@ fn place_across_face(
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::{exchange, livelihoods, neighbour_exchange};
-    #[test]
-    fn donor_steps_relax_on_equal_ground_but_a_real_opportunity_gradient_remains() {
-        let moved = neighbour_exchange([1000., 100.], [1., 1.], [1., 1.]);
-        assert!(moved > 0. && 1000. - moved > 100. + moved);
-        assert_eq!(neighbour_exchange([1000., 100.], [10., 1.], [1., 1.]), 0.);
-        assert!(neighbour_exchange([100., 100.], [1., 3.], [1., 1.]) > 0.);
-    }
-    #[test]
-    fn even_household_stock_responds_to_market_access_development_and_exposure() {
-        let country = livelihoods(50.0, 0.5, 1.0, 0.01, 1.0, 0.0);
-        let residents = [99.0, 100.0];
-        let flow = |market, built, hazard| {
-            exchange(
-                residents,
-                [country, livelihoods(50.0, market, 1.0, built, 1.0, hazard)],
-                [1.0, 1.0],
-            )
-        };
-        let served = flow(2.0, 0.05, 0.1);
-        assert!(served > flow(0.5, 0.05, 0.1));
-        assert!(served > flow(2.0, 0.01, 0.1));
-        assert!(served > flow(2.0, 0.05, 1.0));
-        assert_eq!(flow(0.5, 0.01, 0.0), 0.0);
-    }
-}
-
 fn trace_distribution(field: &Field, stage: &str) -> io::Result<()> {
     if std::env::var_os("ATLAS_TRACE_PEOPLE").is_none() {
         return Ok(());
@@ -371,4 +342,33 @@ fn trace_distribution(field: &Field, stage: &str) -> io::Result<()> {
         "occupiedKm2": if squares>0.0 {total*total/squares} else {0.0},"peakCellWithin5km":peak})
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{exchange, livelihoods, neighbour_exchange};
+    #[test]
+    fn donor_steps_relax_on_equal_ground_but_a_real_opportunity_gradient_remains() {
+        let moved = neighbour_exchange([1000., 100.], [1., 1.], [1., 1.]);
+        assert!(moved > 0. && 1000. - moved > 100. + moved);
+        assert_eq!(neighbour_exchange([1000., 100.], [10., 1.], [1., 1.]), 0.);
+        assert!(neighbour_exchange([100., 100.], [1., 3.], [1., 1.]) > 0.);
+    }
+    #[test]
+    fn even_household_stock_responds_to_market_access_development_and_exposure() {
+        let country = livelihoods(50.0, 0.5, 1.0, 0.01, 1.0, 0.0);
+        let residents = [99.0, 100.0];
+        let flow = |market, built, hazard| {
+            exchange(
+                residents,
+                [country, livelihoods(50.0, market, 1.0, built, 1.0, hazard)],
+                [1.0, 1.0],
+            )
+        };
+        let served = flow(2.0, 0.05, 0.1);
+        assert!(served > flow(0.5, 0.05, 0.1));
+        assert!(served > flow(2.0, 0.01, 0.1));
+        assert!(served > flow(2.0, 0.05, 1.0));
+        assert_eq!(flow(0.5, 0.01, 0.0), 0.0);
+    }
 }

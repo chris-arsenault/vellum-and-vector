@@ -62,17 +62,7 @@ fn creator_configuration_binds_owned_settings_before_building_the_sequence() {
             },
         )
         .unwrap();
-    let processes = recipe
-        .stages()
-        .unwrap()
-        .into_iter()
-        .filter_map(|stage| match stage.kind {
-            StageKind::Process(operation) => Some(operation.process.as_str()),
-            _ => None,
-        })
-        .collect::<Vec<_>>();
-    assert_eq!(processes.first(), Some(&"atlas.prepare"));
-    assert_eq!(processes.last(), Some(&"atlas.names"));
+    assert_world_sequence(&recipe);
     input
         .features
         .get_mut("physical.foundation")
@@ -84,6 +74,20 @@ fn creator_configuration_binds_owned_settings_before_building_the_sequence() {
         .unwrap()
         .to_string()
         .contains("does not own rainfall"));
+}
+
+fn assert_world_sequence(recipe: &atlas_generation::recipe::Configuration) {
+    let processes = recipe
+        .stages()
+        .unwrap()
+        .into_iter()
+        .filter_map(|stage| match stage.kind {
+            StageKind::Process(operation) => Some(operation.process.as_str()),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(processes.first(), Some(&"atlas.prepare"));
+    assert_eq!(processes.last(), Some(&"atlas.names"));
 }
 
 fn selected_catalogue(catalogue: &Catalogue) -> Selection {

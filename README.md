@@ -277,6 +277,9 @@ build is `frontend/dist/` and includes its generation worker.
 Checks that need a generated map use the [local atlas](docs/local-atlas.md): the native
 server and its database on loopback, with one kept verification world (`make local-up`,
 `make local-world`, `make local-real`). It needs Docker, Rust and CMake.
+For Street work, `make city-views CITY=mitsu` redraws the district, road, landmark
+and field overlays. See the [City reference recipes](docs/local-atlas.md#city-references-for-street-work)
+to develop a published City and select a district from it.
 
 `crates/atlas-map` owns independent published-map values, `atlas-generation` owns the
 generator and publisher, `atlas-names` owns naming, `atlas-gis` owns GIS storage and

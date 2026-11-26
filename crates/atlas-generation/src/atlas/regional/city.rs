@@ -584,22 +584,7 @@ fn survey(state: &State, settlement: Settlement, whole_city: bool) -> io::Result
         [x + ox, y + oy]
     };
     let distance = |p: [f64; 2]| (p[0] - centre[0]).hypot(p[1] - centre[1]);
-    let city_ground = if whole_city {
-        let points: Vec<_> = (0..mesh.len())
-            .map(|c| {
-                let [x, y] = at(c);
-                atlas_map::Position::xy(x, y)
-            })
-            .collect();
-        Some(
-            state
-                .spatial
-                .covers_points(state.scope.settled_outline(), &points)
-                .map_err(io::Error::other)?,
-        )
-    } else {
-        None
-    };
+    let city_ground = survey_footprint(state, whole_city, at)?;
     let elevation = field.ground().view(GroundField::Elevation);
     let farmed = field.people().view(HumanField::Layer(LayerId::Farmland));
     let ways = field.people().view(HumanField::KeptLine);
@@ -650,6 +635,49 @@ fn survey(state: &State, settlement: Settlement, whole_city: bool) -> io::Result
         evidence.upper = Some(relief.high.1);
         evidence.lower = Some(relief.low.1);
     }
+    survey_city_features(state, centre, core, city_ground.as_deref(), &mut evidence)?;
+    evidence.approaches = approaches;
+    evidence.cultivated = farmland > 0.;
+    if let Some((_, cell)) = nearest {
+        practices(field, cell, &mut evidence)?;
+    }
+    Ok(evidence)
+}
+
+fn survey_footprint(
+    state: &State,
+    whole_city: bool,
+    at: impl Fn(usize) -> [f64; 2],
+) -> io::Result<Option<Vec<bool>>> {
+    let mesh = state.field().mesh();
+    if whole_city {
+        let points: Vec<_> = (0..mesh.len())
+            .map(|c| {
+                let [x, y] = at(c);
+                atlas_map::Position::xy(x, y)
+            })
+            .collect();
+        Ok(Some(
+            state
+                .spatial
+                .covers_points(state.scope.settled_outline(), &points)
+                .map_err(io::Error::other)?,
+        ))
+    } else {
+        Ok(None)
+    }
+}
+
+fn survey_city_features(
+    state: &State,
+    centre: [f64; 2],
+    core: f64,
+    city_ground: Option<&[bool]>,
+    evidence: &mut SiteEvidence,
+) -> io::Result<()> {
+    let field = state.field();
+    let mesh = field.mesh();
+    let distance = |[x, y]: [f64; 2]| (x - centre[0]).hypot(y - centre[1]);
     let source = state.records.source_features.as_deref();
     let selection = crate::features::FeatureSelection {
         area_id: source.is_none().then_some(state.scope.area),
@@ -701,16 +729,11 @@ fn survey(state: &State, settlement: Settlement, whole_city: bool) -> io::Result
                 !habitable(field, c)?,
                 &feature,
                 [x, y],
-                &mut evidence,
+                evidence,
             )?;
         }
     }
-    evidence.approaches = approaches;
-    evidence.cultivated = farmland > 0.;
-    if let Some((_, cell)) = nearest {
-        practices(field, cell, &mut evidence)?;
-    }
-    Ok(evidence)
+    Ok(())
 }
 /// The highest and lowest dry ground of the city's core, with where each lies.
 struct Relief {

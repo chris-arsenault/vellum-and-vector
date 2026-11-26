@@ -109,6 +109,91 @@ pub(super) fn site(state: &mut State, selection: &Selection, seed: i32) -> io::R
     let radius =
         (state.spatial.area(extent).map_err(io::Error::other)? / std::f64::consts::PI).sqrt();
     let mut works = Vec::new();
+    let established = reserve_existing_works(state, &mut available)?;
+    for s in &mut sites {
+        s.height = (s.height - low) / (high - low).max(1.);
+        s.slope /= steep.max(1e-9);
+        s.access /= busiest.max(1e-9);
+    }
+    for family in city_works(&surroundings, total, seed) {
+        if established.iter().any(|key| key == family.key()) {
+            continue;
+        }
+        let best = best_work_site(state, seed, &available, &sites, family)?;
+        let grounds_cost =
+            family.city().ground / 1e6 * crate::human::catalogue::FULL_STANDING_PER_BUILT_KM2;
+        if backing < grounds_cost {
+            continue;
+        }
+        if let Some((site, _)) = best {
+            backing -= grounds_cost;
+            let anchor = position(state, site);
+            let [cx, cy] = selection.site.centre;
+            let established = town
+                .as_ref()
+                .and_then(|t| {
+                    super::occupation_era(
+                        t,
+                        radius,
+                        (anchor[0] - cx).hypot(anchor[1] - cy),
+                        family.city().ground.sqrt(),
+                    )
+                })
+                .map(str::to_owned);
+            works.push(crate::town::major_works::CityWork {
+                family,
+                cell: site as u32,
+                design: family.definition().design(
+                    &surroundings,
+                    anchor,
+                    &[],
+                    seed.wrapping_add(family as i32),
+                ),
+                established,
+            });
+            let separation = family.city().ground.sqrt() + mesh.spacing();
+            for c in mesh.cells_within(mesh.position(site), separation) {
+                available[c] = false;
+            }
+        }
+    }
+    state.regional.as_mut().unwrap().city.works = works;
+    Ok(())
+}
+
+fn best_work_site(
+    state: &State,
+    seed: i32,
+    available: &[bool],
+    sites: &[CitySite],
+    family: crate::town::major_works::WorkFamily,
+) -> io::Result<Option<(usize, f64)>> {
+    let mesh = state.field().mesh();
+    let capital = state.field().people().view(crate::human::HumanField::Layer(
+        crate::human::catalogue::LayerId::Standing,
+    ));
+    let mut best: Option<(usize, f64)> = None;
+    for cell in 0..mesh.len() {
+        if !available[cell] {
+            continue;
+        }
+        let funds = capital.get(cell)? * mesh.area(cell) / 1e6;
+        let [px, py] = position(state, cell);
+        let score = family.suitability(sites[cell])
+            * (1. + 0.10 * funds.ln_1p())
+            * (0.95 + 0.05 * crate::noise::hash_unit(seed ^ family as i32, px, py));
+        if score <= 0. {
+            continue;
+        }
+        if best.is_none_or(|(_, b)| score > b) {
+            best = Some((cell, score));
+        }
+    }
+    Ok(best)
+}
+
+fn reserve_existing_works(state: &State, available: &mut [bool]) -> io::Result<Vec<String>> {
+    let mesh = state.field().mesh();
     let mut established = Vec::new();
     let source = state.records.source_features.as_deref();
     let query = crate::features::FeatureSelection {
@@ -149,71 +234,7 @@ pub(super) fn site(state: &mut State, selection: &Selection, seed: i32) -> io::R
             available[other] = false;
         }
     }
-    for s in &mut sites {
-        s.height = (s.height - low) / (high - low).max(1.);
-        s.slope /= steep.max(1e-9);
-        s.access /= busiest.max(1e-9);
-    }
-    for family in city_works(&surroundings, total, seed) {
-        if established.iter().any(|key| key == family.key()) {
-            continue;
-        }
-        let mut best: Option<(usize, f64)> = None;
-        for cell in 0..mesh.len() {
-            if !available[cell] {
-                continue;
-            }
-            let funds = capital.get(cell)? * mesh.area(cell) / 1e6;
-            let [px, py, _] = points[cell].coordinates();
-            let score = family.suitability(sites[cell])
-                * (1. + 0.10 * funds.ln_1p())
-                * (0.95 + 0.05 * crate::noise::hash_unit(seed ^ family as i32, px, py));
-            if score <= 0. {
-                continue;
-            }
-            if best.is_none_or(|(_, b)| score > b) {
-                best = Some((cell, score));
-            }
-        }
-        let grounds_cost =
-            family.city().ground / 1e6 * crate::human::catalogue::FULL_STANDING_PER_BUILT_KM2;
-        if backing < grounds_cost {
-            continue;
-        }
-        if let Some((site, _)) = best {
-            backing -= grounds_cost;
-            let anchor = position(state, site);
-            let [cx, cy] = selection.site.centre;
-            let established = town
-                .as_ref()
-                .and_then(|t| {
-                    super::occupation_era(
-                        t,
-                        radius,
-                        (anchor[0] - cx).hypot(anchor[1] - cy),
-                        family.city().ground.sqrt(),
-                    )
-                })
-                .map(str::to_owned);
-            works.push(crate::town::major_works::CityWork {
-                family,
-                cell: site as u32,
-                design: family.definition().design(
-                    &surroundings,
-                    anchor,
-                    &[],
-                    seed.wrapping_add(family as i32),
-                ),
-                established,
-            });
-            let separation = family.city().ground.sqrt() + mesh.spacing();
-            for c in mesh.cells_within(mesh.position(site), separation) {
-                available[c] = false;
-            }
-        }
-    }
-    state.regional.as_mut().unwrap().city.works = works;
-    Ok(())
+    Ok(established)
 }
 fn position(state: &State, cell: usize) -> [f64; 2] {
     let mesh = state.field().mesh();

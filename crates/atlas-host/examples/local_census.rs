@@ -269,10 +269,12 @@ fn run(home: &Path, reference_width: bool) -> ExecutionResult<()> {
     }
     Ok(())
 }
+type HistoricalCommand<A, I, B> = Command<Field, pass::Inputs<Strategy<A, I, B>>>;
+
 fn historical<A: Copy, I: Source + Copy, B: Source + Copy>(
     executor: &mut Executor<Field>,
     owner: Contract<A, I, B>,
-    command: &Command<Field, pass::Inputs<Strategy<A, I, B>>>,
+    command: &HistoricalCommand<A, I, B>,
     facts: Facts,
 ) -> ExecutionResult<()> {
     for strategy in owner.select(executor.state().process_site(), Timing::Elapsed)? {

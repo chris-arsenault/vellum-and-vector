@@ -63,12 +63,7 @@ impl Graph {
         // bound can beat the best known journey.
         let n = self.points.len();
         let estimate = |i: usize| BUILT_TRAVEL * distance(self.points[i], ends[1]);
-        for (i, &p) in self.points.iter().enumerate() {
-            let lower = distance(ends[0], p) + estimate(i);
-            if lower < budget {
-                heap.push((n + i) as u32, [lower]);
-            }
-        }
+        self.queue_entries(ends, budget, &mut heap);
         let mut finish = None;
         while let Some((i, [bound])) = heap.pop() {
             let i = i as usize;
@@ -107,6 +102,25 @@ impl Graph {
                 }
             }
         }
+        self.trace_shared_way(ends, previous, entry_bend, finish)
+    }
+
+    fn queue_entries(&self, ends: [Point; 2], budget: f64, heap: &mut KeyedHeap) {
+        for (i, &p) in self.points.iter().enumerate() {
+            let lower = distance(ends[0], p) + BUILT_TRAVEL * distance(p, ends[1]);
+            if lower < budget {
+                heap.push((self.points.len() + i) as u32, [lower]);
+            }
+        }
+    }
+
+    fn trace_shared_way(
+        &self,
+        ends: [[f64; 2]; 2],
+        previous: Vec<Option<(usize, bool)>>,
+        entry_bend: Vec<Option<[f64; 2]>>,
+        finish: Option<(usize, Option<[f64; 2]>)>,
+    ) -> Option<SharedWay> {
         let (mut i, exit_bend) = finish?;
         let exit = self.points[i];
         let mut parts = Vec::new();
@@ -325,6 +339,31 @@ impl<'a> Avenues<'a> {
         let bounds = atlas_map::Bounds(a[0] - reach, a[1] - reach, a[0] + reach, a[1] + reach);
         let nearby = self.index.query(bounds).map_err(io::Error::other)?;
         let mut graph = Graph::default();
+        self.node_approaches(spatial, ends, nearby, &mut graph)?;
+        for &[p, q] in &self.decks {
+            if graph.ids.contains_key(&JunctionId::at(p))
+                && graph.ids.contains_key(&JunctionId::at(q))
+            {
+                graph.link(p, q, false);
+            }
+        }
+        Ok(graph.route(
+            &Access {
+                terrain: survey,
+                earthwork,
+            },
+            ends,
+            budget,
+        ))
+    }
+
+    fn node_approaches(
+        &self,
+        spatial: &dyn SpatialKernel,
+        ends: [[f64; 2]; 2],
+        nearby: Vec<usize>,
+        graph: &mut Graph,
+    ) -> Result<(), io::Error> {
         let mut lines = Vec::new();
         for i in nearby {
             match &self.ground[i] {
@@ -373,20 +412,6 @@ impl<'a> Avenues<'a> {
                 }
             }
         }
-        for &[p, q] in &self.decks {
-            if graph.ids.contains_key(&JunctionId::at(p))
-                && graph.ids.contains_key(&JunctionId::at(q))
-            {
-                graph.link(p, q, false);
-            }
-        }
-        Ok(graph.route(
-            &Access {
-                terrain: survey,
-                earthwork,
-            },
-            ends,
-            budget,
-        ))
+        Ok(())
     }
 }

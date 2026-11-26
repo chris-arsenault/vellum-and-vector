@@ -1,6 +1,6 @@
 //! Permanent urban geometry at City scale and its local realization on Street maps.
-mod avenues;
 mod activity;
+mod avenues;
 mod character;
 mod circulation;
 mod city;

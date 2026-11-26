@@ -66,6 +66,14 @@ impl Harness {
     fn map_folder(&self, name: &str) -> PathBuf {
         self.reports.join("maps").join(slug(name, &['.', '-']))
     }
+    fn existing_map(&self, name: &str) -> PathBuf {
+        let local = self.reports.join("maps").join(name);
+        if local.join("map.json").is_file() {
+            local
+        } else {
+            self.home.join("maps").join(name)
+        }
+    }
     fn generation<T: DeserializeOwned>(&self, method: &str, request: Value) -> io::Result<T> {
         self.server
             .call("generation", &json!({"method": method, "request": request}))
@@ -196,6 +204,7 @@ fn run() -> io::Result<()> {
             town_previews(&harness, job, options.get("name").unwrap_or_default())
         }
         (Some("history"), Some(name)) => history(&harness, name),
+        (Some("city-view-inputs"), Some(name)) => city_view_inputs(&harness, name),
         (Some("raster"), Some(name)) if options.positionals.len() > 2 => {
             raster(&harness, name, &options.positionals[2..])
         }
@@ -220,6 +229,7 @@ fn usage(harness: &Harness) -> String {
   census [--reference-width] [--full-history [--seed <integer>]]
   experiment processes | run <experiment.json> | render <results.json> [--metric <name>] [--colors linear|log]
   summary|history <map folder under {maps}>
+  city-view-inputs <published City map folder>
   raster <map folder> <layer id>...
   real --at x,y|Settlement [--hex 100m] [--across 50] [--kind ground|structure]
        [--detail draft|standard|fine] [--name name] [--parent map folder]
@@ -600,11 +610,13 @@ fn city_choice(harness: &Harness, options: &Options, reference: &MapRef) -> io::
 }
 fn real_scale(harness: &Harness, options: &Options) -> io::Result<()> {
     let parent_file = match options.get("parent") {
-        Some(parent) => harness.reports.join("maps").join(parent).join("map.json"),
+        Some(parent) => harness.existing_map(parent).join("map.json"),
         None => harness.world_file(),
     };
     let reference = read_json::<Kept>(&parent_file)
-        .map_err(|_| io::Error::other("No kept world; run make local-world"))?
+        .map_err(|e| {
+            io::Error::other(format!("Cannot read parent {}: {e}", parent_file.display()))
+        })?
         .reference;
     let parent = harness.open(&reference)?;
     let [x, y] = point(harness, &reference, options.get("at").unwrap_or_default())?;
@@ -876,9 +888,29 @@ fn history(harness: &Harness, name: &str) -> io::Result<()> {
     println!("{}", directory.join("history.json").display());
     Ok(())
 }
-/// Saves raster layers of a kept map as GeoTIFFs beside its report, e.g. raster:Elevation.
+/// Export the finished map facade's features and two field overlays for offline drawing.
+fn city_view_inputs(harness: &Harness, name: &str) -> io::Result<()> {
+    let directory = harness.existing_map(name);
+    let map: atlas_map::MapDescriptor = read_json(&directory.join("map.json"))?;
+    let mut features = Vec::new();
+    report::features(
+        &harness.server,
+        &map.reference,
+        &map.primary_space_id.to_string(),
+        None,
+        |feature| features.push(feature),
+    )?;
+    raster(
+        harness,
+        name,
+        &["terrain".into(), "raster:Population".into()],
+    )?;
+    write_json(&directory.join("city-view-features.json"), &features)
+}
+
+/// Saves raster layers of a kept map as GeoTIFFs beside its report.
 fn raster(harness: &Harness, name: &str, layers: &[String]) -> io::Result<()> {
-    let directory = harness.reports.join("maps").join(name);
+    let directory = harness.existing_map(name);
     let map: Value = read_json(&directory.join("map.json"))?;
     let kept: Kept = serde_json::from_value(json!({"reference": map["reference"]}))?;
     for id in layers {

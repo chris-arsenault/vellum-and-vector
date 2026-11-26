@@ -103,23 +103,7 @@ fn rounds(catalogue: &Catalogue, context: &Context<'_>, city: bool) -> io::Resul
             &context,
             &format!("{occurrence}/before"),
         )?);
-        body.extend(group(
-            "water.runoff",
-            &format!("{occurrence}/supply"),
-            span,
-        )?);
-        body.extend(group(
-            if round == 1 {
-                "water.initialize"
-            } else {
-                "water.routing"
-            },
-            &format!("{occurrence}/courses"),
-            span,
-        )?);
-        if round == 1 {
-            body.extend(group("epoch.material-forcing", &occurrence, span)?);
-        }
+        water_round(&mut body, group, &occurrence, span, round)?;
         for (position, slot) in DEVELOPMENT.iter().enumerate() {
             body.extend(group(slot, &format!("{occurrence}/{position}"), span)?);
         }
@@ -134,49 +118,7 @@ fn rounds(catalogue: &Catalogue, context: &Context<'_>, city: bool) -> io::Resul
         }
         body.extend(group("epoch.ecology-evolve", &occurrence, span)?);
         body.extend(group("epoch.ecology-burial", &occurrence, span)?);
-        body.push(invocation(
-            "refinement.place-effects",
-            &occurrence,
-            Values::from_iter([("people".into(), society.into())]),
-        ));
-        if society {
-            for id in [
-                "human.land.trade",
-                "human.land.feed",
-                "human.land.gather",
-                "human.land.harden",
-                "settlement.built-maintenance",
-            ] {
-                body.push(invocation(id, &occurrence, Values::new()));
-            }
-        }
-        if city {
-            body.push(invocation(
-                "refinement.city-works",
-                &occurrence,
-                Values::new(),
-            ));
-            // owner-direction(2026-11-24): district programs shape City geography before permanent district boundaries are drawn
-            for slot in [
-                "city.programs",
-                "city.claims",
-                "city.invest",
-                "city.routes",
-                "city.landscape",
-            ] {
-                body.extend(group(slot, &occurrence, 0.)?);
-            }
-            body.extend(group(
-                "city.routes",
-                &format!("{occurrence}/crossings"),
-                0.,
-            )?);
-        }
-        body.extend(group(
-            "water.routing",
-            &format!("{occurrence}/final-courses"),
-            span,
-        )?);
+        develop_settlement(city, society, group, span, &mut body, &occurrence)?;
     }
     if city {
         // owner-direction(2026-11-24): City districts partition the developed main settlement after competing processes; ordinary streets and blocks belong to district maps
@@ -215,6 +157,87 @@ fn rounds(catalogue: &Catalogue, context: &Context<'_>, city: bool) -> io::Resul
         body.extend(group("city.publish", "final", 0.)?);
     }
     Ok(body)
+}
+
+fn water_round(
+    body: &mut Sequence,
+    group: impl Fn(&'static str, &str, f64) -> io::Result<Sequence>,
+    occurrence: &str,
+    span: f64,
+    round: usize,
+) -> io::Result<()> {
+    body.extend(group(
+        "water.runoff",
+        &format!("{occurrence}/supply"),
+        span,
+    )?);
+    body.extend(group(
+        if round == 1 {
+            "water.initialize"
+        } else {
+            "water.routing"
+        },
+        &format!("{occurrence}/courses"),
+        span,
+    )?);
+    if round == 1 {
+        body.extend(group("epoch.material-forcing", occurrence, span)?);
+    }
+    Ok(())
+}
+
+fn develop_settlement(
+    city: bool,
+    society: bool,
+    group: impl Fn(&'static str, &str, f64) -> io::Result<Sequence>,
+    span: f64,
+    body: &mut Sequence,
+    occurrence: &str,
+) -> io::Result<()> {
+    body.push(invocation(
+        "refinement.place-effects",
+        occurrence,
+        Values::from_iter([("people".into(), society.into())]),
+    ));
+    if society {
+        for id in [
+            "human.land.trade",
+            "human.land.feed",
+            "human.land.gather",
+            "human.land.harden",
+            "settlement.built-maintenance",
+        ] {
+            body.push(invocation(id, occurrence, Values::new()));
+        }
+    }
+    if city {
+        body.push(invocation(
+            "refinement.city-works",
+            occurrence,
+            Values::new(),
+        ));
+        // owner-direction(2026-11-24): district programs shape City geography before permanent district boundaries are drawn
+        for slot in [
+            "city.programs",
+            "city.claims",
+            "city.invest",
+            "city.routes",
+            "city.landscape",
+        ] {
+            body.extend(group(slot, occurrence, 0.)?);
+        }
+        body.extend(group(
+            "city.routes",
+            &format!("{occurrence}/crossings"),
+            0.,
+        )?);
+    }
+    body.extend(group(
+        "water.routing",
+        &format!("{occurrence}/final-courses"),
+        span,
+    )?);
+    Ok(())
 }
 /// A real-scale map (ADR 0016) develops its land with the same processes as a region: the
 /// development rounds cut its valleys and streams at the fine span from the captured

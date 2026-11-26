@@ -31,15 +31,15 @@
       "Canonical responsibility": "Non-semantic society startup/coordinator; generic sampler remains separate",
       "World: real historical evolution": "No historical meaning; sampled fields are only initial state",
       "Region: emergent spatial refinement": "Coordinate coupled society refinements; no combined Population/BuiltUp/Standing weighting",
-      "Reason / decisions": "Do not give one-shot apportionment causal ownership; legacy row kept until migration"
+      "Reason / decisions": "Captured society data initializes each child. The selected society owners differentiate households and land across samples."
     },
     {
       "Existing catalog ID": "human.city.growth",
       "Disposition": "Fold / remove standalone process",
-      "Canonical responsibility": "human.land.gather — City-scale movement strategy",
+      "Canonical responsibility": "City household placement belongs to human.land.gather.",
       "World: real historical evolution": "Historical migration belongs to land.gather",
-      "Region: emergent spatial refinement": "Street, edge and district access are refinement strategies of gather",
-      "Reason / decisions": "No separate 10-year city migration; Region must already have urban concentration"
+      "Region: emergent spatial refinement": "Regional settlement catchments develop before City household placement uses finer travel, housing and work opportunities.",
+      "Reason / decisions": "Refinement uses the captured population without another decade of migration."
     },
     {
       "Existing catalog ID": "town.maintenance",
@@ -54,8 +54,8 @@
       "Disposition": "Keep / strengthen",
       "Canonical responsibility": "Movement, concentration and population spatial organization",
       "World: real historical evolution": "Movement/migration with elapsed time, changed census and worn routes",
-      "Region: emergent spatial refinement": "Repeated attraction↔capacity↔food↔trade feedback differentiates one coarse population cell into several kinds of places",
-      "Reason / decisions": "No imposed World point, no instant migration years, parent cell borders not barriers"
+      "Region: emergent spatial refinement": "Place captured residents and identity groups across reachable developed catchments using food, housing, trade and terrain. During City refinement, prior roads and usable crossings change the next round of placement.",
+      "Reason / decisions": "Connected households may settle across captured cell boundaries. A recorded settlement census describes residents to locate in its catchment."
     },
     {
       "Existing catalog ID": "human.land.trade",
@@ -110,8 +110,8 @@
       "Disposition": "Keep / defer details",
       "Canonical responsibility": "City/Street society↔town coupling",
       "World: real historical evolution": "Not an independent World demographic process",
-      "Region: emergent spatial refinement": "Later block/route realization feeds shared numerical stock once City/Street fidelity exists",
-      "Reason / decisions": "No City-footprint prerequisite for Region urban differentiation"
+      "Region: emergent spatial refinement": "Regional households resolve on shared society fields. City passes additionally feed road access, reservations and crossing links into placement.",
+      "Reason / decisions": "The dedicated town-coupling adapter remains deferred. Feedback runs through the existing City and society owners."
     },
     {
       "Existing catalog ID": "town.land-competition",
@@ -123,11 +123,11 @@
     },
     {
       "Existing catalog ID": "town.construction",
-      "Disposition": "Keep local / defer",
-      "Canonical responsibility": "City/Street detailed structure construction",
+      "Disposition": "Keep at City and Street fidelity",
+      "Canonical responsibility": "City land-use fabric and Street premises",
       "World: real historical evolution": "World/Region construction already has numerical built-land owner",
-      "Region: emergent spatial refinement": "Footprints and premises only when later requested",
-      "Reason / decisions": "No second numeric BuiltUp/Standing simulation"
+      "Region: emergent spatial refinement": "Regional society resolves developed stock. City construction uses that stock, district programs, access and claims to form mixed-use ground.",
+      "Reason / decisions": "City leaves the local street network and individual buildings to the finer map."
     },
     {
       "Existing catalog ID": "human.land-era",

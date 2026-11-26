@@ -166,7 +166,7 @@ fn households_keep_their_identity_donor_while_economic_fields_cross_its_edge() {
         donors: Default::default(),
     };
     let channels = channels::physical();
-    let read = |i: usize| Ok(if i % 2 == 0 { 0.2 } else { 0.8 });
+    let read = |i: usize| Ok(if i.is_multiple_of(2) { 0.2 } else { 0.8 });
     let samples = |name: &str, coverage: &mut Coverage| {
         let band = channels.iter().find(|x| x.name == name).unwrap();
         let mut at = Interpolator::new(&grid, band.discrete, coverage);

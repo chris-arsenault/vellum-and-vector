@@ -64,8 +64,10 @@ pub async fn capture(
             resources: &resources,
             inputs: &stores.inputs,
         },
-        stores.maps.access(),
-        &atlas_gis::map_files::MapFiles::new(root.join("map-assets")),
+        regional_capture::PublishedMap {
+            maps: stores.maps.access(),
+            files: &atlas_gis::map_files::MapFiles::new(root.join("map-assets")),
+        },
         records,
         &stores.spatial,
     )?;

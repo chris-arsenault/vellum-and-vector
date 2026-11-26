@@ -36,6 +36,7 @@ fn main() {
                 "Clock",
                 "Composition order",
                 "Contract status",
+                "Current execution strategy",
                 "Transferred to",
                 "Required bindings",
             ] {
@@ -49,17 +50,17 @@ fn main() {
                 "reason": scope["NoOp justification"]
             }));
         }
-        // Proposed strategies remain in the design review until adopted for execution.
-        if record["Contract status"] == "Proposed" {
-            continue;
-        }
-        policies.push(json!({
-            "process": record["Process ID"], "id": record["Strategy ID"],
-            "kind": record["Strategy kind"], "clock": record["Clock"],
-            "order": record["Composition order"], "scopes": scopes,
-            "required": record.get("Required bindings").cloned().unwrap_or_else(|| json!([]))
-        }));
+        policies.push((
+            record,
+            json!({
+                "process": record["Process ID"], "id": record["Strategy ID"],
+                "kind": record["Strategy kind"], "clock": record["Clock"],
+                "order": record["Composition order"], "scopes": scopes,
+                "required": record.get("Required bindings").cloned().unwrap_or_else(|| json!([]))
+            }),
+        ));
     }
+    let policies = execution_policies(policies);
     let out = PathBuf::from(env::var_os("OUT_DIR").unwrap());
     let catalog = "../../docs/design/process-contracts/district-types.dataset.json";
     println!("cargo:rerun-if-changed={catalog}");
@@ -88,4 +89,31 @@ fn main() {
         serde_json::to_vec_pretty(&json!({"items": review})).unwrap(),
     )
     .unwrap();
+}
+
+/// A designed replacement can describe its full scope before its Rust implementation lands.
+/// Carry that scope on the named current strategy while keeping the design available for review.
+fn execution_policies(records: Vec<(&Value, Value)>) -> Vec<Value> {
+    let mut active: Vec<_> = records
+        .iter()
+        .filter(|(r, _)| {
+            r["Contract status"] != "Proposed" && r["Current execution strategy"].is_null()
+        })
+        .map(|(_, policy)| policy.clone())
+        .collect();
+    for (record, policy) in records {
+        let Some(current) = record["Current execution strategy"].as_str() else {
+            continue;
+        };
+        let process = &policy["process"];
+        let owner = active
+            .iter_mut()
+            .find(|row| row["process"] == *process && row["id"] == current)
+            .unwrap_or_else(|| panic!("{process} has no current execution strategy {current}"));
+        owner["scopes"]
+            .as_array_mut()
+            .unwrap()
+            .extend(policy["scopes"].as_array().unwrap().iter().cloned());
+    }
+    active
 }

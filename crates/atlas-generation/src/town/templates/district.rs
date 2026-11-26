@@ -126,77 +126,6 @@ impl Evidence {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn district_traits_act_across_different_ground_without_a_landmark() {
-        let dry = DistrictLand::default();
-        let wet = DistrictLand {
-            wet: 0.9,
-            trees: 0.6,
-            access: 1.2,
-            ..dry
-        };
-        let effects = |kind: Trope, land| {
-            let mut d = Demands::default();
-            kind.shape_district(land, &mut d);
-            d
-        };
-        for e in CATALOG.iter().filter(|e| e.category == Category::Trait) {
-            for ground in [dry, wet] {
-                assert_eq!(
-                    effects(e.id, ground) == Demands::default(),
-                    e.id == Trope::Ordinary
-                );
-            }
-        }
-        let flood = effects(Trope::Flood, wet);
-        assert!(flood.commons > effects(Trope::Flood, dry).commons);
-        assert!(flood.access < effects(Trope::Flood, dry).access);
-        assert!(effects(Trope::Resident, wet).trade > effects(Trope::Resident, dry).trade);
-        let origin = |id| {
-            CATALOG
-                .iter()
-                .find(|e| e.id == id)
-                .unwrap()
-                .localized_origin
-        };
-        assert!(origin(Trope::Spring));
-        assert!(!origin(Trope::Flood));
-    }
-
-    #[test]
-    fn dependent_households_can_work_a_wealthy_estate() {
-        let mut site = Evidence {
-            crowd: 0.3,
-            capital: 1.1,
-            built: 0.2,
-            trade: 0.,
-            food: 0.,
-            route: 0.,
-            tenure: Tenure::Dependent,
-            free: false,
-            craft: 0.,
-            wet: 0.,
-            trees: 0.,
-            ruins: 0.,
-            greenwood: false,
-            veil: false,
-            wealth: 2.,
-            sources: vec![],
-        };
-        assert!(site.weight(Trope::Estates) > site.weight(Trope::Warrens));
-        let estate_weight = site.weight(Trope::Estates);
-        let tenement_weight = site.weight(Trope::Warrens);
-        site.wealth = 0.25;
-        assert!(site.weight(Trope::Estates) < estate_weight);
-        assert!(site.weight(Trope::Warrens) > tenement_weight);
-        assert!(site.weight(Trope::Guild) > 0.);
-        assert_eq!(site.weight(Trope::Veil), 0.);
-    }
-}
 impl Trope {
     pub fn activity(self) -> Activity {
         use Trope::*;
@@ -323,5 +252,77 @@ impl Trope {
             }
             _ => {}
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn district_traits_act_across_different_ground_without_a_landmark() {
+        let dry = DistrictLand::default();
+        let wet = DistrictLand {
+            wet: 0.9,
+            trees: 0.6,
+            access: 1.2,
+            ..dry
+        };
+        let effects = |kind: Trope, land| {
+            let mut d = Demands::default();
+            kind.shape_district(land, &mut d);
+            d
+        };
+        for e in CATALOG.iter().filter(|e| e.category == Category::Trait) {
+            for ground in [dry, wet] {
+                assert_eq!(
+                    effects(e.id, ground) == Demands::default(),
+                    e.id == Trope::Ordinary
+                );
+            }
+        }
+        let flood = effects(Trope::Flood, wet);
+        assert!(flood.commons > effects(Trope::Flood, dry).commons);
+        assert!(flood.access < effects(Trope::Flood, dry).access);
+        assert!(effects(Trope::Resident, wet).trade > effects(Trope::Resident, dry).trade);
+        let origin = |id| {
+            CATALOG
+                .iter()
+                .find(|e| e.id == id)
+                .unwrap()
+                .localized_origin
+        };
+        assert!(origin(Trope::Spring));
+        assert!(!origin(Trope::Flood));
+    }
+
+    #[test]
+    fn dependent_households_can_work_a_wealthy_estate() {
+        let mut site = Evidence {
+            crowd: 0.3,
+            capital: 1.1,
+            built: 0.2,
+            trade: 0.,
+            food: 0.,
+            route: 0.,
+            tenure: Tenure::Dependent,
+            free: false,
+            craft: 0.,
+            wet: 0.,
+            trees: 0.,
+            ruins: 0.,
+            greenwood: false,
+            veil: false,
+            wealth: 2.,
+            sources: vec![],
+        };
+        assert!(site.weight(Trope::Estates) > site.weight(Trope::Warrens));
+        let estate_weight = site.weight(Trope::Estates);
+        let tenement_weight = site.weight(Trope::Warrens);
+        site.wealth = 0.25;
+        assert!(site.weight(Trope::Estates) < estate_weight);
+        assert!(site.weight(Trope::Warrens) > tenement_weight);
+        assert!(site.weight(Trope::Guild) > 0.);
+        assert_eq!(site.weight(Trope::Veil), 0.);
     }
 }

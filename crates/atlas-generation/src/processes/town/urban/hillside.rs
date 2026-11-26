@@ -123,47 +123,17 @@ pub(super) fn traverse(s: &Survey<'_>, run: &[Point], heights: &[f64]) -> Option
     // Place a station at each reversal, including the midpoint of each leg.
     let steps = 12 * (rise.abs() / (12. * STATION * DESIGN_GRADE)).ceil().max(1.) as usize;
     let direction = rise.signum();
-    let along = unit(sub(b, a));
     let reach = rise.abs() / DESIGN_GRADE;
     if reach < distance(a, b) {
         return None;
     }
     let (mut best, original_peak) = course_quality(s, run, direction)?;
-    let mut levels = Vec::new();
-    let mut i = 0;
-    for k in 1..steps {
-        let z = heights[0] + rise * k as f64 / steps as f64;
-        while i + 1 < heights.len() && direction * (heights[i + 1] - z) < 0. {
-            i += 1;
-        }
-        let j = i + 1;
-        let t = ((z - heights[i]) / (heights.get(j)? - heights[i])).clamp(0., 1.);
-        let p = add(run[i], scale(sub(run[j], run[i]), t));
-        let side = left(along);
-        levels.push([
-            contour(s, p, side, reach * 0.8),
-            contour(s, p, scale(side, -1.), reach * 0.8),
-        ]);
-    }
+    let levels = contour_stations(s, run, heights, rise, steps, reach)?;
     let mut winner = None;
     for turns in [1, 2, 3] {
         for factor in [0.65, 0.85, 1., 1.25, 1.55] {
             for sign in [1., -1.] {
-                let mut path = vec![a];
-                for (k, level) in levels.iter().enumerate() {
-                    let phase = (k + 1) as f64 / steps as f64 * turns as f64;
-                    let wave = (1. - (2. * phase.rem_euclid(1.) - 1.).abs())
-                        * if phase.floor() as usize % 2 == 0 {
-                            1.
-                        } else {
-                            -1.
-                        };
-                    let offset = sign * wave * reach * factor / (2. * turns as f64);
-                    let Some(p) = station(&level[usize::from(offset < 0.)], offset) else {
-                        break;
-                    };
-                    path.push(p);
-                }
+                let mut path = switchback_path(a, reach, &levels, turns, factor, sign);
                 if path.len() != steps {
                     continue;
                 }
@@ -183,4 +153,60 @@ pub(super) fn traverse(s: &Survey<'_>, run: &[Point], heights: &[f64]) -> Option
         }
     }
     winner
+}
+
+fn switchback_path(
+    a: Point,
+    reach: f64,
+    levels: &[[Vec<Point>; 2]],
+    turns: i32,
+    factor: f64,
+    sign: f64,
+) -> Vec<Point> {
+    let steps = levels.len() + 1;
+    let mut path = vec![a];
+    for (k, level) in levels.iter().enumerate() {
+        let phase = (k + 1) as f64 / steps as f64 * turns as f64;
+        let wave = (1. - (2. * phase.rem_euclid(1.) - 1.).abs())
+            * if (phase.floor() as usize).is_multiple_of(2) {
+                1.
+            } else {
+                -1.
+            };
+        let offset = sign * wave * reach * factor / (2. * turns as f64);
+        let Some(p) = station(&level[usize::from(offset < 0.)], offset) else {
+            break;
+        };
+        path.push(p);
+    }
+    path
+}
+
+fn contour_stations(
+    s: &Survey<'_>,
+    run: &[Point],
+    heights: &[f64],
+    rise: f64,
+    steps: usize,
+    reach: f64,
+) -> Option<Vec<[Vec<Point>; 2]>> {
+    let along = unit(sub(*run.last()?, run[0]));
+    let direction = rise.signum();
+    let mut levels = Vec::new();
+    let mut i = 0;
+    for k in 1..steps {
+        let z = heights[0] + rise * k as f64 / steps as f64;
+        while i + 1 < heights.len() && direction * (heights[i + 1] - z) < 0. {
+            i += 1;
+        }
+        let j = i + 1;
+        let t = ((z - heights[i]) / (heights.get(j)? - heights[i])).clamp(0., 1.);
+        let p = add(run[i], scale(sub(run[j], run[i]), t));
+        let side = left(along);
+        levels.push([
+            contour(s, p, side, reach * 0.8),
+            contour(s, p, scale(side, -1.), reach * 0.8),
+        ]);
+    }
+    Some(levels)
 }

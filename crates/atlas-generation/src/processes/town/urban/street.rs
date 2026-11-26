@@ -60,28 +60,7 @@ pub(super) fn circulation(
         let pieces = if has_blocks {
             vec![block.geometry.clone()]
         } else {
-            let frame_land = kernel
-                .overlay(&block.geometry, frame, Overlay::Intersection)
-                .map_err(io::Error::other)?;
-            let Some(mut land) = frame_land else { continue };
-            for r in urban
-                .captured
-                .iter()
-                .filter(|r| matches!(r.kind.as_str(), "square" | "park" | "cityWall"))
-            {
-                let reserve = if r.kind == "cityWall" {
-                    kernel.buffer(&r.geometry, 3.).map_err(io::Error::other)?
-                } else {
-                    Some(r.geometry.clone())
-                };
-                if let Some(g) = reserve {
-                    land = kernel
-                        .overlay(&land, &g, Overlay::Difference)
-                        .map_err(io::Error::other)?
-                        .unwrap_or(Geometry::GeometryCollection { geometries: vec![] });
-                }
-            }
-            super::geometry::faces(kernel, &land, roads)?
+            street_ground(kernel, block, frame, roads, &urban.captured)?
         };
         for piece in pieces {
             let division = divide(kernel, &piece, spacing * spacing, angle, i as u64 + 317)?;
@@ -90,22 +69,7 @@ pub(super) fn circulation(
                     if trace.len() < 2 {
                         continue;
                     }
-                    for at in [0, trace.len() - 1] {
-                        let p = trace[at];
-                        let Some(j) = road_index.nearest(p).map_err(io::Error::other)? else {
-                            continue;
-                        };
-                        let [_, on] = kernel
-                            .nearest_points(&point(p), &roads[j])
-                            .map_err(io::Error::other)?;
-                        if distance(xy(p), xy(on)) <= 6.
-                            && kernel
-                                .covers_points(frame, &[on])
-                                .map_err(io::Error::other)?[0]
-                        {
-                            trace[at] = on;
-                        }
-                    }
+                    snap_lane(kernel, road_index.as_ref(), roads, frame, &mut trace)?;
                     urban.routes.push(Element::way(
                         Geometry::LineString { coordinates: trace },
                         "thoroughfare",
@@ -141,6 +105,64 @@ pub(super) fn circulation(
     urban.street_round += 1;
     Ok(())
 }
+fn snap_lane(
+    kernel: &dyn crate::spatial::SpatialKernel,
+    road_index: &dyn atlas_map::spatial::SpatialIndex,
+    roads: &[Geometry],
+    frame: &Geometry,
+    trace: &mut [atlas_map::Position],
+) -> io::Result<()> {
+    for at in [0, trace.len() - 1] {
+        let p = trace[at];
+        let Some(j) = road_index.nearest(p).map_err(io::Error::other)? else {
+            continue;
+        };
+        let [_, on] = kernel
+            .nearest_points(&point(p), &roads[j])
+            .map_err(io::Error::other)?;
+        if distance(xy(p), xy(on)) <= 6.
+            && kernel
+                .covers_points(frame, &[on])
+                .map_err(io::Error::other)?[0]
+        {
+            trace[at] = on;
+        }
+    }
+    Ok(())
+}
+
+fn street_ground(
+    kernel: &dyn crate::spatial::SpatialKernel,
+    block: &Feature,
+    frame: &Geometry,
+    roads: &[Geometry],
+    captured: &[Feature],
+) -> io::Result<Vec<Geometry>> {
+    let frame_land = kernel
+        .overlay(&block.geometry, frame, Overlay::Intersection)
+        .map_err(io::Error::other)?;
+    let Some(mut land) = frame_land else {
+        return Ok(Vec::new());
+    };
+    for r in captured
+        .iter()
+        .filter(|r| matches!(r.kind.as_str(), "square" | "park" | "cityWall"))
+    {
+        let reserve = if r.kind == "cityWall" {
+            kernel.buffer(&r.geometry, 3.).map_err(io::Error::other)?
+        } else {
+            Some(r.geometry.clone())
+        };
+        if let Some(g) = reserve {
+            land = kernel
+                .overlay(&land, &g, Overlay::Difference)
+                .map_err(io::Error::other)?
+                .unwrap_or(Geometry::GeometryCollection { geometries: vec![] });
+        }
+    }
+    super::geometry::faces(kernel, &land, roads)
+}
+
 fn number(f: &Feature, key: &str, or: f64) -> f64 {
     f.attributes.get(key).and_then(|v| v.as_f64()).unwrap_or(or)
 }
@@ -286,18 +308,8 @@ pub(super) fn premises(
         let coverage = (0.12 + 0.48 * density / (density + 1200.) + 0.4 * built / (built + 0.09))
             .clamp(0., 1.);
         for piece in atlas_map::regions::parts(&inset) {
-            let mut available = Some(piece.clone());
-            for r in corridor_index
-                .query(kernel.bounds(&piece).map_err(io::Error::other)?)
-                .map_err(io::Error::other)?
-            {
-                if let Some(ground) = available.take() {
-                    available = kernel
-                        .overlay(&ground, &corridors[r], Overlay::Difference)
-                        .map_err(io::Error::other)?
-                        .and_then(polygon);
-                }
-            }
+            let mut available =
+                off_street_land(kernel, &piece, corridor_index.as_ref(), &corridors)?;
             let centre = xy(kernel.interior_position(&piece).map_err(io::Error::other)?);
             let Some(edges) = boundary_lines(&piece).into_iter().next() else {
                 continue;
@@ -348,34 +360,12 @@ pub(super) fn premises(
                     };
                     let shape = rectangle(pitch * (0.68 + 0.23 * sample(key ^ 19)), depth);
                     let Some(ground) = &available else { break };
-                    if !kernel
-                        .relation(ground, &shape, Predicate::Covers)
-                        .map_err(io::Error::other)?
-                    {
-                        continue;
-                    }
-                    let plot = rectangle(pitch * 0.98, depth + width * 0.55);
-                    let Some(lot_shape) = kernel
-                        .overlay(&plot, ground, Overlay::Intersection)
-                        .map_err(io::Error::other)?
-                        .and_then(polygon)
+                    let Some(lot_shape) = fit_plot(state, frame, ground, &shape, || {
+                        rectangle(pitch * 0.98, depth + width * 0.55)
+                    })?
                     else {
                         continue;
                     };
-                    let centre = kernel.interior_position(&shape).map_err(io::Error::other)?;
-                    if !kernel
-                        .covers_points(frame, &[centre])
-                        .map_err(io::Error::other)?[0]
-                    {
-                        continue;
-                    }
-                    if let Some(cell) =
-                        crate::field::refinement::courses::cell_at(state.field().mesh(), xy(centre))
-                    {
-                        if !crate::field::people::work::habitable(state.field(), cell)? {
-                            continue;
-                        }
-                    }
                     available = kernel
                         .overlay(ground, &lot_shape, Overlay::Difference)
                         .map_err(io::Error::other)?
@@ -399,6 +389,70 @@ pub(super) fn premises(
         }
     }
     Ok(())
+}
+
+fn fit_plot(
+    state: &State,
+    frame: &Geometry,
+    ground: &Geometry,
+    shape: &Geometry,
+    plot: impl FnOnce() -> Geometry,
+) -> io::Result<Option<Geometry>> {
+    let kernel = state.spatial.as_ref();
+    if !kernel
+        .relation(ground, shape, Predicate::Covers)
+        .map_err(io::Error::other)?
+    {
+        return Ok(None);
+    }
+    let plot = plot();
+    let Some(lot_shape) = kernel
+        .overlay(&plot, ground, Overlay::Intersection)
+        .map_err(io::Error::other)?
+        .and_then(polygon)
+    else {
+        return Ok(None);
+    };
+    if !habitable_premise(state, frame, shape)? {
+        return Ok(None);
+    }
+    Ok(Some(lot_shape))
+}
+
+fn habitable_premise(state: &State, frame: &Geometry, shape: &Geometry) -> io::Result<bool> {
+    let kernel = state.spatial.as_ref();
+    let centre = kernel.interior_position(shape).map_err(io::Error::other)?;
+    if !kernel
+        .covers_points(frame, &[centre])
+        .map_err(io::Error::other)?[0]
+    {
+        return Ok(false);
+    }
+    match crate::field::refinement::courses::cell_at(state.field().mesh(), xy(centre)) {
+        Some(cell) => crate::field::people::work::habitable(state.field(), cell),
+        None => Ok(true),
+    }
+}
+
+fn off_street_land(
+    kernel: &dyn crate::spatial::SpatialKernel,
+    piece: &Geometry,
+    corridor_index: &dyn atlas_map::spatial::SpatialIndex,
+    corridors: &[Geometry],
+) -> io::Result<Option<Geometry>> {
+    let mut available = Some(piece.clone());
+    for r in corridor_index
+        .query(kernel.bounds(piece).map_err(io::Error::other)?)
+        .map_err(io::Error::other)?
+    {
+        if let Some(ground) = available.take() {
+            available = kernel
+                .overlay(&ground, &corridors[r], Overlay::Difference)
+                .map_err(io::Error::other)?
+                .and_then(polygon);
+        }
+    }
+    Ok(available)
 }
 
 #[cfg(test)]

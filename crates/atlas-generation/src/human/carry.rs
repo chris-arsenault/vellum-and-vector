@@ -76,16 +76,7 @@ impl HumanLayers {
                 arrivals.get(to)? + outgoing * self.mesh.area(from) / self.mesh.area(to),
             )?;
         }
-        let mut displaced = coverage.scratch(self.mesh.len(), 0.0);
-        for cell in 0..self.mesh.len() {
-            let incoming = arrivals.get(cell)?;
-            if incoming > 0.0 {
-                displaced.set(
-                    cell,
-                    ((incoming - self.free_area(cell)?) / incoming).clamp(0.0, 1.0),
-                )?;
-            }
-        }
+        let displaced = self.displaced_share(coverage, &arrivals)?;
         let farm = self.bands.layers[LayerId::Farmland as usize].snapshot()?;
         let herd = self.bands.layers[LayerId::Pasture as usize].snapshot()?;
         for from in 0..self.mesh.len() {
@@ -128,6 +119,24 @@ impl HumanLayers {
             )?;
         }
         Ok(())
+    }
+
+    fn displaced_share(
+        &mut self,
+        coverage: &mut Coverage,
+        arrivals: &Band<f64>,
+    ) -> Result<Band<f64>, io::Error> {
+        let mut displaced = coverage.scratch(self.mesh.len(), 0.0);
+        for cell in 0..self.mesh.len() {
+            let incoming = arrivals.get(cell)?;
+            if incoming > 0.0 {
+                displaced.set(
+                    cell,
+                    ((incoming - self.free_area(cell)?) / incoming).clamp(0.0, 1.0),
+                )?;
+            }
+        }
+        Ok(displaced)
     }
 
     /// Resolve finer sites of already ruined fabric, including the surviving stock,

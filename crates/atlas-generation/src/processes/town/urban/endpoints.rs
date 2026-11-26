@@ -41,7 +41,8 @@ pub(super) struct RoadPlan {
     pub connections: Vec<Connection>,
 }
 
-pub(super) struct Sites {
+pub(super) struct Sites<'a> {
+    points: &'a [Point],
     pub gateways: Vec<(usize, String)>,
     pub destinations: Vec<(usize, String)>,
     pub spacing: f64,
@@ -49,13 +50,13 @@ pub(super) struct Sites {
 
 /// Candidate stops come from the city as a whole. Park entrances are on their usable edge,
 /// and the same surveyed park coverage constrains the later route search.
-pub(super) fn candidate_sites(
+pub(super) fn candidate_sites<'a>(
     state: &crate::atlas::state::State,
     u: &mut super::Urban,
     frame: &atlas_map::Geometry,
-    points: &[Point],
+    points: &'a [Point],
     gateways: Vec<(usize, String)>,
-) -> io::Result<(Sites, Vec<bool>)> {
+) -> io::Result<(Sites<'a>, Vec<bool>)> {
     let mesh = state.field().mesh();
     let n = mesh.len();
     let policy = super::fields::policy(state)?;
@@ -139,6 +140,7 @@ pub(super) fn candidate_sites(
     );
     Ok((
         Sites {
+            points,
             gateways,
             destinations: stops,
             spacing,
@@ -150,13 +152,13 @@ pub(super) fn candidate_sites(
 pub(super) fn select_endpoints(
     state: &crate::atlas::state::State,
     u: &super::Urban,
-    points: &[Point],
-    sites: Sites,
+    sites: Sites<'_>,
     buildable: impl Fn(usize) -> bool,
     network: &[bool],
     founding: bool,
 ) -> io::Result<RoadPlan> {
     let Sites {
+        points,
         gateways,
         destinations: stops,
         spacing,
@@ -236,19 +238,25 @@ pub(super) fn select_endpoints(
         state.spatial.as_ref(),
         points,
         arrivals,
-        &entry_cells,
-        &centres,
+        Hubs {
+            entrances: &entry_cells,
+            centres: &centres,
+        },
         &attraction,
         city_span * 0.22,
     )
+}
+
+struct Hubs<'a> {
+    entrances: &'a [usize],
+    centres: &'a [(usize, String, f64)],
 }
 
 fn pair_destinations(
     spatial: &dyn SpatialKernel,
     points: &[Point],
     stops: Vec<(usize, String)>,
-    entrances: &[usize],
-    centres: &[(usize, String, f64)],
+    Hubs { entrances, centres }: Hubs<'_>,
     attraction: &[f64],
     catchment: f64,
 ) -> io::Result<RoadPlan> {
@@ -335,7 +343,7 @@ mod tests {
     #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn gateway_and_ward_choose_a_market_before_any_road_is_routed() {
-        use super::{pair_destinations, Journey};
+        use super::{pair_destinations, Hubs, Journey};
         let spatial = atlas_gis::geometry::NativeGeos::new(1e-6).unwrap();
         let points = [[1., 2.], [1., 1.], [3., 2.], [4., 1.]];
         let stops = vec![
@@ -347,8 +355,10 @@ mod tests {
             &spatial,
             &points,
             stops,
-            &[3],
-            &[(2, "Market".into(), 5.)],
+            Hubs {
+                entrances: &[3],
+                centres: &[(2, "Market".into(), 5.)],
+            },
             &[2., 1., 5.],
             4.,
         )

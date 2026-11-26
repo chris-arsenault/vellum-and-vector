@@ -7,12 +7,30 @@ The original process inventory and society decisions came from `vellum_vector_pr
 | [Processes](processes.dataset.json) | Process ID |
 | [Strategies](strategies.dataset.json) | Process ID and strategy ID |
 | [Society decisions](society-decisions.dataset.json) | Existing catalog ID |
+| [District types](district-types.dataset.json) | Type ID |
 
 Edit strategy applicability in the strategy dataset. Each entry pairs a map type with an independent resolution band. Named bands use the exact atlas constructor endpoints. Custom intervals specify an exclusive `above_metres` and inclusive `through_metres`. An algorithm declares its clock and required input slots. Algorithms that work together at the same site each declare a distinct composition order and execute in ascending order. A NoOp records its reason for each applicable scope. Unspecified entries retain the work awaiting design.
 
 The generation crate reads this catalog at build time. Semantic registrations bind its algorithm IDs to Rust implementations. Provider, inherited, coordinator, transferred and deferred entries retain their own dispositions. Existing legacy registrations keep their execution paths until migration.
 
 Run `cargo run -q -p atlas-generation --example process_applicability` to print the flat review view. It expands each strategy once per scope and includes the original workbook fields.
+
+## City development
+
+A Street strategy with a `Current execution strategy` names the existing runtime disposition for its scope. Its own row describes the intended implementation. When the Street owner implements and registers that strategy, remove the field so the catalogue selects it directly.
+
+A City captures its refined parent’s settlement, households, approaches and surroundings. Regional refinement can repeat at progressively finer scales. On the City map itself, trade, provisioning, household placement, built investment and upkeep run before urban layout in each round. The following round reads the access, usable bridge crossings and reserved ground the previous round produced. The regional sequence owns this order. [Regional schedule](../../../crates/atlas-generation/src/atlas/regional/sequence.rs) and [City inputs](../../../crates/atlas-generation/src/atlas/regional/city.rs).
+
+| Owner | City result |
+| --- | --- |
+| [Major works](../../../crates/atlas-generation/src/atlas/regional/city/works.rs) | Early siting across the known settled extent. Captured works retain their sites. A new work needs suitable ground, backing and room for its family’s footprint and influence. |
+| [District programs](../../../crates/atlas-generation/src/processes/town/urban/programs.rs) | Founder catchments respond to settlement area and geography. Each founder draws one economic role, one social character and at least one trait. The founding template favors particular roles. Local evidence and an increasing city-wide repeat penalty shape the draws. |
+| [Investment](../../../crates/atlas-generation/src/processes/town/urban/investment.rs) and [defenses](../../../crates/atlas-generation/src/processes/town/urban/defenses.rs) | Stewards acquire adjoining ground for parks and commons. Competing enclosures earn funding for individual sections according to who and what they protect. |
+| [Movement](../../../crates/atlas-generation/src/processes/town/urban/circulation.rs) | Site ordinary destinations, choose journeys, then route across the terrain. Approaches can share an ascent, take a switchback or cross a ravine by bridge. |
+| [Land competition](../../../crates/atlas-generation/src/processes/town/urban/claims.rs) and [construction](../../../crates/atlas-generation/src/processes/town/urban/landscape.rs) | Resolve mixed housing, trade and workshop ground. Local activity can support pockets away from principal roads. Connected junctions and arterials can draw additional activity. |
+| [Final district partition](../../../crates/atlas-generation/src/processes/town/urban/city.rs) | Assign the full districtable ground around reservations, preserve founder identities and count residents by area overlap. A district can comprise several pieces. |
+
+The City publishes the resolved districts, mixed land uses, principal routes, gates, works and places through `town.urban-geography`. Local streets, plots and individual buildings belong to the finer map. [Urban registrations and publication](../../../crates/atlas-generation/src/processes/town/urban/registration.rs).
 
 ## Module chunks
 
@@ -43,7 +61,7 @@ Source basis: main @ a616cef. 120/120 Processes contracts complete; 40/480 map-t
 
 ## Society review
 
-Design proposals, not executed Rust migrations. The 120-ID Process roster remains intact for provenance; generic lattice sampling stays domain-agnostic.
+The following notes record the society pilot at workbook import. The strategy dataset and Rust registrations above describe current applicability and execution.
 
 ### Shared numerical state and cross-process causes
 
@@ -151,7 +169,7 @@ Design proposals, not executed Rust migrations. The 120-ID Process roster remain
 - Coupling deferred to town detail
 - No geometry prerequisite for regional density
 
-#### Status
+#### Status at workbook import
 
 - PROPOSED — not Rust-executed
 - 40 map-type strategies specified

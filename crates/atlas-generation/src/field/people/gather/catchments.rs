@@ -223,6 +223,25 @@ mod tests {
     use super::*;
     #[test]
     fn an_accessible_destination_draws_from_both_census_areas_but_not_across_open_water() {
+        let sites = catchment_sites();
+        let mut after: Vec<_> = sites.iter().map(|s| s.residents).collect();
+        for p in placement(&sites, super::super::DEFAULT_PLACEMENT) {
+            let mut pool = 0.;
+            for (c, share) in p.sources {
+                let offer = share * after[c];
+                after[c] -= offer;
+                pool += offer;
+            }
+            for (c, share) in p.receivers {
+                after[c] += share * pool;
+            }
+        }
+        assert!(after[2] > after[1] && after[2] > after[3]);
+        assert!(after[0] < sites[0].residents);
+        assert_eq!(after[4..], [0., 200.]);
+    }
+
+    fn catchment_sites() -> Vec<Site> {
         let mut sites = Vec::new();
         for (i, inherited) in [90., 90., 10., 10., 0., 200.].into_iter().enumerate() {
             let id = usize::from(i >= 2);
@@ -248,20 +267,6 @@ mod tests {
                 ways,
             });
         }
-        let mut after: Vec<_> = sites.iter().map(|s| s.residents).collect();
-        for p in placement(&sites, super::super::DEFAULT_PLACEMENT) {
-            let mut pool = 0.;
-            for (c, share) in p.sources {
-                let offer = share * after[c];
-                after[c] -= offer;
-                pool += offer;
-            }
-            for (c, share) in p.receivers {
-                after[c] += share * pool;
-            }
-        }
-        assert!(after[2] > after[1] && after[2] > after[3]);
-        assert!(after[0] < sites[0].residents);
-        assert_eq!(after[4..], [0., 200.]);
+        sites
     }
 }

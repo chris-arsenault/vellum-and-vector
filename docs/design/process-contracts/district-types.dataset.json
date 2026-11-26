@@ -23,7 +23,7 @@
         "type": "string"
       },
       "Name": {
-        "description": "Repeatable generic type or trait name (common noun phrase), analogous to a major-work type such as 'mega library'. NOT a unique place name, named monument, named NPC, story title or definite-article epithet. Individual generated districts/POIs acquire their own culturally appropriate instance names during publication.",
+        "description": "Generic catalog name for a repeatable economic role, social character or trait. Each district also has its own generated or retained place name.",
         "type": "string"
       },
       "Provenance": {
@@ -55,7 +55,7 @@
     {
       "Category": "Trait",
       "Composition interactions": "The economic and social programs alone shape this district.",
-      "Core idea": "An ordinary district without a special local landmark or hazard.",
+      "Core idea": "The district has its economic role and social character without an additional trait effect.",
       "Eligibility requirements": "Available to every newly founded district.",
       "Generative effects": "Adds no site or land-use influence and ends the trait draw.",
       "Name": "ordinary",
@@ -70,132 +70,132 @@
       "Composition interactions": "Crowded-tenement society can make a tight night bazaar, patrician society can build guarded merchant courts, newcomers can run culturally distinct exchanges; optional Veil/ruin/animal traits rearrange access, stalls, safety and specialized goods only when sourced.",
       "Core idea": "A theatrical fantasy market quarter where caravans, guild factors, haggling merchants and auctioneers compete for valuable frontage and public trading ground; ordinary exchange is always possible, rare/exotic goods require real suppliers.",
       "Eligibility requirements": "Available to occupied districts. Trade and arriving routes favor a market.",
-      "Generative effects": "Arcaded market spines, bargaining courts, auction squares, covered bazaars, commodity yards, counting-houses and caravan arrivals; multiple distinctive market/inn/merchant POIs rather than one repeated market token. Principal routes converge on actual destinations.",
+      "Generative effects": "Markets favor trade frontage and principal approaches. A bargaining court, covered bazaar or commodity yard can express that role at a specific site.",
       "Name": "grand bazaar",
-      "Provenance": "Starter proposal for replacing existing single-list district types; pending Phase 5 reconciliation with old list and production adoption.",
-      "Status": "Draft",
+      "Provenance": "Introduced in the Phase 5 district catalog and used by the City district selector.",
+      "Status": "Reviewed",
       "Type ID": "economic.market-exchange",
-      "Weighted suitability": "Favor established merchant routes, crossroads, trading agreements, caravan traffic and retained market charters; rising clientele favors monumental auction spaces, lesser trade supports more intimate bazaar alleys."
+      "Weighted suitability": "Trade turnover raises the draw weight, especially where routes bring arrivals."
     },
     {
       "Category": "Economic",
       "Composition interactions": "Patrician estates create elite patron-backed workshops, warrens create dense small makers, guild society shares machines and service courts; ruins supply reused materials and Greenwood/creature traits alter workshop upkeep or siting.",
       "Core idea": "A district of smiths, masons, dyers, glassworkers, tinkers or fantastical artificers, producing visible craft specialization from actual workers, materials and machinery rather than generic 'shops.'",
       "Eligibility requirements": "A district can establish workshops. Craft traditions, materials and power favor them. Magical crafts depend on their medium.",
-      "Generative effects": "Distinct forge courts, smoking kilns where fuel exists, open stone yards, dye channels, waterwheel workshops, smithies, apprenticeship halls and shared loading passages. Working-site concentrations shape major service approach and nuisance/open-ground allocation.",
+      "Generative effects": "Workshop ground and access for workers and deliveries gain weight. Forge courts, dye channels and loading passages are possible local expressions where the craft has materials and access.",
       "Name": "artificer quarter",
-      "Provenance": "Starter proposal for replacing existing single-list district types; pending Phase 5 reconciliation with old list and production adoption.",
-      "Status": "Draft",
+      "Provenance": "Introduced in the Phase 5 district catalog and used by the City district selector.",
+      "Status": "Reviewed",
       "Type ID": "economic.craft-workshops",
-      "Weighted suitability": "Prefer available stone/wood/metal/textile inputs, guild or workshop ties, water/fuel/transport, clientele and credible productive specialties; downweight expensive residential frontages without suppliers."
+      "Weighted suitability": "Craft activity and available capital together favor workshops."
     },
     {
       "Category": "Economic",
       "Composition interactions": "Guild commons can manage tolls and warehouses, patricians may privatize quays, warrens crowd behind dock walls; old walls and Veil discontinuities produce distinctive choke points without invented cargo or portals.",
       "Core idea": "The noisy transfer ward for caravans, pack beasts, cargo boats and heavy freight, with guarded arrival courts and goods moving between transport modes.",
       "Eligibility requirements": "Arriving routes and existing trade favor the formation of freight yards.",
-      "Generative effects": "Broad enclosed caravanserai yards, weighing houses, guarded warehouses, towpaths, cargo cranes where built and feasible, stock pens, toll and customs courts and large freight approaches; river quays only where water/shore supports them.",
+      "Generative effects": "Freight favors trade frontage, working yards and high-access approaches. A freight yard may take the form of a caravanserai, weighing house or stock pen. Quays require a suitable shore.",
       "Name": "caravanserai and quays",
-      "Provenance": "Starter proposal for replacing existing single-list district types; pending Phase 5 reconciliation with old list and production adoption.",
-      "Status": "Draft",
+      "Provenance": "Introduced in the Phase 5 district catalog and used by the City district selector.",
+      "Status": "Reviewed",
       "Type ID": "economic.freight-hub",
-      "Weighted suitability": "Weight actual caravan intersections, maintained regional roads, navigable waterfront or portage, reliable freight flows and access to city gates; an inland caravanserai is legitimate without a quay."
+      "Weighted suitability": "Arriving routes carry more weight where trade is already active."
     },
     {
       "Category": "Economic",
       "Composition interactions": "Warrens produce packed food stalls and tenement bakehouses, patrician estates sponsor walled granaries and provision gardens; beast rookeries, springs, floods and old walls change sanitation, storage and access.",
       "Core idea": "The city's food-making underbelly: millers, butchers, bakers, brewers, fishmongers and grain factors, fed by real rural or imported supply rather than a generic food-services label.",
       "Eligibility requirements": "Cultivated land and approaches favor food storage and provisioning.",
-      "Generative effects": "Granary towers, milling courts, smokehouses, ovens, slaughter yards and crowded produce markets where supplies justify them; noisy service lanes, protected water/food storage and productive POIs differentiate the quarter.",
+      "Generative effects": "Provisioning favors working ground, gardens and access. Granaries, mills, ovens and produce markets are possible local expressions.",
       "Name": "granary quarter",
-      "Provenance": "Starter proposal for replacing existing single-list district types; pending Phase 5 reconciliation with old list and production adoption.",
-      "Status": "Draft",
+      "Provenance": "Introduced in the Phase 5 district catalog and used by the City district selector.",
+      "Status": "Reviewed",
       "Type ID": "economic.food-provision",
-      "Weighted suitability": "Favor active rural provisioning roads, granaries, slaughter and processing capability, rivers or wells where necessary, cultivated fringes, fish landings or imported food corridors; do not assume every food trade needs waterfront."
+      "Weighted suitability": "Provisioning and access from arriving routes favor a granary quarter."
     },
     {
       "Category": "Economic",
       "Composition interactions": "With exiles the hostel becomes an arrival neighborhood; with patricians it becomes fashionable bathhouses and guest compounds; with crowded warrens it becomes cramped lodging and shared kitchens. A famous resident or haunted ruin changes who visits.",
       "Core idea": "A fantasy city's living hospitality district: inns, bathhouses, boarding halls, healers, hostels, cooks and small household trades serve locals, travelers and the unlucky.",
       "Eligibility requirements": "Available to every occupied district. Dense housing and arrivals favor services.",
-      "Generative effects": "Lantern-lit inn courts and lodging clusters, bath and laundry grounds where water exists, healer yards, communal kitchens, traveler stables and boarding courtyards; prominent inns and public service POIs become actual routes and places.",
+      "Generative effects": "Hospitality favors housing, neighborhood trade and access. Inn courts, communal kitchens, stables and bath grounds are possible local expressions.",
       "Name": "inn quarter",
-      "Provenance": "Starter proposal for replacing existing single-list district types; pending Phase 5 reconciliation with old list and production adoption.",
-      "Status": "Draft",
+      "Provenance": "Introduced in the Phase 5 district catalog and used by the City district selector.",
+      "Status": "Reviewed",
       "Type ID": "economic.household-services",
-      "Weighted suitability": "Favor real occupied residents, arrival ways, pilgrimage/market visitors, safe approach routes and gaps in hospitality or household services. Offers a viable ordinary livelihood without automatically inventing a rare institution."
+      "Weighted suitability": "Built ground, crowding and arrivals favor household services."
     },
     {
       "Category": "Economic",
       "Composition interactions": "Guild governance produces schools and craft patents, patricians private salons, warrens cheap copyists' alleys, ruins archive-hunting scholars, and an actual Veil/Salt/Aurora phenomenon may change studies without authoring new magic.",
       "Core idea": "An enclave of scribes, astrologers where supported, cartographers, physicians, apothecaries, tutors and archive keepers, whose patronage and knowledge can physically dominate a district.",
       "Eligibility requirements": "A district can establish schools or scriptoria. Investment, wealth and existing seats of learning favor them.",
-      "Generative effects": "Scriptorium courts, archive cloisters, herb gardens, apothecary lanes, public disputation squares, observatory courtyards where commissioned and medical halls. Diverse specialized POIs require independent evidence, not cloned academies.",
+      "Generative effects": "Learned services favor civic ground, gardens and housing. A scriptorium, herb garden, archive court or medical hall can express those uses locally.",
       "Name": "scribe and apothecary quarter",
-      "Provenance": "Starter proposal for replacing existing single-list district types; pending Phase 5 reconciliation with old list and production adoption.",
-      "Status": "Draft",
+      "Provenance": "Introduced in the Phase 5 district catalog and used by the City district selector.",
+      "Status": "Reviewed",
       "Type ID": "economic.learned-services",
-      "Weighted suitability": "Favor known libraries, schools, magical/medical training where supported, record-keeping courts, patrons, literacy, rare ingredients and actual clients; lacking those, substantial scholarly complexes are ineligible."
+      "Weighted suitability": "Standing investment and relative wealth favor learned services."
     },
     {
       "Category": "Social",
       "Composition interactions": "Grand Bazaar yields bazaar-warrens; Scriptoria supports cramped copyist lodgings; the old city wall may confine or divide houses; creatures, floodwater and Greenwood create distinct burdened or celebrated warrens.",
       "Core idea": "An iconic crush of tightly inhabited courts, improvised additions, shared resources and contested passage: a social morphology of crowding, not an automatic morality or crime label.",
       "Eligibility requirements": "Available across occupied districts. Crowding and modest household capital favor tenements.",
-      "Generative effects": "A visibly knotted dense district with small shared courts, interlocking upper structures at Street detail, roof passages where viable, narrow service gaps and intense localized demand for markets, baths and water points; keep real through-access.",
+      "Generative effects": "Housing gains ground and the district places less demand on principal approaches. Shared courts, narrow service passages and closely spaced dwellings are possible local expressions.",
       "Name": "tenement warrens",
-      "Provenance": "Starter proposal for replacing existing single-list district types; pending Phase 5 reconciliation with old list and production adoption.",
-      "Status": "Draft",
+      "Provenance": "Introduced in the Phase 5 district catalog and used by the City district selector.",
+      "Status": "Reviewed",
       "Type ID": "social.crowded-tenements",
-      "Weighted suitability": "Favor actual high occupancy relative to viable space, low investment or constrained tenure, high employment accessibility and limited expansion room; crowding does not prove slum poverty or criminality."
+      "Weighted suitability": "Crowding raises the weight most where capital and relative wealth are modest."
     },
     {
       "Category": "Social",
       "Composition interactions": "Freight gives private merchant dynasties and warehouses, Scriptoria gives patronized scholars, arts/crafts give luxury workshops; ruins or Veil hazards become private guarded landmarks rather than vanishing.",
       "Core idea": "A landscape of powerful families, luxurious estates, controlled gates, retainers and rival household compounds—where actual status or patronage can afford visible space.",
       "Eligibility requirements": "Available across occupied districts. Relative wealth, standing and lower density favor reserved estates.",
-      "Generative effects": "Walled or hedged manor precincts, formal gardens, long approach avenues, household chapels, family courts, private groves and conspicuous gaps between compounds. Splendid but deliberately low-coverage urban land distinguishes the district.",
+      "Generative effects": "Estates favor extensive gardens and reduce demand for through access. Private gardens, long approaches and open ground between compounds are possible local expressions.",
       "Name": "noble estates",
-      "Provenance": "Starter proposal for replacing existing single-list district types; pending Phase 5 reconciliation with old list and production adoption.",
-      "Status": "Draft",
+      "Provenance": "Introduced in the Phase 5 district catalog and used by the City district selector.",
+      "Status": "Reviewed",
       "Type ID": "social.patrician-estates",
-      "Weighted suitability": "Favor demonstrable wealth, political privilege, ancestral tenure, court patrons or strongly supported high-value holdings; do not assign aristocracy because a City template has a grand style."
+      "Weighted suitability": "Relative wealth and capital favor estates. Crowding reduces that advantage."
     },
     {
       "Category": "Social",
       "Composition interactions": "Bazaar + Guildholds becomes competing auction halls, Freight becomes a convoy league, Food yields bakers' and millers' guild courts; old ruins and fantastical traits can change oaths, shared equipment and property rules without free magic.",
       "Core idea": "Corporations and brotherhoods govern shared courtyards, negotiated rights and collective services under binding charters or guild oaths.",
       "Eligibility requirements": "Local makers and cooperative production favor the formation of a guild commons.",
-      "Generative effects": "Grand guildhall commons, workshops sharing guarded courtyards, processional guild banners/routes, competing chapterhouses, shared reservoirs or machinery and conspicuous rights boundaries between guild compounds.",
+      "Generative effects": "Makers favor workshop ground, common land and civic investment. Shared work courts, guildhalls and common machinery are possible local expressions.",
       "Name": "guild commons",
-      "Provenance": "Starter proposal for replacing existing single-list district types; pending Phase 5 reconciliation with old list and production adoption.",
-      "Status": "Draft",
+      "Provenance": "Introduced in the Phase 5 district catalog and used by the City district selector.",
+      "Status": "Reviewed",
       "Type ID": "social.guild-commons",
-      "Weighted suitability": "Favor established guilds, ward charters, long-lived productive ties, common machinery or genuine corporate rights, rather than assuming every workshop district is guild-controlled."
+      "Weighted suitability": "Local craft activity raises the weight of a guild commons."
     },
     {
       "Category": "Social",
       "Composition interactions": "Outlanders trading in a bazaar generate diplomatic markets, artisans carry skills, innkeepers receive pilgrims; economic wealth and actual inherited rights determine whether it is elite, cramped or communal. A famous NPC could anchor an existing refuge.",
       "Core idea": "An arrival community of refugees, migrants, traveling peoples or exiles maintaining distinct customs, meeting places and internal routes, sometimes wealthy, sometimes struggling, never automatically a ghetto.",
       "Eligibility requirements": "A ward can establish a newcomer community. Trade and contacts favor its settlement.",
-      "Generative effects": "Threshold squares, hostels, culturally distinct gathering courts, clustered family yards, guest markets, memorials or temples where real practices exist, and routes linking arrival roads to deeper neighborhood homes.",
+      "Generative effects": "Newcomer households favor housing, common ground and local trade. Guest markets, threshold squares and family courts are possible local expressions.",
       "Name": "outlander enclave",
-      "Provenance": "Starter proposal for replacing existing single-list district types; pending Phase 5 reconciliation with old list and production adoption.",
-      "Status": "Draft",
+      "Provenance": "Introduced in the Phase 5 district catalog and used by the City district selector.",
+      "Status": "Reviewed",
       "Type ID": "social.newcomer-quarter",
-      "Weighted suitability": "Favor actual migration, displacement, established diaspora links, caravan visitors, multilingual/cultural contact and supported communal rights; without outsiders or contacts this trope is ineligible."
+      "Weighted suitability": "Arrivals and trade turnover together favor the founding of an enclave."
     },
     {
       "Category": "Social",
       "Composition interactions": "An artisan Freefolk ward shares workyards, a market quarter bargains over stall rights, a freight ward controls public tolls; a spring or ancient ruin can become a protected communal site and an outgrown wall a shared promenade.",
       "Core idea": "A self-governing ward of independent households, mutual defense and open commons, held together by assemblies, charters or hard-won freedoms rather than wealth or aristocratic patronage.",
       "Eligibility requirements": "Households can found a free commons. Shared tenure and farmland favor the draw.",
-      "Generative effects": "Large deliberately open assembly greens, public meeting halls, shared mills or wells, freely connected pedestrian approaches and defensible yet publicly accessible ward edges; contrasts with private estates and enclosed guildholds.",
+      "Generative effects": "Shared tenure favors common ground, housing and access. An assembly green, shared mill or public meeting hall can express common tenure locally.",
       "Name": "freehold commons",
-      "Provenance": "Starter proposal for replacing existing single-list district types; pending Phase 5 reconciliation with old list and production adoption.",
-      "Status": "Draft",
+      "Provenance": "Introduced in the Phase 5 district catalog and used by the City district selector.",
+      "Status": "Reviewed",
       "Type ID": "social.free-commons",
-      "Weighted suitability": "Favor actual chartered rights, communal practices, independent household tenure, historical popular assemblies or supported sanctuary/refuge agreements; cannot invent a revolution."
+      "Weighted suitability": "Free households or common tenure raise the draw weight. Food production also favors a commons."
     },
     {
       "Category": "Trait",
@@ -204,10 +204,10 @@
       "Eligibility requirements": "An existing Veil medium or retained discontinuity supports this trait. Known crossings can inform the district.",
       "Generative effects": "Across the ward, disturbed ground discourages through movement. Reliable approaches gain trade and waiting space. Existing Veil doors retain their own geography and rules.",
       "Name": "Veil-frayed streets",
-      "Provenance": "Starter proposal for replacing existing single-list district types; pending Phase 5 reconciliation with old list and production adoption.",
-      "Status": "Draft",
+      "Provenance": "Introduced in the Phase 5 district catalog and used by the City district selector.",
+      "Status": "Reviewed",
       "Type ID": "trait.veil-discontinuity",
-      "Weighted suitability": "Increase weight near real Veil features, supported maintainers and meaningful route/terrain interference.",
+      "Weighted suitability": "A local Veil medium or a matching known feature makes the trait eligible. Arriving routes increase its weight.",
       "Localized origin": false
     },
     {
@@ -217,10 +217,10 @@
       "Eligibility requirements": "An existing Greenwood medium or established sign of encroachment supports the draw. Tree cover and wet ground shape its local expression.",
       "Generative effects": "Encroachment increases pressure for shared green ground and gardens and makes routes through rooting ground more costly. Expression varies with canopy, water and local Verdure.",
       "Name": "Greenwood encroachment",
-      "Provenance": "Starter proposal for replacing existing single-list district types; pending Phase 5 reconciliation with old list and production adoption.",
-      "Status": "Draft",
+      "Provenance": "Introduced in the Phase 5 district catalog and used by the City district selector.",
+      "Status": "Reviewed",
       "Type ID": "trait.greenwood-encroachment",
-      "Weighted suitability": "Favor old gardens, water and maintained or abandoned structures with Greenwood signals.",
+      "Weighted suitability": "A local Greenwood medium or a matching known feature makes the trait eligible. Tree cover increases its weight.",
       "Localized origin": false
     },
     {
@@ -230,10 +230,10 @@
       "Eligibility requirements": "Burial customs can form across a district. Existing burial grounds favor the draw. Magical preservation requires actual Salt.",
       "Generative effects": "Funerary custom preserves communal burial ground and favors civic stewardship and processional access, particularly through older masonry and inhabited streets. Existing ossuaries may bear witness to the custom.",
       "Name": "ancestral burial traditions",
-      "Provenance": "Starter proposal for replacing existing single-list district types; pending Phase 5 reconciliation with old list and production adoption.",
-      "Status": "Draft",
+      "Provenance": "Introduced in the Phase 5 district catalog and used by the City district selector.",
+      "Status": "Reviewed",
       "Type ID": "trait.salt-ossuary",
-      "Weighted suitability": "Favor extant old burial sites, grave stewardship, memorial routes and preserved material.",
+      "Weighted suitability": "Standing capital and existing burial evidence favor the custom.",
       "Localized origin": false
     },
     {
@@ -243,10 +243,10 @@
       "Eligibility requirements": "Wet and low-lying land favors exposure across the district. Dry approaches can carry diverted traffic.",
       "Generative effects": "Low wet lanes favor open ground, gardens and diversion of through traffic. Dry approaches become more attractive throughout the district. The existing river and floodplain retain their courses.",
       "Name": "flood-prone lanes",
-      "Provenance": "Starter proposal for replacing existing single-list district types; pending Phase 5 reconciliation with old list and production adoption.",
-      "Status": "Draft",
+      "Provenance": "Introduced in the Phase 5 district catalog and used by the City district selector.",
+      "Status": "Reviewed",
       "Type ID": "trait.flood-exposure",
-      "Weighted suitability": "Favor connected floodplains, channels, tidal outlets, actual historic flood risk.",
+      "Weighted suitability": "Wet ground raises the weight of flood exposure.",
       "Localized origin": false
     },
     {
@@ -256,10 +256,10 @@
       "Eligibility requirements": "District water use and gardens can develop around a retained or locally generated source.",
       "Generative effects": "Reliable water encourages gardens, shared land and accessible approaches across the district. An identifiable water source can be recorded as its origin.",
       "Name": "spring-fed district",
-      "Provenance": "Starter proposal for replacing existing single-list district types; pending Phase 5 reconciliation with old list and production adoption.",
-      "Status": "Draft",
+      "Provenance": "Introduced in the Phase 5 district catalog and used by the City district selector.",
+      "Status": "Reviewed",
       "Type ID": "trait.reliable-spring",
-      "Weighted suitability": "Favor real water sources, historical supply disputes, cultivation or crafts requiring dependable water.",
+      "Weighted suitability": "Wet ground favors a spring. An existing matching source adds support.",
       "Localized origin": true
     },
     {
@@ -269,36 +269,36 @@
       "Eligibility requirements": "Older foundations can persist under inhabited land. Local ruins and established settlement favor their reuse.",
       "Generative effects": "Older building strata influence access, civic stewardship and open courts throughout inhabited ground. Where ruined masonry survives, its influence is stronger.",
       "Name": "built over ruins",
-      "Provenance": "Starter proposal for replacing existing single-list district types; pending Phase 5 reconciliation with old list and production adoption.",
-      "Status": "Draft",
+      "Provenance": "Introduced in the Phase 5 district catalog and used by the City district selector.",
+      "Status": "Reviewed",
       "Type ID": "trait.ancient-ruins",
-      "Weighted suitability": "Favor known older ruins and reused infrastructure, old tombs or abandoned city strata.",
+      "Weighted suitability": "Ruined stock favors the reuse of older foundations.",
       "Localized origin": false
     },
     {
       "Category": "Trait",
       "Composition interactions": "Gate passages draw traffic. Fragments can reserve land or survive as a common walk inside the growing city.",
-      "Core idea": "A crumbling old defensive perimeter and its gate passages divide what is now an ordinary interior neighborhood, with fragments still governing property, traffic and memory.",
+      "Core idea": "Older defense rights can shape common walks and frontage inside the present settlement. Physical wall sections belong to the defense process.",
       "Eligibility requirements": "Settlement can preserve the rights of way and common land of an earlier enclosure. Surviving defenses provide evidence.",
       "Generative effects": "Inherited rights of way and shared ground affect circulation, common walks and working frontage. Surviving sections strengthen these effects along their alignments. Defense owns physical walls and gates.",
       "Name": "former walled quarter",
-      "Provenance": "Starter proposal for replacing existing single-list district types; pending Phase 5 reconciliation with old list and production adoption.",
-      "Status": "Draft",
+      "Provenance": "Introduced in the Phase 5 district catalog and used by the City district selector.",
+      "Status": "Reviewed",
       "Type ID": "trait.outgrown-wall",
-      "Weighted suitability": "Favor formerly protected cores and phases of outward settlement growth.",
+      "Weighted suitability": "Developed ground and evidence of former defenses favor this trait.",
       "Localized origin": false
     },
     {
       "Category": "Trait",
       "Composition interactions": "A resident and their home give nearby markets customers, workshops commissions and the district a named destination.",
-      "Core idea": "A truly notable and geographically situated person, creature-tamer, ruler-in-exile, champion, scholar or notorious patron makes one lane or precinct famous across the city.",
+      "Core idea": "A patron’s household brings visitors, trade and civic influence throughout the district. Their home can be recorded in finer detail.",
       "Eligibility requirements": "A district can establish a notable resident, their role and home. Their visitors and patronage affect commerce and access across the district.",
       "Generative effects": "Visitors and patronage draw commerce and civic investment across the district, especially on accessible frontage. District detail can identify the person, their livelihood and their residence.",
       "Name": "patronage of a notable resident",
-      "Provenance": "Starter proposal for replacing existing single-list district types; pending Phase 5 reconciliation with old list and production adoption.",
-      "Status": "Draft",
+      "Provenance": "Introduced in the Phase 5 district catalog and used by the City district selector.",
+      "Status": "Reviewed",
       "Type ID": "trait.notable-resident",
-      "Weighted suitability": "Favor actual residence, patrons, guild authority, scholarship, services or notable historical site.",
+      "Weighted suitability": "Relative wealth favors the rise of a patron. Evidence of an existing resident adds support.",
       "Localized origin": true
     },
     {
@@ -308,10 +308,10 @@
       "Eligibility requirements": "Trees, steep ground and occupied rooftops support nesting throughout a district.",
       "Generative effects": "Nesting influences the use of trees, rooftops and steep ground across the district. Shared habitat competes with construction and through access near suitable nesting areas.",
       "Name": "nesting colonies",
-      "Provenance": "Starter proposal for replacing existing single-list district types; pending Phase 5 reconciliation with old list and production adoption.",
-      "Status": "Draft",
+      "Provenance": "Introduced in the Phase 5 district catalog and used by the City district selector.",
+      "Status": "Reviewed",
       "Type ID": "trait.creature-rookery",
-      "Weighted suitability": "Favor connected roofs, cliffs, groves, refuse/food sources or protected breeding grounds.",
+      "Weighted suitability": "Tree cover and built ground favor nesting colonies.",
       "Localized origin": false
     }
   ]

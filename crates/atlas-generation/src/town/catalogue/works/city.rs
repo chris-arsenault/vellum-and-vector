@@ -15,34 +15,6 @@ pub(crate) struct CitySite {
     pub near_door: f64,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_steep_face_and_open_level_high_ground_offer_different_commissions() {
-        let summit = CitySite {
-            height: 1.,
-            ..Default::default()
-        };
-        let face = CitySite {
-            slope: 0.9,
-            ..summit
-        };
-        assert!(
-            WorkFamily::Observatory.suitability(summit) > WorkFamily::Observatory.suitability(face)
-        );
-        assert!(
-            WorkFamily::RockMonument.suitability(face)
-                > WorkFamily::RockMonument.suitability(summit)
-        );
-        assert_ne!(
-            WorkFamily::Observatory.influence(),
-            WorkFamily::RockMonument.influence()
-        );
-    }
-}
-
 impl WorkFamily {
     pub(crate) fn demands(self) -> crate::town::templates::district::Demands {
         use crate::town::templates::district::Demands;
@@ -124,5 +96,33 @@ impl WorkFamily {
             Self::ThermalRefuge => (6., 3.),
             Self::FloatingHall => (8., 4.),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_steep_face_and_open_level_high_ground_offer_different_commissions() {
+        let summit = CitySite {
+            height: 1.,
+            ..Default::default()
+        };
+        let face = CitySite {
+            slope: 0.9,
+            ..summit
+        };
+        assert!(
+            WorkFamily::Observatory.suitability(summit) > WorkFamily::Observatory.suitability(face)
+        );
+        assert!(
+            WorkFamily::RockMonument.suitability(face)
+                > WorkFamily::RockMonument.suitability(summit)
+        );
+        assert_ne!(
+            WorkFamily::Observatory.influence(),
+            WorkFamily::RockMonument.influence()
+        );
     }
 }

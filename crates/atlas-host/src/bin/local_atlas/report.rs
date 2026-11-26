@@ -250,6 +250,8 @@ fn annal(feature: &MapFeature) -> Option<String> {
         _ => None,
     }
 }
+type KindCounts = BTreeMap<(String, String), Vec<(String, usize)>>;
+
 pub fn report(server: &Server, reference: &MapRef, directory: &Path) -> io::Result<()> {
     fs::create_dir_all(directory)?;
     let map: Value = server.call("maps/read", &json!({"method": "open", "args": [reference]}))?;
@@ -268,7 +270,7 @@ pub fn report(server: &Server, reference: &MapRef, directory: &Path) -> io::Resu
     let primary = text(&map["primarySpaceId"]);
     let real_scale = !map["realScale"].is_null();
     // hpc-exempt: published kind counts by space and layer, each in first-seen order.
-    let mut counts = BTreeMap::<(String, String), Vec<(String, usize)>>::new();
+    let mut counts = KindCounts::new();
     // hpc-exempt: towns by name, in first-seen order of their buildings.
     let mut towns = Vec::<(String, Town)>::new();
     let mut things = Vec::new();
@@ -332,29 +334,7 @@ pub fn report(server: &Server, reference: &MapRef, directory: &Path) -> io::Resu
             town.addressed, town.buildings
         ));
     }
-    let layers = map["layers"].as_array().cloned().unwrap_or_default();
-    for space in &spaces {
-        let id = text(&space["id"]);
-        let in_space: Vec<_> = layers
-            .iter()
-            .filter(|layer| text(&layer["spaceId"]) == id)
-            .collect();
-        let rasters = in_space
-            .iter()
-            .filter(|layer| layer["source"]["kind"] == "raster")
-            .count();
-        let floor = space["frame"]["floor"].as_str().unwrap_or("surface");
-        lines.push(format!("\nSpace {floor} ({id}): {rasters} raster layers"));
-        for layer in in_space
-            .iter()
-            .filter(|layer| layer["source"]["kind"] == "vector")
-        {
-            if let Some(kinds) = counts.get(&(id.clone(), text(&layer["id"]))) {
-                let listed: Vec<_> = kinds.iter().map(|(k, c)| format!("{k} {c}")).collect();
-                lines.push(format!("  {}: {}", text(&layer["name"]), listed.join(", ")));
-            }
-        }
-    }
+    list_layers(&map, &spaces, &counts, &mut lines);
     if !annals.is_empty() {
         lines.push("\nRealms and events:".into());
         lines.extend(annals);
@@ -369,56 +349,10 @@ pub fn report(server: &Server, reference: &MapRef, directory: &Path) -> io::Resu
         directory,
         "map.png",
     )?];
-    if let Some(city) = &city {
-        if let Some(layer) = layers
-            .iter()
-            .find(|l| !real_scale && l["id"] == "raster:finalSurface" && l["spaceId"] == primary)
-        {
-            let mut canvas = Canvas::new(
-                PICTURE,
-                Frame::around(bounds, 4. / 3., 0.04, CENTRE),
-                "#f3f1e9",
-            )?;
-            let layer: atlas_map::MapLayer = serde_json::from_value(layer.clone())?;
-            let footprint = serde_json::from_value(map["footprint"].clone())?;
-            let image = surface_image(server, reference, &layer)?;
-            canvas.surface(&image, layer.bounds, &footprint);
-            for thing in things.iter().filter(|t| t.initial_city) {
-                draw_feature(&mut canvas, thing);
-            }
-            let early = directory.join("early-works-and-roads.png");
-            canvas.save(&early)?;
-            written.push(early.display().to_string());
-            canvas.surface(&image, layer.bounds, &footprint);
-            draw(&mut canvas, &things);
-            let path = directory.join("city.png");
-            canvas.save(&path)?;
-            written.push(path.display().to_string());
-        } else {
-            written.push(picture(
-                &things,
-                Frame::around(city.0, 4. / 3., 0.05, CENTRE),
-                directory,
-                "city.png",
-            )?);
-        }
-        if real_scale && things.iter().any(|thing| thing.layer == Layer::Building) {
-            let [centre]: [atlas_map::GeometryResult; 1] = server.call(
-                "maps/read",
-                &json!({"method":"geometries", "args":[reference, primary, [
-                    {"operation":"interior", "geometry":map["footprint"]}
-                ]]}),
-            )?;
-            if let atlas_map::GeometryResult::Position(centre) = centre {
-                let [x, y, _] = centre.coordinates();
-                written.push(picture(
-                    &things,
-                    Frame::centred([x, y], 500., 4. / 3.),
-                    directory,
-                    "district-detail.png",
-                )?);
-            }
-        }
+    if let Some(city) = city {
+        written.extend(city_pictures(
+            server, reference, &map, city, &things, directory,
+        )?);
     }
     // The town with the most occupied buildings, whole and at its centre.
     if let Some((_, town)) = towns.iter().max_by_key(|(_, town)| town.buildings) {
@@ -445,6 +379,96 @@ pub fn report(server: &Server, reference: &MapRef, directory: &Path) -> io::Resu
     }
     Ok(())
 }
+fn list_layers(map: &Value, spaces: &[Value], counts: &KindCounts, lines: &mut Vec<String>) {
+    let layers = map["layers"].as_array().cloned().unwrap_or_default();
+    for space in spaces {
+        let id = text(&space["id"]);
+        let in_space: Vec<_> = layers
+            .iter()
+            .filter(|layer| text(&layer["spaceId"]) == id)
+            .collect();
+        let rasters = in_space
+            .iter()
+            .filter(|layer| layer["source"]["kind"] == "raster")
+            .count();
+        let floor = space["frame"]["floor"].as_str().unwrap_or("surface");
+        lines.push(format!("\nSpace {floor} ({id}): {rasters} raster layers"));
+        for layer in in_space
+            .iter()
+            .filter(|layer| layer["source"]["kind"] == "vector")
+        {
+            if let Some(kinds) = counts.get(&(id.clone(), text(&layer["id"]))) {
+                let listed: Vec<_> = kinds.iter().map(|(k, c)| format!("{k} {c}")).collect();
+                lines.push(format!("  {}: {}", text(&layer["name"]), listed.join(", ")));
+            }
+        }
+    }
+}
+
+fn city_pictures(
+    server: &Server,
+    reference: &MapRef,
+    map: &Value,
+    city: Extent,
+    things: &[Drawn],
+    directory: &Path,
+) -> io::Result<Vec<String>> {
+    let mut written = Vec::new();
+    let mut layers = map["layers"].as_array().into_iter().flatten();
+    let primary = text(&map["primarySpaceId"]);
+    let real_scale = !map["realScale"].is_null();
+    let bounds = serde_json::from_value(map["bounds"].clone())?;
+    if let Some(layer) =
+        layers.find(|l| !real_scale && l["id"] == "raster:finalSurface" && l["spaceId"] == primary)
+    {
+        let mut canvas = Canvas::new(
+            PICTURE,
+            Frame::around(bounds, 4. / 3., 0.04, CENTRE),
+            "#f3f1e9",
+        )?;
+        let layer: atlas_map::MapLayer = serde_json::from_value(layer.clone())?;
+        let footprint = serde_json::from_value(map["footprint"].clone())?;
+        let image = surface_image(server, reference, &layer)?;
+        canvas.surface(&image, layer.bounds, &footprint);
+        for thing in things.iter().filter(|t| t.initial_city) {
+            draw_feature(&mut canvas, thing);
+        }
+        let early = directory.join("early-works-and-roads.png");
+        canvas.save(&early)?;
+        written.push(early.display().to_string());
+        canvas.surface(&image, layer.bounds, &footprint);
+        draw(&mut canvas, things);
+        let path = directory.join("city.png");
+        canvas.save(&path)?;
+        written.push(path.display().to_string());
+    } else {
+        written.push(picture(
+            things,
+            Frame::around(city.0, 4. / 3., 0.05, CENTRE),
+            directory,
+            "city.png",
+        )?);
+    }
+    if real_scale && things.iter().any(|thing| thing.layer == Layer::Building) {
+        let [centre]: [atlas_map::GeometryResult; 1] = server.call(
+            "maps/read",
+            &json!({"method":"geometries", "args":[reference, primary, [
+                {"operation":"interior", "geometry":map["footprint"]}
+            ]]}),
+        )?;
+        if let atlas_map::GeometryResult::Position(centre) = centre {
+            let [x, y, _] = centre.coordinates();
+            written.push(picture(
+                things,
+                Frame::centred([x, y], 500., 4. / 3.),
+                directory,
+                "district-detail.png",
+            )?);
+        }
+    }
+    Ok(written)
+}
+
 fn picture(things: &[Drawn], frame: Frame, directory: &Path, file: &str) -> io::Result<String> {
     let mut canvas = Canvas::new(PICTURE, frame, BACKGROUND)?;
     draw(&mut canvas, things);

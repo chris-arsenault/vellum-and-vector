@@ -4,6 +4,7 @@ use super::{
     geometry::pos,
     Element, Urban,
 };
+use crate::human::identity::{Tradition, IDENTITY_SLOTS};
 use crate::{
     atlas::state::State,
     noise::hash_unit,
@@ -29,32 +30,7 @@ pub(super) fn destinations(state: &State, u: &mut Urban) -> io::Result<()> {
         / std::f64::consts::PI)
         .sqrt();
     let points: Vec<_> = (0..mesh.len()).map(|c| position(mesh, c)).collect();
-    let mut quality = vec![0.; mesh.len()];
-    for (c, v) in quality.iter_mut().enumerate() {
-        let x = u.fields.claims[c];
-        if u.fields.inside[c]
-            && u.fields.stencil[c] > 0.55
-            && !x.reserved
-            && x.people > 0.
-            && x.built > 0.
-            && u.fields.civic[c] < 0.7
-        {
-            *v = (x.home + x.work).sqrt() * (0.6 + u.fields.access[c]) + x.investment;
-        }
-    }
-    let positions: Vec<_> = points.iter().copied().map(pos).collect();
-    for park in &u.parks {
-        for (v, in_park) in quality.iter_mut().zip(
-            state
-                .spatial
-                .covers_points(&park.geometry, &positions)
-                .map_err(io::Error::other)?,
-        ) {
-            if in_park {
-                *v = 0.;
-            }
-        }
-    }
+    let quality = site_quality(state, u, mesh, &points)?;
     let reach = u.programs.first().map_or(template.quarter(), |p| p.reach);
     let mut kinds = vec![vec![0u32; PLACES.len()]; u.programs.len()];
     let seed = state
@@ -83,24 +59,10 @@ pub(super) fn destinations(state: &State, u: &mut Urban) -> io::Result<()> {
         let x = u.fields.claims[c];
         let [px, py] = points[c];
         let near = |p: [f64; 2]| (px - p[0]).hypot(py - p[1]) < template.quarter();
-        use crate::human::identity::{Tradition, IDENTITY_SLOTS};
+
         let mut craft = 0.;
         let mut faith = 0.;
-        let mut age: f64 = 0.;
-        for slot in 0..IDENTITY_SLOTS {
-            let group = state.field().people().identity(slot);
-            let people = group.people.get(c)?;
-            if people > 0. {
-                age = age.max(group.age.get(c)?);
-                if group.traditions[Tradition::Craft as usize].get(c)? > 0 {
-                    craft += people;
-                }
-                if group.traditions[Tradition::Faith as usize].get(c)? > 0 {
-                    faith += people;
-                }
-            }
-        }
-        let people = state.field().people().people(c)?.max(1.);
+        let (age, people) = local_traditions(state, c, &mut craft, &mut faith)?;
         let ways = state
             .field()
             .people()
@@ -183,4 +145,63 @@ pub(super) fn destinations(state: &State, u: &mut Urban) -> io::Result<()> {
         }
     }
     Ok(())
+}
+
+fn site_quality(
+    state: &State,
+    u: &mut Urban,
+    mesh: &crate::lattice::TriangularLattice,
+    points: &[[f64; 2]],
+) -> Result<Vec<f64>, io::Error> {
+    let mut quality = vec![0.; mesh.len()];
+    for (c, v) in quality.iter_mut().enumerate() {
+        let x = u.fields.claims[c];
+        if u.fields.inside[c]
+            && u.fields.stencil[c] > 0.55
+            && !x.reserved
+            && x.people > 0.
+            && x.built > 0.
+            && u.fields.civic[c] < 0.7
+        {
+            *v = (x.home + x.work).sqrt() * (0.6 + u.fields.access[c]) + x.investment;
+        }
+    }
+    let positions: Vec<_> = points.iter().copied().map(pos).collect();
+    for park in &u.parks {
+        for (v, in_park) in quality.iter_mut().zip(
+            state
+                .spatial
+                .covers_points(&park.geometry, &positions)
+                .map_err(io::Error::other)?,
+        ) {
+            if in_park {
+                *v = 0.;
+            }
+        }
+    }
+    Ok(quality)
+}
+
+fn local_traditions(
+    state: &State,
+    c: usize,
+    craft: &mut f64,
+    faith: &mut f64,
+) -> Result<(f64, f64), io::Error> {
+    let mut age: f64 = 0.;
+    for slot in 0..IDENTITY_SLOTS {
+        let group = state.field().people().identity(slot);
+        let people = group.people.get(c)?;
+        if people > 0. {
+            age = age.max(group.age.get(c)?);
+            if group.traditions[Tradition::Craft as usize].get(c)? > 0 {
+                *craft += people;
+            }
+            if group.traditions[Tradition::Faith as usize].get(c)? > 0 {
+                *faith += people;
+            }
+        }
+    }
+    let people = state.field().people().people(c)?.max(1.);
+    Ok((age, people))
 }

@@ -5,7 +5,7 @@ use super::{
     geometry::pos,
     Element, Urban,
 };
-use crate::spatial::Overlay;
+use crate::spatial::{Overlay, SpatialKernel};
 use crate::{
     atlas::state::State,
     features::Feature,
@@ -104,6 +104,95 @@ pub(super) fn develop(
     let mut secondary = [vec![0.; n], vec![0.; n]];
     let mut mix = vec![[0.; 3]; n];
     u.fields.activity = super::activity::develop(state, u, template.quarter(), activity)?;
+    let main = land_use_bids(u, mesh, template, &mut layers, &mut secondary, &mut mix);
+    let reserved_land = reserve_public_ground(state, u, reserved, k, union, n)?;
+    let secondary_masks = [
+        contour(state, &secondary[0], 0.)?,
+        contour(state, &secondary[1], 0.)?,
+    ];
+    let mut sampler = crate::lattice::sampling::Sampler::new(mesh);
+    let [ox, oy] = mesh.origin();
+    let mut build_mixed_tracts = |kind: usize,
+                                  geometry: Geometry|
+     -> Result<Vec<Geometry>, io::Error> {
+        let surfaces = parts(&geometry);
+        for surface in &surfaces {
+            let tracts = if kind <= 2 {
+                mixed_housing(k, surface, &secondary_masks)?
+            } else {
+                vec![(surface.clone(), None)]
+            };
+            for (shape, secondary_use) in tracts {
+                let at = k.interior_position(&shape).map_err(io::Error::other)?;
+                let mut tract = ground(shape, USES[kind]);
+                if let Some(use_) = secondary_use {
+                    tract
+                        .attributes
+                        .insert("secondaryUse".into(), USES[use_].into());
+                }
+                if let Some(c) =
+                    crate::field::refinement::courses::cell_at(mesh, super::geometry::xy(at))
+                {
+                    let q = u.fields.claims[c];
+                    tract.attributes.insert("density".into(), q.people.into());
+                    tract.attributes.insert("builtShare".into(), q.built.into());
+                    if kind != 5 {
+                        let [px, py] = super::geometry::xy(at);
+                        let mut weight = |use_: usize| {
+                            sampler.sample([px - ox, py - oy], |cell| Ok(mix[cell][use_]))
+                        };
+                        tract.attributes.insert(
+                            "useMix".into(),
+                            serde_json::json!({"housing":weight(0)?,"trade":weight(1)?,"workshops":weight(2)?}),
+                        );
+                    }
+                }
+                tract
+                    .attributes
+                    .insert("settlementTemplate".into(), template.selected.name().into());
+                u.blocks.push(tract);
+            }
+        }
+        Ok(surfaces)
+    };
+    let mut occupied = None;
+    // Local bids decide contested uses. General settlement fills the residual ground.
+    for kind in [1, 2, 3, 4, 5, 0] {
+        let Some(mut geometry) = contour(state, &layers[kind], 0.)? else {
+            continue;
+        };
+        for mask in [reserved_land.as_ref(), occupied.as_ref()]
+            .into_iter()
+            .flatten()
+        {
+            let Some(g) = k
+                .overlay(&geometry, mask, crate::spatial::Overlay::Difference)
+                .map_err(io::Error::other)?
+            else {
+                geometry = Geometry::GeometryCollection { geometries: vec![] };
+                break;
+            };
+            geometry = g;
+        }
+        let surfaces = build_mixed_tracts(kind, geometry)?;
+        let mut merge = surfaces;
+        merge.extend(occupied.take());
+        occupied = union(&merge)?;
+    }
+    districtable_ground(state, u, frame, reserved, union, &main)?;
+    place_outlying_sites(u, mesh, k)?;
+    Ok(())
+}
+
+fn land_use_bids(
+    u: &mut Urban,
+    mesh: &crate::lattice::TriangularLattice,
+    template: &crate::town::templates::Selection,
+    layers: &mut [Vec<f64>],
+    secondary: &mut [Vec<f64>; 2],
+    mix: &mut [[f64; 3]],
+) -> Vec<f64> {
+    let n = mesh.len();
     let mut main = vec![0.; n];
     for c in 0..n {
         let x = u.fields.claims[c];
@@ -167,6 +256,17 @@ pub(super) fn develop(
             layers[kind][c] = (occupied - 0.4).min(bids[kind] - other);
         }
     }
+    main
+}
+
+fn reserve_public_ground(
+    state: &State,
+    u: &mut Urban,
+    reserved: &[Feature],
+    k: &dyn SpatialKernel,
+    union: impl Fn(&[Geometry]) -> Result<Option<Geometry>, io::Error>,
+    n: usize,
+) -> Result<Option<Geometry>, io::Error> {
     let mut masks: Vec<Geometry> = reserved.iter().map(|f| f.geometry.clone()).collect();
     let park_shapes: Vec<_> = u.parks.iter().map(|p| p.geometry.clone()).collect();
     let park_mask = union(&park_shapes)?;
@@ -219,77 +319,22 @@ pub(super) fn develop(
         u.open.push(park.clone());
     }
     let reserved_land = union(&masks)?;
-    let secondary_masks = [
-        contour(state, &secondary[0], 0.)?,
-        contour(state, &secondary[1], 0.)?,
-    ];
-    let mut sampler = crate::lattice::sampling::Sampler::new(mesh);
-    let [ox, oy] = mesh.origin();
-    let mut occupied = None;
-    // Local bids decide contested uses. General settlement fills the residual ground.
-    for kind in [1, 2, 3, 4, 5, 0] {
-        let Some(mut geometry) = contour(state, &layers[kind], 0.)? else {
-            continue;
-        };
-        for mask in [reserved_land.as_ref(), occupied.as_ref()]
-            .into_iter()
-            .flatten()
-        {
-            let Some(g) = k
-                .overlay(&geometry, mask, crate::spatial::Overlay::Difference)
-                .map_err(io::Error::other)?
-            else {
-                geometry = Geometry::GeometryCollection { geometries: vec![] };
-                break;
-            };
-            geometry = g;
-        }
-        let surfaces = parts(&geometry);
-        for surface in &surfaces {
-            let tracts = if kind <= 2 {
-                mixed_housing(k, surface, &secondary_masks)?
-            } else {
-                vec![(surface.clone(), None)]
-            };
-            for (shape, secondary_use) in tracts {
-                let at = k.interior_position(&shape).map_err(io::Error::other)?;
-                let mut tract = ground(shape, USES[kind]);
-                if let Some(use_) = secondary_use {
-                    tract
-                        .attributes
-                        .insert("secondaryUse".into(), USES[use_].into());
-                }
-                if let Some(c) =
-                    crate::field::refinement::courses::cell_at(mesh, super::geometry::xy(at))
-                {
-                    let q = u.fields.claims[c];
-                    tract.attributes.insert("density".into(), q.people.into());
-                    tract.attributes.insert("builtShare".into(), q.built.into());
-                    if kind != 5 {
-                        let [px, py] = super::geometry::xy(at);
-                        let mut weight = |use_: usize| {
-                            sampler.sample([px - ox, py - oy], |cell| Ok(mix[cell][use_]))
-                        };
-                        tract.attributes.insert(
-                            "useMix".into(),
-                            serde_json::json!({"housing":weight(0)?,"trade":weight(1)?,"workshops":weight(2)?}),
-                        );
-                    }
-                }
-                tract
-                    .attributes
-                    .insert("settlementTemplate".into(), template.selected.name().into());
-                u.blocks.push(tract);
-            }
-        }
-        let mut merge = surfaces;
-        merge.extend(occupied.take());
-        occupied = union(&merge)?;
-    }
-    // Districts organize only the principal connected settlement. A walk across a
-    // small gap can join neighborhoods without filling the same gap with buildings.
+    Ok(reserved_land)
+}
+
+fn districtable_ground(
+    state: &State,
+    u: &mut Urban,
+    frame: &Geometry,
+    reserved: &[Feature],
+    union: impl Fn(&[Geometry]) -> io::Result<Option<Geometry>>,
+    main: &[f64],
+) -> io::Result<()> {
+    let k = state.spatial.as_ref();
+    let mesh = state.field().mesh();
+    let template = policy(state)?;
     u.domain = None;
-    if let Some(shape) = contour(state, &main, 0.68)? {
+    if let Some(shape) = contour(state, main, 0.68)? {
         let reach = template.quarter().max(mesh.spacing()) * 0.60;
         if let Some(expanded) = k.buffer(&shape, reach).map_err(io::Error::other)? {
             if let Some(closed) = k.buffer(&expanded, -reach).map_err(io::Error::other)? {
@@ -335,6 +380,14 @@ pub(super) fn develop(
             u.domain = union(&parts(&land))?;
         }
     }
+    Ok(())
+}
+
+fn place_outlying_sites(
+    u: &mut Urban,
+    mesh: &crate::lattice::TriangularLattice,
+    k: &dyn SpatialKernel,
+) -> Result<(), io::Error> {
     for &c in &u.destinations {
         let x = u.fields.claims[c];
         let access = u.fields.access[c];
