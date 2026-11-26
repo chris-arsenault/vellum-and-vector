@@ -12,6 +12,43 @@ use crate::{
 };
 use std::io;
 impl HumanLayers {
+    pub(super) fn place_households(
+        &mut self,
+        transfers: &[super::operations::HouseholdTransfers],
+    ) -> io::Result<()> {
+        let population = LayerId::Population as usize;
+        for transfer in transfers {
+            let mut arrivals = Vec::new();
+            let mut people = 0.;
+            for &(cell, fraction) in &transfer.sources {
+                let area = self.km2(cell);
+                let before = self.bands.layers[population].get(cell)?;
+                let heads = before * fraction;
+                let mut column = self.column(cell)?;
+                let mut departing = identity::part(&mut column, fraction);
+                for group in &mut departing {
+                    group.people *= area;
+                }
+                identity::accumulate(&mut arrivals, &departing);
+                self.bands.write_column(cell, &column)?;
+                self.bands.layers[population].set(cell, before - heads)?;
+                people += heads * area;
+            }
+            for &(cell, share) in &transfer.receivers {
+                let factor = share / self.km2(cell);
+                let mut column = self.column(cell)?;
+                let mut incoming = arrivals.clone();
+                for group in &mut incoming {
+                    group.people *= factor;
+                }
+                identity::arrive(&mut column, &incoming);
+                self.bands.write_column(cell, &column)?;
+                let prior = self.bands.layers[population].get(cell)?;
+                self.bands.layers[population].set(cell, prior + people * factor)?;
+            }
+        }
+        Ok(())
+    }
     /// Transfer developed land to the places using it. Open ground receives it first.
     /// Where households take cultivated land, its former use occupies the vacated area.
     pub(super) fn place_land(

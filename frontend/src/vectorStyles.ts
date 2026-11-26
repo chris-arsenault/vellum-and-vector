@@ -1,4 +1,4 @@
-import { cityGroundStyle } from "./cityGroundStyle";
+import { cityGroundStyle, cityRoadStyle } from "./cityGroundStyle";
 import LineString from "ol/geom/LineString.js";
 import { Circle, Fill, RegularShape, Stroke, Style, Text } from "ol/style.js";
 import type { LayerStyle } from "./types";
@@ -102,7 +102,9 @@ export function featureStyle(feature: RenderFeature, style: LayerStyle, resoluti
   if (style.layerId === "magic" && typeof feature.attributes.rule === "string")
     return magicPlaceStyle(feature, style);
   return (
-    cityGroundStyle(feature, false, style.labels) ?? geographicStyle(feature, style, resolution)
+    cityRoadStyle(feature, resolution, style.color, style.labels) ??
+    cityGroundStyle(feature, false, style.labels) ??
+    geographicStyle(feature, style, resolution)
   );
 }
 function magicMark(symbol: MagicPlaceSymbol, color: string) {

@@ -210,6 +210,15 @@ macro_rules! society {
     }};
 }
 
+macro_rules! numeric {
+    (gather) => {
+        gather::CONTROLS
+    };
+    ($command:ident) => {
+        &[]
+    };
+}
+
 pub fn specifications(regional: bool) -> Vec<Specification> {
     let mut specs: Vec<_> = DEFINITIONS.iter().map(specification).collect();
     specs.extend([
@@ -219,7 +228,11 @@ pub fn specifications(regional: bool) -> Vec<Specification> {
     ]);
     macro_rules! describe {
         ($owner:expr,$command:ident,$slot:expr) => {
-            specs.push(registration($owner, $slot).specification())
+            specs.push(
+                registration($owner, $slot)
+                    .specification()
+                    .numeric(numeric!($command)),
+            )
         };
     }
     society!(describe, regional);
@@ -247,28 +260,62 @@ pub fn register(
         ))?;
     }
     macro_rules! projected {
-        (gather) => {
-            crate::atlas::regional::city::gather(pass.gather.projected(field), seed)
+        (trade) => {
+            crate::atlas::regional::city::start_people_pass(pass.trade.projected(field), seed)
         };
+        (gather) => {{
+            let gather = pass.gather.projected(field);
+            crate::execution::Command::with_inputs(
+                "human.land.gather",
+                crate::execution::CommandKind::Work,
+                vec![],
+                move |scope, input| {
+                    crate::atlas::regional::city::trace_footprint(
+                        scope.state(),
+                        "before placement",
+                    )?;
+                    scope.run(&gather, input)?;
+                    crate::atlas::regional::city::trace_footprint(
+                        scope.state(),
+                        "after placement",
+                    )?;
+                    Ok(crate::atlas::regional::city::trace_people(
+                        scope.state(),
+                        "after placing households",
+                    )?)
+                },
+            )
+        }};
         ($command:ident) => {
             pass.$command.projected(field)
+        };
+    }
+    macro_rules! tune {
+        (gather, $input:expr, $strategy:expr) => {
+            gather::tune($strategy, $input)?
+        };
+        ($command:ident, $input:expr, $strategy:expr) => {
+            $strategy
         };
     }
     macro_rules! register_owner {
         ($owner:expr,$command:ident,$slot:expr) => {{
             let parent = parent.clone();
-            registry.register(Process::semantic_command(
-                &registration($owner, $slot),
-                projected!($command),
-                move |input, strategy| {
-                    Ok(pass::Inputs {
-                        facts: facts(input),
-                        parent: parent.clone(),
-                        city: None,
-                        strategy,
-                    })
-                },
-            ))?
+            registry.register(
+                Process::semantic_command(
+                    &registration($owner, $slot),
+                    projected!($command),
+                    move |input, selected| {
+                        Ok(pass::Inputs {
+                            facts: facts(input),
+                            parent: parent.clone(),
+                            city: None,
+                            strategy: tune!($command, input, selected),
+                        })
+                    },
+                )
+                .numeric(numeric!($command)),
+            )?
         }};
     }
     society!(register_owner, regional);

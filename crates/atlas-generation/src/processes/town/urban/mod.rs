@@ -1,10 +1,18 @@
 //! Permanent urban geometry at City scale and its local realization on Street maps.
+mod avenues;
+mod activity;
+mod character;
 mod circulation;
 mod city;
 mod claims;
+mod defenses;
+mod endpoints;
 mod fields;
 pub mod geometry;
+mod grades;
+mod hillside;
 mod investment;
+mod journeys;
 mod landscape;
 mod partition;
 mod places;
@@ -82,6 +90,29 @@ pub struct Urban {
     district_child: bool,
 }
 impl Urban {
+    pub(crate) fn housing_reserved(&self, cell: usize) -> bool {
+        self.fields
+            .claims
+            .get(cell)
+            .is_some_and(|claim| claim.reserved)
+    }
+    pub(crate) fn road_access(&self) -> &[f64] {
+        &self.fields.access
+    }
+    pub(crate) fn bridge_links(
+        &self,
+        mesh: &crate::lattice::TriangularLattice,
+    ) -> Vec<crate::links::Link> {
+        grades::bridge_links(&self.routes, mesh)
+    }
+    fn work_at(&self, cell: usize) -> crate::town::templates::district::Demands {
+        self.fields
+            .sponsor
+            .get(cell)
+            .and_then(|s| *s)
+            .and_then(|i| self.sponsors.get(i)?.work)
+            .map_or_else(Default::default, |(family, _)| family.demands())
+    }
     pub fn district_child(&self) -> bool {
         self.district_child
     }

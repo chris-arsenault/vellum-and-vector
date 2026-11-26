@@ -28,15 +28,24 @@ follows the connected concentration of residents and built ground around the set
 accounting for slope and standing water on the parent map. It opens at the
 regional level whose cells give that extent a region's triangle count. It runs the
 regional sequence. The society rounds refine population and built stock on the shared field.
-City template guidance influences household placement. Walls and commissioned works develop
+Household placement reads the previous round's road access alongside food, work and
+city template guidance. Each captured census describes a population spread across a
+catchment. Neighbouring catchments overlap on reachable ground, where roads, workplaces
+and housing determine the fine distribution. Households carry their identities with them.
+Walls and commissioned works develop
 during those rounds.
 
 The captured settled outline gives the interior a strong preference for urban development.
 The surrounding countryside can support farms, road stops and satellites. The founding
 policy and the settlement's existing people, capital, institutions and approaches give
 rise to district programs before roads and land use settle. Each program competes for a
-site. Its economic activity and social identity are independent weighted choices from eligible
-catalogue entries. Optional traits require evidence at an actual site. These choices change
+site. Local settlement patterns and geography weight the economic, social and trait
+draws. Repeated city-wide choices become progressively less likely. Every new district
+receives at least one trait. Ordinary stands alone and adds no effect. Other traits
+shape land use and movement across the district, with local variation from terrain,
+occupation and earlier rounds of development. A home or water source can explain a
+district-wide effect. The district retains that origin as detail. POI siting and major
+works remain independent. Magical effects depend on the corresponding medium. These choices change
 land claims, investment, access and construction. Each round
 reads the previous round's occupied ground and access on the shared lattice.
 
@@ -47,18 +56,35 @@ open grounds and significant sites.
 
 ## Walls
 
-A city raises a wall round the built land joined to its heart, courtyards within included,
-where its template guards or seats power, its people can build, and its built land stands
-unwalled; a template with an enclosed seat raises an inner wall first. A wall's run leaves
-out faces that water or steep ground defends and opens gates where maintained ways cross.
-A former enclosure can stand inside the city that outgrew it. The captured settlement history bounds its date and extent, and ruined stretches can disappear. The enclosure
-question, how many walls enclose a cell, conditions where places stand.
+Collective investment compares concentrations of people, occupied ground and civic activity
+across the known city. A sponsor weighs the share protected, ground already defended and
+the cost of each candidate enclosure. Finite labour and standing capital fund real sections
+over successive rounds. Water and steep ground can complete a side. Principal roads crossing
+the standing works establish gates. Growth beyond a wall and local evidence of ruin affect
+its condition and the demand for repairs or further works.
 
 ## The catalogue's large-scale slot
 
 Every place in the settlement catalogue states how it appears on a city map: shown, with its
 symbol, rough ground, the reading that raises it and the uses it seeds on a district map; or
 hidden, with the reason. The City places prominent catalogue landmarks according to local use and site conditions.
+
+Major works compete for suitable sites across the settled outline early in development.
+Each family describes the land it needs and how far its influence extends along and across
+its approach. Its commissioned design supplies the physical grounds. Principal journeys
+connect incoming ways, works and economic destinations. Later journeys reuse those routes
+and connect emerging districts where the existing journey is too indirect. Regional approaches
+and district journeys converge on centres supported by trade, work and civic activity.
+Routes that carry several journeys gain width and improve access in the next round.
+The reach of a district centre scales with the settled area and the local quarter size.
+The road process selects pairs of endpoints and their trip demand before routing. The router
+can serve a pair over existing streets or survey a new connection between the same destinations.
+It compares passages on both sides of a direct alignment and surveys the resulting profile
+for traverses on steep ground and bridge decks between bearing banks. Journeys can join
+an existing hillside ascent at two accessible elevations. A new ascent follows successive
+ground contours and evaluates the grade on each leg of a turn. The grade along the
+road, occupied ground and local passage costs shape bends between junctions. Planned
+ground favours straighter runs, while rough ground favours curved approaches.
 
 ## District maps
 

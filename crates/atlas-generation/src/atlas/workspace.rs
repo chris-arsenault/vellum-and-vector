@@ -221,8 +221,12 @@ pub fn construct(input: Construction<'_>) -> ExecutionResult<Prepared> {
         input.spatial,
         input.cache.clone(),
     )?);
-    let mut surface =
-        Surface::captured(input.inputs.surface.clone(), executor.state(), input.cache)?;
+    let mut surface = Surface::captured(
+        input.inputs.surface.clone(),
+        executor.state(),
+        input.cache,
+        input.spatial,
+    )?;
     surface.compose_authored(input.authored, input.frame.scope.space, input.spatial)?;
     Ok(Prepared {
         inherited,

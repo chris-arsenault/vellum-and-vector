@@ -262,8 +262,6 @@ pub struct City {
     pub urban: crate::processes::town::urban::Urban,
     pub template: Option<crate::town::templates::Selection>,
     pub walls: Vec<crate::town::walls::Wall>,
-    #[serde(default)]
-    pub gate_crossings: Vec<u32>,
     pub works: Vec<crate::town::major_works::CityWork>,
 }
 impl Regional {

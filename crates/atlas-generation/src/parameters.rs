@@ -6,6 +6,38 @@ use std::{collections::BTreeMap, io};
 
 pub type Values = Map<String, Value>;
 pub type Definitions = BTreeMap<String, Definition>;
+
+/// A process-owned numeric control, shared by discovery, validation and binding.
+// owner-direction(2026-11-25): generation controls use a uniform runtime parameter structure with defaults
+#[derive(Clone, Copy, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NumericParameter {
+    pub name: &'static str,
+    pub unit: &'static str,
+    pub default: f64,
+    pub minimum: Option<f64>,
+    pub maximum: Option<f64>,
+    pub strategy: Option<&'static str>,
+    pub map_types: &'static [crate::processes::strategies::MapType],
+}
+
+impl NumericParameter {
+    pub fn definition(self) -> Definition {
+        Definition {
+            kind: Kind::Number,
+            unit: Some(self.unit.into()),
+            required: false,
+            nullable: false,
+            default: Some(Value::from(self.default)),
+            minimum: self.minimum,
+            maximum: self.maximum,
+            choices: None,
+            fields: None,
+            items: None,
+            overrides: Override::Replace,
+        }
+    }
+}
 #[derive(Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Kind {

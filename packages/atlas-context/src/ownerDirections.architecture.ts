@@ -621,6 +621,97 @@ const directions: readonly OwnerDirection[] = [
     test: "crates/atlas-generation/src/town/city/outline.rs",
   },
   {
+    given: "2026-11-24",
+    direction:
+      "major works choose sites early across the known City extent and each work defines its own influence",
+    marks: ["crates/atlas-generation/src/atlas/regional/city/works.rs"],
+    test: "crates/atlas-generation/src/town/catalogue/works/city.rs",
+  },
+  {
+    given: "2026-11-24",
+    direction:
+      "defenses are planned against the whole city so a wall enclosing less than one percent is exceptional",
+    marks: ["crates/atlas-generation/src/town/walls.rs"],
+    test: "crates/atlas-generation/src/town/walls.rs",
+  },
+  {
+    given: "2026-11-24",
+    direction:
+      "principal roads grow from whole-city journeys, then refine their alignment and district connections",
+    marks: ["crates/atlas-generation/src/processes/town/urban/circulation.rs"],
+    test: "crates/atlas-generation/src/processes/town/urban/journeys.rs",
+  },
+  {
+    given: "2026-11-24",
+    direction:
+      "the major roads alone should reveal where journeys gather, cross the city and continue",
+    marks: ["crates/atlas-generation/src/processes/town/urban/endpoints.rs"],
+    test: "crates/atlas-generation/src/processes/town/urban/endpoints.rs",
+  },
+  {
+    given: "2026-11-25",
+    direction: "select road endpoints separately from routing between them",
+    marks: ["crates/atlas-generation/src/processes/town/urban/circulation.rs"],
+    test: "crates/atlas-generation/src/processes/town/urban/endpoints.rs",
+  },
+  {
+    direction:
+      "local numeric geography shapes the course of principal roads between their junctions",
+    given: "2026-11-24",
+    marks: ["crates/atlas-generation/src/processes/town/urban/journeys.rs"],
+    test: "crates/atlas-generation/src/processes/town/urban/journeys.rs",
+  },
+  {
+    given: "2026-11-25",
+    direction: "keep the ravines and address road grade with switchbacks and bridges",
+    marks: ["crates/atlas-generation/src/processes/town/urban/grades.rs"],
+    test: "crates/atlas-generation/src/processes/town/urban/grades.rs",
+  },
+  {
+    given: "2026-11-25",
+    direction: "a switchback follows the elevation on both legs of the hillside",
+    marks: ["crates/atlas-generation/src/processes/town/urban/hillside.rs"],
+    test: "crates/atlas-generation/src/processes/town/urban/grades.rs",
+  },
+  {
+    given: "2026-11-25",
+    direction:
+      "major thoroughfares share a corridor when later journeys would build parallel avenues a few metres apart",
+    marks: ["crates/atlas-generation/src/processes/town/urban/avenues.rs"],
+    test: "crates/atlas-generation/src/processes/town/urban/grades.rs",
+  },
+  {
+    given: "2026-11-25",
+    direction:
+      "distribute census households across overlapping catchments according to usable ground and access to livelihoods",
+    marks: ["crates/atlas-generation/src/field/people/gather/catchments.rs"],
+    test: "crates/atlas-generation/src/field/people/gather/catchments.rs",
+  },
+  {
+    given: "2026-11-25",
+    direction: "household refinement smooths parent cell edges through local placement",
+    marks: ["crates/atlas-generation/src/field/people/gather/placement.rs"],
+    test: "crates/atlas-generation/src/field/people/gather/placement.rs",
+  },
+  {
+    given: "2026-11-25",
+    direction: "household placement responds to the major roads laid in earlier city rounds",
+    marks: ["crates/atlas-generation/src/field/people/growth.rs"],
+    test: "crates/atlas-generation/src/field/people/growth.rs",
+  },
+  {
+    given: "2026-11-25",
+    direction: "a full city's population must account for the named city's townspeople",
+    marks: ["crates/atlas-generation/src/field/people/gather/settlements.rs"],
+    test: "crates/atlas-generation/src/field/people/gather/settlements.rs",
+  },
+  {
+    direction: "tune how far a district centre serves, leaving the district count to the city",
+    given: "2026-11-24",
+    marks: ["crates/atlas-generation/src/processes/town/urban/programs.rs"],
+    test: "crates/atlas-generation/src/processes/town/urban/programs.rs",
+  },
+  {
     direction: "City processes interact across rounds by reading and writing shared numeric fields",
     given: "2026-11-24",
     marks: ["crates/atlas-generation/src/processes/town/urban/fields.rs"],
@@ -647,7 +738,8 @@ const directions: readonly OwnerDirection[] = [
     test: "crates/atlas-generation/src/atlas/regional/sequence.rs",
   },
   {
-    direction: "geography and social processes determine district count and districts cover all districtable ground",
+    direction:
+      "geography and social processes determine district count and districts cover all districtable ground",
     given: "2026-11-24",
     marks: ["crates/atlas-generation/src/processes/town/urban/programs.rs"],
     test: "crates/atlas-generation/src/processes/town/urban/partition.rs",
@@ -660,6 +752,30 @@ const directions: readonly OwnerDirection[] = [
       "crates/atlas-host/src/regional_capture/records.rs",
     ],
     test: "crates/atlas-host/src/regional_capture/records.rs",
+  },
+  {
+    direction: "the harness itself retains the feature records needed to inspect full-map trials",
+    given: "2026-11-25",
+    marks: ["crates/atlas-host/src/bin/local_atlas/experiment/native.rs"],
+    test: "crates/atlas-host/src/bin/local_atlas/experiment/native.rs",
+  },
+  {
+    direction: "traits affect the whole district, even when they have a single point of origin",
+    given: "2026-11-25",
+    marks: ["crates/atlas-generation/src/town/templates/district.rs"],
+    test: "crates/atlas-generation/src/town/templates/district.rs",
+  },
+  {
+    direction: "each district has at least one trait; Ordinary has no effect and stands alone",
+    given: "2026-11-25",
+    marks: ["crates/atlas-generation/src/processes/town/urban/character.rs"],
+    test: "crates/atlas-generation/src/processes/town/urban/character.rs",
+  },
+  {
+    direction: "repeats become progressively less likely as more districts use a type",
+    given: "2026-11-25",
+    marks: ["crates/atlas-generation/src/processes/town/urban/character.rs"],
+    test: "crates/atlas-generation/src/processes/town/urban/character.rs",
   },
   {
     direction: "the orchestrator controls mutability during publication",
@@ -678,6 +794,30 @@ const directions: readonly OwnerDirection[] = [
     given: "2026-11-16",
     marks: ["crates/atlas-generation/src/lattice/triangular.rs"],
     test: "crates/atlas-generation/tests/lattice.rs",
+  },
+  {
+    direction: "generation controls use a uniform runtime parameter structure with defaults",
+    given: "2026-11-25",
+    marks: ["crates/atlas-generation/src/parameters.rs"],
+    test: "crates/atlas-generation/src/atlas/dispatch/experiment.rs",
+  },
+  {
+    direction:
+      "experiment process targets are limited to the subset migrated to the modern orchestrator",
+    given: "2026-11-25",
+    marks: ["crates/atlas-generation/src/atlas/dispatch/experiment.rs"],
+    test: "crates/atlas-generation/src/atlas/dispatch/experiment.rs",
+  },
+  {
+    direction: "dynamic process experiments belong in the existing harness with no Web UI",
+    given: "2026-11-25",
+    marks: ["crates/atlas-host/src/bin/local_atlas/main.rs"],
+  },
+  {
+    direction: "neighborhoods can originate trade and working ground away from principal roads",
+    given: "2026-11-25",
+    marks: ["crates/atlas-generation/src/processes/town/urban/activity.rs"],
+    test: "crates/atlas-generation/src/processes/town/urban/activity.rs",
   },
 ];
 

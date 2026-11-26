@@ -7,17 +7,13 @@ import type {
 } from "@atlas/map";
 import type { FeatureTypeStyle, LayerStyle } from "./types";
 import { symbolStyleSchema } from "./viewSchemas";
-import type { FeatureAppearance } from "./renderFeature";
+import { vectorFamily, type FeatureAppearance } from "./renderFeature";
 import { drawnLayerStyles, polityIdentity } from "./drawnStyles";
 import type { Geometry } from "geojson";
 
 export type DrawingGeography = ReadonlyMap<string, Geometry | null>;
 
-/** A symbol's layer vocabulary is independent of the asset's qualified catalogue identity. */
-/** A layer's kind: its id without `vector:` and without the `@<level>` that a building's
- * upper floors and cellars carry, so `vector:structures@-1` styles as structures. */
-export const vectorFamily = (id: string) =>
-  (id.startsWith("vector:") ? id.slice(7) : id).split("@")[0];
+export { vectorFamily } from "./renderFeature";
 export type PublishedFeature = Omit<MapFeature, "name"> & { name: string; mapLayerId: string };
 export function publishedFeature(feature: MapFeature): PublishedFeature {
   return {

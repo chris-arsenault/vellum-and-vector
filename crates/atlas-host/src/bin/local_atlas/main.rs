@@ -2,6 +2,7 @@
 //! and map services the way the frontend does: one kept verification world, maps refined
 //! from it, and each map's report and pictures read from its published GIS storage.
 mod client;
+mod experiment;
 mod follow;
 mod picture;
 mod report;
@@ -189,6 +190,8 @@ fn run() -> io::Result<()> {
             .map(drop),
         (Some("places"), _) => places(&harness, options.get("parent")),
         (Some("census"), _) => census(&harness, &options),
+        // owner-direction(2026-11-25): dynamic process experiments belong in the existing harness with no Web UI
+        (Some("experiment"), _) => experiment::command(&harness, &options),
         (Some("town-previews"), Some(job)) if options.get("name").is_some() => {
             town_previews(&harness, job, options.get("name").unwrap_or_default())
         }
@@ -215,6 +218,7 @@ fn usage(harness: &Harness) -> String {
   world --name name [--width metres] [--height metres] [--quality draft|standard|fine] [--seed n]
   places [--parent world folder]
   census [--reference-width] [--full-history [--seed <integer>]]
+  experiment processes | run <experiment.json> | render <results.json> [--metric <name>] [--colors linear|log]
   summary|history <map folder under {maps}>
   raster <map folder> <layer id>...
   real --at x,y|Settlement [--hex 100m] [--across 50] [--kind ground|structure]

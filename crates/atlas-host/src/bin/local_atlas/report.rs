@@ -79,6 +79,8 @@ fn block_colour(use_: &str) -> &'static str {
     }
 }
 struct Drawn {
+    initial_city: bool,
+    arterial_strength: Option<f64>,
     layer: Layer,
     geometry: Geometry,
     width: f64,
@@ -156,6 +158,20 @@ fn drawn(feature: &MapFeature, real_scale: bool) -> Option<Drawn> {
         _ => return None,
     };
     Some(Drawn {
+        arterial_strength: feature
+            .attributes
+            .get("arterialStrength")
+            .and_then(Value::as_f64),
+        initial_city: matches!(
+            feature.kind.as_str(),
+            "majorWork" | "road" | "river" | "lake"
+        ) || feature.kind == "thoroughfare"
+            && (feature.attributes.get("class").and_then(Value::as_str) == Some("Approach")
+                || feature
+                    .attributes
+                    .get("layoutRound")
+                    .and_then(Value::as_u64)
+                    .is_some_and(|r| r <= 1)),
         layer,
         geometry: feature.geometry.clone(),
         width,
@@ -164,29 +180,31 @@ fn drawn(feature: &MapFeature, real_scale: bool) -> Option<Drawn> {
 }
 fn draw(canvas: &mut Canvas, things: &[Drawn]) {
     for thing in things {
-        match thing.layer {
-            Layer::Park | Layer::Water => canvas.fill(&thing.geometry, thing.colour, None),
-            Layer::River | Layer::Way => {
-                canvas.outline(&thing.geometry, thing.width, 0.7, thing.colour)
-            }
-            Layer::Wall => canvas.outline(&thing.geometry, thing.width, 2., thing.colour),
-            Layer::District => canvas.outline(&thing.geometry, thing.width, 1.2, thing.colour),
-            Layer::CityDistrict => canvas.outline(&thing.geometry, thing.width, 1.2, thing.colour),
-            Layer::Avenue => {
-                canvas.outline(&thing.geometry, thing.width + 2., 2.8, "#80694e");
-                canvas.outline(&thing.geometry, thing.width, 1.6, thing.colour);
-            }
-            Layer::CityGround => canvas.fill(&thing.geometry, thing.colour, None),
-            Layer::Block => canvas.fill(&thing.geometry, thing.colour, Some((PLOT.1, 0.6))),
-            Layer::Mark => canvas.mark(&thing.geometry, thing.width, thing.colour),
-            Layer::Field => canvas.fill(&thing.geometry, thing.colour, Some((FIELD.1, 0.6))),
-            Layer::Plot | Layer::Square => {
-                canvas.fill(&thing.geometry, thing.colour, Some((PLOT.1, 0.6)))
-            }
-            Layer::Building => {
-                canvas.fill(&thing.geometry, thing.colour, Some((BUILDING_EDGE, 0.6)))
-            }
+        draw_feature(canvas, thing);
+    }
+}
+fn draw_feature(canvas: &mut Canvas, thing: &Drawn) {
+    match thing.layer {
+        Layer::Park | Layer::Water => canvas.fill(&thing.geometry, thing.colour, None),
+        Layer::River | Layer::Way => {
+            canvas.outline(&thing.geometry, thing.width, 0.7, thing.colour)
         }
+        Layer::Wall => canvas.outline(&thing.geometry, thing.width, 2., thing.colour),
+        Layer::District => canvas.outline(&thing.geometry, thing.width, 1.2, thing.colour),
+        Layer::CityDistrict => canvas.outline(&thing.geometry, thing.width, 1.2, thing.colour),
+        Layer::Avenue => {
+            let face = thing.arterial_strength.map_or(1.6, |s| 0.8 + 2.8 * s);
+            canvas.outline(&thing.geometry, thing.width + 2., face + 1.2, "#80694e");
+            canvas.outline(&thing.geometry, thing.width, face, thing.colour);
+        }
+        Layer::CityGround => canvas.fill(&thing.geometry, thing.colour, None),
+        Layer::Block => canvas.fill(&thing.geometry, thing.colour, Some((PLOT.1, 0.6))),
+        Layer::Mark => canvas.mark(&thing.geometry, thing.width, thing.colour),
+        Layer::Field => canvas.fill(&thing.geometry, thing.colour, Some((FIELD.1, 0.6))),
+        Layer::Plot | Layer::Square => {
+            canvas.fill(&thing.geometry, thing.colour, Some((PLOT.1, 0.6)))
+        }
+        Layer::Building => canvas.fill(&thing.geometry, thing.colour, Some((BUILDING_EDGE, 0.6))),
     }
 }
 
@@ -364,6 +382,13 @@ pub fn report(server: &Server, reference: &MapRef, directory: &Path) -> io::Resu
             let layer: atlas_map::MapLayer = serde_json::from_value(layer.clone())?;
             let footprint = serde_json::from_value(map["footprint"].clone())?;
             let image = surface_image(server, reference, &layer)?;
+            canvas.surface(&image, layer.bounds, &footprint);
+            for thing in things.iter().filter(|t| t.initial_city) {
+                draw_feature(&mut canvas, thing);
+            }
+            let early = directory.join("early-works-and-roads.png");
+            canvas.save(&early)?;
+            written.push(early.display().to_string());
             canvas.surface(&image, layer.bounds, &footprint);
             draw(&mut canvas, &things);
             let path = directory.join("city.png");

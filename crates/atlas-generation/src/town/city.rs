@@ -118,11 +118,11 @@ pub fn prominent(kind: Kind, reading: &CityReading) -> bool {
 /// Districts: each cell joins the seed it reaches most cheaply, where crossing water, a wall,
 /// a main road or a change of character costs more than ordinary ground. Seeds are the city's
 /// strongest hot spots, so districts gather round its centres and part along its barriers.
-pub fn districts(
+pub fn districts<N: IntoIterator<Item = Option<usize>>>(
     seeds: &[usize],
     n: usize,
     cost: impl Fn(usize, usize) -> f64,
-    neighbours: impl Fn(usize) -> [Option<usize>; 3],
+    neighbours: impl Fn(usize) -> N,
 ) -> Vec<usize> {
     use std::cmp::Reverse;
     use std::collections::BinaryHeap;

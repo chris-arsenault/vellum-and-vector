@@ -127,6 +127,15 @@ fn partition(calls: &[Call<'_, '_>], site: Site) -> ExecutionResult<(Vec<Unit>, 
 #[cfg(test)]
 mod tests;
 
+const FEEDBACK_PREFIX: &str = "feedback-";
+
+pub(super) fn occurrence_path(path: &[String]) -> &[String] {
+    match path.split_last() {
+        Some((part, parent)) if part.starts_with(FEEDBACK_PREFIX) => parent,
+        _ => path,
+    }
+}
+
 fn validate_feedback(call: &Call<'_, '_>, site: Site) -> ExecutionResult<()> {
     let Some(group) = call.specification.schedule.feedback else {
         return Ok(());
@@ -245,7 +254,9 @@ fn emit<'a>(
             };
             let mut context = stage.context.clone();
             if let Some(group) = schedule.feedback {
-                context.path.push(format!("feedback-{}/{pass}", group.name));
+                context
+                    .path
+                    .push(format!("{FEEDBACK_PREFIX}{}/{pass}", group.name));
             }
             result.push(Stage {
                 kind: StageKind::Process(call),

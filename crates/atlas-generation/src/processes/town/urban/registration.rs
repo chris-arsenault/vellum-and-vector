@@ -16,12 +16,12 @@ use std::io;
 enum Task {
     Primary,
     Claims,
-    Civic,
+    Civic(f64),
     Defense,
     Pending,
-    Programs,
-    Districts,
-    Landscape,
+    Programs(super::character::Settings),
+    Districts(f64),
+    Landscape(super::activity::Settings),
     Circulation,
     Premises,
 }
@@ -84,13 +84,13 @@ const MOVEMENT: &[UrbanStrategy] = &[
 const DISTRICTS: &[UrbanStrategy] = &[
     strategy(
         "district-programs",
-        Task::Programs,
+        Task::Programs(super::character::Settings::DEFAULT),
         Origin::Frame,
         Boundary::Sponsors,
     ),
     strategy(
         "district-partition",
-        Task::Districts,
+        Task::Districts(super::partition::CATCHMENT_BOUNDARY.default),
         Origin::Partition,
         Boundary::Districts,
     ),
@@ -98,7 +98,7 @@ const DISTRICTS: &[UrbanStrategy] = &[
 const BUILD: &[UrbanStrategy] = &[
     strategy(
         "urban-blocks",
-        Task::Landscape,
+        Task::Landscape(super::activity::Settings::DEFAULT),
         Origin::Frame,
         Boundary::Land,
     ),
@@ -123,7 +123,7 @@ const CLAIMS: &[UrbanStrategy] = &[
 const INVEST: &[UrbanStrategy] = &[
     strategy(
         "civic-precincts",
-        Task::Civic,
+        Task::Civic(investment::PARCEL_WEIGHT.default),
         Origin::Frame,
         Boundary::Sponsors,
     ),
@@ -244,9 +244,24 @@ pub fn publication_specification() -> Specification {
     Specification::new(PUBLICATION, "atlas:workspace", "", true).publication()
 }
 pub fn specifications() -> Vec<Specification> {
-    owners().iter().map(Registration::specification).collect()
+    owners()
+        .iter()
+        .map(|o| o.specification().numeric(controls(o.owner.id)))
+        .collect()
 }
-pub fn register(registry: &mut Registry, operations: Option<&Operations>) -> io::Result<()> {
+fn controls(id: &str) -> &'static [crate::parameters::NumericParameter] {
+    match id {
+        "town.districts" => super::character::CONTROLS,
+        "town.construction" => super::activity::CONTROLS,
+        "town.collective-investment" => &[investment::PARCEL_WEIGHT],
+        _ => &[],
+    }
+}
+pub fn register(
+    registry: &mut Registry,
+    operations: Option<&Operations>,
+    district_catchment_scale: f64,
+) -> io::Result<()> {
     for owner in owners() {
         let id = owner.owner.id;
         let standalone = operations
@@ -349,7 +364,9 @@ pub fn register(registry: &mut Registry, operations: Option<&Operations>) -> io:
                     match input.algorithm {
                         Task::Pending => unreachable!(),
                         Task::Claims => claims::resolve(state, &mut urban, &domain, &boundary),
-                        Task::Civic => investment::civic(state, &mut urban, &domain, boundary),
+                        Task::Civic(weight) => {
+                            investment::civic(state, &mut urban, &domain, boundary, weight)
+                        }
                         Task::Defense => investment::defense(state, &mut urban, &domain, boundary),
                         Task::Primary if urban.layout_round == Some(round) => {
                             circulation::crossings(state, &urban)
@@ -359,10 +376,18 @@ pub fn register(registry: &mut Registry, operations: Option<&Operations>) -> io:
                             urban.layout_round = Some(round);
                             Ok(())
                         }
-                        Task::Programs => programs::compete(state, &mut urban, boundary),
-                        Task::Districts => city::districts(state, &mut urban, boundary),
-                        Task::Landscape => {
-                            landscape::develop(state, &mut urban, &domain, &boundary)
+                        Task::Programs(settings) => programs::compete(
+                            state,
+                            &mut urban,
+                            boundary,
+                            district_catchment_scale,
+                            settings,
+                        ),
+                        Task::Districts(weight) => {
+                            city::districts(state, &mut urban, boundary, weight)
+                        }
+                        Task::Landscape(settings) => {
+                            landscape::develop(state, &mut urban, &domain, &boundary, settings)
                         }
                         Task::Circulation => street::circulation(
                             state,
@@ -378,9 +403,27 @@ pub fn register(registry: &mut Registry, operations: Option<&Operations>) -> io:
                 Ok(())
             },
         );
-        registry.register(Process::semantic_command(&owner, command, |_, strategy| {
-            Ok(strategy)
-        }))?;
+        registry.register(
+            Process::semantic_command(&owner, command, |input, mut strategy| {
+                if matches!(strategy.algorithm, Task::Programs(_)) {
+                    strategy.algorithm =
+                        Task::Programs(super::character::Settings::from_input(input)?);
+                }
+                if matches!(strategy.algorithm, Task::Landscape(_)) {
+                    strategy.algorithm =
+                        Task::Landscape(super::activity::Settings::from_input(input)?);
+                }
+                if matches!(strategy.algorithm, Task::Districts(_)) {
+                    strategy.algorithm =
+                        Task::Districts(input.number(super::partition::CATCHMENT_BOUNDARY.name)?);
+                }
+                if matches!(strategy.algorithm, Task::Civic(_)) {
+                    strategy.algorithm = Task::Civic(input.number(investment::PARCEL_WEIGHT.name)?);
+                }
+                Ok(strategy)
+            })
+            .numeric(controls(id)),
+        )?;
     }
     if operations.is_some() {
         registry.register(Process::publication(

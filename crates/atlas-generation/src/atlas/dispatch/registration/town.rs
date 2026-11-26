@@ -71,6 +71,7 @@ pub fn specifications() -> io::Result<Vec<Specification>> {
 pub fn register(
     registry: &mut Registry,
     operations: &town::development::Operations,
+    district_catchment_scale: f64,
 ) -> io::Result<()> {
     registry.register(Process::unit(
         Specification::new("town.cultivation", "atlas:workspace", "", true),
@@ -112,7 +113,11 @@ pub fn register(
             operation.clone(),
         ))?;
     }
-    crate::processes::town::urban::registration::register(registry, Some(operations))?;
+    crate::processes::town::urban::registration::register(
+        registry,
+        Some(operations),
+        district_catchment_scale,
+    )?;
     registry.register(Process::command(
         specification()?,
         town::operation(),

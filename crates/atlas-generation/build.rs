@@ -68,9 +68,10 @@ fn main() {
         .as_array()
         .unwrap()
         .iter()
-        .map(
-            |row| json!({"Type ID":row["Type ID"], "Category":row["Category"], "Name":row["Name"]}),
-        )
+        .map(|row| {
+            json!({"Type ID":row["Type ID"], "Category":row["Category"], "Name":row["Name"],
+                "Localized origin":row["Localized origin"].as_bool().unwrap_or(false)})
+        })
         .collect();
     fs::write(
         out.join("district-types.json"),

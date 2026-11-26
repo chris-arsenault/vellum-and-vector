@@ -83,6 +83,8 @@ dev:
 
 # Local atlas for verification (docs/local-atlas.md): database and native server on loopback,
 # one kept world, real-scale maps opened from it. AT is in world metres, e.g. AT=500000,375000.
+# Run these targets and scripts/local-atlas.sh experiment directly. The launcher handles
+# the local database login. No with-cred, broker unlock, or external credentials are needed.
 local-up:
 	scripts/local-atlas.sh up
 

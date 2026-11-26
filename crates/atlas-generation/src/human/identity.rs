@@ -156,6 +156,11 @@ pub fn rename(column: &mut IdentityColumn, field: Tradition, from: i32, to: i32)
     settle(column);
 }
 pub fn arrive(column: &mut IdentityColumn, arriving: &[IdentityLayer]) {
+    accumulate(column, arriving);
+    settle(column);
+}
+
+pub(crate) fn accumulate(column: &mut IdentityColumn, arriving: &[IdentityLayer]) {
     for layer in arriving.iter().rev().filter(|layer| layer.people > TRACE) {
         if let Some(held) = column
             .iter_mut()
@@ -166,7 +171,6 @@ pub fn arrive(column: &mut IdentityColumn, arriving: &[IdentityLayer]) {
             column.insert(0, layer.clone());
         }
     }
-    settle(column);
 }
 fn changed(traditions: [i32; TRADITIONS], changes: &TraditionChanges) -> [i32; TRADITIONS] {
     let (tongue, known) = (Tradition::Tongue as usize, Tradition::Known as usize);

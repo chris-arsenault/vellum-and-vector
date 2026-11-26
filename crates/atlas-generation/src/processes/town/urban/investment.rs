@@ -8,6 +8,7 @@ use crate::{
     atlas::{regional::city, state::State},
     features::Feature,
     field::{people::work::working, refinement::courses::cell_at, shared::Scalar},
+    hpc::{Direction, KeyedHeap},
     metric::search::search,
     town::catalogue::Activity,
 };
@@ -15,18 +16,45 @@ use atlas_map::Geometry;
 use serde::{Deserialize, Serialize};
 use std::io;
 
+pub(super) const PARCEL_WEIGHT: crate::parameters::NumericParameter =
+    crate::parameters::NumericParameter {
+        name: "commonsParcelPreference",
+        unit: "weight",
+        default: 2.,
+        minimum: Some(0.),
+        maximum: None,
+        strategy: Some("civic-precincts"),
+        map_types: &[crate::processes::strategies::MapType::City],
+    };
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub(super) struct Site {
     pub name: String,
     pub source: String,
     pub cell: usize,
     pub ground: f64,
+    #[serde(default)]
+    pub work: Option<(crate::town::major_works::WorkFamily, f64)>,
+    #[serde(default)]
+    pub grounds: Option<Geometry>,
+}
+fn grounds(at: [f64; 2], design: &crate::town::major_works::WorkDesign) -> Geometry {
+    let [x, y] = at;
+    let (sin, cos) = design.bearing.sin_cos();
+    super::geometry::ring(
+        &design
+            .reserve
+            .iter()
+            .map(|[a, b]| [x + a * cos - b * sin, y + a * sin + b * cos])
+            .collect::<Vec<_>>(),
+    )
 }
 pub(super) fn civic(
     state: &State,
     urban: &mut Urban,
     frame: &Geometry,
     institutions: Vec<Feature>,
+    parcel_weight: f64,
 ) -> io::Result<()> {
     let mesh = state.field().mesh();
     let template = policy(state)?;
@@ -40,9 +68,22 @@ pub(super) fn civic(
             .interior_position(&f.geometry)
             .map_err(io::Error::other)?;
         if let Some(cell) = cell_at(mesh, xy(at)) {
+            let family = f
+                .attributes
+                .get("majorWorkFamily")
+                .and_then(|v| v.as_str())
+                .and_then(crate::town::major_works::WorkFamily::from_key);
+            let design = f
+                .attributes
+                .get("workDesign")
+                .map(|v| serde_json::from_value::<crate::town::major_works::WorkDesign>(v.clone()))
+                .transpose()
+                .map_err(io::Error::other)?;
             urban.sponsors.push(Site {
                 name: f.name,
                 source: f.id.to_string(),
+                work: family.map(|w| (w, design.as_ref().map_or(0., |d| d.bearing))),
+                grounds: design.as_ref().map(|d| grounds(xy(at), d)),
                 cell,
                 ground: f
                     .attributes
@@ -59,6 +100,8 @@ pub(super) fn civic(
             source: work.key().into(),
             cell: cell as usize,
             ground: work.city().ground,
+            work: Some((work, commissioned.design.bearing)),
+            grounds: Some(grounds(position(mesh, cell as usize), &commissioned.design)),
         });
     }
     let fields = &mut urban.fields;
@@ -75,11 +118,11 @@ pub(super) fn civic(
             .program
             .get(s.cell)
             .and_then(|&i| urban.programs.get(i))
-            .map_or(0., |p| {
-                let demand = p.demands_at(position(mesh, s.cell));
+            .map_or(0., |_| {
+                let demand = claim.demands;
                 s.ground.sqrt() * (demand.civic + demand.commons)
             });
-        let reach = constituency
+        let institutional_reach = constituency
             + (s.ground.sqrt() + mesh.spacing())
                 * (1. + demand.sqrt())
                 * template
@@ -90,6 +133,13 @@ pub(super) fn civic(
                     )
                     .max(0.25)
                     .sqrt();
+        let (reach, transverse, bearing) =
+            s.work
+                .map_or((institutional_reach, 1., 0.), |(work, bearing)| {
+                    let (length, breadth) = work.influence();
+                    (s.ground.sqrt() * length, length / breadth, bearing)
+                });
+        let axis = [bearing.cos(), bearing.sin()];
         let mut cost = working(state.field());
         for c in 0..mesh.len() {
             cost.set(c, f64::INFINITY)?;
@@ -105,7 +155,13 @@ pub(super) fn civic(
                 if fields.claims[b].reserved {
                     return Ok(f64::INFINITY);
                 }
+                let [dx, dy] = crate::town::geometry::unit(crate::town::geometry::sub(
+                    mesh.position(b),
+                    mesh.position(a),
+                ));
+                let across = (dx * axis[1] - dy * axis[0]).abs();
                 Ok(mesh.edge_length(a, e)
+                    * (1. + (transverse - 1.) * across)
                     * (1. + slope.get(b)?.max(0.) * 4. + fields.claims[b].farm)
                     / (1. + fields.access[b] * 0.65))
             },
@@ -119,12 +175,12 @@ pub(super) fn civic(
         }
     }
     if urban.parks.is_empty() {
-        urban.parks = commons(state, urban)?;
+        urban.parks = commons(state, urban, parcel_weight)?;
     }
     Ok(())
 }
 
-fn commons(state: &State, u: &Urban) -> io::Result<Vec<super::Element>> {
+fn commons(state: &State, u: &Urban, parcel_weight: f64) -> io::Result<Vec<super::Element>> {
     let mesh = state.field().mesh();
     let points: Vec<_> = (0..mesh.len())
         .map(|c| super::geometry::pos(position(mesh, c)))
@@ -149,6 +205,11 @@ fn commons(state: &State, u: &Urban) -> io::Result<Vec<super::Element>> {
         / std::f64::consts::PI)
         .sqrt();
     let mut parks = Vec::new();
+    let trees = state.field().shared().scalar(Scalar::TreeCover);
+    let elevation = state
+        .field()
+        .ground()
+        .view(crate::rock::ground::GroundField::Elevation);
     for (index, p) in u.programs.iter().enumerate() {
         let civic = u
             .sponsors
@@ -156,9 +217,6 @@ fn commons(state: &State, u: &Urban) -> io::Result<Vec<super::Element>> {
             .any(|s| mesh.physical_distance(p.cell, s.cell) < p.reach);
         let stewardship =
             p.demands.commons + f64::from(civic) * 0.9 + f64::from(template.site.free_tenure) * 0.4;
-        if stewardship == 0. && p.sites.is_empty() {
-            continue;
-        }
         let mut scores = vec![0.; mesh.len()];
         for c in mesh.cells_within(mesh.position(p.cell), p.reach) {
             let x = u.fields.claims[c];
@@ -170,13 +228,15 @@ fn commons(state: &State, u: &Urban) -> io::Result<Vec<super::Element>> {
             {
                 continue;
             }
-            let distance = mesh.physical_distance(p.cell, c) / p.reach;
-            let care = stewardship + (p.demands_at(position(mesh, c)).commons - p.demands.commons);
+            let care = stewardship + (x.demands.commons - p.demands.commons);
+            let [xpos, ypos] = position(mesh, c);
+            // Variation in unrecorded field parcels matters most on uniform ground.
+            let fallow = crate::noise::unit_noise(xpos, ypos, 4829, template.quarter(), 2);
             scores[c] = care
-                * (0.1 + f64::from(wooded[c]) + x.farm.sqrt())
+                * (0.1 + f64::from(wooded[c]) + trees.get(c)?.max(0.).sqrt() + x.farm.sqrt())
                 * (0.3 + x.investment)
-                * (1. - distance * 0.55)
-                / (1. + x.built * 4.);
+                * (0.55 + fallow)
+                / (1. + x.built * 4. + u.fields.access[c]);
         }
         let Some((site, &bid)) = scores.iter().enumerate().max_by(|a, b| a.1.total_cmp(b.1)) else {
             continue;
@@ -184,12 +244,45 @@ fn commons(state: &State, u: &Urban) -> io::Result<Vec<super::Element>> {
         if bid <= 0.15 {
             continue;
         }
-        let radius = (template.quarter() + mesh.spacing()) * (1. + stewardship.sqrt());
-        for (c, score) in scores.iter_mut().enumerate() {
-            *score = (*score / bid).sqrt()
-                * (1. - (mesh.physical_distance(c, site) / radius).powi(2)).max(0.);
+        // The endowment buys adjoining land. Favor the affordable field or terrace
+        // at the boundary of the common, wherever that boundary currently lies.
+        let extent = (template.quarter() + mesh.spacing()) * (1. + stewardship.sqrt());
+        let mut budget = 1.6 * extent.powi(2);
+        let mut footprint = vec![0.; mesh.len()];
+        let mut frontier = KeyedHeap::new([Direction::Descending], Direction::Ascending);
+        let height = elevation.get(site)?;
+        scores[site] = 0.;
+        let mut offer = |cell: usize| -> io::Result<Option<f64>> {
+            let local = std::mem::take(&mut scores[cell]);
+            if local <= 0. {
+                return Ok(None);
+            }
+            let rise = crate::scale::MapScale::metres(
+                (elevation.get(cell)? - height).abs(),
+                crate::scale::LengthUnit::Native,
+            );
+            let access = mesh.physical_distance(cell, site) / extent;
+            let terrace = rise / (template.quarter() * 0.06);
+            Ok(Some(
+                (local / bid).powf(parcel_weight) / (1. + terrace + 0.25 * access * access),
+            ))
+        };
+        frontier.push(site as u32, [1.]);
+        while let Some((cell, [value])) = frontier.pop() {
+            let cell = cell as usize;
+            let price = mesh.area(cell) / value;
+            if price > budget {
+                break;
+            }
+            budget -= price;
+            footprint[cell] = 1.;
+            for neighbor in (0..3).filter_map(|edge| mesh.neighbor(cell, edge)) {
+                if let Some(value) = offer(neighbor)? {
+                    frontier.push(neighbor as u32, [value]);
+                }
+            }
         }
-        if let Some(g) = super::landscape::contour(state, &scores, 0.36)? {
+        if let Some(g) = super::landscape::contour(state, &footprint, 0.5)? {
             for part in atlas_map::regions::parts(&g) {
                 let mut park = super::Element::new(
                     part,
@@ -252,53 +345,6 @@ pub(super) fn defense(
             urban.captured.push(f);
         }
     }
-    urban.defense = city::propose_walls(
-        state,
-        policy(state)?,
-        state.regional.as_ref().unwrap().round,
-    )?;
-    let existing = state.regional.as_ref().unwrap().city.walls.len();
-    let mesh = state.field().mesh();
-    for (i, wall) in urban.defense.iter().enumerate().filter(|(_, w)| w.outgrown) {
-        let source = format!("city-wall-{}", existing + i);
-        let sites: Vec<_> = wall
-            .inside
-            .iter()
-            .map(|&c| c as usize)
-            .filter(|&c| {
-                (0..3).any(|edge| mesh.neighbor(c, edge).is_some_and(|n| !wall.encloses(n)))
-            })
-            .map(|c| atlas_map::regions::point(super::geometry::pos(position(mesh, c))))
-            .collect();
-        if sites.is_empty() {
-            continue;
-        }
-        let index = state.spatial.index(&sites).map_err(io::Error::other)?;
-        for program in &mut urban.programs {
-            use crate::town::templates::district::Trope;
-            let [x, y] = position(mesh, program.cell);
-            let Some((nearest, distance)) = index
-                .nearest_with_distance(atlas_map::Position::xy(x, y))
-                .map_err(io::Error::other)?
-            else {
-                continue;
-            };
-            let influence = (1. - distance / program.reach).max(0.);
-            if program.traits.contains(&Trope::Wall)
-                || crate::noise::hash_unit(i as i32, x, y) >= influence
-            {
-                continue;
-            }
-            let Geometry::Point { coordinates } = &sites[nearest] else {
-                continue;
-            };
-            program.traits.push(Trope::Wall);
-            program.sites.push((Trope::Wall, xy(*coordinates)));
-            program.evidence["traitSites"] = serde_json::json!(program.sites);
-            if let Some(facts) = program.evidence["sources"].as_array_mut() {
-                facts.push(serde_json::json!([Trope::Wall, source]));
-            }
-        }
-    }
+    urban.defense = super::defenses::invest(state, urban)?;
     Ok(())
 }

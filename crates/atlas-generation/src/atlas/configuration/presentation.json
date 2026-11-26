@@ -3683,6 +3683,14 @@
         "step": 0.0025,
         "group": "human"
       },
+      "districtCatchmentScale": {
+        "label": "City district catchment",
+        "unit": "relative reach",
+        "minimum": 0.1,
+        "default": 3.6,
+        "step": 0.1,
+        "group": "human"
+      },
       "roadTraffic": {
         "label": "Travellers that make a road",
         "unit": "per year",
@@ -3725,6 +3733,7 @@
         "cityReach": [
           "human.places"
         ],
+        "districtCatchmentScale": ["town.districts"],
         "roadTraffic": [
           "human.places"
         ],

@@ -1,6 +1,6 @@
 use crate::atlas::resolution::{HexSize, Profile, Quality};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 pub enum MapType {
     World,
     Region,

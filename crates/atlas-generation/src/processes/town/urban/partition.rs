@@ -22,12 +22,24 @@ pub(super) struct District {
     pub program: Option<usize>,
 }
 
+pub(super) const CATCHMENT_BOUNDARY: crate::parameters::NumericParameter =
+    crate::parameters::NumericParameter {
+        name: "foundingCatchmentBoundaryWeight",
+        unit: "weight",
+        default: 1.,
+        minimum: Some(0.),
+        maximum: None,
+        strategy: Some("district-partition"),
+        map_types: &[crate::processes::strategies::MapType::City],
+    };
+
 /// A shared street can become an internal street of a district. A long shared edge
 /// is an easier join than a narrow neck; a through approach is a stronger boundary.
 pub(super) fn partition(
     kernel: &dyn SpatialKernel,
     precincts: &[Precinct],
     approaches: &[Geometry],
+    boundary_weight: f64,
 ) -> io::Result<Vec<District>> {
     let shapes: Vec<_> = precincts.iter().map(|p| p.shape.clone()).collect();
     let index = kernel.index(&shapes).map_err(io::Error::other)?;
@@ -48,6 +60,13 @@ pub(super) fn partition(
             else {
                 continue;
             };
+            // Two precincts can share a border and also touch at an isolated corner.
+            // Only the linear contact can carry a through road or join the precincts.
+            let coordinates = atlas_map::regions::boundary_lines(&edge);
+            if coordinates.is_empty() {
+                continue;
+            }
+            let edge = Geometry::MultiLineString { coordinates };
             let length = kernel.length(&edge).map_err(io::Error::other)?;
             if length <= 0. {
                 continue;
@@ -69,73 +88,95 @@ pub(super) fn partition(
             edges[j].insert(i, contact);
         }
     }
-    let mut members: Vec<Vec<usize>> = (0..shapes.len()).map(|i| vec![i]).collect();
-    let mut areas: Vec<_> = precincts.iter().map(|p| p.area).collect();
-    // Area counts open urban land; residents, constructed ground and civic seats
-    // give a busy precinct more weight than the same area at the fringe.
-    let mut weights: Vec<_> = precincts
-        .iter()
-        .map(|p| p.area / 1000. + p.residents + p.built * 3500. + p.service_load)
+    // Grow from established centres along the precinct graph. Merging unclaimed
+    // ground first can give a whole neighborhood to the last centre it touches.
+    let mut seeds: Vec<_> = (0..precincts.len())
+        .filter(|&i| precincts[i].anchor.is_some())
         .collect();
-    let mut character: Vec<_> = precincts.iter().map(|p| p.character).collect();
-    let mut works: Vec<_> = precincts.iter().map(|p| p.works).collect();
-    let mut anchors: Vec<_> = precincts.iter().map(|p| p.anchor).collect();
-    let mut programs: Vec<_> = precincts.iter().map(|p| p.program).collect();
-    loop {
-        let Some(i) = (0..members.len())
-            .filter(|&i| !edges[i].is_empty() && anchors[i].is_none())
-            .min_by(|&a, &b| weights[a].total_cmp(&weights[b]))
-        else {
-            break;
-        };
-        let score = |j: usize| {
-            let two_centres = works[i] > 0 && works[j] > 0;
-            let affinity = if programs[i] == programs[j] { 6. } else { 1. };
-            affinity * edges[i][&j]
-                / (areas[i] + areas[j]).sqrt()
-                / (weights[i] + weights[j]).sqrt()
-                / (1. + (character[i] - character[j]).abs())
-                / if two_centres { 3. } else { 1. }
-        };
-        let j = *edges[i]
-            .keys()
-            .max_by(|&&a, &&b| score(a).total_cmp(&score(b)))
-            .unwrap();
-        edges[j].remove(&i);
-        for (k, contact) in std::mem::take(&mut edges[i]) {
-            if k != j {
-                edges[k].remove(&i);
-                *edges[k].entry(j).or_default() += contact;
-                *edges[j].entry(k).or_default() += contact;
+    let mut seen = vec![false; precincts.len()];
+    for start in 0..precincts.len() {
+        if seen[start] {
+            continue;
+        }
+        let mut stack = vec![start];
+        seen[start] = true;
+        let mut anchored = false;
+        let mut strongest = start;
+        while let Some(i) = stack.pop() {
+            anchored |= precincts[i].anchor.is_some();
+            if precincts[i].residents > precincts[strongest].residents {
+                strongest = i;
+            }
+            for &j in edges[i].keys() {
+                if !seen[j] {
+                    seen[j] = true;
+                    stack.push(j);
+                }
             }
         }
-        let absorbed = std::mem::take(&mut members[i]);
-        members[j].extend(absorbed);
-        character[j] = (character[j] * areas[j] + character[i] * areas[i]) / (areas[i] + areas[j]);
-        if anchors[j].is_none() && areas[i] > areas[j] {
-            programs[j] = programs[i];
+        if !anchored {
+            seeds.push(strongest);
         }
-        if anchors[j].is_none() {
-            anchors[j] = anchors[i];
-        }
-        areas[j] += areas[i];
-        weights[j] += weights[i];
-        works[j] += works[i];
     }
-    let roots: Vec<_> = (0..members.len())
-        .filter(|&i| !members[i].is_empty())
-        .collect();
-    Ok(roots
+    let centres = shapes
         .iter()
-        .map(|&i| District {
-            precincts: std::mem::take(&mut members[i]),
-            program: anchors[i].or(programs[i]),
-            neighbors: edges[i]
-                .keys()
-                .map(|j| roots.binary_search(j).unwrap())
-                .collect(),
-        })
-        .collect())
+        .map(|shape| kernel.interior_position(shape))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(io::Error::other)?;
+    let loads: Vec<_> = precincts
+        .iter()
+        .map(|p| ((p.residents + p.built * 3500. + p.service_load) / (p.area / 1e6)).ln_1p())
+        .collect();
+    let labels = crate::town::city::districts(
+        &seeds,
+        precincts.len(),
+        |i, j| {
+            let (a, b) = (&precincts[i], &precincts[j]);
+            let distance = crate::town::geometry::distance(
+                super::geometry::xy(centres[i]),
+                super::geometry::xy(centres[j]),
+            );
+            let span = a.area.min(b.area).sqrt();
+            let narrow = span / (span + edges[i][&j]);
+            let boundary = f64::from(a.program != b.program);
+            let civic = f64::from(a.works > 0 && b.works > 0);
+            distance.max(span * 0.1)
+                * (0.5 + narrow * narrow * 3.)
+                * (1.
+                    + boundary * boundary_weight
+                    + civic * 0.3
+                    + (a.character - b.character).abs() * 0.25)
+                * (1. + (loads[i] + loads[j]) * 0.04)
+        },
+        |i| edges[i].keys().copied().map(Some),
+    );
+    let mut groups: Vec<District> = Vec::new();
+    let mut seed_group = Vec::new();
+    for i in seeds {
+        let program = precincts[i].anchor.or(precincts[i].program);
+        let id = program
+            .and_then(|p| groups.iter().position(|g| g.program == Some(p)))
+            .unwrap_or_else(|| {
+                groups.push(District {
+                    precincts: Vec::new(),
+                    neighbors: Vec::new(),
+                    program,
+                });
+                groups.len() - 1
+            });
+        seed_group.push(id);
+    }
+    for (i, &label) in labels.iter().enumerate() {
+        let group = seed_group[label];
+        groups[group].precincts.push(i);
+        for &j in edges[i].keys() {
+            let neighbor = seed_group[labels[j]];
+            if neighbor != group && !groups[group].neighbors.contains(&neighbor) {
+                groups[group].neighbors.push(neighbor);
+            }
+        }
+    }
+    Ok(groups)
 }
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
@@ -143,6 +184,41 @@ mod tests {
     use super::*;
     use atlas_gis::geometry::NativeGeos;
     use atlas_map::{regions::rectangle, Bounds};
+    #[test]
+    fn shared_border_and_separate_point_contact_can_carry_a_road() {
+        use super::super::geometry::{line, ring};
+        let kernel = NativeGeos::new(1e-6).unwrap();
+        let shapes = [
+            rectangle(Bounds(0., 0., 4., 4.)),
+            ring(&[
+                [4., 0.],
+                [7., 0.],
+                [7., 4.],
+                [5., 4.],
+                [4., 3.],
+                [5., 2.],
+                [4., 1.],
+            ]),
+        ];
+        let precincts = shapes
+            .into_iter()
+            .map(|shape| Precinct {
+                area: kernel.area(&shape).unwrap(),
+                shape,
+                residents: 0.,
+                built: 0.,
+                service_load: 0.,
+                works: 0,
+                character: 0.,
+                program: None,
+                anchor: None,
+            })
+            .collect::<Vec<_>>();
+        let road = line(&[[4., -1.], [4., 4.]]);
+        let groups = partition(&kernel, &precincts, &[road], CATCHMENT_BOUNDARY.default).unwrap();
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].precincts.len(), 2);
+    }
     #[test]
     fn internal_streets_remain_inside_city_scale_districts() {
         let kernel = NativeGeos::new(1e-6).unwrap();
@@ -162,7 +238,7 @@ mod tests {
                 }
             })
             .collect();
-        let groups = partition(&kernel, &precincts, &[]).unwrap();
+        let groups = partition(&kernel, &precincts, &[], CATCHMENT_BOUNDARY.default).unwrap();
         assert_eq!(groups.len(), 4);
         assert_eq!(
             groups.iter().map(|g| g.precincts.len()).sum::<usize>(),
@@ -180,5 +256,34 @@ mod tests {
                 Some(Geometry::Polygon { .. })
             ));
         }
+    }
+
+    #[test]
+    fn a_severed_precinct_stays_with_its_founding_catchment() {
+        let kernel = NativeGeos::new(1e-6).unwrap();
+        let precincts: Vec<_> = [0, 1, 2, 3, 6]
+            .into_iter()
+            .map(|x| Precinct {
+                shape: rectangle(Bounds(x as f64, 0., x as f64 + 1., 1.)),
+                area: 1.,
+                residents: 12.,
+                built: 0.,
+                service_load: 0.,
+                works: 0,
+                character: 0.,
+                program: Some(usize::from(x >= 2)),
+                anchor: match x {
+                    0 => Some(0),
+                    3 => Some(1),
+                    _ => None,
+                },
+            })
+            .collect();
+        let groups = partition(&kernel, &precincts, &[], CATCHMENT_BOUNDARY.default).unwrap();
+        assert_eq!(groups.len(), 2);
+        assert_eq!(groups[0].precincts, [0, 1]);
+        assert_eq!(groups[1].precincts, [2, 3, 4]);
+        assert_eq!(groups[0].neighbors, [1]);
+        assert_eq!(groups[1].neighbors, [0]);
     }
 }

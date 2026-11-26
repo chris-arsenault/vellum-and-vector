@@ -2,6 +2,7 @@
 pub mod cargo;
 pub mod channels;
 mod checkpoint;
+mod households;
 pub mod local_magic;
 mod local_material;
 mod magic;
@@ -38,6 +39,7 @@ impl ProjectedChannel {
 pub struct Surface {
     grid: Grid,
     interpolation: Interpolation,
+    household_ground: Option<households::Footprints>,
     // hpc-exempt: channel catalogue metadata; numerical samples live in typed bands.
     channels: BTreeMap<String, ProjectedChannel>,
     cargo: Option<cargo::Cargo>,
@@ -66,8 +68,16 @@ impl Surface {
         resource: std::rc::Rc<crate::field::inheritance::resources::Resource>,
         field: &Field,
         cache: SharedCache,
+        spatial: &dyn crate::spatial::SpatialKernel,
     ) -> io::Result<Self> {
         let mut surface = Self::new((*resource.grid).clone(), field, cache)?;
+        if field.process_site().map_type != crate::processes::strategies::MapType::World {
+            surface.household_ground = Some(households::Footprints::new(
+                field.mesh(),
+                &surface.grid,
+                spatial,
+            )?);
+        }
         surface.import(&resource)?;
         surface.input = Some(resource);
         Ok(surface)
@@ -120,6 +130,14 @@ impl Surface {
         let samples = self.interpolation.samples();
         let mut values = self.coverage.allocate(0.0);
         for sample in 0..samples.len() {
+            if let Some(ground) = self
+                .household_ground
+                .as_ref()
+                .filter(|_| name == "populationDensity")
+            {
+                values.set(sample, ground.mean(sample, &read)?)?;
+                continue;
+            }
             let cell = samples.get(sample)?;
             if cell >= 0 {
                 values.set(sample, read(cell as usize)?)?;
@@ -145,6 +163,7 @@ impl Surface {
         Ok(Self {
             grid,
             interpolation,
+            household_ground: None,
             // hpc-exempt: one entry per channel schema.
             channels: BTreeMap::new(),
             cargo: None,
@@ -170,6 +189,11 @@ impl Surface {
     /// Refresh the human layers selected for inheritance after the settled eras.
     pub fn project_people(&mut self, field: &Field) -> io::Result<()> {
         let bands = field.bands();
+        let columns = self
+            .household_ground
+            .as_ref()
+            .map(|g| g.identities(field))
+            .transpose()?;
         for channel in channels::humans() {
             if self.channels.contains_key(&channel.name) {
                 let source = bands
@@ -178,13 +202,25 @@ impl Surface {
                     .ok_or_else(|| {
                         io::Error::other(format!("Missing human layer {}", channel.name))
                     })?;
-                self.physical(field, &source.values, &channel)?;
+                self.physical(field, &source.values, &channel, columns.as_deref())?;
             }
         }
         Ok(())
     }
     pub fn project(&mut self, field: &Field, selection: Selection<'_>) -> io::Result<()> {
         let bands = field.bands();
+        let columns = self
+            .household_ground
+            .as_ref()
+            .filter(|_| {
+                !selection.forcing_only
+                    && selection
+                        .physical
+                        .iter()
+                        .any(|c| c.name.starts_with("Identity"))
+            })
+            .map(|g| g.identities(field))
+            .transpose()?;
         for channel in selection.physical {
             if selection.forcing_only
                 && ![
@@ -206,7 +242,7 @@ impl Surface {
                 .ok_or_else(|| {
                     io::Error::other(format!("Physical projection is missing {}", channel.name))
                 })?;
-            self.physical(field, &source.values, channel)?;
+            self.physical(field, &source.values, channel, columns.as_deref())?;
         }
         let selected = if selection.forcing_only {
             None
@@ -267,6 +303,7 @@ impl Surface {
         field: &Field,
         source: &NumericBand,
         channel: &Channel,
+        columns: Option<&[crate::human::identity::IdentityColumn]>,
     ) -> io::Result<()> {
         let existing = self.channels.remove(&channel.name);
         let mut output = match existing {
@@ -280,6 +317,25 @@ impl Surface {
         };
         let extensive = channel.quantity == Quantity::Extensive;
         let source = source.read_values()?;
+        if let Some(ground) = self
+            .household_ground
+            .as_ref()
+            .filter(|_| channel.name == "Population")
+        {
+            let values = (0..self.coverage.len())
+                .map(|i| ground.mean(i, &|c| source.get(c)))
+                .collect::<io::Result<Vec<_>>>()?;
+            output.write(0, &values)?;
+            self.put(&channel.name, channel.unit, channel.quantity, output);
+            return Ok(());
+        }
+        if let Some(values) =
+            columns.and_then(|cols| households::identity_band(&channel.name, cols))
+        {
+            output.write(0, &values)?;
+            self.put(&channel.name, channel.unit, channel.quantity, output);
+            return Ok(());
+        }
         self.interpolation.project(
             &|cell| {
                 let value = source.get(cell)?;

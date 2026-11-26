@@ -2,7 +2,9 @@
 use super::{Identity, Kind};
 use crate::town::{geometry::Point, story::Story, templates::SiteEvidence};
 use serde::{Deserialize, Serialize};
+mod city;
 mod design;
+pub(crate) use city::CitySite;
 pub(crate) use design::Part;
 pub use design::WorkDesign;
 use design::{Axis, Layout, Program, Role, Station};

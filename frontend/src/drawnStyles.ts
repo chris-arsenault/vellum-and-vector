@@ -1,4 +1,4 @@
-import { cityGroundStyle } from "./cityGroundStyle";
+import { cityGroundStyle, cityRoadStyle } from "./cityGroundStyle";
 import { Circle, Fill, Stroke, Style, Text } from "ol/style.js";
 import GeoJSON from "ol/format/GeoJSON.js";
 import Point from "ol/geom/Point.js";
@@ -157,7 +157,7 @@ function shapeStyle(
   resolution: number,
   c: DrawnStyleContext
 ): Style[] {
-  const special = specialStyle(f, c);
+  const special = specialStyle(f, c, resolution);
   if (special) return [special];
   if (f.layerId === "magic") return magicStyle(f, layer, resolution, c);
   if (["sovereignty", "control", "claims", "administration"].includes(f.layerId))
@@ -182,12 +182,13 @@ function shapeStyle(
     ];
   return [landmark(f, c)];
 }
-function specialStyle(f: RenderFeature, c: DrawnStyleContext) {
+function specialStyle(f: RenderFeature, c: DrawnStyleContext, resolution: number) {
   if (f.kind === "settlement") return settlement(f, c);
   if (f.kind === "fault")
     return new Style({ stroke: new Stroke({ color: "#8d8170", width: 0.7, lineDash: [2, 5] }) });
   if (f.kind === "ocean") return new Style({ fill: new Fill({ color: "#00000000" }) });
   return (
+    cityRoadStyle(f, resolution, ink) ??
     cityGroundStyle(f, c.view.style === "ink") ??
     biomeStyle(f, c.view.style === "ink") ??
     drawnPlace(f, c.view.style === "ink", c.drawing.placeAnchor)

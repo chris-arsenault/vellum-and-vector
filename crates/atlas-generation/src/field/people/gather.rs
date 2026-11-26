@@ -21,7 +21,52 @@ use std::{io, rc::Rc};
 #[derive(Clone, Copy)]
 pub enum Movement {
     Journeys,
-    Placement,
+    Placement(PlacementSettings),
+}
+
+#[derive(Clone, Copy)]
+pub struct PlacementSettings {
+    pub(super) catchment_spans: f64,
+    pub(super) catchment_falloff: f64,
+}
+
+use crate::parameters::NumericParameter;
+const PLACEMENT: &str = "household-placement";
+pub(crate) const CONTROLS: &[NumericParameter] = &[CATCHMENT_SPANS, CATCHMENT_FALLOFF];
+const CATCHMENT_SPANS: NumericParameter = NumericParameter {
+    name: "catchmentSpans",
+    unit: "parent cell spans",
+    default: 2.,
+    minimum: Some(f64::MIN_POSITIVE),
+    maximum: None,
+    strategy: Some(PLACEMENT),
+    map_types: &[crate::processes::strategies::MapType::City],
+};
+const CATCHMENT_FALLOFF: NumericParameter = NumericParameter {
+    name: "catchmentFalloff",
+    unit: "exponent",
+    default: 3.,
+    minimum: Some(f64::MIN_POSITIVE),
+    maximum: None,
+    strategy: Some(PLACEMENT),
+    map_types: &[crate::processes::strategies::MapType::City],
+};
+const DEFAULT_PLACEMENT: PlacementSettings = PlacementSettings {
+    catchment_spans: CATCHMENT_SPANS.default,
+    catchment_falloff: CATCHMENT_FALLOFF.default,
+};
+
+pub(crate) fn tune(
+    mut strategy: Placement,
+    input: &crate::atlas::dispatch::Input,
+) -> io::Result<Placement> {
+    if matches!(strategy.algorithm, Movement::Placement(_)) {
+        strategy.algorithm = Movement::Placement(PlacementSettings {
+            catchment_spans: input.number(CATCHMENT_SPANS.name)?,
+            catchment_falloff: input.number(CATCHMENT_FALLOFF.name)?,
+        });
+    }
+    Ok(strategy)
 }
 
 pub type Placement = Strategy<Movement, LayerId>;
@@ -47,8 +92,8 @@ pub const MOVEMENT: Contract<Movement, LayerId> = Contract {
             Condition::None,
         ),
         layer_strategy(
-            "household-placement",
-            Movement::Placement,
+            PLACEMENT,
+            Movement::Placement(DEFAULT_PLACEMENT),
             EffectTime::SpatialIteration,
             LayerId::Population,
             Condition::None,
@@ -56,7 +101,9 @@ pub const MOVEMENT: Contract<Movement, LayerId> = Contract {
     ],
 };
 
+mod catchments;
 mod placement;
+mod settlements;
 use placement::place;
 pub(super) use placement::{distribute, placement};
 
@@ -509,8 +556,8 @@ pub(crate) fn operation(
             let field = context.state();
             let strategy = input.strategy;
             let residents = initial_layer(field, &strategy)?;
-            if !matches!(strategy.algorithm, Movement::Journeys) {
-                return place(context, &work, &q, &owner, &residents);
+            if let Movement::Placement(settings) = strategy.algorithm {
+                return place(context, &work, &q, &owner, &residents, settings);
             }
             let years = work.facts.years / work.facts.sweeps as f64;
             let targets = field.coverage.borrow_mut().scratch(field.mesh.len(), 0i32);

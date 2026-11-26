@@ -190,6 +190,13 @@ impl Request {
 }
 impl PreparedRequest {
     pub fn prepare(self, host: Host) -> ExecutionResult<Generation> {
+        self.prepare_experiment(host, None)
+    }
+    pub fn prepare_experiment(
+        self,
+        host: Host,
+        experiment: Option<atlas_generation::atlas::dispatch::experiment::Experiment>,
+    ) -> ExecutionResult<Generation> {
         let PreparedRequest {
             request,
             resolved,
@@ -201,8 +208,8 @@ impl PreparedRequest {
             host,
             resolved,
             configuration,
-            geography.frame,
-            surface_rules,
+            (geography.frame, surface_rules),
+            experiment,
         )
     }
 }
@@ -212,8 +219,8 @@ impl Request {
         mut host: Host,
         resolved: Resolved,
         configuration: Configuration,
-        frame: MapFrame,
-        surface_rules: SurfaceRules,
+        (frame, surface_rules): (MapFrame, SurfaceRules),
+        experiment: Option<atlas_generation::atlas::dispatch::experiment::Experiment>,
     ) -> ExecutionResult<Generation> {
         let context = self.geography.context();
         atlas_generation::features::mapped::validate(
@@ -324,6 +331,7 @@ impl Request {
             application::Run {
                 interfaces: crate::generation_rules::interfaces(&self.geography),
                 configuration,
+                experiment,
                 settings: Settings {
                     seed: self.input.seed.to_string(),
                     seed_scope: serde_json::to_string(&(frame.profile, frame.bounds))

@@ -20,7 +20,7 @@ pub struct Work {
     pub imports: Band<f64>,
     pub outside_market: Option<Market>,
     pub connections: std::rc::Rc<Vec<super::feed::Connection>>,
-    pub markets: std::rc::Rc<Vec<(usize, f64)>>,
+    pub(crate) markets: std::rc::Rc<Vec<crate::field::refinement::people::SettlementCensus>>,
     pub city: Option<std::rc::Rc<super::growth::Guidance>>,
 }
 pub fn habitable(field: &Field, cell: usize) -> io::Result<bool> {
@@ -42,6 +42,7 @@ impl Work {
         facts: Facts,
         questions: &Questions,
         rivers: &Query<Field, ReadBand<u32>>,
+        city: Option<&super::growth::Guidance>,
     ) -> ExecutionResult<Self> {
         let friction = context.query(&questions.friction)?.values();
         let climbing = context.query(&questions.climbing)?.values();
@@ -49,17 +50,25 @@ impl Work {
         let field = context.state();
         let travel = Travel::new(field, friction, climbing, rivers)?;
         let range = length(field, facts.range)?;
+        let access = city.map_or(&[][..], |g| g.road_access.as_slice());
+        let crossings: Vec<_> = field
+            .place_offers()
+            .map_or(&[][..], |o| o.links())
+            .iter()
+            .chain(city.into_iter().flat_map(|g| g.crossings.iter()))
+            .map(|l| crate::links::Link {
+                a: l.a,
+                b: l.b,
+                cost: l.cost,
+            })
+            .collect();
         let going = Passage::new(
             &field.mesh,
             &mut field.coverage.borrow_mut(),
-            |a, b| travel.step(a, b),
+            |a, b| Ok(travel.step(a, b)? * super::growth::travel_friction(access, a, b)),
             range,
         )?
-        .with_links(
-            &field.mesh,
-            field.place_offers().map_or(&[], |o| o.links()),
-            range,
-        )?;
+        .with_links(&field.mesh, &crossings, range)?;
         Ok(Self::over(field, facts, going)?)
     }
     /// The work of a pass over `going`, with the land each cell reaches.

@@ -26,6 +26,15 @@ pub struct Settings {
 }
 pub trait Observer {
     fn validate(&mut self, state: &State) -> ExecutionResult<()>;
+    fn process(
+        &mut self,
+        _state: &State,
+        _id: &str,
+        _path: &[String],
+        _parameters: &crate::parameters::Values,
+    ) -> ExecutionResult<()> {
+        Ok(())
+    }
     fn cancelled(&self) -> ExecutionResult<bool> {
         Ok(false)
     }
@@ -310,6 +319,12 @@ impl<'a> Run<'a> {
             )?;
             return Err(error);
         }
+        observer.process(
+            runtime.executor.state(),
+            &contract.id,
+            &stage.context.path,
+            &input.parameters,
+        )?;
         if self.trace_registry {
             let specification = &process.specification;
             let selected = specification.strategy(site, stage)?;

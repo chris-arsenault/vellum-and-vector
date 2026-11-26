@@ -15,6 +15,9 @@ const SLOPE_RESISTANCE: f64 = 0.15;
 
 /// A settlement template's city guidance for one growth pass.
 pub struct Guidance {
+    pub census: std::rc::Rc<Vec<crate::field::refinement::people::CensusCell>>,
+    pub road_access: Vec<f64>,
+    pub crossings: Vec<crate::links::Link>,
     /// The template's weight at each cell; zero reserves it.
     pub weight: Vec<f64>,
     /// Each cell's draw from the city's prominent places and works, 0 to 1.
@@ -45,7 +48,13 @@ pub fn affinities(field: &crate::field::Field, guidance: &Guidance) -> std::io::
         open.push(super::work::habitable(field, cell)?);
     }
     let busiest = ways.iter().copied().fold(0., f64::max).max(f64::EPSILON);
-    ways.iter_mut().for_each(|w| *w /= busiest);
+    for (cell, way) in ways.iter_mut().enumerate() {
+        // owner-direction(2026-11-25): household placement responds to the major roads laid in earlier city rounds.
+        *way = access(
+            *way / busiest,
+            guidance.road_access.get(cell).copied().unwrap_or(0.),
+        );
+    }
     let neighbours = |cell| [0, 1, 2].map(|edge| mesh.neighbor(cell, edge));
     let cells = Cells {
         people: &people,
@@ -57,6 +66,20 @@ pub fn affinities(field: &crate::field::Field, guidance: &Guidance) -> std::io::
         places: &guidance.places,
     };
     Ok(attraction(&cells, neighbours))
+}
+
+fn access(maintained: f64, city: f64) -> f64 {
+    1. - (1. - maintained.clamp(0., 1.)) * (1. - city.clamp(0., 1.))
+}
+
+/// Travel benefits from roads most when both ends of the step are close to one.
+pub(super) fn travel_friction(access: &[f64], a: usize, b: usize) -> f64 {
+    1. - 0.5
+        * access
+            .get(a)
+            .zip(access.get(b))
+            .map_or(0., |(a, b)| a.min(*b))
+            .powi(3)
 }
 
 /// What city growth reads at each cell of the city map.
@@ -116,6 +139,16 @@ pub fn attraction(cells: &Cells<'_>, neighbours: impl Fn(usize) -> [Option<usize
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_new_artery_supplies_access_without_first_becoming_a_regional_way() {
+        assert!(access(0., 0.88) > access(0., 0.10));
+        assert_eq!(access(1., 0.), 1.);
+        assert_eq!(access(0., 0.), 0.);
+        let street = [1., 1., 0.];
+        assert!(super::travel_friction(&street, 0, 1) < super::travel_friction(&street, 1, 2));
+        assert_eq!(super::travel_friction(&[], 0, 1), 1.);
+    }
 
     /// A line of cells, each with the cells beside it.
     fn line(n: usize) -> impl Fn(usize) -> [Option<usize>; 3] {

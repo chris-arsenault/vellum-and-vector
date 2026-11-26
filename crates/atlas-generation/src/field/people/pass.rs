@@ -123,7 +123,14 @@ impl Pass {
             vec![],
             move |scope, input: &Inputs<S>| {
                 if first || work.borrow().is_none() {
-                    let mut opened = Work::open(scope, input.facts, &questions, &rivers)?;
+                    let mut opened = Work::open(
+                        scope,
+                        input.facts,
+                        &questions,
+                        &rivers,
+                        input.city.as_deref(),
+                    )?;
+                    opened.city = input.city.clone();
                     opened.outside_market = input.parent.market;
                     opened.connections = input.parent.connections.clone();
                     opened.markets = input.parent.markets.clone();
@@ -133,7 +140,6 @@ impl Pass {
                     *work.borrow_mut() = Some(Rc::new(RefCell::new(opened)));
                 }
                 let current = work.borrow().as_ref().unwrap().clone();
-                current.borrow_mut().city = input.city.clone();
                 let result = scope.run(
                     &command,
                     &land::WorkInput {

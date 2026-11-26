@@ -191,7 +191,11 @@ impl Operations {
         if let Some(region) = input.regional {
             operations.regional(runtime, features, region)?;
         } else {
-            crate::processes::town::urban::registration::register(&mut operations.registry, None)?;
+            crate::processes::town::urban::registration::register(
+                &mut operations.registry,
+                None,
+                operations.people_input.parameters.district_catchment_scale,
+            )?;
         }
         Ok(operations)
     }
@@ -249,7 +253,11 @@ impl Operations {
             runtime.town_signal_projection(),
         );
         town.select(&mut runtime.executor);
-        registration::town::register(&mut self.registry, &town)?;
+        registration::town::register(
+            &mut self.registry,
+            &town,
+            self.people_input.parameters.district_catchment_scale,
+        )?;
         registration::ground::register(&mut self.registry)?;
         Ok(())
     }

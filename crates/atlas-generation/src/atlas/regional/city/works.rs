@@ -1,6 +1,7 @@
 //! The city's commissioned works keep their sites through the numerical development rounds.
 use crate::{
     atlas::state::State,
+    field::shared::Scalar,
     field::{
         people::work::habitable,
         poi::{
@@ -9,6 +10,7 @@ use crate::{
             values::Place,
         },
     },
+    town::catalogue::works::CitySite,
     town::{major_works::city_works, templates::Selection},
 };
 use atlas_map::{Geometry, Position};
@@ -24,6 +26,13 @@ pub(super) fn site(state: &mut State, selection: &Selection, seed: i32) -> io::R
     }
     let mesh = state.field().mesh();
     let extent = state.scope.settled_outline();
+    let Some(settlement) = super::settlement(state)? else {
+        return Ok(());
+    };
+    let census = settlement.people;
+    let mut surroundings = super::survey(state, settlement, true)?;
+    surroundings.guarded |= selection.site.guarded;
+    surroundings.seat |= selection.site.seat;
     let points: Vec<_> = (0..mesh.len())
         .map(|cell| {
             let [x, y] = position(state, cell);
@@ -34,6 +43,7 @@ pub(super) fn site(state: &mut State, selection: &Selection, seed: i32) -> io::R
         .spatial
         .covers_points(extent, &points)
         .map_err(io::Error::other)?;
+    // owner-direction(2026-11-24): major works choose sites early across the known City extent and each work defines its own influence.
     let mut available = inside;
     let field = state.field();
     let capital = field.people().view(crate::human::HumanField::Layer(
@@ -41,43 +51,126 @@ pub(super) fn site(state: &mut State, selection: &Selection, seed: i32) -> io::R
     ));
     let ways = field.people().view(crate::human::HumanField::KeptLine);
     let mut population = 0.;
+    let mut backing = 0.;
+    let mut sites = vec![CitySite::default(); mesh.len()];
+    let mut low = f64::INFINITY;
+    let mut high = f64::NEG_INFINITY;
+    let mut steep: f64 = 0.;
+    let mut busiest: f64 = 0.;
     for (cell, open) in available.iter_mut().enumerate() {
         *open &= habitable(field, cell)?;
         if !*open {
             continue;
         }
         population += state.field().people().people(cell)? * mesh.area(cell) / 1e6;
+        backing += capital.get(cell)? * mesh.area(cell) / 1e6;
+        let read = |band| field.shared().scalar(band).get(cell);
+        let height = field
+            .ground()
+            .view(crate::rock::ground::GroundField::Elevation)
+            .get(cell)?;
+        let slope = read(Scalar::Slope)?.max(0.);
+        let access = ways.get(cell)?.max(0.).ln_1p();
+        low = low.min(height);
+        high = high.max(height);
+        steep = steep.max(slope);
+        busiest = busiest.max(access);
+        let mut lake = false;
+        let mut shore = false;
+        for other in (0..3).filter_map(|e| mesh.neighbor(cell, e)) {
+            lake |= field.water().column.kind.get(other)? == 2;
+            shore |= !habitable(field, other)?;
+        }
+        sites[cell] = CitySite {
+            height,
+            slope,
+            access,
+            lake,
+            shore,
+            built: field
+                .people()
+                .view(crate::human::HumanField::Layer(
+                    crate::human::catalogue::LayerId::BuiltUp,
+                ))
+                .get(cell)?
+                .clamp(0., 1.),
+            woods: read(Scalar::TreeCover)?,
+            flood: read(Scalar::FloodplainIntensity)?.max(read(Scalar::FloodFrequency)?),
+            salt: read(Scalar::Salting)?,
+            near_door: surroundings.door.map_or(0., |p| {
+                let [x, y] = position(state, cell);
+                (1. - (x - p[0]).hypot(y - p[1]) / (mesh.spacing() * 2.)).max(0.)
+            }),
+        };
     }
-    let total = super::settlement(state)?
-        .and_then(|s| s.people)
-        .unwrap_or(population);
+    let total = census.unwrap_or(population);
 
     let town = super::captured_settlement(state)?;
     let radius =
         (state.spatial.area(extent).map_err(io::Error::other)? / std::f64::consts::PI).sqrt();
     let mut works = Vec::new();
-    for (family, [x, y]) in city_works(&selection.site, total, seed) {
-        let reach = family
-            .definition()
-            .sponsor_reach()
-            .max(selection.quarter() * 2.);
-        let [ox, oy] = mesh.origin();
+    let mut established = Vec::new();
+    let source = state.records.source_features.as_deref();
+    let query = crate::features::FeatureSelection {
+        area_id: source.is_none().then_some(state.scope.area),
+        kind: Some("majorWork"),
+        layer_id: None,
+    };
+    let records = match source {
+        Some(reader) => reader.values(query)?,
+        None => state.records.features.values(query)?,
+    };
+    for record in records {
+        let record = record?;
+        let at = state
+            .spatial
+            .interior_position(&record.geometry)
+            .map_err(io::Error::other)?;
+        let [x, y, _] = at.coordinates();
+        let Some(c) = crate::field::refinement::courses::cell_at(mesh, [x, y]) else {
+            continue;
+        };
+        if !available[c] {
+            continue;
+        }
+        if let Some(key) = record
+            .attributes
+            .get("majorWorkFamily")
+            .and_then(|v| v.as_str())
+        {
+            established.push(key.to_owned());
+        }
+        let ground = record
+            .attributes
+            .get("groundM2")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.);
+        for other in mesh.cells_within(mesh.position(c), ground.sqrt() + mesh.spacing()) {
+            available[other] = false;
+        }
+    }
+    for s in &mut sites {
+        s.height = (s.height - low) / (high - low).max(1.);
+        s.slope /= steep.max(1e-9);
+        s.access /= busiest.max(1e-9);
+    }
+    for family in city_works(&surroundings, total, seed) {
+        if established.iter().any(|key| key == family.key()) {
+            continue;
+        }
         let mut best: Option<(usize, f64)> = None;
-        let mut backing = 0.;
-        for cell in mesh.cells_within([x - ox, y - oy], reach) {
+        for cell in 0..mesh.len() {
             if !available[cell] {
                 continue;
             }
             let funds = capital.get(cell)? * mesh.area(cell) / 1e6;
-            backing += funds;
-            let residents = field.people().people(cell)? * mesh.area(cell) / 1e6;
-            if funds <= 0. || residents <= 0. {
+            let [px, py, _] = points[cell].coordinates();
+            let score = family.suitability(sites[cell])
+                * (1. + 0.10 * funds.ln_1p())
+                * (0.95 + 0.05 * crate::noise::hash_unit(seed ^ family as i32, px, py));
+            if score <= 0. {
                 continue;
             }
-            let [px, py, _] = points[cell].coordinates();
-            let distance = (px - x).hypot(py - y);
-            let score = (1. + funds.ln_1p()) * (1. + ways.get(cell)?.sqrt())
-                / (1. + (distance / reach * 3.).powi(2));
             if best.is_none_or(|(_, b)| score > b) {
                 best = Some((cell, score));
             }
@@ -88,6 +181,7 @@ pub(super) fn site(state: &mut State, selection: &Selection, seed: i32) -> io::R
             continue;
         }
         if let Some((site, _)) = best {
+            backing -= grounds_cost;
             let anchor = position(state, site);
             let [cx, cy] = selection.site.centre;
             let established = town
@@ -105,7 +199,7 @@ pub(super) fn site(state: &mut State, selection: &Selection, seed: i32) -> io::R
                 family,
                 cell: site as u32,
                 design: family.definition().design(
-                    &selection.site,
+                    &surroundings,
                     anchor,
                     &[],
                     seed.wrapping_add(family as i32),

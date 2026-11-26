@@ -210,6 +210,18 @@ case "${1:-}" in
     echo "Usage: $0 up|down|reset|profile [seconds], or a harness command:" >&2
     cd "$root" && cargo run --quiet --release -p atlas-host --bin local_atlas
     ;;
+  experiment)
+    if [[ ! -x "$root/target/release/local_atlas" ]]; then
+      echo "Build the harness with cargo build --release -p atlas-host --bin local_atlas" >&2
+      exit 1
+    fi
+    if [[ "${2:-}" == run && -f "$home/credentials.env" ]]; then
+      credentials
+      export ATLAS_EXPERIMENT_MAP_URL="postgresql://atlas_map_reader:$ATLAS_LOCAL_MAP_READER_PASSWORD@127.0.0.1:$database_port/vellum_maps"
+      export ATLAS_EXPERIMENT_GENERATION_URL="postgresql://atlas_generation:$ATLAS_LOCAL_GENERATION_PASSWORD@127.0.0.1:$database_port/vellum_generation"
+    fi
+    exec "$root/target/release/local_atlas" "$@"
+    ;;
   # Every other command is the Rust harness: world, real, region, resume, summary, ...
   *)
     cd "$root" && exec cargo run --quiet --release -p atlas-host --bin local_atlas -- "$@"

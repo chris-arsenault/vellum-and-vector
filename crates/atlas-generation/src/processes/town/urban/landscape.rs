@@ -18,12 +18,13 @@ use atlas_map::{
 };
 use std::io;
 
-pub(super) const USES: [&str; 5] = [
+pub(super) const USES: [&str; 6] = [
     "Settled ground",
     "Crowded housing",
     "Garden housing",
     "Trade frontage",
     "Working ground",
+    "Common ground",
 ];
 
 pub(super) fn contour(state: &State, values: &[f64], level: f64) -> io::Result<Option<Geometry>> {
@@ -43,33 +44,73 @@ fn ground(shape: Geometry, usage: &str) -> Element {
     e.attributes.insert("groundUse".into(), usage.into());
     e
 }
+/// Split housing only where a second activity forms a coherent concentration.
+/// Both sides remain ordinary tracts and carry their own mix into Street.
+fn mixed_housing(
+    kernel: &dyn crate::spatial::SpatialKernel,
+    surface: &Geometry,
+    masks: &[Option<Geometry>; 2],
+) -> io::Result<Vec<(Geometry, Option<usize>)>> {
+    let mut tracts = Vec::new();
+    let mut remaining = Some(surface.clone());
+    for (kind, mask) in [3, 4].into_iter().zip(masks) {
+        let (Some(mask), Some(area)) = (mask, remaining.as_ref()) else {
+            continue;
+        };
+        if !kernel
+            .relation(area, mask, crate::spatial::Predicate::Intersects)
+            .map_err(io::Error::other)?
+        {
+            continue;
+        }
+        if let Some(pocket) = kernel
+            .overlay(area, mask, Overlay::Intersection)
+            .map_err(io::Error::other)?
+        {
+            tracts.extend(parts(&pocket).into_iter().map(|g| (g, Some(kind))));
+            remaining = kernel
+                .overlay(area, mask, Overlay::Difference)
+                .map_err(io::Error::other)?;
+        }
+    }
+    if let Some(rest) = remaining {
+        tracts.extend(parts(&rest).into_iter().map(|g| (g, None)));
+    }
+    Ok(tracts)
+}
 pub(super) fn develop(
     state: &mut State,
     u: &mut Urban,
     frame: &Geometry,
     reserved: &[Feature],
+    activity: super::activity::Settings,
 ) -> io::Result<()> {
-    state
-        .regional
-        .as_mut()
-        .unwrap()
-        .city
-        .walls
-        .append(&mut u.defense);
+    state.regional.as_mut().unwrap().city.walls = std::mem::take(&mut u.defense);
     let mesh = state.field().mesh();
     let k = state.spatial.as_ref();
+    let union = |shapes: &[Geometry]| {
+        if shapes.is_empty() {
+            Ok(None)
+        } else {
+            k.union_all(shapes).map_err(io::Error::other)
+        }
+    };
     let template = policy(state)?;
     let n = mesh.len();
     u.blocks.clear();
     u.open.clear();
     u.landmarks.clear();
     let mut layers = vec![vec![0.; n]; USES.len()];
+    let mut secondary = [vec![0.; n], vec![0.; n]];
+    let mut mix = vec![[0.; 3]; n];
+    u.fields.activity = super::activity::develop(state, u, template.quarter(), activity)?;
     let mut main = vec![0.; n];
     for c in 0..n {
         let x = u.fields.claims[c];
         let access = u.fields.access[c];
         let civic = u.fields.civic[c];
-        let reserve = 1. + x.farm * 2. + x.ruin * 3.;
+        let work = u.work_at(c);
+        let reserve = 1. + x.farm * 2. + x.ruin * 3. + civic * work.commons;
         // Actual occupied land can follow an approach well beyond the contiguous core.
         let occupied = if x.reserved || !u.fields.inside[c] {
             0.
@@ -86,14 +127,11 @@ pub(super) fn develop(
         };
         main[c] = occupied + 1.25 * demand;
         let strength = program.map_or(0., |p| p.strength) * demand;
-        let demands = program
-            .map(|program| program.demands_at(position(mesh, c)))
-            .unwrap_or_default();
+        let demands = x.demands;
         let local = program.map_or(0., |p| {
             1. / (1. + (mesh.physical_distance(c, p.cell) / p.reach).powi(2))
         });
         let strength = strength * (0.4 + 0.6 * local);
-        let labour = x.work / (1. + x.home + x.work);
         let density = x.crowd / (0.4 + x.crowd + x.investment);
         let affluent = x.investment / (0.35 + x.investment + x.crowd);
         let [px, py] = position(mesh, c);
@@ -101,11 +139,23 @@ pub(super) fn develop(
         let bids = [
             0.72 + 0.4 * (1. - demand),
             density * (0.8 + 0.3 * texture) + strength * demands.housing * (0.45 + 0.55 * density),
-            affluent * (0.7 + 0.45 * texture)
+            civic * work.gardens
+                + affluent * (0.7 + 0.45 * texture)
                 + strength * demands.gardens * (0.45 + affluent * 0.6),
-            access * (labour + strength * demands.trade + 0.35),
-            labour * (0.6 + 0.6 * texture) + strength * demands.workshops * (0.5 + 0.65 * access),
+            u.fields.activity[c][0],
+            u.fields.activity[c][1],
+            strength * demands.commons * (0.4 + 0.6 * texture + 0.4 * x.farm) / (1. + x.built),
         ];
+        let housing = bids[0].max(bids[1]).max(bids[2]);
+        let weights = [housing, bids[3], bids[4]].map(|v| v.max(0.).powi(3));
+        let total = weights.iter().sum::<f64>();
+        mix[c] = weights.map(|w| w / total);
+        for (layer, (bid, other)) in secondary
+            .iter_mut()
+            .zip([(bids[3], bids[4]), (bids[4], bids[3])])
+        {
+            layer[c] = (occupied - 0.4).min(bid - (0.80 * housing).max(other));
+        }
         layers[0][c] = occupied - 0.40;
         for kind in 1..bids.len() {
             let other = bids
@@ -119,12 +169,23 @@ pub(super) fn develop(
     }
     let mut masks: Vec<Geometry> = reserved.iter().map(|f| f.geometry.clone()).collect();
     let park_shapes: Vec<_> = u.parks.iter().map(|p| p.geometry.clone()).collect();
-    let park_mask = k.union_all(&park_shapes).map_err(io::Error::other)?;
+    let park_mask = union(&park_shapes)?;
     for (i, s) in u.sponsors.iter().enumerate() {
+        if let Some(grounds) = &s.grounds {
+            if let Some(area) = buildable(k, grounds.clone(), reserved)? {
+                let mut ground =
+                    Element::new(area.clone(), "square", &format!("{} grounds", s.name));
+                ground
+                    .attributes
+                    .insert("sponsor".into(), s.source.clone().into());
+                u.open.push(ground);
+                masks.push(area);
+            }
+        }
         let strength: Vec<_> = (0..n)
             .map(|c| {
                 if u.fields.sponsor[c] == Some(i) && u.fields.inside[c] {
-                    u.fields.civic[c]
+                    u.fields.civic[c] * s.work.map_or(1., |(family, _)| family.demands().civic)
                 } else {
                     0.
                 }
@@ -150,20 +211,6 @@ pub(super) fn develop(
                     .insert("sponsor".into(), s.source.clone().into());
                 u.blocks.push(area);
                 masks.push(shape.clone());
-                if let Some(court) = contour(state, &strength, 0.72)? {
-                    let Some(court) = k
-                        .overlay(&court, &shape, Overlay::Intersection)
-                        .map_err(io::Error::other)?
-                        .and_then(atlas_map::regions::polygon)
-                    else {
-                        continue;
-                    };
-                    let mut court = Element::new(court, "square", &format!("{} court", s.name));
-                    court
-                        .attributes
-                        .insert("sponsor".into(), s.source.clone().into());
-                    u.open.push(court);
-                }
             }
         }
     }
@@ -171,10 +218,16 @@ pub(super) fn develop(
         masks.push(park.geometry.clone());
         u.open.push(park.clone());
     }
-    let reserved_land = k.union_all(&masks).map_err(io::Error::other)?;
+    let reserved_land = union(&masks)?;
+    let secondary_masks = [
+        contour(state, &secondary[0], 0.)?,
+        contour(state, &secondary[1], 0.)?,
+    ];
+    let mut sampler = crate::lattice::sampling::Sampler::new(mesh);
+    let [ox, oy] = mesh.origin();
     let mut occupied = None;
     // Local bids decide contested uses. General settlement fills the residual ground.
-    for kind in [1, 2, 3, 4, 0] {
+    for kind in [1, 2, 3, 4, 5, 0] {
         let Some(mut geometry) = contour(state, &layers[kind], 0.)? else {
             continue;
         };
@@ -192,24 +245,46 @@ pub(super) fn develop(
             geometry = g;
         }
         let surfaces = parts(&geometry);
-        for shape in &surfaces {
-            let mut tract = ground(shape.clone(), USES[kind]);
-            let at = k.interior_position(shape).map_err(io::Error::other)?;
-            if let Some(c) =
-                crate::field::refinement::courses::cell_at(mesh, super::geometry::xy(at))
-            {
-                let q = u.fields.claims[c];
-                tract.attributes.insert("density".into(), q.people.into());
-                tract.attributes.insert("builtShare".into(), q.built.into());
+        for surface in &surfaces {
+            let tracts = if kind <= 2 {
+                mixed_housing(k, surface, &secondary_masks)?
+            } else {
+                vec![(surface.clone(), None)]
+            };
+            for (shape, secondary_use) in tracts {
+                let at = k.interior_position(&shape).map_err(io::Error::other)?;
+                let mut tract = ground(shape, USES[kind]);
+                if let Some(use_) = secondary_use {
+                    tract
+                        .attributes
+                        .insert("secondaryUse".into(), USES[use_].into());
+                }
+                if let Some(c) =
+                    crate::field::refinement::courses::cell_at(mesh, super::geometry::xy(at))
+                {
+                    let q = u.fields.claims[c];
+                    tract.attributes.insert("density".into(), q.people.into());
+                    tract.attributes.insert("builtShare".into(), q.built.into());
+                    if kind != 5 {
+                        let [px, py] = super::geometry::xy(at);
+                        let mut weight = |use_: usize| {
+                            sampler.sample([px - ox, py - oy], |cell| Ok(mix[cell][use_]))
+                        };
+                        tract.attributes.insert(
+                            "useMix".into(),
+                            serde_json::json!({"housing":weight(0)?,"trade":weight(1)?,"workshops":weight(2)?}),
+                        );
+                    }
+                }
+                tract
+                    .attributes
+                    .insert("settlementTemplate".into(), template.selected.name().into());
+                u.blocks.push(tract);
             }
-            tract
-                .attributes
-                .insert("settlementTemplate".into(), template.selected.name().into());
-            u.blocks.push(tract);
         }
         let mut merge = surfaces;
         merge.extend(occupied.take());
-        occupied = k.union_all(&merge).map_err(io::Error::other)?;
+        occupied = union(&merge)?;
     }
     // Districts organize only the principal connected settlement. A walk across a
     // small gap can join neighborhoods without filling the same gap with buildings.
@@ -244,7 +319,7 @@ pub(super) fn develop(
             .map(|claim| f64::from(claim.reserved as u8))
             .collect();
         holes.extend(contour(state, &protected, 0.5)?);
-        let reserve = k.union_all(&holes).map_err(io::Error::other)?;
+        let reserve = union(&holes)?;
         let core = k
             .overlay(&g, frame, crate::spatial::Overlay::Intersection)
             .map_err(io::Error::other)?;
@@ -255,14 +330,9 @@ pub(super) fn develop(
             (g, _) => g,
         };
         if let Some(land) = eligible {
-            let mut largest = 0.;
-            for part in parts(&land) {
-                let area = k.area(&part).map_err(io::Error::other)?;
-                if area > largest {
-                    u.domain = Some(part);
-                    largest = area;
-                }
-            }
+            // A park or public court may cut the principal settlement in two.
+            // Both inhabited banks still need districts.
+            u.domain = union(&parts(&land))?;
         }
     }
     for &c in &u.destinations {

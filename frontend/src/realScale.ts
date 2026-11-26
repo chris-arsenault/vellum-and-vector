@@ -1,7 +1,7 @@
 import type { MapDescriptor, Position, RealScale, RegionSelection } from "@atlas/map";
 import type { HexSize, RealScaleChoice } from "@atlas/context";
 import type { LayerStyle } from "./types";
-import { vectorFamily } from "./publishedAppearance";
+import { vectorFamily } from "./renderFeature";
 
 /** Real-scale view choices; hex marks and shapes stay published map data (ADR 0016). */
 export interface RealScalePresentation {

@@ -64,6 +64,15 @@ pub struct Completed {
 }
 /// UI observations carry progress and previews; domain validation stays in the Rust runtime.
 pub trait Observations {
+    fn process(
+        &mut self,
+        _state: &State,
+        _id: &str,
+        _path: &[String],
+        _parameters: &atlas_generation::parameters::Values,
+    ) -> ExecutionResult<()> {
+        Ok(())
+    }
     fn completed_state(
         &mut self,
         _state: &State,
@@ -87,6 +96,15 @@ pub struct Publication<'a, S, C, O> {
     pub result: Option<Completed>,
 }
 impl<S: Sink, C: GenerationControl, O: Observations> Output for Publication<'_, S, C, O> {
+    fn process(
+        &mut self,
+        state: &State,
+        id: &str,
+        path: &[String],
+        parameters: &atlas_generation::parameters::Values,
+    ) -> ExecutionResult<()> {
+        self.observations.process(state, id, path, parameters)
+    }
     fn validate(&mut self, _state: &State) -> ExecutionResult<()> {
         Ok(())
     }

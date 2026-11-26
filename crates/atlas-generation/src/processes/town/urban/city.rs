@@ -18,6 +18,7 @@ pub(super) fn districts(
     state: &State,
     urban: &mut Urban,
     retained: Vec<crate::features::Feature>,
+    boundary_weight: f64,
 ) -> io::Result<()> {
     let kernel = state.spatial.as_ref();
     urban.districts.clear();
@@ -218,7 +219,7 @@ pub(super) fn districts(
         .as_ref()
         .and_then(|s| s.attributes.get("namingCulture"))
         .and_then(|v| v.as_str());
-    let districts = super::partition::partition(kernel, &precincts, &approaches)?;
+    let districts = super::partition::partition(kernel, &precincts, &approaches, boundary_weight)?;
     for (i, group) in districts.into_iter().enumerate() {
         let members = group.precincts.iter().map(|&j| &precincts[j]);
         let residents: f64 = members.clone().map(|p| p.residents).sum();
@@ -243,9 +244,10 @@ pub(super) fn districts(
                 culture,
             )?
             .name;
+        let origins = super::programs::district_origins(state, program, &g, &positions, culture)?;
         let mut district = Element::new(g, "district", &name);
         district.attributes.insert("districtProgram".into(),
-            serde_json::json!({"economic":program.economic,"social":program.social,"traits":program.traits,"evidence":program.evidence,"demands":program.demands}),
+            serde_json::json!({"economic":program.economic,"social":program.social,"traits":program.traits,"origins":origins,"evidence":program.evidence,"demands":program.demands}),
         );
         district.attributes.insert(
             "settlementTemplate".into(),

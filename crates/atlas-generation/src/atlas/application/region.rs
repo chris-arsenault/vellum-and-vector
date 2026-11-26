@@ -34,6 +34,14 @@ pub(super) fn create(
         .transpose()?
         .unwrap_or_default();
     if crate::field::refinement::people::enabled(&input.domains) {
+        let households = captured.source("Population");
+        if state.scope.city.is_some() && households.channels.contains_key("Population") {
+            parent_people.census = std::rc::Rc::new(crate::field::inheritance::census_support(
+                state.field().mesh(),
+                state.spatial.as_ref(),
+                households,
+            )?);
+        }
         if parent_people.market.is_none() {
             (input.progress)(
                 0.0,

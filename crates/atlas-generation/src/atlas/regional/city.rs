@@ -22,23 +22,23 @@ mod works;
 /// Relief across the core that makes two usable levels of one city, in metres.
 const LEVELS: f64 = 30.;
 
-pub(crate) fn gather(
+pub(crate) fn start_people_pass(
     operation: crate::execution::Command<
         State,
-        crate::field::people::pass::Inputs<crate::field::people::gather::Placement>,
+        crate::field::people::pass::Inputs<crate::field::people::goods::TradeStrategy>,
     >,
     seed: i32,
 ) -> crate::execution::Command<
     State,
-    crate::field::people::pass::Inputs<crate::field::people::gather::Placement>,
+    crate::field::people::pass::Inputs<crate::field::people::goods::TradeStrategy>,
 > {
     crate::execution::Command::with_inputs(
-        "human.land.gather",
+        "human.land.trade",
         crate::execution::CommandKind::Work,
         vec![],
         move |scope,
               input: &crate::field::people::pass::Inputs<
-            crate::field::people::gather::Placement,
+            crate::field::people::goods::TradeStrategy,
         >| {
             let mut input = input.clone();
             if scope.state().scope.city.is_some() {
@@ -46,19 +46,29 @@ pub(crate) fn gather(
                 let state = scope.state();
                 let mesh = state.field().mesh();
                 let [ox, oy] = mesh.origin();
+                let urban = &state
+                    .regional
+                    .as_ref()
+                    .ok_or_else(|| io::Error::other("City roads require regional state"))?
+                    .city
+                    .urban;
                 input.city = Some(Rc::new(growth::Guidance {
+                    census: input.parent.census.clone(),
                     weight: (0..mesh.len())
                         .map(|cell| {
+                            if urban.housing_reserved(cell) {
+                                return 0.;
+                            }
                             let [x, y] = mesh.position(cell);
                             selection.city_affinity([x + ox, y + oy])
                         })
                         .collect(),
                     places: places_at(state, mesh.len()),
+                    road_access: urban.road_access().to_vec(),
+                    crossings: urban.bridge_links(mesh),
                 }));
             }
-            scope.run(&operation, &input)?;
-            trace_people(scope.state(), "after placing households")?;
-            Ok(())
+            scope.run(&operation, &input)
         },
     )
 }
@@ -102,81 +112,12 @@ pub(crate) fn inherit_policy(
     Ok(())
 }
 
-/// Slope at which ground defends a wall's face on its own, rise over run.
-const DEFENDING_SLOPE: f64 = 0.4;
-
-type Faces = Vec<crate::town::walls::Face>;
-/// Each of the city's walls as it runs: the faces it stands along and the faces its gates
-/// open on.
-fn wall_runs(state: &State) -> io::Result<Vec<(Faces, Faces)>> {
-    use crate::town::walls::run;
-    let Some(regional) = state.regional.as_ref().filter(|r| !r.city.walls.is_empty()) else {
-        return Ok(Vec::new());
-    };
-    let field = state.field();
-    let mesh = field.mesh();
-    let slope = field.shared().scalar(crate::field::shared::Scalar::Slope);
-    let kept = field.people().view(HumanField::KeptLine);
-    let mut defended = Vec::with_capacity(mesh.len());
-    let mut ways = Vec::with_capacity(mesh.len());
-    for cell in 0..mesh.len() {
-        defended.push(!habitable(field, cell)? || slope.get(cell)? > DEFENDING_SLOPE);
-        ways.push(kept.get(cell)?);
-    }
-    let busiest = ways.iter().copied().fold(0., f64::max).max(f64::EPSILON);
-    if regional.city.gate_crossings.is_empty() {
-        ways.iter_mut().for_each(|w| *w /= busiest);
-    } else {
-        ways.fill(0.);
-    }
-    for &c in &regional.city.gate_crossings {
-        ways[c as usize] = 1.;
-    }
-    let neighbours = |cell| [0, 1, 2].map(|edge| mesh.neighbor(cell, edge));
-    let mut runs = Vec::new();
-    for wall in &regional.city.walls {
-        let mut inside = vec![false; mesh.len()];
-        for &cell in &wall.inside {
-            inside[cell as usize] = true;
-        }
-        let (mut faces, gates) = run(&inside, &defended, &ways, neighbours);
-        if wall.era.is_some() && wall.outgrown {
-            let ruin = field.people().view(HumanField::RuinedBuiltUp);
-            let mut kept = Vec::new();
-            for face in faces {
-                if ruin.get(face.inside)?
-                    <= field
-                        .people()
-                        .view(HumanField::Layer(LayerId::BuiltUp))
-                        .get(face.inside)?
-                {
-                    kept.push(face)
-                }
-            }
-            faces = kept;
-        }
-        runs.push((faces, gates));
-    }
-    Ok(runs)
-}
-/// A wall face's two ends, in map coordinates.
-fn segment(
-    mesh: &crate::lattice::TriangularLattice,
-    face: &crate::town::walls::Face,
-) -> Option<[[f64; 2]; 2]> {
-    let [ox, oy] = mesh.origin();
-    let edge = (0..3).find(|&e| mesh.neighbor(face.inside, e) == Some(face.outside))?;
-    let ([cx, cy], [nx, ny], length) = mesh.physical_face(face.inside, edge)?;
-    let [tx, ty] = [-ny * length / 2., nx * length / 2.];
-    Some([[cx - tx + ox, cy - ty + oy], [cx + tx + ox, cy + ty + oy]])
-}
-/// The city's walls where they stand, gates left open: lines the towns of a city map cannot
-/// build or walk through.
 pub(crate) fn wall_lines(state: &State) -> io::Result<Vec<[[f64; 2]; 2]>> {
-    let mesh = state.field().mesh();
-    Ok(wall_runs(state)?
+    Ok(state
+        .regional
         .iter()
-        .flat_map(|(faces, _)| faces.iter().filter_map(|face| segment(mesh, face)))
+        .flat_map(|r| &r.city.walls)
+        .flat_map(|w| w.lines.iter().copied())
         .collect())
 }
 
@@ -198,20 +139,16 @@ pub(crate) fn wall_places(
     let Some(regional) = state.regional.as_ref() else {
         return Ok((Vec::new(), Vec::new()));
     };
-    let mesh = state.field().mesh();
     let position = |[x, y]: [f64; 2]| Position::xy(x, y);
-    let segment = |face: &crate::town::walls::Face| segment(mesh, face).map(|s| s.map(position));
     let mut walls = Vec::new();
     let mut gates = Vec::new();
-    for (index, (wall, (faces, openings))) in regional
-        .city
-        .walls
-        .iter()
-        .zip(wall_runs(state)?)
-        .enumerate()
-    {
-        let lines: Vec<Vec<Position>> = faces.iter().filter_map(segment).map(Vec::from).collect();
-        let Some(first) = faces.first() else {
+    for (index, wall) in regional.city.walls.iter().enumerate() {
+        let lines: Vec<Vec<Position>> = wall
+            .lines
+            .iter()
+            .map(|s| s.map(position).to_vec())
+            .collect();
+        let Some(&first) = wall.inside.first().filter(|_| !lines.is_empty()) else {
             continue;
         };
         let mut attributes = crate::features::records::Attributes::new();
@@ -223,6 +160,8 @@ pub(crate) fn wall_places(
             "condition".into(),
             if wall.outgrown {
                 "reused interior defenses"
+            } else if wall.sections.iter().any(|s| s.built < s.cost) {
+                "partial"
             } else {
                 "maintained"
             }
@@ -230,7 +169,8 @@ pub(crate) fn wall_places(
         );
         attributes.insert("raisedInRound".into(), wall.round.into());
         attributes.insert("enclosedCells".into(), wall.inside.len().into());
-        attributes.insert("gates".into(), openings.len().into());
+        attributes.insert("gates".into(), wall.gates.len().into());
+        attributes.insert("enclosureAreaM2".into(), wall.area.into());
         let key = format!("city-wall-{index}");
         let feature = generated(
             state,
@@ -245,17 +185,18 @@ pub(crate) fn wall_places(
         )?;
         let mut place = Place::at(
             Kind::CityWall,
-            first.inside,
-            faces.iter().map(|f| f.inside).collect(),
+            first as usize,
+            wall.inside.iter().map(|c| *c as usize).collect(),
         );
         place.id = key;
         place.feature = Some(feature);
         walls.push(place);
-        for (number, gate) in openings.iter().enumerate() {
-            let Some([a, b]) = segment(gate) else {
+        for (number, &[x, y]) in wall.gates.iter().enumerate() {
+            let Some(cell) =
+                crate::field::refinement::courses::cell_at(state.field().mesh(), [x, y])
+            else {
                 continue;
             };
-            let ([ax, ay, _], [bx, by, _]) = (a.coordinates(), b.coordinates());
             let mut attributes = crate::features::records::Attributes::new();
             attributes.insert("wall".into(), index.into());
             let key = format!("city-gate-{index}-{number}");
@@ -267,12 +208,12 @@ pub(crate) fn wall_places(
                     kind: "cityGate",
                     layer: "structures",
                     geometry: Geometry::Point {
-                        coordinates: Position::xy((ax + bx) / 2., (ay + by) / 2.),
+                        coordinates: Position::xy(x, y),
                     },
                     attributes,
                 },
             )?;
-            let mut place = Place::at(Kind::CityGate, gate.inside, vec![gate.inside]);
+            let mut place = Place::at(Kind::CityGate, cell, vec![cell]);
             place.id = key;
             place.feature = Some(feature);
             gates.push(place);
@@ -382,11 +323,41 @@ pub(super) fn trace(event: &str, details: serde_json::Value) {
     }
 }
 
+/// Compare a saved map's footprint at a society step, before expensive downstream work.
+pub(crate) fn trace_footprint(state: &State, stage: &str) -> io::Result<()> {
+    let Some(path) = std::env::var_os("ATLAS_TRACE_PEOPLE_FOOTPRINT") else {
+        return Ok(());
+    };
+    #[derive(serde::Deserialize)]
+    struct MapCut {
+        footprint: atlas_map::Geometry,
+    }
+    let cut: MapCut = serde_json::from_reader(std::io::BufReader::new(std::fs::File::open(path)?))?;
+    let field = state.field();
+    let mesh = field.mesh();
+    let cells: Vec<_> = (0..mesh.len())
+        .map(|i| crate::lattice::hexes::triangle_polygon(mesh, i))
+        .collect();
+    let areas = state
+        .spatial
+        .intersection_areas(&cut.footprint, &cells)
+        .map_err(io::Error::other)?;
+    let mut heads = 0.;
+    for (i, area) in areas.into_iter().enumerate() {
+        heads += field.people().people(i)? * area / 1e6;
+    }
+    eprintln!(
+        "{}",
+        serde_json::json!({"event":"people.footprint","stage":stage,"residents":heads.round()})
+    );
+    Ok(())
+}
+
 /// Where a city map's people stand at one stage, traced as `city.people`: how many, inside
 /// the published outline and in the context band; their centre of mass from the settlement's
 /// centre; their shares by distance in built radii and by compass quarter; the share on the
 /// outline's edge cells; the most crowded cells; and the map's extent about the centre.
-pub(super) fn trace_people(state: &State, stage: &str) -> io::Result<()> {
+pub(crate) fn trace_people(state: &State, stage: &str) -> io::Result<()> {
     if std::env::var_os("ATLAS_TRACE_CITY").is_none() || state.scope.city.is_none() {
         return Ok(());
     }
@@ -576,7 +547,7 @@ fn template(
     else {
         return Err(io::Error::other("City template requires a settlement site").into());
     };
-    let mut site = survey(state, settlement)?;
+    let mut site = survey(state, settlement, false)?;
     let city = state.scope.city.as_ref().unwrap();
     let saved = match state.records.source_features.as_deref() {
         Some(source) => source.get(city.settlement)?,
@@ -598,234 +569,7 @@ fn template(
     Ok(selection)
 }
 
-/// People a city needs before it can raise a wall round itself.
-const BUILDERS: f64 = 20_000.;
-/// Population at which a city's builders no longer limit its walls.
-const WALLED_CITY: f64 = 80_000.;
-/// Share of built land outside every wall at which a city considers a new one.
-const OUTGROWN: f64 = 0.35;
-
-/// Walls rise where their causes meet: a template that keeps a seat of power or guards its
-/// ground, a city large enough to build them, and built land standing unwalled. The ruling
-/// compound or citadel a template encloses gets its own inner wall in the first round.
-pub(crate) fn propose_walls(
-    state: &State,
-    selection: &Selection,
-    round: usize,
-) -> io::Result<Vec<crate::town::walls::Wall>> {
-    use crate::town::walls::{enclosed, outgrown, Wall};
-    let (city_wall, citadel_wall, capital) = {
-        let field = state.field();
-        let mesh = field.mesh();
-        let [ox, oy] = mesh.origin();
-        let at = |cell| {
-            let [x, y] = mesh.position(cell);
-            [x + ox, y + oy]
-        };
-        let centre = selection.site.centre;
-        let built_band = field.people().view(HumanField::Layer(LayerId::BuiltUp));
-        let mut built = Vec::with_capacity(mesh.len());
-        let mut open = Vec::with_capacity(mesh.len());
-        let mut people = 0.;
-        let mut capital = 0.;
-        let standing = field.people().view(HumanField::Layer(LayerId::Standing));
-        let mut heart = (f64::INFINITY, 0);
-        for cell in 0..mesh.len() {
-            built.push(built_band.get(cell)?.clamp(0., 1.));
-            open.push(habitable(field, cell)?);
-            people += field.people().people(cell)? * mesh.area(cell) / 1e6;
-            capital += standing.get(cell)? * mesh.area(cell) / 1e6;
-            let p = at(cell);
-            let d = (p[0] - centre[0]).hypot(p[1] - centre[1]);
-            if d < heart.0 && open[cell] {
-                heart = (d, cell);
-            }
-        }
-        let walls = &state
-            .regional
-            .as_ref()
-            .map_or(&[][..], |r| &r.city.walls[..]);
-        let need = if walls.is_empty() {
-            1.
-        } else {
-            let share = outgrown(walls, &built);
-            if share < OUTGROWN {
-                0.
-            } else {
-                share
-            }
-        };
-        let sponsored = selection.site.guarded
-            || selection.enclosed_seat().is_some()
-            || (selection.site.seat && selection.site.upper.is_some());
-        let able = ((people - BUILDERS) / (WALLED_CITY - BUILDERS)).clamp(0., 1.);
-        let raise = sponsored && capital > 0. && need * able > 0.3;
-        let city = raise.then(|| {
-            enclosed(&built, &open, heart.1, |c| {
-                [0, 1, 2].map(|edge| mesh.neighbor(c, edge))
-            })
-        });
-        // A template's enclosed seat is walled on its own in the first round.
-        let citadel = (round <= 1 && walls.is_empty() && capital > 0.)
-            .then(|| {
-                let anchor = selection.site.point(selection.enclosed_seat()?)?;
-                let radius = selection.enclosure_radius(selection.quarter())?;
-                Some(
-                    (0..mesh.len())
-                        .map(|cell| {
-                            let p = at(cell);
-                            open[cell] && (p[0] - anchor[0]).hypot(p[1] - anchor[1]) <= radius
-                        })
-                        .collect::<Vec<_>>(),
-                )
-            })
-            .flatten();
-        (city, citadel, capital)
-    };
-    let mut proposals = Vec::new();
-    if state
-        .regional
-        .as_ref()
-        .is_some_and(|r| r.city.walls.is_empty())
-    {
-        if let Some(wall) = historic_wall(state, selection, round, capital)? {
-            proposals.push(wall);
-        }
-    }
-    for cells in [citadel_wall, city_wall].into_iter().flatten() {
-        let inside: Vec<u32> = (0..cells.len())
-            .filter(|&c| cells[c])
-            .map(|c| c as u32)
-            .collect();
-        let mesh = state.field().mesh();
-        let length: f64 = inside
-            .iter()
-            .flat_map(|c| (0..3).map(move |edge| (*c as usize, edge)))
-            .filter(|&(c, e)| mesh.neighbor(c, e).is_some_and(|neighbor| !cells[neighbor]))
-            .map(|(c, e)| mesh.edge_length(c, e))
-            .sum();
-        // A wall competes for standing works in proportion to its length and defended area.
-        let masonry = length * 8. / 1e6 * crate::human::catalogue::FULL_STANDING_PER_BUILT_KM2;
-        if !inside.is_empty() && masonry <= capital * 0.15 {
-            if !state
-                .regional
-                .iter()
-                .flat_map(|r| &r.city.walls)
-                .any(|old| old.inside == inside)
-            {
-                proposals.push(Wall {
-                    round,
-                    inside,
-                    ..Default::default()
-                });
-            }
-        }
-    }
-    Ok(proposals)
-}
-
-/// Founding evidence read at city scale: the city's centre, its usable shore and levels, the
-/// ways that reach its core, worked land around it and the magic practised there.
-/// Recover the already elapsed defensive footprint from the town's first funded era.
-fn historic_wall(
-    state: &State,
-    selection: &Selection,
-    round: usize,
-    capital: f64,
-) -> io::Result<Option<crate::town::walls::Wall>> {
-    use crate::field::people::work::working;
-    let Some(town) = captured_settlement(state)? else {
-        return Ok(None);
-    };
-    let contested = town
-        .attributes
-        .get("contestedBy")
-        .is_some_and(|v| !v.is_null());
-    let authority = town
-        .attributes
-        .get("polityId")
-        .is_some_and(|v| !v.is_null());
-    if !(selection.site.guarded || selection.enclosed_seat().is_some() || contested && authority)
-        || capital <= 0.
-    {
-        return Ok(None);
-    }
-    let Some(history) = town.attributes.get("history").and_then(|v| v.as_array()) else {
-        return Ok(None);
-    };
-    let Some((era, early)) = history
-        .iter()
-        .filter_map(|h| Some((h.get("era")?.as_str()?, h.get("townsfolk")?.as_f64()?)))
-        .find(|(_, p)| *p >= 1000.)
-    else {
-        return Ok(None);
-    };
-    let people = town
-        .attributes
-        .get("settlementPopulation")
-        .and_then(|v| v.as_f64())
-        .unwrap_or(early);
-    if people <= early {
-        return Ok(None);
-    }
-    let f = state.field();
-    let mesh = f.mesh();
-    let Some(heart) = crate::field::refinement::courses::cell_at(mesh, selection.site.centre)
-    else {
-        return Ok(None);
-    };
-    let area = state
-        .spatial
-        .area(state.scope.settled_outline())
-        .map_err(io::Error::other)?;
-    let reach = (area * early / people / std::f64::consts::PI).sqrt();
-    let mut cost = working(f);
-    for c in 0..mesh.len() {
-        cost.set(c, f64::INFINITY)?;
-    }
-    cost.set(heart, 0.)?;
-    let slope = f.shared().scalar(crate::field::shared::Scalar::Slope);
-    let built = f.people().view(HumanField::Layer(LayerId::BuiltUp));
-    crate::metric::search::search(
-        mesh,
-        [heart],
-        &mut cost,
-        reach,
-        |_, _| Ok(()),
-        |_, b, _| {
-            if !habitable(f, b)? {
-                return Ok(f64::INFINITY);
-            }
-            Ok(mesh.spacing() * (1. + slope.get(b)?.max(0.) * 5.) / (0.6 + built.get(b)?.sqrt()))
-        },
-    )?;
-    let mut inside = Vec::new();
-    let mut perimeter = 0.;
-    for c in 0..mesh.len() {
-        if !cost.get(c)?.is_finite() {
-            continue;
-        }
-        inside.push(c as u32);
-        for e in 0..3 {
-            if let Some(b) = mesh.neighbor(c, e) {
-                if !cost.get(b)?.is_finite() {
-                    perimeter += mesh.edge_length(c, e);
-                }
-            }
-        }
-    }
-    let funded = capital * (early / people).sqrt() * 0.15;
-    let masonry = perimeter * 8. / 1e6 * crate::human::catalogue::FULL_STANDING_PER_BUILT_KM2;
-    Ok(
-        (inside.len() > 1 && masonry <= funded).then(|| crate::town::walls::Wall {
-            round,
-            inside,
-            era: Some(era.into()),
-            outgrown: people > early * 2.,
-        }),
-    )
-}
-fn survey(state: &State, settlement: Settlement) -> io::Result<SiteEvidence> {
+fn survey(state: &State, settlement: Settlement, whole_city: bool) -> io::Result<SiteEvidence> {
     let field = state.field();
     let mesh = field.mesh();
     let Settlement {
@@ -840,6 +584,22 @@ fn survey(state: &State, settlement: Settlement) -> io::Result<SiteEvidence> {
         [x + ox, y + oy]
     };
     let distance = |p: [f64; 2]| (p[0] - centre[0]).hypot(p[1] - centre[1]);
+    let city_ground = if whole_city {
+        let points: Vec<_> = (0..mesh.len())
+            .map(|c| {
+                let [x, y] = at(c);
+                atlas_map::Position::xy(x, y)
+            })
+            .collect();
+        Some(
+            state
+                .spatial
+                .covers_points(state.scope.settled_outline(), &points)
+                .map_err(io::Error::other)?,
+        )
+    } else {
+        None
+    };
     let elevation = field.ground().view(GroundField::Elevation);
     let farmed = field.people().view(HumanField::Layer(LayerId::Farmland));
     let ways = field.people().view(HumanField::KeptLine);
@@ -857,7 +617,7 @@ fn survey(state: &State, settlement: Settlement) -> io::Result<SiteEvidence> {
         if nearest.is_none_or(|(best, _)| d < best) {
             nearest = Some((d, cell));
         }
-        if d > core {
+        if !city_ground.as_ref().map_or(d <= core, |cells| cells[cell]) {
             continue;
         }
         let dry = habitable(field, cell)?;
@@ -927,7 +687,12 @@ fn survey(state: &State, settlement: Settlement) -> io::Result<SiteEvidence> {
             .interior_position(&feature.geometry)
             .map_err(io::Error::other)?;
         let [x, y, _] = at.coordinates();
-        if distance([x, y]) > core {
+        if !city_ground
+            .as_ref()
+            .map_or(distance([x, y]) <= core, |cells| {
+                crate::field::refinement::courses::cell_at(mesh, [x, y]).is_some_and(|c| cells[c])
+            })
+        {
             continue;
         }
         if let Some(c) = crate::field::refinement::courses::cell_at(mesh, [x, y]) {

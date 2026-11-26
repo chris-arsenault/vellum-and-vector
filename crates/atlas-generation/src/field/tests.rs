@@ -51,6 +51,49 @@ pub(super) fn seed() -> FieldSeed {
 }
 
 #[test]
+fn a_household_catchment_places_the_contributing_languages_with_their_speakers() {
+    use crate::human::{
+        catalogue::LayerId,
+        identity::{IdentityLayer, Tradition},
+        operations::HouseholdTransfers,
+        HumanField,
+    };
+    let mut seed = seed();
+    for (cell, language) in [(0, 17), (1, 42)] {
+        let mut layer = IdentityLayer {
+            people: 80.,
+            ..Default::default()
+        };
+        layer.traditions[Tradition::Tongue as usize] = language;
+        seed.people.initialize_column(cell, &[layer]).unwrap();
+        seed.people
+            .initialize(HumanField::Layer(LayerId::Population), cell, 80.)
+            .unwrap();
+    }
+    let field = seed.finish(Box::<GroundObservers>::default()).unwrap();
+    let owner = super::Field::human_operations();
+    let mut run = crate::execution::Executor::new(field);
+    run.run_with(
+        &owner.place_households,
+        &vec![HouseholdTransfers {
+            sources: vec![(0, 0.25), (1, 0.75)],
+            receivers: vec![(2, 1.)],
+        }],
+    )
+    .unwrap();
+    let column = run.state().people.column(2).unwrap();
+    let speakers = |code| {
+        column
+            .iter()
+            .find(|g| g.traditions[Tradition::Tongue as usize] == code)
+            .unwrap()
+            .people
+    };
+    assert!(speakers(42) > speakers(17) && speakers(17) > 0.);
+    assert!(run.state().people.people(2).unwrap() > 0.);
+}
+
+#[test]
 fn surveyed_harvest_outlives_the_parent_sampling_coverage() {
     let mut seed = seed();
     {
@@ -101,6 +144,42 @@ fn captured_grid_projects_categories_and_values_past_the_child_boundary() {
             .unwrap();
         assert!(values.iter().all(|value| (*value - 7.0).abs() < 1e-9));
     }
+}
+
+#[test]
+fn households_keep_their_identity_donor_while_economic_fields_cross_its_edge() {
+    use crate::{
+        field::projection::channels,
+        reconstruction::{Grid, Interpolator, Layout},
+        storage::Coverage,
+    };
+    let cache = BlockCache::new(1_000_000, BlockScratch::new(MemoryFile::default()));
+    let mut coverage = Coverage::samples(4, cache);
+    let grid = Grid {
+        bounds: [0., 0., 100., 100.],
+        periodic_width: None,
+        layout: Layout::Raster {
+            width: 2,
+            height: 2,
+        },
+        measures: coverage.allocate(2500.).read_only(),
+        donors: Default::default(),
+    };
+    let channels = channels::physical();
+    let read = |i: usize| Ok(if i % 2 == 0 { 0.2 } else { 0.8 });
+    let samples = |name: &str, coverage: &mut Coverage| {
+        let band = channels.iter().find(|x| x.name == name).unwrap();
+        let mut at = Interpolator::new(&grid, band.discrete, coverage);
+        [40., 50., 60.].map(|x| at.sample([x, 50.], &read).unwrap())
+    };
+    for name in ["Farmland", "Pasture", "BuiltUp", "Standing"] {
+        let [l, m, r] = samples(name, &mut coverage);
+        assert!(0.2 < l && l < m && m < r && r < 0.8, "{name}");
+    }
+    let residents = samples("Population", &mut coverage);
+    assert!(residents.iter().all(|&v| v == 0.2 || v == 0.8));
+    assert_eq!(residents, samples("IdentityPeople0", &mut coverage));
+    assert_eq!(residents, samples("IdentityTongue0", &mut coverage));
 }
 
 #[test]

@@ -100,8 +100,8 @@ fn centrality(
     let mut catchment = working(field);
     work.reach(field, &customers, &mut catchment)?;
     let mut orders = working(field);
-    for &(cell, census) in work.markets.iter() {
-        orders.set(cell, orders.get(cell)? + census)?;
+    for market in work.markets.iter() {
+        orders.set(market.cell, orders.get(market.cell)? + market.townspeople)?;
     }
     let mut reachable_orders = working(field);
     work.reach(field, &orders, &mut reachable_orders)?;

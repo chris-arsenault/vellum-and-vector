@@ -77,6 +77,7 @@ pub(super) struct Policy {
     pub kernel: fn(&SiteEvidence) -> &'static [Founder],
     pub tenure: fn(&Parcel<'_>) -> Tenure,
     pub affinity: fn(&Parcel<'_>) -> f64,
+    pub city_households: Option<fn(&Parcel<'_>) -> f64>,
     pub habitat: fn(&SiteEvidence, Point, bool) -> Habitat,
     pub connector: fn(&SiteEvidence) -> Option<Connector>,
     pub enclosure: Option<Enclosure>,
@@ -98,6 +99,7 @@ impl Policy {
             eligible: |_| true,
             tenure: |p| p.ordinary_tenure(),
             affinity: |_| 1.,
+            city_households: None,
             habitat: |_, _, _| Habitat::Ground,
             connector: |_| None,
             enclosure: None,
@@ -143,7 +145,13 @@ impl Selection {
     /// How strongly the template draws a city's homes to a point of its city map, read in
     /// the template's quarters. Zero reserves the point, as it does a plot on a district map.
     pub fn city_affinity(&self, point: Point) -> f64 {
-        self.affinity(Activity::Household, point, self.quarter())
+        let policy = self.selected.policy();
+        policy.city_households.unwrap_or(policy.affinity)(&Parcel {
+            site: &self.site,
+            activity: Activity::Household,
+            point,
+            unit: self.quarter(),
+        })
     }
     /// Zero reserves the location independently of competing economic offers.
     pub fn affinity(&self, activity: Activity, point: Point, unit: f64) -> f64 {

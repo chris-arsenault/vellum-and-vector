@@ -20,7 +20,8 @@ tropes! {
     Greenwood => "trait.greenwood-encroachment", Ossuary => "trait.salt-ossuary",
     Flood => "trait.flood-exposure", Spring => "trait.reliable-spring",
     Ruins => "trait.ancient-ruins", Wall => "trait.outgrown-wall",
-    Resident => "trait.notable-resident", Rookery => "trait.creature-rookery"
+    Resident => "trait.notable-resident", Rookery => "trait.creature-rookery",
+    Ordinary => "trait.ordinary"
 }
 #[derive(Deserialize, PartialEq, Eq)]
 pub(crate) enum Category {
@@ -36,6 +37,8 @@ pub(crate) struct Entry {
     pub name: String,
     #[serde(rename = "Category")]
     pub category: Category,
+    #[serde(default, rename = "Localized origin")]
+    pub localized_origin: bool,
 }
 pub(crate) static CATALOG: LazyLock<Vec<Entry>> = LazyLock::new(|| {
     serde_json::from_str(include_str!(concat!(
@@ -45,7 +48,7 @@ pub(crate) static CATALOG: LazyLock<Vec<Entry>> = LazyLock::new(|| {
     .expect("district catalogue IDs")
 });
 
-#[derive(Default, Clone, Copy, Debug, Serialize, Deserialize)]
+#[derive(Default, Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 pub(crate) struct Demands {
     pub housing: f64,
     pub workshops: f64,
@@ -55,15 +58,17 @@ pub(crate) struct Demands {
     pub access: f64,
     pub civic: f64,
 }
-impl Demands {
-    pub fn add_site(&mut self, kind: Trope, influence: f64) {
-        let mut local = Self::default();
-        kind.contribute(&mut local);
-        self.commons += influence * local.commons;
-        self.gardens += influence * local.gardens;
-        self.access += influence * local.access;
-        self.civic += influence * local.civic;
-    }
+#[derive(Clone, Copy, Default)]
+pub(crate) struct DistrictLand {
+    pub wet: f64,
+    pub trees: f64,
+    pub slope: f64,
+    pub ruined: f64,
+    pub built: f64,
+    pub access: f64,
+    pub verdure: f64,
+    pub tearing: f64,
+    pub old_wall: bool,
 }
 pub(crate) struct Evidence {
     pub crowd: f64,
@@ -76,36 +81,91 @@ pub(crate) struct Evidence {
     pub tenure: Tenure,
     pub free: bool,
     pub craft: f64,
+    pub wet: f64,
+    pub trees: f64,
+    pub ruins: f64,
+    pub greenwood: bool,
+    pub veil: bool,
     pub sources: Vec<(Trope, String)>,
 }
 impl Evidence {
     pub fn weight(&self, id: Trope) -> f64 {
         use Trope::*;
-        let source = self.sources.iter().any(|(t, _)| *t == id);
-        match id {
-            Bazaar => self.trade.sqrt() * (0.3 + self.route),
-            Artificer => self.craft * (0.5 + self.capital),
-            Freight => self.route * self.trade.sqrt(),
-            Granary => self.food * (1. + self.route),
-            Inn => self.built.sqrt() * (1. + self.crowd + self.route),
-            Scribe => f64::from(source) * (1. + self.capital),
-            Warrens => self.crowd / (0.25 + self.capital) / (0.5 + self.wealth),
-            // Household tenure describes the occupants. Dependants can live on an estate
-            // whose owners have the surplus to withhold valuable land from development.
-            Estates if self.tenure != Tenure::Common && self.wealth > 1. && self.capital > 0. => {
-                self.wealth * self.capital / (0.25 + self.crowd)
+        let support = (self.sources.iter().filter(|(t, _)| *t == id).count() as f64).ln_1p();
+        let arrivals = self.route.ln_1p();
+        let crowd = self.crowd.ln_1p();
+        let wealth = self.wealth.ln_1p();
+        let local = match id {
+            Bazaar => 0.7 + self.trade.sqrt() * (0.45 + arrivals),
+            Artificer => 0.85 + self.craft.ln_1p() * (1. + self.capital),
+            Freight => 0.45 + arrivals * (1. + self.trade),
+            Granary => 0.75 + self.food.sqrt() * (0.8 + arrivals),
+            Inn => 0.9 + self.built.sqrt() * (0.5 + 0.35 * crowd) + arrivals,
+            Scribe => 0.65 + 0.6 * self.capital + 0.4 * wealth,
+            Warrens => 0.65 + crowd / (0.65 + self.capital + wealth),
+            Estates => 0.55 + wealth * (0.7 + self.capital) / (1. + crowd),
+            Guild => 0.65 + self.craft.ln_1p(),
+            Outlanders => 0.55 + arrivals * self.trade.sqrt(),
+            Commons => {
+                0.7 + f64::from(self.free || self.tenure == Tenure::Common) + self.food.sqrt() * 0.4
             }
-            Estates => 0.,
-            Guild | Outlanders => f64::from(source) * 2.,
-            Commons => f64::from(self.free || self.tenure == Tenure::Common) * (1. + self.built),
-            _ => f64::from(source),
-        }
+            Veil if !self.veil && support == 0. => return 0.,
+            Greenwood if !self.greenwood && support == 0. => return 0.,
+            Veil => 0.8 + arrivals,
+            Greenwood => 0.7 + self.trees,
+            Flood => 0.15 + 2.6 * self.wet,
+            Spring => 0.55 + self.wet,
+            Ossuary => 0.5 + 0.35 * self.capital,
+            Ruins => 0.55 + 2. * self.ruins,
+            Wall => 0.45 + self.built.sqrt(),
+            Resident => 0.65 + 0.45 * wealth,
+            Rookery => 0.5 + self.trees + 0.3 * self.built,
+            Ordinary => 1.,
+        };
+        local + 2.5 * support
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn district_traits_act_across_different_ground_without_a_landmark() {
+        let dry = DistrictLand::default();
+        let wet = DistrictLand {
+            wet: 0.9,
+            trees: 0.6,
+            access: 1.2,
+            ..dry
+        };
+        let effects = |kind: Trope, land| {
+            let mut d = Demands::default();
+            kind.shape_district(land, &mut d);
+            d
+        };
+        for e in CATALOG.iter().filter(|e| e.category == Category::Trait) {
+            for ground in [dry, wet] {
+                assert_eq!(
+                    effects(e.id, ground) == Demands::default(),
+                    e.id == Trope::Ordinary
+                );
+            }
+        }
+        let flood = effects(Trope::Flood, wet);
+        assert!(flood.commons > effects(Trope::Flood, dry).commons);
+        assert!(flood.access < effects(Trope::Flood, dry).access);
+        assert!(effects(Trope::Resident, wet).trade > effects(Trope::Resident, dry).trade);
+        let origin = |id| {
+            CATALOG
+                .iter()
+                .find(|e| e.id == id)
+                .unwrap()
+                .localized_origin
+        };
+        assert!(origin(Trope::Spring));
+        assert!(!origin(Trope::Flood));
+    }
 
     #[test]
     fn dependent_households_can_work_a_wealthy_estate() {
@@ -119,14 +179,21 @@ mod tests {
             tenure: Tenure::Dependent,
             free: false,
             craft: 0.,
+            wet: 0.,
+            trees: 0.,
+            ruins: 0.,
+            greenwood: false,
+            veil: false,
             wealth: 2.,
             sources: vec![],
         };
         assert!(site.weight(Trope::Estates) > site.weight(Trope::Warrens));
+        let estate_weight = site.weight(Trope::Estates);
+        let tenement_weight = site.weight(Trope::Warrens);
         site.wealth = 0.25;
-        assert_eq!(site.weight(Trope::Estates), 0.);
-        assert!(site.weight(Trope::Warrens) > 0.);
-        assert_eq!(site.weight(Trope::Guild), 0.);
+        assert!(site.weight(Trope::Estates) < estate_weight);
+        assert!(site.weight(Trope::Warrens) > tenement_weight);
+        assert!(site.weight(Trope::Guild) > 0.);
         assert_eq!(site.weight(Trope::Veil), 0.);
     }
 }
@@ -196,33 +263,65 @@ impl Trope {
                 d.housing += 0.7;
                 d.access += 0.4;
             }
-            Greenwood | Rookery => {
-                d.commons += 1.;
-                d.gardens += 1.4;
-                d.access -= 0.7;
+            _ => {}
+        }
+    }
+
+    // owner-direction(2026-11-25): traits affect the whole district, even when they have a single point of origin.
+    pub fn shape_district(self, land: DistrictLand, d: &mut Demands) {
+        use Trope::*;
+        let frontage = land.access / (1. + land.access);
+        match self {
+            Greenwood => {
+                let growth = 0.35 + land.trees + land.verdure + land.wet * 0.5;
+                d.commons += 1.1 * growth;
+                d.gardens += 0.9 * growth;
+                d.access -= 0.55 * growth;
             }
-            Veil | Flood => {
-                d.commons += 0.7;
-                d.access -= 1.1;
+            Rookery => {
+                let nesting = 0.3 + land.trees + land.slope + 0.5 * land.built;
+                d.commons += nesting;
+                d.gardens += 0.45 * nesting;
+                d.access -= 0.35 * nesting;
             }
-            Wall | Ruins => {
-                d.civic += 0.5;
-                d.commons += 0.6;
-                d.access -= 0.6;
+            Flood => {
+                d.commons += 0.35 + 2.2 * land.wet;
+                d.gardens += 0.35 + land.wet;
+                d.access += 0.35 - 1.8 * land.wet;
+            }
+            Veil => {
+                d.access -= 0.3 + 1.5 * land.tearing;
+                d.commons += 0.4 + land.tearing;
+                d.trade += 0.5 * frontage / (1. + land.tearing);
+            }
+            Wall => {
+                let masonry = 0.35 + land.ruined + f64::from(land.old_wall);
+                d.commons += masonry;
+                d.workshops += 0.45 * masonry;
+                d.access += 0.65 * frontage - 0.45 * masonry;
+            }
+            Ruins => {
+                let remains = 0.45 + land.ruined + land.built * 0.3;
+                d.civic += remains;
+                d.commons += 0.8 * remains;
+                d.access -= 0.45 * remains;
             }
             Spring => {
-                d.commons += 1.2;
-                d.gardens += 0.8;
-                d.access += 0.8;
+                d.commons += 0.45 + land.wet;
+                d.gardens += 0.55 + land.wet;
+                d.access += 0.4 + 0.4 * frontage;
             }
             Ossuary => {
-                d.commons += 0.9;
-                d.civic += 1.;
+                d.commons += 0.65 + land.ruined;
+                d.civic += 0.6 + land.built;
+                d.access += 0.3 * frontage;
             }
             Resident => {
-                d.civic += 0.5;
-                d.access += 0.6;
+                d.civic += 0.65 + 0.45 * land.built;
+                d.trade += 0.45 + 1.15 * frontage;
+                d.access += 0.35 + 0.65 * frontage;
             }
+            _ => {}
         }
     }
 }

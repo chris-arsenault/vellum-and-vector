@@ -23,17 +23,34 @@ pub const DEVELOPMENT_EXPOSURE: [f64; 3] = [250.0, 60.0, 20.0];
 
 #[derive(Clone, Default)]
 pub struct Parent {
+    pub census: Rc<Vec<CensusCell>>,
     pub market: Option<Market>,
     pub connections: Rc<Vec<crate::field::people::feed::Connection>>,
-    pub markets: Rc<Vec<(usize, f64)>>,
+    pub(crate) markets: Rc<Vec<SettlementCensus>>,
 }
 
-/// A captured settlement's census describes customers served by its market. Its
-/// residents still come exclusively from the sampled population layer.
+#[derive(Clone, Copy)]
+pub(crate) struct SettlementCensus {
+    pub cell: usize,
+    pub townspeople: f64,
+    pub surveyed_km2: f64,
+    pub rural_people: f64,
+    pub built_km2: f64,
+}
+
+#[derive(Clone, Copy)]
+pub struct CensusCell {
+    pub id: usize,
+    pub centre: [f64; 2],
+    pub span: f64,
+    pub density: f64,
+}
+
+/// The same captured settlement supplies market demand and a residential census.
 pub(crate) fn markets(
     field: &Field,
     features: &dyn FeatureReader,
-) -> io::Result<Vec<(usize, f64)>> {
+) -> io::Result<Vec<SettlementCensus>> {
     let mut markets = Vec::new();
     for feature in features.values(FeatureSelection {
         kind: Some("settlement"),
@@ -54,7 +71,14 @@ pub(crate) fn markets(
             0.0,
         )?;
         if census > 0.0 {
-            markets.push((cell, census));
+            let measured = |key: &str| number(feature.attributes.get(key), 0.);
+            markets.push(SettlementCensus {
+                cell,
+                townspeople: census,
+                surveyed_km2: measured("representedAreaKm2")?,
+                rural_people: measured("ruralPopulation")?,
+                built_km2: measured("builtKm2")?,
+            });
         }
     }
     Ok(markets)

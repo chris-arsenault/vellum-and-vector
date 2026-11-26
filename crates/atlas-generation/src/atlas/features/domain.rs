@@ -154,7 +154,13 @@ pub(super) fn features() -> Vec<Feature> {
         &[("present.people", "built.layout")],
         &[("present.people", "built.layout")],
     );
-    built.parameters = &["townThreshold", "cityReach", "roadTraffic", "highways"];
+    built.parameters = &[
+        "townThreshold",
+        "cityReach",
+        "districtCatchmentScale",
+        "roadTraffic",
+        "highways",
+    ];
     built.slots.extend([
         "town.initialize",
         "town.develop",

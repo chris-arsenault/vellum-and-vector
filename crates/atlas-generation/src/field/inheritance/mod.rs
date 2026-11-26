@@ -2,6 +2,7 @@
 pub mod cargo;
 mod material;
 mod people;
+pub(crate) use people::census_support;
 pub mod resources;
 use super::{
     owner::FieldSeed,
@@ -124,13 +125,12 @@ impl Inputs {
         let mut sampled = Samples::default();
         let mut remaining = channels::physical();
         if self.parent.contains_key("populationCapacity") {
-            let mut harvest = channels::Channel::new(
+            let harvest = channels::Channel::new(
                 "populationCapacity",
                 "people/square-kilometre",
                 &[],
                 "population",
             );
-            harvest.discrete = true;
             remaining.push(harvest);
         }
         while let Some(channel) = remaining.pop() {

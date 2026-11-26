@@ -32,13 +32,17 @@ pub struct Ground {
     pub water: bool,
 }
 impl Ground {
-    fn settlement_support(&self) -> f64 {
+    pub(crate) fn settlement_support(&self) -> f64 {
         if self.water {
             return 0.;
         }
         // The same density and built cover that distinguish urban ground inside City.
         (self.residents_per_km2 / 1200. + self.built_share / 0.12) / (1. + self.slope / 0.25)
     }
+}
+
+pub(crate) fn settlement_threshold(local_support: f64) -> f64 {
+    (local_support * 0.5).clamp(0.1, 1.)
 }
 
 // owner-direction(2026-11-24): the city edge is defined by its settled extent, population density and geography.
@@ -86,7 +90,7 @@ pub fn trace(
         }
     }
     // A sparse settlement can still be distinguished from the countryside around it.
-    let threshold = (local_support * 0.5).clamp(0.1, 1.);
+    let threshold = settlement_threshold(local_support);
     let mut score = vec![f64::NAN; width * height];
     let mut pending = vec![seed];
     let (mut west, mut east, mut south, mut north) = (left, left, below, below);

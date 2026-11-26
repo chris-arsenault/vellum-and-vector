@@ -20,6 +20,9 @@ pub struct Catalogue {
     pub products: Vec<crate::products::ProductDefinition>,
 }
 impl Catalogue {
+    pub fn inventory(&self) -> impl Iterator<Item = &Specification> {
+        self.entries.values()
+    }
     pub fn atlas(
         selection: &crate::atlas::features::Selection,
         systems: &[crate::magic::configuration::System],

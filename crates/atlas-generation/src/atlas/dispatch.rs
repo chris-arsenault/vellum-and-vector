@@ -1,4 +1,5 @@
 //! Configured occurrences use the same command/query dispatcher as their owner algorithms.
+pub mod experiment;
 mod metadata;
 pub mod preflight;
 mod publication;
@@ -47,6 +48,7 @@ impl Input {
 pub struct Specification {
     pub contract: ProductContract,
     pub parameters: Definitions,
+    pub numeric: &'static [crate::parameters::NumericParameter],
     pub workspace_only: bool,
     pub duration: Option<crate::bindings::DurationBinding>,
     pub category: Category,
@@ -66,6 +68,7 @@ impl Specification {
                 invalidates: Vec::new(),
             },
             parameters: Definitions::new(),
+            numeric: &[],
             workspace_only,
             duration: None,
             // owner-direction(2026-11-23): the spreadsheet determines migration and existing registrations stay legacy until migrated
@@ -73,6 +76,15 @@ impl Specification {
             module: declared_at.file(),
             schedule: Schedule::default(),
         }
+    }
+    pub fn numeric(mut self, controls: &'static [crate::parameters::NumericParameter]) -> Self {
+        self.numeric = controls;
+        self.parameters.extend(
+            controls
+                .iter()
+                .map(|control| (control.name.into(), control.definition())),
+        );
+        self
     }
     pub fn publication(mut self) -> Self {
         self.category = Category::ClassificationPublication;
@@ -171,6 +183,10 @@ pub struct Process {
     registered_at: Option<&'static std::panic::Location<'static>>,
 }
 impl Process {
+    pub fn numeric(mut self, controls: &'static [crate::parameters::NumericParameter]) -> Self {
+        self.specification = self.specification.numeric(controls);
+        self
+    }
     /// Context setup may install query strategies on the enclosing map execution scope.
     pub fn setup(
         specification: Specification,

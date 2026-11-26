@@ -13,12 +13,8 @@ use crate::{
         shared::Scalar,
     },
     metric::search::search,
-    town::city::hot_spots,
 };
-use atlas_map::{
-    regions::{boundary_lines, point},
-    Geometry,
-};
+use atlas_map::{regions::boundary_lines, Geometry};
 use std::io;
 
 pub(super) fn routes(
@@ -33,13 +29,50 @@ pub(super) fn routes(
     let policy = policy(state)?;
     let n = mesh.len();
     let points: Vec<_> = (0..n).map(|c| position(mesh, c)).collect();
-    u.routes.clear();
+    let founding = u.routes.is_empty();
+    let mut entrances = Vec::new();
+    let mut inland_ends: Vec<(usize, String)> = Vec::new();
     let mut network = vec![false; n];
     for f in approaches {
         let Some(f) = within_frame(state.spatial.as_ref(), f, frame)? else {
             continue;
         };
         for trace in boundary_lines(&f.geometry) {
+            let cells = course_cells(
+                mesh,
+                &Geometry::LineString {
+                    coordinates: trace.clone(),
+                },
+                mesh.spacing(),
+                0.,
+            );
+            let inside = |c: usize| u.fields.stencil[c] > 0.5;
+            for pair in cells.windows(2).filter(|p| inside(p[0]) != inside(p[1])) {
+                entrances.push((
+                    if inside(pair[0]) { pair[0] } else { pair[1] },
+                    f.name.clone(),
+                ));
+            }
+            // A route clipped into several pieces still has one identity. Only a real
+            // passage across the urban edge supplies a gateway. For a route wholly
+            // inside the city, keep its most peripheral station as the connecting site.
+            if let Some(c) = cells
+                .iter()
+                .copied()
+                .filter(|&c| inside(c))
+                .min_by(|&a, &b| u.fields.stencil[a].total_cmp(&u.fields.stencil[b]))
+            {
+                if let Some((old, _)) = inland_ends.iter_mut().find(|(_, name)| name == &f.name) {
+                    if u.fields.stencil[c] < u.fields.stencil[*old] {
+                        *old = c;
+                    }
+                } else {
+                    inland_ends.push((c, f.name.clone()));
+                }
+            }
+            if !founding {
+                continue;
+            }
             let mut road = Element::way(
                 Geometry::LineString { coordinates: trace },
                 "thoroughfare",
@@ -55,120 +88,115 @@ pub(super) fn routes(
             u.routes.push(road);
         }
     }
-    let claims = &u.fields.claims;
-    let score: Vec<_> = claims
-        .iter()
-        .enumerate()
-        .map(|(i, x)| {
-            if !u.fields.inside[i] || x.reserved || x.people < 180. {
-                0.
-            } else {
-                (x.home + x.work + 0.6 * u.fields.developed[i] - 0.3 * x.farm).max(0.)
-                    * (u.fields.stencil[i]
-                        + if x.built > 0.12 || x.trade > 0.45 {
-                            0.35
-                        } else {
-                            0.
-                        })
-            }
-        })
-        .collect();
-    let census = crate::atlas::regional::city::settlement(state)?
-        .and_then(|s| s.people)
-        .unwrap_or(0.);
-    let spacing = (state.spatial.area(frame).map_err(io::Error::other)?
-        / (1. + (census / 3200.).sqrt() * 3.))
-        .sqrt()
-        .max(3. * mesh.spacing());
-    u.destinations = hot_spots(&score, &points, spacing, usize::MAX);
-    let mut stops: Vec<(usize, String)> = u
-        .sponsors
-        .iter()
-        .map(|s| (s.cell, s.name.clone()))
-        .collect();
-    stops.extend(u.programs.iter().map(|p| (p.cell, p.name.clone())));
-    stops.extend(u.interior.iter().map(|(c, p)| (*c, p.name.clone())));
-    let positions: Vec<_> = points.iter().copied().map(pos).collect();
-    let mut green = vec![false; n];
-    for park in &u.parks {
-        let covered = state
-            .spatial
-            .covers_points(&park.geometry, &positions)
-            .map_err(io::Error::other)?;
-        let entrance = (0..n)
-            .filter(|&c| {
-                !covered[c]
-                    && !claims[c].reserved
-                    && (0..3).any(|edge| mesh.neighbor(c, edge).is_some_and(|b| covered[b]))
-            })
-            .max_by(|&a, &b| {
-                let access = |c: usize| u.fields.access[c] + claims[c].home + claims[c].work;
-                access(a).total_cmp(&access(b))
-            });
-        if let Some(c) = entrance {
-            stops.push((c, park.name.clone()));
-        }
-        for (held, on) in green.iter_mut().zip(covered) {
-            *held |= on;
+    for (c, name) in inland_ends {
+        if !entrances.iter().any(|(_, road)| road == &name) {
+            entrances.push((c, name));
         }
     }
-    if let Some((a, b, name)) = policy.connector() {
-        for role in [a, b] {
-            if let Some(c) = policy.site.point(role).and_then(|p| cell_at(mesh, p)) {
-                stops.push((c, name.into()));
-            }
-        }
-    }
-    for founder in policy.kernel() {
-        if let Some(c) = policy
-            .site
-            .point(founder.anchor)
-            .and_then(|p| cell_at(mesh, p))
-        {
-            stops.push((c, "Founding quarter".into()));
-        }
-    }
-    stops.extend(
-        u.destinations
+    let mut gateways: Vec<(usize, String)> = Vec::new();
+    for (c, name) in entrances {
+        if !gateways
             .iter()
-            .map(|&c| (c, "District approach".into())),
-    );
-    if !network.iter().any(|v| *v) {
-        if let Some(c) =
-            cell_at(mesh, policy.site.centre).or_else(|| u.destinations.first().copied())
+            .any(|(g, _)| mesh.physical_distance(c, *g) < policy.quarter())
         {
+            gateways.push((c, name));
+        }
+    }
+    for way in &u.routes {
+        for c in super::grades::ground_cells(mesh, way) {
             network[c] = true;
         }
     }
+    let (sites, green) = super::endpoints::candidate_sites(state, u, frame, &points, gateways)?;
+    let spacing = sites.spacing;
+    let claims = &u.fields.claims;
     let slope = f.shared().scalar(Scalar::Slope);
+    let elevations = f.ground().view(crate::rock::ground::GroundField::Elevation);
+    let height_metres = |c| {
+        Ok(crate::scale::MapScale::metres(
+            elevations.get(c)?,
+            crate::scale::LengthUnit::Native,
+        ))
+    };
+    let gradients = (0..n)
+        .map(|c| mesh.gradient(c, &height_metres))
+        .collect::<io::Result<Vec<_>>>()?;
+    let settled = claims
+        .iter()
+        .enumerate()
+        .filter(|(c, x)| u.fields.stencil[*c] > 0.5 && x.people > 0.);
+    let (total, area) = settled.fold((0., 0.), |(sum, area), (c, x)| {
+        (sum + mesh.area(c) * x.people, area + mesh.area(c))
+    });
+    let usual_density = (total / area.max(1.)).max(1.);
+    let seed = state
+        .scope
+        .city
+        .as_ref()
+        .map_or(0, |s| s.settlement.0 as i32);
+    let terrain_reach = (mesh.spacing() * 4.).max(spacing * 0.55);
     let mut effort = Vec::with_capacity(n);
     for c in 0..n {
         let x = claims[c];
-        let demand =
-            super::programs::at(u, c).map_or(0., |p| p.demands_at(position(mesh, c)).access);
-        let access_cost = (-0.45 * demand * u.fields.stencil[c]).exp();
-        effort.push(if !habitable(f, c)? || green[c] && !network[c] {
-            f64::INFINITY
-        } else {
-            access_cost
-                * (1.
-                    + 4. * slope.get(c)?.max(0.)
-                    + x.farm * 0.6
-                    + f64::from(x.reserved as u8) * 4.)
-                / (1. + 0.45 * x.work + 0.25 * u.fields.developed[c] + 0.3 * u.fields.civic[c])
-        });
+        let demand = x.demands.access;
+        let access_cost = (-0.45
+            * (demand * u.fields.stencil[c] + u.fields.civic[c] * u.work_at(c).access))
+            .exp();
+        let residents = x.people.max(0.);
+        let populated = residents / (residents + usual_density);
+        // The catalogue already expresses how hot ground, tears, wards and ordinary
+        // works change passage. Use those local fields with their own direction and reach.
+        let ground_cost = f.place_offers().map_or(Ok(1.), |p| p.road(c))?;
+        let [px, py] = points[c];
+        let texture = crate::noise::fractal_noise(px, py, seed ^ 0x4129, terrain_reach, 2);
+        effort.push(
+            if !u.fields.inside[c] || !habitable(f, c)? || green[c] && !network[c] {
+                f64::INFINITY
+            } else {
+                access_cost * ground_cost * (0.75 * texture).exp() / (0.58 + 1.25 * populated)
+                    * (1.
+                        + 4. * slope.get(c)?.max(0.)
+                        + x.farm * 0.6
+                        + f64::from(x.reserved as u8) * 4.)
+                    / (1. + 0.45 * x.work + 0.25 * u.fields.developed[c] + 0.3 * u.fields.civic[c])
+            },
+        );
     }
-    let city = &state.regional.as_ref().unwrap().city;
-    let depth: Vec<_> = (0..n)
-        .map(|c| {
-            crate::town::walls::enclosure(&city.walls, c)
-                + crate::town::walls::enclosure(&u.defense, c)
-        })
-        .collect();
+    let heights = (0..n).map(height_metres).collect::<io::Result<Vec<_>>>()?;
+    let terrain = super::grades::terrain(mesh, &heights);
+    let survey = super::grades::Survey {
+        elevation: &terrain,
+        open: &|p| cell_at(mesh, p).is_some_and(|c| effort[c].is_finite()),
+    };
+    if founding {
+        network.fill(false);
+        for approach in &mut u.routes {
+            let mut graded = survey.road(approach.geometry.clone(), "Approach", 16.);
+            graded.name = approach.name.clone();
+            graded.attributes.insert(
+                "sourceRoad".into(),
+                approach.attributes["sourceRoad"].clone(),
+            );
+            for cell in super::grades::ground_cells(mesh, &graded) {
+                network[cell] = true;
+            }
+            *approach = graded;
+        }
+    }
     let mut wall = vec![false; n];
     let mut gate = vec![false; n];
-    for &c in &city.gate_crossings {
-        gate[c as usize] = true;
+    for defense in &u.defense {
+        let geometry = Geometry::MultiLineString {
+            coordinates: defense.lines.iter().map(|s| s.map(pos).to_vec()).collect(),
+        };
+        for c in course_cells(mesh, &geometry, mesh.spacing(), 0.) {
+            wall[c] = true;
+        }
+        for &p in &defense.gates {
+            if let Some(c) = cell_at(mesh, p) {
+                gate[c] = true;
+            }
+        }
     }
     for shape in &u.inherited_defenses {
         match shape {
@@ -186,99 +214,47 @@ pub(super) fn routes(
         }
     }
     let crossing = |a: usize, b: usize| {
-        if (depth[a] != depth[b] || wall[b]) && !gate[a] && !gate[b] {
+        if wall[a] != wall[b] && !gate[a] && !gate[b] {
             4.
         } else {
             1.
         }
     };
-    let mut cost = working(f);
-    let mut previous: Vec<usize> = (0..n).collect();
-    let mut seeds = Vec::new();
-    for (c, &on) in network.iter().enumerate() {
-        cost.set(c, if on { 0. } else { f64::INFINITY })?;
-        if on {
-            seeds.push(c);
-        }
-    }
-    search(
-        mesh,
-        seeds,
-        &mut cost,
-        f64::INFINITY,
-        |next, from| {
-            previous[next] = from;
-            Ok(())
-        },
-        |a, b, e| {
-            let alignment = policy.align(points[a]).map_or(1., |axis| {
-                let dir =
-                    crate::town::geometry::unit(crate::town::geometry::sub(points[b], points[a]));
-                1. + 0.55 * (1. - crate::town::geometry::dot(dir, axis).abs().min(1.))
-            });
-            Ok(mesh.edge_length(a, e) * (effort[a] + effort[b]) * 0.5 * alignment * crossing(a, b))
-        },
+    // owner-direction(2026-11-24): principal roads grow from whole-city journeys, then refine their alignment and district connections.
+    // owner-direction(2026-11-25): select road endpoints separately from routing between them.
+    let plan = super::endpoints::select_endpoints(
+        state,
+        u,
+        &points,
+        sites,
+        |cell| effort[cell].is_finite(),
+        &network,
+        founding,
     )?;
-    let mut corridors: Vec<_> = u.routes.iter().map(|e| e.geometry.clone()).collect();
-    for (stop, destination) in stops {
-        if !u.fields.inside[stop] || !cost.get(stop)?.is_finite() || network[stop] {
-            continue;
-        }
-        let mut c = stop;
-        let mut vertices = vec![pos(points[c])];
-        while !network[c] && previous[c] != c {
-            network[c] = true;
-            c = previous[c];
-            vertices.push(pos(points[c]));
-        }
-        if vertices.len() < 2 {
-            continue;
-        }
-        if !corridors.is_empty() {
-            let at = point(*vertices.last().unwrap());
-            let index = state.spatial.index(&corridors).map_err(io::Error::other)?;
-            if let Some(i) = index
-                .nearest(*vertices.last().unwrap())
-                .map_err(io::Error::other)?
-            {
-                let [_, end] = state
-                    .spatial
-                    .nearest_points(&at, &corridors[i])
-                    .map_err(io::Error::other)?;
-                if state
-                    .spatial
-                    .distance(&at, &point(end))
-                    .map_err(io::Error::other)?
-                    < mesh.spacing() * 2.
-                {
-                    *vertices.last_mut().unwrap() = end;
-                }
-            }
-        }
-        let line = Geometry::LineString {
-            coordinates: vertices,
-        };
-        let line = state
-            .spatial
-            .resample_trace(&line, mesh.spacing() * 0.63, None)
-            .map_err(io::Error::other)?;
-        if let Some(inside) = state
-            .spatial
-            .clip_trace(&line, frame)
-            .map_err(io::Error::other)?
-        {
-            let mut way = Element::way(inside.clone(), "thoroughfare", "Avenue", 14.);
-            way.attributes
-                .insert("destination".into(), destination.into());
-            u.routes.push(way);
-            corridors.push(inside);
-        }
-    }
+    let aligned: Vec<_> = points.iter().map(|&p| policy.align(p)).collect();
+    let surface = super::journeys::Surface {
+        mesh,
+        points: &points,
+        effort: &effort,
+        aligned: &aligned,
+        gradients: &gradients,
+        seed,
+        crossing: &crossing,
+    };
+    let traffic = super::journeys::route_connections(
+        state,
+        &surface,
+        &survey,
+        plan,
+        &mut network,
+        &mut u.routes,
+    )?;
+    let mut cost = working(f);
     // Walk from the final corridors, so access measures the route network actually proposed.
     let mut seeds = Vec::new();
     network.fill(false);
     for way in &u.routes {
-        for c in course_cells(mesh, &way.geometry, mesh.spacing(), 0.) {
+        for c in super::grades::ground_cells(mesh, way) {
             if !network[c] {
                 network[c] = true;
                 seeds.push(c);
@@ -286,7 +262,14 @@ pub(super) fn routes(
         }
     }
     for (c, on) in network.iter().enumerate() {
-        cost.set(c, if *on { 0. } else { f64::INFINITY })?;
+        cost.set(
+            c,
+            if *on {
+                mesh.spacing() * 0.45 / (1. + traffic[c])
+            } else {
+                f64::INFINITY
+            },
+        )?;
     }
     search(
         mesh,
@@ -303,21 +286,72 @@ pub(super) fn routes(
 }
 
 pub(super) fn crossings(state: &mut State, urban: &Urban) -> io::Result<()> {
-    let mesh = state.field().mesh();
-    let city = &state.regional.as_ref().unwrap().city;
-    if city.walls.is_empty() {
+    let city = &mut state.regional.as_mut().unwrap().city;
+    if city.walls.is_empty() || urban.routes.is_empty() {
         return Ok(());
     }
-    let mut crossings = Vec::new();
-    for route in &urban.routes {
-        crossings.extend(
-            course_cells(mesh, &route.geometry, mesh.spacing(), 0.)
-                .into_iter()
-                .map(|c| c as u32),
-        );
+    let k = state.spatial.as_ref();
+    let routes = Geometry::MultiLineString {
+        coordinates: urban
+            .routes
+            .iter()
+            .flat_map(|e| boundary_lines(&e.geometry))
+            .collect(),
+    };
+    for wall in &mut city.walls {
+        let built = Geometry::MultiLineString {
+            coordinates: wall
+                .sections
+                .iter()
+                .filter_map(|s| s.standing())
+                .map(|s| s.map(pos).to_vec())
+                .collect(),
+        };
+        let hit = k
+            .overlay(&built, &routes, crate::spatial::Overlay::Intersection)
+            .map_err(io::Error::other)?;
+        let mut points = Vec::new();
+        fn junctions(g: Geometry, points: &mut Vec<atlas_map::Position>) {
+            match g {
+                Geometry::Point { coordinates } => points.push(coordinates),
+                Geometry::MultiPoint { coordinates } => points.extend(coordinates),
+                Geometry::GeometryCollection { geometries } => {
+                    for g in geometries {
+                        junctions(g, points);
+                    }
+                }
+                _ => {}
+            }
+        }
+        if let Some(hit) = hit {
+            junctions(hit, &mut points);
+        }
+        wall.gates = points.iter().copied().map(super::geometry::xy).collect();
+        if points.is_empty() {
+            continue;
+        }
+        let openings = k
+            .buffer(
+                &Geometry::MultiPoint {
+                    coordinates: points,
+                },
+                8.,
+            )
+            .map_err(io::Error::other)?;
+        if let Some(openings) = openings {
+            let remaining = k
+                .overlay(&built, &openings, crate::spatial::Overlay::Difference)
+                .map_err(io::Error::other)?;
+            wall.lines = remaining
+                .iter()
+                .flat_map(boundary_lines)
+                .flat_map(|line| {
+                    line.windows(2)
+                        .map(|p| [super::geometry::xy(p[0]), super::geometry::xy(p[1])])
+                        .collect::<Vec<_>>()
+                })
+                .collect();
+        }
     }
-    crossings.sort_unstable();
-    crossings.dedup();
-    state.regional.as_mut().unwrap().city.gate_crossings = crossings;
     Ok(())
 }

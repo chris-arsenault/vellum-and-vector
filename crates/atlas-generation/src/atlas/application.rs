@@ -46,6 +46,7 @@ pub struct Products {
 }
 pub struct Run {
     pub configuration: Configuration,
+    pub experiment: Option<super::dispatch::experiment::Experiment>,
     pub settings: Settings,
     pub selection: Selection,
     pub domains: Vec<String>,
@@ -153,6 +154,7 @@ pub fn prepare(
             interfaces: run.interfaces,
         },
         &context,
+        run.experiment,
     )
 }
 struct OwnerInputs<'a, 'c> {

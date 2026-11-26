@@ -320,6 +320,10 @@ mod tests {
         );
         charter.selected = Template::Ring;
         assert_eq!(charter.affinity(Activity::Trade, [30., 0.], 10.), 0.);
+        assert_eq!(charter.city_affinity(charter.site.centre), 0.);
+        for outer_quarter in [[3000., 0.], [0., -3000.]] {
+            assert!(charter.city_affinity(outer_quarter) > 0.);
+        }
         assert_eq!(charter.align([30., 0.]), Some([0., 1.]));
     }
 

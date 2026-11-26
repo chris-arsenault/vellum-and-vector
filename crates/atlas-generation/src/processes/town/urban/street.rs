@@ -36,6 +36,8 @@ pub(super) fn circulation(
                 f.kind == "cityBlock"
             } else {
                 f.kind == "urbanGround"
+                    && f.attributes.get("groundUse").and_then(|v| v.as_str())
+                        != Some("Common ground")
             }
         })
         .collect();
@@ -143,6 +145,57 @@ fn number(f: &Feature, key: &str, or: f64) -> f64 {
     f.attributes.get(key).and_then(|v| v.as_f64()).unwrap_or(or)
 }
 
+#[derive(Clone, Copy)]
+enum Premises {
+    House,
+    Shop,
+    Workshop,
+    Hall,
+}
+impl Premises {
+    fn layout(self) -> (&'static str, &'static str, f64) {
+        match self {
+            Self::House => ("House", "residential", 7.5),
+            Self::Shop => ("Shop", "economic", 10.),
+            Self::Workshop => ("Workshop", "economic", 16.),
+            Self::Hall => ("Hall", "civic", 20.),
+        }
+    }
+}
+
+fn premises_mix(usage: &str, mix: Option<&serde_json::Value>) -> [f64; 4] {
+    if matches!(usage, "Civic precinct" | "civic") {
+        return [0., 0., 0., 1.];
+    }
+    if let Some(mix) = mix {
+        let weights =
+            ["housing", "trade", "workshops"].map(|key| mix[key].as_f64().unwrap_or(0.).max(0.));
+        let total = weights.iter().sum::<f64>();
+        if total > 0. {
+            let [h, t, w] = weights.map(|v| v / total);
+            return [h, t, w, 0.];
+        }
+    }
+    match usage {
+        "business" | "Trade frontage" => [0., 1., 0., 0.],
+        "industry" | "Working ground" => [0., 0., 1., 0.],
+        _ => [1., 0., 0., 0.],
+    }
+}
+
+fn premise(weights: [f64; 4], roll: f64) -> Premises {
+    let [home, shop, work, _] = weights;
+    if roll < home {
+        Premises::House
+    } else if roll < home + shop {
+        Premises::Shop
+    } else if weights[3] == 0. || roll < home + shop + work {
+        Premises::Workshop
+    } else {
+        Premises::Hall
+    }
+}
+
 /// Frontages face the nearest street. Each house takes a rectangular site with a
 /// rear yard, leaving the remaining land available to the other street frontages.
 pub(super) fn premises(
@@ -219,12 +272,17 @@ pub(super) fn premises(
             .and_then(|v| v.as_f64())
             .unwrap_or(0.);
         let seed = (urban.street_round * 7919 + i * 157) as u64;
-        let width = match usage {
-            "business" | "Trade frontage" => 10.,
-            "industry" | "Working ground" => 16.,
-            "civic" | "Civic precinct" => 20.,
-            _ => 7.5,
-        };
+        let weights = premises_mix(usage, lot.attributes.get("useMix"));
+        let frontage_width: f64 = [
+            Premises::House,
+            Premises::Shop,
+            Premises::Workshop,
+            Premises::Hall,
+        ]
+        .into_iter()
+        .zip(weights)
+        .map(|(p, w)| p.layout().2 * w)
+        .sum();
         let coverage = (0.12 + 0.48 * density / (density + 1200.) + 0.4 * built / (built + 0.09))
             .clamp(0., 1.);
         for piece in atlas_map::regions::parts(&inset) {
@@ -253,7 +311,7 @@ pub(super) fn premises(
                 let length = distance(a, b);
                 let direction = unit(sub(b, a));
                 let normal_distance = dot(sub(centre, a), left(direction)).abs();
-                let count = (length / width).floor() as usize;
+                let count = (length / frontage_width).floor() as usize;
                 if normal_distance < 6. || count == 0 {
                     continue;
                 }
@@ -262,6 +320,7 @@ pub(super) fn premises(
                     if sample(key) > coverage {
                         continue;
                     }
+                    let (name, function, width) = premise(weights, sample(key ^ 0x5a6d)).layout();
                     let pitch = length / count as f64;
                     let frontage = add(a, scale(direction, pitch * (n as f64 + 0.5)));
                     let inward = scale(
@@ -324,26 +383,13 @@ pub(super) fn premises(
                     let mut yard = Element::new(lot_shape, "yard", "Premises");
                     yard.attributes = lot.attributes.clone();
                     urban.plots.push(yard);
-                    let mut building = Element::new(
-                        shape,
-                        "building",
-                        match usage {
-                            "business" => "Shop",
-                            "industry" => "Workshop",
-                            "civic" => "Hall",
-                            _ => "House",
-                        },
-                    );
+                    let mut building = Element::new(shape, "building", name);
                     building.attributes = lot.attributes.clone();
-                    building.attributes.insert(
-                        "buildingFunction".into(),
-                        match usage {
-                            "business" | "industry" => "economic",
-                            "civic" => "civic",
-                            _ => "residential",
-                        }
-                        .into(),
-                    );
+                    // The secondary land use belongs to the surrounding frontage.
+                    building.attributes.remove("secondaryUse");
+                    building
+                        .attributes
+                        .insert("buildingFunction".into(), function.into());
                     building
                         .attributes
                         .insert("entrance".into(), serde_json::json!(front));
@@ -353,4 +399,31 @@ pub(super) fn premises(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn premises_use_the_local_mix_and_recognize_city_tracts() {
+        let mix = serde_json::json!({"housing":6,"trade":3,"workshops":1});
+        let weights = premises_mix("Crowded housing", Some(&mix));
+        assert_eq!(
+            [0.1, 0.75, 0.95].map(|v| premise(weights, v).layout().0),
+            ["House", "Shop", "Workshop"]
+        );
+        for (label, expected) in [
+            ("Trade frontage", "Shop"),
+            ("Working ground", "Workshop"),
+            ("Civic precinct", "Hall"),
+        ] {
+            assert_eq!(premise(premises_mix(label, None), 0.3).layout().0, expected);
+        }
+        assert_eq!(
+            premise(premises_mix("Civic precinct", Some(&mix)), 0.45)
+                .layout()
+                .0,
+            "Hall"
+        );
+    }
 }

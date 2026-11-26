@@ -11,6 +11,8 @@ pub(super) struct CityFields {
     #[serde(default)]
     pub program: Vec<usize>,
     pub access: Vec<f64>,
+    #[serde(default)]
+    pub activity: Vec<[f64; 2]>,
     pub claims: Vec<Claims>,
     pub developed: Vec<f64>,
     pub civic: Vec<f64>,
@@ -20,6 +22,8 @@ pub(super) struct CityFields {
 
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
 pub(super) struct Claims {
+    #[serde(default)]
+    pub demands: crate::town::templates::district::Demands,
     pub home: f64,
     pub work: f64,
     #[serde(default)]

@@ -28,6 +28,7 @@ fn creator_configuration_binds_owned_settings_before_building_the_sequence() {
     let mut input: Input = serde_json::from_value(json!({
         "areaId": atlas_map::Id::from_name("world"), "domains": ["physical"], "quality": "draft", "seed": 4,
         "features": {
+            "built.layout": {"settings": {"districtCatchmentScale": 2.8}},
             "physical.foundation": {"settings": {"continents": 7}, "configuration": {"profile": {"ContinentalWarpStrength": 0.8}}},
             "physical.lifecycle": {"configuration": {"history": {"plateTravel": [0.9, 0.5, 0.1]}}},
             "ecology.living": {"configuration": {"landscape": {"rainfall": 0.5}}}
@@ -35,6 +36,7 @@ fn creator_configuration_binds_owned_settings_before_building_the_sequence() {
     })).unwrap();
     let resolved = configuration::resolve(&input, &settings).unwrap();
     assert_eq!(resolved.parameters.continents, 7.0);
+    assert_eq!(resolved.parameters.district_catchment_scale, 2.8);
     assert_eq!(resolved.overrides["ContinentalWarpStrength"], 0.8);
     assert_eq!(resolved.settings.epochs[0].plate_travel, Some(0.1));
     assert_eq!(

@@ -24,6 +24,12 @@ pub struct Placement {
     pub targets: ReadBand<i32>,
     pub share: ReadBand<f64>,
 }
+/// Each source offers a fraction of its current households. Receivers divide
+/// that pool by share, carrying the contributing households' identities.
+pub struct HouseholdTransfers {
+    pub sources: Vec<(usize, f64)>,
+    pub receivers: Vec<(usize, f64)>,
+}
 pub struct LandPlacement {
     pub kind: LayerId,
     pub movement: Placement,
@@ -88,6 +94,7 @@ fn command<S: 'static, P: 'static>(
 pub struct Operations<S> {
     pub lay: Command<S, Lay>,
     pub move_layer: Command<S, Move>,
+    pub place_households: Command<S, Vec<HouseholdTransfers>>,
     pub place_ruins: Command<S, Placement>,
     pub place_land: Command<S, LandPlacement>,
     pub convert: Command<S, Convert>,
@@ -111,6 +118,12 @@ impl<S: 'static> Operations<S> {
     pub fn new(access: OwnerAccess<S>) -> Self {
         use CommandKind::{Elapsed, Event, Work};
         Self {
+            place_households: command(
+                "human.layers.place-households",
+                Work,
+                access,
+                |owner, _, p| owner.place_households(p),
+            ),
             lay: command("human.layers.lay", Work, access, |owner, _, input| {
                 owner.lay(input)
             }),

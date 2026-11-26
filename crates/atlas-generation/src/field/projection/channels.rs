@@ -606,7 +606,11 @@ pub(super) fn humans() -> Vec<Channel> {
         }
     }
     for channel in c {
-        channel.discrete = true;
+        // Households travel with their donor's identity column. Land fractions and
+        // invested capital describe spatial densities over the surrounding ground.
+        channel.discrete = channel.quantity == Quantity::Category
+            || channel.name == "Population"
+            || channel.name.starts_with("Identity");
         if channel.quantity != Quantity::Category {
             channel.minimum = Some(0.0);
         }

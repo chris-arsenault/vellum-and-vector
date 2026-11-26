@@ -26,6 +26,15 @@ pub enum Boundary<'a> {
 /// observation must finish copying/serializing its output before the next process mutates it.
 pub trait Output {
     fn validate(&mut self, state: &State) -> ExecutionResult<()>;
+    fn process(
+        &mut self,
+        _state: &State,
+        _id: &str,
+        _path: &[String],
+        _parameters: &crate::parameters::Values,
+    ) -> ExecutionResult<()> {
+        Ok(())
+    }
     fn diagnostic(&mut self, _diagnostic: &Diagnostic) -> ExecutionResult<()> {
         Ok(())
     }
@@ -53,7 +62,11 @@ pub struct Generation {
     ownership: Ownership,
 }
 impl Generation {
-    pub fn new(input: Prepared, features: &Context<'_>) -> ExecutionResult<Self> {
+    pub fn new(
+        mut input: Prepared,
+        features: &Context<'_>,
+        experiment: Option<super::dispatch::experiment::Experiment>,
+    ) -> ExecutionResult<Self> {
         let ownership = Ownership::new(
             &input.state.scope,
             input.operations.world.original.features.clone(),
@@ -63,13 +76,17 @@ impl Generation {
         )?;
         let mut runtime = Runtime::new(input.state);
         let operations = Operations::new(&mut runtime, features, input.operations)?;
+        let site = runtime.executor.state().field().process_site();
+        if let Some(experiment) = experiment {
+            experiment.apply(&mut input.configuration, &operations.registry, site)?;
+        }
         let products = ProductLedger::new(input.facts, operations.registry.products.clone())
             .map_err(|error| ExecutionError::Failed(format!("{error:?}")))?;
         let (_, diagnostics) = super::dispatch::preflight::inspect(
             &input.configuration,
             &operations.registry,
             products.clone(),
-            runtime.executor.state().field().process_site(),
+            site,
         );
         if !diagnostics.is_empty() {
             return Err(ExecutionError::Failed(
@@ -244,6 +261,15 @@ impl<C, O: Output> Observations<'_, C, O> {
     }
 }
 impl<C: GenerationControl, O: Output> Observer for Observations<'_, C, O> {
+    fn process(
+        &mut self,
+        state: &State,
+        id: &str,
+        path: &[String],
+        parameters: &crate::parameters::Values,
+    ) -> ExecutionResult<()> {
+        self.output.process(state, id, path, parameters)
+    }
     fn validate(&mut self, state: &State) -> ExecutionResult<()> {
         self.ownership.validate(state)?;
         self.output.validate(state)

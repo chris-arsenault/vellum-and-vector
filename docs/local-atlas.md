@@ -141,6 +141,96 @@ When generation code changes what a world stores, the kept world may no longer o
 `scripts/local-atlas.sh world --fresh` creates a new one, and
 `scripts/local-atlas.sh reset` deletes the volume and every stored file.
 
+## Process experiments
+
+Build the harness once. The experiment commands use that binary directly and read trial
+settings from JSON.
+
+```sh
+cargo build --release -p atlas-host --bin local_atlas
+scripts/local-atlas.sh experiment processes
+scripts/local-atlas.sh experiment run experiment.json
+scripts/local-atlas.sh experiment render path/to/results.json --metric areaIntegral --colors log
+scripts/local-atlas.sh experiment land-use path/to/trial-1 --near 300
+```
+
+Use `source.kind` to choose the inputs.
+
+- `inspect` reads the published raster named by `observe.channel` on each of the
+  `source.maps` report folders. It uses a saved GeoTIFF when available, or reads the
+  local atlas asset. All maps use the footprint of `observe.footprint`, which defaults
+  to the last map in the list.
+- `captured` opens the pinned revision in the `source.map` report folder. It needs the
+  local atlas database and the retained numerical resources. Set `source.revision` to
+  rerun an earlier capture of that same map after its finished revision has been published. An optional
+  `source.configuration` JSON file supplies creator settings or the saved regeneration
+  action for that revision in place of settings from the map.
+- `create` starts from `source.configuration`, a world configuration or a saved world
+  `action.json`. Configuration paths are relative to the experiment file.
+- `job` opens the saved preparation of an interrupted job by `source.id`, using its
+  captured inputs and records. This starts the selected work from the prepared inputs.
+
+Captured and create runs read a live numerical channel such as `Population` or `Elevation`.
+With `only`, the normal scheduler runs the listed migrated processes plus the preparation
+needed to open the inputs. Without `only`, the full recipe runs and writes its completed
+document, numerical resources and `records.sqlite` to the trial directory. The database
+retains vector features and networks after the harness exits, including district
+polygons, trait landmarks and roads. Read `working_features` for the completed feature
+records. Its `data` column holds CBOR and its `kind` column supports filtering.
+The `land-use` command measures primary and secondary uses within each district and
+the portion of each use within the specified straight-line distance of mapped roads.
+Experiments keep all outputs under
+`.artifacts/local-atlas/experiments/`.
+
+For example, compare household placement on a captured City. Trade binds the City census
+guidance for the placement pass.
+
+```json
+{
+  "name": "City household catchments",
+  "source": { "kind": "captured", "map": "Nishi-resident-capture" },
+  "only": [
+    { "process": "human.land.trade", "invocation": "round-1/human.land.trade" },
+    { "process": "human.land.feed", "invocation": "round-1/human.land.feed" },
+    { "process": "human.land.gather", "invocation": "round-1/human.land.gather" }
+  ],
+  "observe": {
+    "channel": "Population",
+    "footprint": "Nishi-current-views",
+    "watch": [{ "process": "refinement.begin" }]
+  },
+  "search": {
+    "kind": "sweep",
+    "target": { "process": "human.land.gather", "invocation": "round-1/human.land.gather" },
+    "parameter": "catchmentSpans",
+    "values": [1, 2, 4]
+  }
+}
+```
+
+Omit `search` for a single run. Use `changes` for fixed overrides with the same `target`
+and `parameter` fields and a single `value`. Omitting a target's `invocation` matches all
+applicable occurrences of that process. Use `experiment processes` to find eligible controls,
+defaults, units and strategies.
+
+To expose another coefficient, declare a `NumericParameter` next to the process strategy.
+Register it with the process specification and bind the resolved value into the strategy's
+typed settings. The declaration supplies the fallback value for ordinary generation too.
+
+A `bisect` search takes the same `target` and `parameter` with `lower`, `upper`,
+`tolerance`, `metric` and `threshold` in place of `values`. It reports the bracket in
+parameter units. Pick endpoints on opposite sides of the threshold and an interval where the
+metric changes consistently. Failed trials and unbracketed endpoints are visible in the output.
+
+Each comparison produces `results.json`, `measurements.csv`, `series.svg` and `maps.png`.
+The maps share a sample frame and colour scale, with panels in trial order. Re-render with
+`--colors log` to see variation in a field with large peaks. The table records
+the resolved settings at watched and varied invocations. Measurements are estimates on a
+shared grid of cell-centre samples. `areaIntegral` weights the values by sample area in square
+kilometres, so integrating population density gives estimated residents. `coveredKm2` and
+`sampledKm2` report data coverage and the sampled footprint area. Use `observe.samplesAcross`
+to set the sample count along the longer side of the frame.
+
 ## Profiling
 
 `make local-profile SECONDS=30` samples the running server with perf for that many

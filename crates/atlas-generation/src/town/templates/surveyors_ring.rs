@@ -34,6 +34,18 @@ pub(super) const POLICY: Policy = Policy {
         let arc = (radius / gap).round().max(1.);
         0.5 + 3. / (1. + (radius - arc * gap).abs() / p.unit)
     },
+    city_households: Some(|p| {
+        let radius = crate::town::geometry::distance(p.point, p.site.centre);
+        if radius < p.unit {
+            return 0.;
+        }
+        // A survey charter shapes the quarters near its founding court. Only the
+        // court itself reserves urban ground; street rights of way belong to plots.
+        let gap = spacing(p.unit);
+        let ring = (radius / gap).round().max(1.) * gap;
+        let draw = 1. / (1. + (radius - ring).abs() / p.unit);
+        1. + (2. * draw - 0.5) / (1. + (radius / (2. * gap)).powi(2))
+    }),
     streets: |town| {
         let unit = town.plot().1;
         super::streets::occupied_arcs(town, unit, spacing(unit))

@@ -68,6 +68,23 @@ pub(super) fn resolve(
     let tenure = read(HumanField::Tenure)?;
     let ways = read(HumanField::KeptLine)?;
     let slope = f.shared().scalar(Scalar::Slope);
+    let scalar = |id| f.shared().scalar(id);
+    let mut old_wall = vec![false; mesh.len()];
+    for wall in state
+        .regional
+        .as_ref()
+        .unwrap()
+        .city
+        .walls
+        .iter()
+        .filter(|w| w.outgrown)
+    {
+        for section in &wall.sections {
+            if section.built > 0. {
+                old_wall[section.cell] = true;
+            }
+        }
+    }
     let reach = (2. * template.quarter()).max(mesh.spacing() * 3.);
     let turnover = (0..mesh.len())
         .map(|c| f.goods_turnover(c))
@@ -118,12 +135,25 @@ pub(super) fn resolve(
             .get(c)
             .and_then(|&id| urban.programs.get(id as usize));
         let strength = program.map_or(0., |p| p.strength) * stencil;
+        let land = crate::town::templates::district::DistrictLand {
+            wet: (scalar(Scalar::FloodplainIntensity).get(c)? / 1000.)
+                .max(scalar(Scalar::WetlandCover).get(c)?),
+            trees: scalar(Scalar::TreeCover).get(c)?,
+            slope: grade,
+            ruined: ruin[c],
+            built: b,
+            access,
+            verdure: scalar(Scalar::Verdure).get(c)?.clamp(0., 1.),
+            tearing: scalar(Scalar::Tearing).get(c)?.clamp(0., 1.),
+            old_wall: old_wall[c],
+        };
         let demand = program
-            .map(|program| program.demands_at(p))
+            .map(|program| program.demands_on(land))
             .unwrap_or_default();
         let household = 1. + strength * (demand.housing + 0.3 * demand.gardens);
         let employment = 1. + strength * (demand.trade + demand.workshops);
         fields.claims.push(Claims {
+            demands: demand,
             home: homes * household * (0.65 + 2.65 * stencil),
             work: work * employment * (0.75 + 1.55 * stencil),
             trade,

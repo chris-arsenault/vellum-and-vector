@@ -37,6 +37,14 @@ function width(feature: RenderFeature, resolution: number) {
     .filter((value) => value !== undefined) as number[];
 }
 
+it("retains the hierarchy of shared city journeys at overview scale", () => {
+  const road = { ...river([10, 10]), kind: "thoroughfare", layerId: "roads" };
+  const main = { ...road, attributes: { widths: [24, 24], arterialStrength: 0.7 } };
+  const feeder = { ...road, attributes: { widths: [10, 10], arterialStrength: 0.1 } };
+  expect(width(main, 50)[0]).toBeGreaterThan(width(feeder, 50)[0] * 2);
+  expect(width(main, 1)[0]).toBe(24);
+});
+
 it("distinguishes unresolved tributaries and trunks at continental zoom without splitting every segment", () => {
   const small = river([10, 12, 15]),
     large = river([100, 150, 230]);
@@ -68,12 +76,15 @@ it("distinguishes political seats without using zoom to add or remove settlement
 
 it("shows occupied City ground with labels off and leaves district interiors visible", () => {
   const ground = { ...river([]), geometry: rectangle(0, 0, 100, 100), kind: "urbanGround" };
-  const paint = (use: string) =>
-    styles({ ...ground, attributes: { groundUse: use } }, 100)[0]
+  const paint = (use: string, secondaryUse?: string) =>
+    styles({ ...ground, attributes: { groundUse: use, secondaryUse } }, 100)[0]
       .getFill()
       ?.getColor();
   expect(paint("Civic precinct")).toBeTruthy();
   expect(paint("Crowded housing")).not.toEqual(paint("Civic precinct"));
+  expect(paint("Crowded housing", "Trade frontage")).not.toEqual(
+    paint("Crowded housing", "Working ground")
+  );
   expect(styles({ ...ground, kind: "district" }, 100)[0].getFill()).toBeFalsy();
 });
 

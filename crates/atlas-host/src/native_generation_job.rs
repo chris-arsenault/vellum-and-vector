@@ -44,6 +44,12 @@ pub struct Services<'a> {
     pub published: &'a dyn Fn(&MapRef) -> io::Result<()>,
 }
 impl NativeJob {
+    pub fn retained_capture(jobs: &std::path::Path, id: atlas_map::Id) -> io::Result<Self> {
+        let path = jobs.join(id.to_string()).join("captured.json");
+        let capture: CapturedJob = serde_json::from_reader(fs::File::open(path)?)?;
+        Ok(capture.request)
+    }
+
     pub async fn run(
         self,
         services: Services<'_>,
@@ -221,6 +227,7 @@ impl NativeJob {
             &self.operation.to_string(),
             generation_execution::Services {
                 recovery: Some(recovery),
+                experiment: None,
                 resources: resources.clone(),
                 cache: cache.clone(),
                 spatial: spatial.clone(),

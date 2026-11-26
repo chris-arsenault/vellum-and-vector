@@ -153,6 +153,7 @@ async fn generate(root: &Path, width: f64, height: f64, action: Option<&Path>) -
         submission,
         "surface-check",
         Services {
+            experiment: None,
             resources,
             spatial,
             cache,

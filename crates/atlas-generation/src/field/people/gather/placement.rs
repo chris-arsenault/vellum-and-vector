@@ -151,6 +151,7 @@ pub(super) fn place(
     q: &Questions,
     owner: &operations::Operations<Field>,
     residents: &crate::storage::ReadBand<f64>,
+    settings: super::PlacementSettings,
 ) -> ExecutionResult<()> {
     // owner-direction(2026-11-21): people on finer maps roughly match the parent's because people's refinement processes produce roughly equal counts, as other refinement processes do
     let livable = context.query(&q.livable)?.values();
@@ -196,21 +197,116 @@ pub(super) fn place(
         )?;
     }
     trace_distribution(field, "before gathering")?;
+    if let Some(city) = work
+        .city
+        .as_ref()
+        .filter(|c| c.census.len() == field.mesh.len())
+    {
+        let sites = super::catchments::sites(field, work, city, residents, &opportunity)?;
+        context.run(
+            &owner.place_households,
+            &super::catchments::placement(&sites, settings),
+        )?;
+        trace_distribution(context.state(), "after gathering")?;
+        return Ok(());
+    }
+    for face in 0..3 {
+        place_across_face(context, work, owner, &opportunity, face)?;
+    }
+    let residents = context
+        .state()
+        .people
+        .view(crate::human::HumanField::Layer(LayerId::Population));
     distribute(
         context,
         work,
         owner,
         LayerId::Population,
-        residents,
+        &residents,
         &opportunity,
     )?;
+    if context.state().process_site().map_type == crate::field::people::contract::MapType::Region
+        && !work.markets.is_empty()
+    {
+        let transfers = super::settlements::households(context.state(), work)?;
+        context.run(&owner.place_households, &transfers)?;
+    }
     trace_distribution(context.state(), "after gathering")?;
+    Ok(())
+}
+
+fn neighbour_exchange(heads: [f64; 2], weights: [f64; 2], areas: [f64; 2]) -> f64 {
+    0.5 * (exchange(heads, weights, areas)
+        - exchange(
+            [heads[1], heads[0]],
+            [weights[1], weights[0]],
+            [areas[1], areas[0]],
+        ))
+}
+
+fn place_across_face(
+    context: &mut CommandContext<'_, Field>,
+    work: &Work,
+    owner: &operations::Operations<Field>,
+    opportunity: &Band<f64>,
+    face: usize,
+) -> ExecutionResult<()> {
+    // owner-direction(2026-11-25): household refinement smooths parent cell edges through local placement.
+    // Exchange across each face orientation. Otherwise a household's single best
+    // distant offer can mask every smaller imbalance across its immediate boundary.
+    let field = context.state();
+    let current = field
+        .people
+        .view(crate::human::HumanField::Layer(LayerId::Population));
+    let mut targets = field.coverage.borrow_mut().scratch(field.mesh.len(), -1);
+    let mut share = working(field);
+    for a in 0..field.mesh.len() {
+        if field.mesh.inverted(a) || !habitable(field, a)? {
+            continue;
+        }
+        let Some(b) = field.mesh.neighbor(a, face) else {
+            continue;
+        };
+        if !habitable(field, b)? {
+            continue;
+        }
+        let passage = super::step_passed(work, a, face)?;
+        let heads = [current.get(a)?, current.get(b)?];
+        let weights = [opportunity.get(a)?, opportunity.get(b)?];
+        let areas = [km2(field, a), km2(field, b)];
+        let moved = neighbour_exchange(heads, weights, areas);
+        let (from, to, stock) = if moved > 0. {
+            (a, b, heads[0] * areas[0])
+        } else if moved < 0. {
+            (b, a, heads[1] * areas[1])
+        } else {
+            continue;
+        };
+        targets.set(from, to as i32)?;
+        share.set(from, moved.abs() / stock * passage)?;
+    }
+    context.run(
+        &owner.move_layer,
+        &Move {
+            kind: LayerId::Population,
+            targets: targets.read_only(),
+            share: share.read_only(),
+            years: 0.,
+        },
+    )?;
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{exchange, livelihoods};
+    use super::{exchange, livelihoods, neighbour_exchange};
+    #[test]
+    fn donor_steps_relax_on_equal_ground_but_a_real_opportunity_gradient_remains() {
+        let moved = neighbour_exchange([1000., 100.], [1., 1.], [1., 1.]);
+        assert!(moved > 0. && 1000. - moved > 100. + moved);
+        assert_eq!(neighbour_exchange([1000., 100.], [10., 1.], [1., 1.]), 0.);
+        assert!(neighbour_exchange([100., 100.], [1., 3.], [1., 1.]) > 0.);
+    }
     #[test]
     fn even_household_stock_responds_to_market_access_development_and_exposure() {
         let country = livelihoods(50.0, 0.5, 1.0, 0.01, 1.0, 0.0);

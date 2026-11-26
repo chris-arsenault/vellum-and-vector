@@ -60,7 +60,11 @@ pub(super) fn prepare(
         vec![],
         move |scope, step| {
             scope.run(&prepare, step)?;
-            scope.run(&grow, step)
+            scope.run(&grow, step)?;
+            Ok(super::city::trace_footprint(
+                scope.state(),
+                "inherited population",
+            )?)
         },
     )
 }
