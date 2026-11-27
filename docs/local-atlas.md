@@ -158,6 +158,16 @@ server, `history <name>` writes what each process recorded doing (`history.json`
 `raster <name> <layer id>...` saves raster layers as GeoTIFFs, e.g. `terrain` (elevation
 and its companion bands) or `raster:finalSurface`.
 
+`scripts/local-atlas.sh compare <name> <name>` prints how alike two kept maps are. For
+each mix both maps hold (premises other than homes, homes, storeys, households' means,
+plot sizes, ways by length, how mixed each street's premises are, district roles, civic
+places, land use by area) it gives the share the two have in common: what both hold of
+each entry, summed, so two maps with the same proportions share all of it whatever their
+size. Premises are counted by holding, not by building. Each map's own figures follow:
+the spread of its homes' means, how much of that spread lies between streets beside what
+chance alone leaves, and how much of its street length keeps to two directions square to
+each other beside what streets laid independently keep.
+
 A failed job keeps its progress. Fix the cause, run `make local-up` to rebuild and
 restart the server, and `make local-resume` continues the last job from its last
 completed round. A job that completed while its driver was gone only gets its report.

@@ -2,6 +2,7 @@
 //! and map services the way the frontend does: one kept verification world, maps refined
 //! from it, and each map's report and pictures read from its published GIS storage.
 mod client;
+mod compare;
 mod experiment;
 mod follow;
 mod picture;
@@ -234,6 +235,17 @@ fn run() -> io::Result<()> {
             let kept: Kept = read_json(&directory.join("map.json"))?;
             report::report(&harness.server, &kept.reference, &directory)
         }
+        (Some("compare"), Some(first)) if options.positionals.len() == 3 => {
+            let second = options.positionals[2].as_str();
+            let kept = |name: &str| -> io::Result<Kept> {
+                read_json(&harness.reports.join("maps").join(name).join("map.json"))
+            };
+            let (a, b) = (kept(first)?, kept(second)?);
+            compare::compare(
+                &harness.server,
+                [(first, &a.reference), (second, &b.reference)],
+            )
+        }
         _ => {
             eprintln!("{}", usage(&harness));
             std::process::exit(2);
@@ -250,6 +262,7 @@ fn usage(harness: &Harness) -> String {
   census [--reference-width] [--full-history [--seed <integer>]]
   experiment processes | run <experiment.json> | render <results.json> [--metric <name>] [--colors linear|log]
   summary|history <map folder under {maps}>
+  compare <map folder> <map folder>
   city-view-inputs <published City map folder>
   raster <map folder> <layer id>...
   real --at x,y|Settlement [--hex 100m] [--across 50] [--kind ground|structure]
