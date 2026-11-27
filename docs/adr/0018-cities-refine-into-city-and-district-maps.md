@@ -135,6 +135,14 @@ and the district offers them larger plots. Where they have less, that share take
 in lodging courts, and a crowded household builds upward more readily before it builds
 over its garden. A standalone town has no City to say and chooses as it always has.
 
+Every town on a street map carries a record of how it is ordered: the spacing its streets
+keep, how far a back lane runs, where a main street's crossings fall, the saving that
+earns a shortcut, the street work its residents give and the size of the plots it offers.
+The causes that vary a town (its template, its city's civic order, its district, its
+land) and the rules that build it meet in this record. A cause writes a term; a rule
+reads it where it would otherwise hold a number of its own. Each term is a declared
+setting of the map, so one map can be made with different terms and compared.
+
 During Street development, local conditions inform demand, operating premises
 compete for reachable customers and services, and funded common works can claim
 ground. Accessible clearance already affects nuisance at premises. The separate

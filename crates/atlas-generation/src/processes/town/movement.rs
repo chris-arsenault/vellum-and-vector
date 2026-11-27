@@ -18,17 +18,14 @@ use std::io;
 // Street work laid out between plots. Street metres, resolved by `Measure::Layout`.
 /// How far past two plot depths a street's end looks for its own holdings.
 const END_PAD: f64 = 5.;
-/// A backland lane starts this far beside and in front of a plot's flank, and runs this far
-/// behind the plot.
+/// A backland lane starts this far beside and in front of a plot's flank. How far it runs
+/// behind the plot is the town's order's to say.
 const BACKLAND_OFFSET: f64 = 5.;
-const BACKLAND_REACH: f64 = 20.;
 /// Street ends nearer than this are not joined by a shortcut; a shortcut's gain is measured
-/// against its direct length and this much more.
+/// against its direct length and this much more. The saving that earns a shortcut and the
+/// spacing a new route keeps from other streets are the town's order's to say.
 const SHORTCUT_LEAST: f64 = 25.;
 const SHORTCUT_SLACK: f64 = 40.;
-const SHORTCUT_GAIN: f64 = 0.4;
-/// The least spacing a new route keeps from the streets it does not join.
-const ROUTE_SPACING: f64 = 60.;
 /// The shortest route worth building, and the least length any connection is charged for.
 const MINIMUM_ROUTE: f64 = 20.;
 const LEAST_CONNECTION: f64 = 1.;
@@ -90,7 +87,7 @@ pub fn advance(town: &mut Town, context: &mut Frontage<'_>) -> io::Result<()> {
         housed,
     );
     // Each participating resident can supply the same share of street work in an epoch.
-    let new_effort = participants * 0.12 * context.exposure;
+    let new_effort = participants * town.order.street_work * context.exposure;
     town.access_effort += new_effort;
     let opening = town.access_effort;
     let name = town.seat.name.clone();
@@ -274,9 +271,9 @@ struct Decisions {
 fn shortcut_served(town: &Town, graph: &BoundNetwork, project: &Project) -> bool {
     let (a, b) = (project.points[0], *project.points.last().unwrap());
     let slack = town.scale().length(SHORTCUT_SLACK, Measure::Layout);
-    graph
-        .junction_cost(a, b)
-        .is_some_and(|cost| shortcut_gain(cost, distance(a, b), slack) <= SHORTCUT_GAIN)
+    graph.junction_cost(a, b).is_some_and(|cost| {
+        shortcut_gain(cost, distance(a, b), slack) <= town.order.shortcut_saving
+    })
 }
 #[derive(Default, serde::Serialize)]
 struct StreetWork {
@@ -1098,7 +1095,7 @@ fn street_loads(town: &Town, context: &Frontage<'_>, use_: &Loads) -> io::Result
 fn backland(town: &Town) -> Vec<Project> {
     let town_scale = town.scale();
     let offset = town_scale.length(BACKLAND_OFFSET, Measure::Layout);
-    let behind = town_scale.length(BACKLAND_REACH, Measure::Layout);
+    let behind = town_scale.length(town.order.back_lane, Measure::Layout);
     let deep = town_scale.length(DEEP_PLOT, Measure::Plot);
     let centre_pull = town_scale.length(CENTRE_PULL, Measure::Adjacency);
     town.holdings()
@@ -1221,8 +1218,9 @@ fn shortcuts(
         for &b in adjacent {
             let direct = distance(ends[a], ends[b]);
             let cost = routes.cost(b);
+            let terms = (slack, town.order.shortcut_saving);
             if let Some(benefit) =
-                shortcut_benefit(cost, direct, slack, frontage[a].min(frontage[b]), width)
+                shortcut_benefit(cost, direct, terms, frontage[a].min(frontage[b]), width)
             {
                 projects.push(Project {
                     demand: "shortcut",
@@ -1239,16 +1237,17 @@ fn shortcuts(
 fn shortcut_gain(cost: f64, direct: f64, slack: f64) -> f64 {
     (cost - direct) / (direct + slack)
 }
+/// What joining two street ends is worth: nothing unless it saves more than `saving` of
+/// the walk between them and serves occupied frontage.
 fn shortcut_benefit(
     cost: f64,
     direct: f64,
-    slack: f64,
+    (slack, saving): (f64, f64),
     served: f64,
     plot_width: f64,
 ) -> Option<f64> {
     let gain = shortcut_gain(cost, direct, slack);
-    (gain.is_finite() && gain > SHORTCUT_GAIN && served > 0.)
-        .then_some(gain * (1. + served / plot_width))
+    (gain.is_finite() && gain > saving && served > 0.).then_some(gain * (1. + served / plot_width))
 }
 fn invest(
     town: &mut Town,
@@ -1299,7 +1298,7 @@ fn invest(
         };
         points[0] = start;
         if let [a, b] = points.as_mut_slice() {
-            let spacing = scale.length(ROUTE_SPACING, Measure::Layout);
+            let spacing = scale.length(town.order.street_spacing, Measure::Layout);
             let streets = StreetLines::near(
                 town,
                 &[*a, *b],
@@ -1516,10 +1515,16 @@ mod tests {
     }
     #[test]
     fn shortcuts_need_a_real_detour_and_people_at_both_ends() {
-        assert_eq!(shortcut_benefit(f64::INFINITY, 100., 40., 12., 10.), None);
-        assert_eq!(shortcut_benefit(300., 100., 40., 0., 10.), None);
-        assert_eq!(shortcut_benefit(120., 100., 40., 12., 10.), None);
-        assert!(shortcut_benefit(300., 100., 40., 12., 10.).is_some());
+        let usual = (40., crate::town::order::Order::default().shortcut_saving);
+        assert_eq!(shortcut_benefit(f64::INFINITY, 100., usual, 12., 10.), None);
+        assert_eq!(shortcut_benefit(300., 100., usual, 0., 10.), None);
+        assert_eq!(shortcut_benefit(120., 100., usual, 12., 10.), None);
+        assert!(shortcut_benefit(300., 100., usual, 12., 10.).is_some());
+        // A town that joins street ends for any saving builds the shortcut the usual town
+        // leaves, and one that wants the walk halved leaves a shortcut the usual town builds.
+        assert!(shortcut_benefit(120., 100., (40., 0.1), 12., 10.).is_some());
+        assert!(shortcut_benefit(190., 100., usual, 12., 10.).is_some());
+        assert_eq!(shortcut_benefit(190., 100., (40., 0.9), 12., 10.), None);
     }
 
     fn market() -> Town {

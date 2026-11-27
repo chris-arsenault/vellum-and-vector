@@ -739,7 +739,11 @@ fn real_scale(harness: &Harness, options: &Options) -> io::Result<()> {
             developed["recipe"]["features"]["built.layout"]["configuration"][choice] = json!(value);
         }
     }
-    if let Some(setting) = options.get("set") {
+    for setting in options
+        .get("set")
+        .into_iter()
+        .flat_map(|all| all.split(','))
+    {
         let (feature, key, value) = feature_setting(setting)?;
         developed["recipe"]["features"][feature]["settings"][key] = json!(value);
     }

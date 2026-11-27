@@ -118,10 +118,12 @@ Settlement names are resolved on that parent, so subsequent selections follow it
 For a controlled settlement comparison, `real --template surveyors-ring` selects that
 template from the site's eligible alternatives. `--major-work library` starts a commission
 whose site, design and construction follow the usual major-work rules. `--set
-feature.key=number` changes one numeric feature setting for that map alone, such as
-`city --set built.layout.districtCatchmentScale=1.8`; a child otherwise generates with the
-settings its world was made with. Use the same parent, settlement and hex settings for each
-comparison.
+feature.key=number` changes numeric feature settings for that map alone, several separated
+by commas, such as `city --set built.layout.districtCatchmentScale=1.8`; a child otherwise
+generates with the settings its world was made with. A street map takes how its towns are
+ordered the same way: `built.layout.streetSpacing`, `backLaneReach`, `crossingSpacing`,
+`shortcutSaving`, `streetWorkShare`, `plotFrontage` and `plotDepth`. Use the same parent,
+settlement and hex settings for each comparison.
 A finished map is saved to the server library and reported in
 `.artifacts/local-atlas/maps/<name>/`:
 

@@ -16,6 +16,8 @@ pub struct Settings {
     pub seed: i32,
     pub template: Option<crate::town::templates::Template>,
     pub major_work: Option<crate::town::major_works::WorkFamily>,
+    /// How each town the process founds is ordered, as the map's settings give it.
+    pub order: crate::town::order::Order,
 }
 
 pub(super) const TEMPLATE: &str = "template";

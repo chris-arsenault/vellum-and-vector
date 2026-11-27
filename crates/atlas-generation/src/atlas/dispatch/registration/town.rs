@@ -36,6 +36,7 @@ fn settings(input: &Input) -> ExecutionResult<Settings> {
             .get(town::MAJOR_WORK)
             .and_then(serde_json::Value::as_str)
             .and_then(WorkFamily::from_key),
+        order: crate::town::order::Order::from_input(input)?,
     })
 }
 fn initialization() -> io::Result<Specification> {
@@ -45,7 +46,7 @@ fn initialization() -> io::Result<Specification> {
         (town::TEMPLATE): {"type":"enum","required":false,"choices":Template::ALL.map(Template::name)},
         (town::MAJOR_WORK): {"type":"enum","required":false,"choices":WorkFamily::ALL.iter().map(|family| family.key()).collect::<Vec<_>>()}
     }))?);
-    Ok(spec)
+    Ok(spec.numeric(crate::town::order::CONTROLS))
 }
 pub fn specifications() -> io::Result<Vec<Specification>> {
     let mut result = vec![specification()?.publication()];

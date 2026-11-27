@@ -48,6 +48,7 @@ fn feature(id: &'static str, slots: Slots, regional: Regional) -> Feature {
         requires: &[],
         absent: &[],
         parameters: &[],
+        controls: &[],
         processes,
         native,
         slots: names,

@@ -160,6 +160,9 @@ fn publish_settlement(state: &mut impl TownWriter, town: &Town) -> io::Result<()
     settlement
         .attributes
         .insert("layout".into(), json!(town.layout.as_str()));
+    settlement
+        .attributes
+        .insert("townOrder".into(), json!(town.order));
     settlement.attributes.insert(
         "settlementTemplate".into(),
         json!(town.template.selected.name()),

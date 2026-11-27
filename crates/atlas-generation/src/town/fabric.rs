@@ -128,6 +128,9 @@ pub struct Town {
     noded: std::cell::RefCell<Option<(u64, std::rc::Rc<super::access::Noded>)>>,
     pub seat: Seat,
     pub layout: Layout,
+    /// How the town is ordered: the terms its causes write and its rules read.
+    #[serde(default)]
+    pub order: super::order::Order,
     /// The fidelity the town develops at; its processes read lengths through `scale`.
     #[serde(default)]
     pub fidelity: super::scale::Fidelity,
@@ -789,6 +792,7 @@ impl Town {
             works: Default::default(),
             seat,
             layout,
+            order: Default::default(),
             fidelity: Default::default(),
             streets: vec![],
             growing_ways: vec![],

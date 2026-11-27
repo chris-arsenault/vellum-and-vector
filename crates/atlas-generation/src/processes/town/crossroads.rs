@@ -88,7 +88,7 @@ pub(super) fn establish(
     }
     let town_scale = town.scale();
     let depth = town.plot().1;
-    let core = depth * 5.;
+    let core = depth * town.order.crossing_spacing;
     let trunks: Vec<_> = town
         .streets()
         .iter()

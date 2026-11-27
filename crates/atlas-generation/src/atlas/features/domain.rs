@@ -62,6 +62,7 @@ fn feature(
         requires: &[],
         absent: &[],
         parameters: &[],
+        controls: &[],
         processes,
         native: vec![],
         slots,
@@ -113,6 +114,7 @@ pub(super) fn features() -> Vec<Feature> {
         requires: &[],
         absent: &[],
         parameters: &[],
+        controls: &[],
         native: vec![],
         processes: [
             "magic.thermal",
@@ -161,6 +163,7 @@ pub(super) fn features() -> Vec<Feature> {
         "roadTraffic",
         "highways",
     ];
+    built.controls = crate::town::order::CONTROLS;
     built.slots.extend([
         "town.initialize",
         "town.develop",

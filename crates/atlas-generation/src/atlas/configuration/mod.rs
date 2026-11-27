@@ -51,6 +51,33 @@ pub struct Resolved {
 pub fn error(code: &str, message: impl std::fmt::Display) -> io::Error {
     io::Error::other(format!("{code}: {message}"))
 }
+/// The settings a map chose among those the feature's processes declare, each within the
+/// bounds its process gave it. A setting the map did not choose is left out, so the
+/// process's own default applies.
+fn declared_settings(
+    feature: &crate::atlas::features::Feature,
+    chosen: &Values,
+) -> io::Result<Values> {
+    let mut owned = Values::new();
+    for control in feature.controls {
+        let Some(value) = chosen.get(control.name) else {
+            continue;
+        };
+        let within = value.as_f64().is_some_and(|number| {
+            number.is_finite()
+                && control.minimum.is_none_or(|least| number >= least)
+                && control.maximum.is_none_or(|most| number <= most)
+        });
+        if !within {
+            return Err(error(
+                "feature_setting",
+                format!("{} is outside the bounds of {}", value, control.name),
+            ));
+        }
+        owned.insert(control.name.into(), value.clone());
+    }
+    Ok(owned)
+}
 pub fn resolve(input: &Input, defaults: &Settings) -> io::Result<Resolved> {
     let catalogue = Catalogue::default();
     for id in input.features.keys() {
@@ -72,15 +99,15 @@ pub fn resolve(input: &Input, defaults: &Settings) -> io::Result<Resolved> {
     let mut selection = Selection::new();
     for feature in &catalogue.features {
         let choice = input.features.get(feature.id).cloned().unwrap_or_default();
+        let mut owned = declared_settings(feature, &choice.settings)?;
         for key in choice.settings.keys() {
-            if !feature.parameters.contains(&key.as_str()) {
+            if !feature.parameters.contains(&key.as_str()) && !owned.contains_key(key) {
                 return Err(error(
                     "feature_setting",
                     format!("{} does not own {key}", feature.id),
                 ));
             }
         }
-        let mut owned = Values::new();
         for key in feature.parameters {
             let value = choice
                 .settings
@@ -258,4 +285,38 @@ fn validate_domains(input: &Input, profile: Profile) -> io::Result<()> {
         ));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_map_sets_only_the_declared_settings_it_chooses_and_only_within_their_bounds() {
+        let catalogue = Catalogue::default();
+        let built = catalogue
+            .features
+            .iter()
+            .find(|feature| feature.id == "built.layout")
+            .expect("the built feature");
+        let chosen = |name: &str, value: f64| -> Values {
+            [(name.to_owned(), serde_json::json!(value))]
+                .into_iter()
+                .collect()
+        };
+        // A town's street spacing is declared by the founding process the feature runs.
+        let spaced = declared_settings(built, &chosen("streetSpacing", 140.)).expect("in bounds");
+        assert_eq!(spaced, chosen("streetSpacing", 140.));
+        // What the map leaves unsaid stays the process's to decide.
+        assert!(declared_settings(built, &Values::new())
+            .expect("nothing chosen")
+            .is_empty());
+        // A shortcut cannot save more than the whole walk.
+        assert!(declared_settings(built, &chosen("shortcutSaving", 1.5)).is_err());
+        assert!(declared_settings(built, &chosen("streetSpacing", -1.)).is_err());
+        // A name no process declares is not the feature's.
+        assert!(declared_settings(built, &chosen("unheardOf", 1.))
+            .expect("ignored here")
+            .is_empty());
+    }
 }

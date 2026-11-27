@@ -23,7 +23,7 @@ use crate::{
         },
         plots::{slots, Slot},
         scale::{Fidelity, Measure, TownScale},
-        settings::{CANDIDATE_DEPTH, CANDIDATE_FRONTAGE, CANDIDATE_REACH},
+        settings::CANDIDATE_REACH,
     },
 };
 use std::{io, rc::Rc};
@@ -581,6 +581,7 @@ fn settle(
         let mut next = Some(required.unwrap_or(selection.selected));
         while let Some(template) = next {
             let mut town = Town::new(candidate.clone(), settings.layout);
+            town.order = settings.order;
             town.fidelity = fidelity;
             town.template = selection.clone();
             town.template.selected = template;
@@ -906,6 +907,7 @@ impl Operations {
                 let site = match start {
                     SettlementStart::District(district) => {
                         let mut town = street_context::inherit(state, &district, &neighbours)?;
+                        town.order = settings.order;
                         let mut ground = site::terrain(state, site::bounds(state)?)?;
                         if let Some(site) = &town.district {
                             ground.mark_shapes(
@@ -1011,9 +1013,10 @@ impl Operations {
                                     .district
                                     .as_ref()
                                     .map_or(1., crate::town::fabric::DistrictSite::plot_scale);
+                                let order = town.order;
                                 let frontage =
-                                    roomy * scale.length(CANDIDATE_FRONTAGE, Measure::Plot);
-                                let depth = roomy * scale.length(CANDIDATE_DEPTH, Measure::Plot);
+                                    roomy * scale.length(order.plot_frontage, Measure::Plot);
+                                let depth = roomy * scale.length(order.plot_depth, Measure::Plot);
                                 let sites = town
                                     .streets()
                                     .iter()

@@ -97,11 +97,8 @@ pub const BUILDING_ENVELOPE_MIN: f64 = 0.8;
 /// A plot on a main street counts as this share of its distance from the centre, so a place
 /// fills its main streets before its lanes.
 pub const MAIN_STREET_PULL: f64 = 0.85;
-/// The frontage and depth of the candidate plots each round surveys along streets and on open
-/// land, and the frontage of the plots a founding surveys. Street metres, resolved by
-/// `Measure::Plot`.
-pub const CANDIDATE_FRONTAGE: f64 = 9.;
-pub const CANDIDATE_DEPTH: f64 = 25.;
+/// The frontage of the plots a founding surveys. Street metres, resolved by `Measure::Plot`.
+/// The plots each later round offers take their size from the town's order.
 pub const FOUNDING_FRONTAGE: f64 = 10.;
 /// How far from inhabited sites a round surveys open land. Street metres, resolved by
 /// `Measure::Layout`.

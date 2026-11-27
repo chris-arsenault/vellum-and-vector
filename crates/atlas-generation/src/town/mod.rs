@@ -22,6 +22,7 @@ pub mod lanes;
 pub mod major_works;
 pub mod neighbourhood;
 pub mod network;
+pub mod order;
 pub mod plots;
 pub mod production;
 pub mod roofs;
