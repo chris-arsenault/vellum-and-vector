@@ -35,6 +35,20 @@ and housing determine the fine distribution. Households carry their identities w
 Walls and commissioned works develop
 during those rounds.
 
+Households settle where built ground has room, and a better location is worth living
+more closely for. Builders then add a share of the ground people still lack, and ground
+beyond what its people need returns to the fields. Over the rounds the city's ground
+fills and its edge sharpens: inside it open ground is taken up, outside it built ground
+thins to farmsteads. Built ground holds more people where many live within a short walk
+and fewer where trade fills its households' purse. Each district program adds how tightly
+its own households live, so tenement ground holds several times the people of estate
+ground, and ground inside a standing wall is worth more and crowds further. The City
+passes both to the society rounds with its road access and reservations. District centres
+stand as far apart as the settled ground warrants in each round, so a city that gathers
+onto less ground founds more of them. Land-use areas and districts cover ground that is
+built on; the rest of the map is its countryside and neighbouring villages. No step fills
+an outline or sets a coverage.
+
 The captured settled outline gives the interior a strong preference for urban development.
 The surrounding countryside can support farms, road stops and satellites. The founding
 policy and the settlement's existing people, capital, institutions and approaches give

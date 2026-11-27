@@ -28,11 +28,75 @@ pub enum Movement {
 pub struct PlacementSettings {
     pub(super) catchment_spans: f64,
     pub(super) catchment_falloff: f64,
+    /// How strongly a better location draws households onto the room it has.
+    pub(super) location_draw: f64,
+    /// How heavily the households a cell's own land feeds weigh beside the room of its
+    /// built ground.
+    pub(super) land_hold: f64,
+    /// The share of open ground beside built ground that counts as room builders can add.
+    pub(super) edge_growth: f64,
+    /// How much more a place is worth to households for each wall standing round it.
+    pub(super) wall_premium: f64,
+    /// How strongly dear ground thins, and a full purse widens, the ground a household takes.
+    pub(super) ground_thrift: f64,
 }
 
 use crate::parameters::NumericParameter;
 const PLACEMENT: &str = "household-placement";
-pub(crate) const CONTROLS: &[NumericParameter] = &[CATCHMENT_SPANS, CATCHMENT_FALLOFF];
+pub(crate) const CONTROLS: &[NumericParameter] = &[
+    CATCHMENT_SPANS,
+    CATCHMENT_FALLOFF,
+    LOCATION_DRAW,
+    LAND_HOLD,
+    EDGE_GROWTH,
+    WALL_PREMIUM,
+    GROUND_THRIFT,
+];
+const REFINED: &[crate::processes::strategies::MapType] = &[
+    crate::processes::strategies::MapType::City,
+    crate::processes::strategies::MapType::Region,
+];
+// A location's worth grows with the order of magnitude of its opportunity, so a single
+// market cell cannot draw a whole city onto itself.
+const LOCATION_DRAW: NumericParameter = NumericParameter {
+    name: "locationDraw",
+    unit: "exponent on the magnitude of opportunity",
+    default: 3.,
+    minimum: Some(0.),
+    map_types: REFINED,
+    ..CATCHMENT_FALLOFF
+};
+const LAND_HOLD: NumericParameter = NumericParameter {
+    name: "landHold",
+    unit: "weight of the people the land feeds",
+    default: 0.5,
+    minimum: Some(0.),
+    maximum: Some(1.),
+    ..CATCHMENT_FALLOFF
+};
+const GROUND_THRIFT: NumericParameter = NumericParameter {
+    name: "groundThrift",
+    unit: "exponent on neighbours over purse",
+    default: 0.1,
+    minimum: Some(0.),
+    map_types: REFINED,
+    ..CATCHMENT_FALLOFF
+};
+const EDGE_GROWTH: NumericParameter = NumericParameter {
+    name: "edgeGrowth",
+    unit: "share of open ground beside built ground",
+    default: 0.05,
+    minimum: Some(0.),
+    maximum: Some(1.),
+    ..CATCHMENT_FALLOFF
+};
+const WALL_PREMIUM: NumericParameter = NumericParameter {
+    name: "wallPremium",
+    unit: "added worth for each enclosing wall",
+    default: 0.2,
+    minimum: Some(0.),
+    ..CATCHMENT_FALLOFF
+};
 const CATCHMENT_SPANS: NumericParameter = NumericParameter {
     name: "catchmentSpans",
     unit: "parent cell spans",
@@ -54,6 +118,11 @@ const CATCHMENT_FALLOFF: NumericParameter = NumericParameter {
 const DEFAULT_PLACEMENT: PlacementSettings = PlacementSettings {
     catchment_spans: CATCHMENT_SPANS.default,
     catchment_falloff: CATCHMENT_FALLOFF.default,
+    location_draw: LOCATION_DRAW.default,
+    land_hold: LAND_HOLD.default,
+    edge_growth: EDGE_GROWTH.default,
+    wall_premium: WALL_PREMIUM.default,
+    ground_thrift: GROUND_THRIFT.default,
 };
 
 pub(crate) fn tune(
@@ -64,6 +133,11 @@ pub(crate) fn tune(
         strategy.algorithm = Movement::Placement(PlacementSettings {
             catchment_spans: input.number(CATCHMENT_SPANS.name)?,
             catchment_falloff: input.number(CATCHMENT_FALLOFF.name)?,
+            location_draw: input.number(LOCATION_DRAW.name)?,
+            land_hold: input.number(LAND_HOLD.name)?,
+            edge_growth: input.number(EDGE_GROWTH.name)?,
+            wall_premium: input.number(WALL_PREMIUM.name)?,
+            ground_thrift: input.number(GROUND_THRIFT.name)?,
         });
     }
     Ok(strategy)
@@ -79,7 +153,13 @@ pub const MOVEMENT: Contract<Movement, LayerId> = Contract {
         Product::NetFoodImports,
         Product::Travel,
         Product::Question("draw"),
+        Product::Question("room"),
+        Product::Question("support"),
+        Product::Question("wealth"),
         Product::Layer(LayerId::BuiltUp),
+        Product::CityAccess,
+        Product::DistrictPrograms,
+        Product::DefenseWorks,
     ],
     writes: &[Product::Layer(LayerId::Population), Product::RoadWear],
     catalog_id: "human.land.gather",
@@ -552,13 +632,20 @@ pub(crate) fn operation(
         CommandKind::Work,
         vec![],
         move |context, input: &WorkInput<Placement>| {
+            let strategy = input.strategy;
+            let residents = initial_layer(context.state(), &strategy)?;
+            if let Movement::Placement(settings) = strategy.algorithm {
+                // The pass's later steps read how tightly households live from the work.
+                let mut held = {
+                    let work = input.work.borrow();
+                    place(context, &work, &q, &owner, &residents, settings)?
+                };
+                held.retain();
+                input.work.borrow_mut().held = held;
+                return Ok(());
+            }
             let work = input.work.borrow();
             let field = context.state();
-            let strategy = input.strategy;
-            let residents = initial_layer(field, &strategy)?;
-            if let Movement::Placement(settings) = strategy.algorithm {
-                return place(context, &work, &q, &owner, &residents, settings);
-            }
             let years = work.facts.years / work.facts.sweeps as f64;
             let targets = field.coverage.borrow_mut().scratch(field.mesh.len(), 0i32);
             let mut leaving = Leaving {

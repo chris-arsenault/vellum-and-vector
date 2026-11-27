@@ -132,16 +132,16 @@ fn exchange(density: [f64; 2], suitability: [f64; 2], area: [f64; 2]) -> f64 {
     ((density[0] * to - density[1] * from) * a * b / capacity).max(0.0)
 }
 
+/// `housed` is the people the built ground at and beside a cell holds at ease.
 fn livelihoods(
     food: f64,
     market: f64,
     attraction: f64,
-    built: f64,
+    housed: f64,
     guidance: f64,
     risk: f64,
 ) -> f64 {
-    let jobs = guidance
-        * (facts::WORKABLE * market.powi(2) * attraction + built * facts::PEOPLE_PER_BUILT_KM2);
+    let jobs = guidance * (facts::WORKABLE * market.powi(2) * attraction + housed);
     (food.sqrt() + jobs * (1.0 + food).ln_1p()) / (1.0 + risk)
 }
 
@@ -152,11 +152,13 @@ pub(super) fn place(
     owner: &operations::Operations<Field>,
     residents: &crate::storage::ReadBand<f64>,
     settings: super::PlacementSettings,
-) -> ExecutionResult<()> {
+) -> ExecutionResult<Band<f64>> {
     // owner-direction(2026-11-21): people on finer maps roughly match the parent's because people's refinement processes produce roughly equal counts, as other refinement processes do
     let livable = context.query(&q.livable)?.values();
     let support = context.query(&q.support)?.values();
     let draw = context.query(&q.draw)?.values();
+    let room = context.query(&q.room)?.values();
+    let wealth = context.query(&q.wealth)?.values();
     let field = context.state();
     let built = field
         .people
@@ -191,24 +193,46 @@ pub(super) fn place(
         }
         let guidance = city_affinity.as_ref().map_or(1.0, |values| values[cell]);
         let risk = hazards::exposure(field, cell)?;
+        let housed = edge * room.get(cell)?;
         opportunity.set(
             cell,
-            livable.get(cell)? * livelihoods(food, market, attraction, edge, guidance, risk),
+            livable.get(cell)? * livelihoods(food, market, attraction, housed, guidance, risk),
         )?;
     }
+    let ground = crate::field::people::dwelling::ground(
+        field,
+        work,
+        &crate::field::people::dwelling::Reads {
+            residents,
+            opportunity: &opportunity,
+            room: &room,
+            wealth: &wealth,
+        },
+        &settings,
+    )?;
     trace_distribution(field, "before gathering")?;
     if let Some(city) = work
         .city
         .as_ref()
         .filter(|c| c.census.len() == field.mesh.len())
     {
-        let sites = super::catchments::sites(field, work, city, residents, &opportunity)?;
+        let sites = super::catchments::sites(
+            field,
+            work,
+            city,
+            residents,
+            &super::catchments::Settling {
+                ground: &ground,
+                fed: &support,
+                settings,
+            },
+        )?;
         context.run(
             &owner.place_households,
             &super::catchments::placement(&sites, settings),
         )?;
         trace_distribution(context.state(), "after gathering")?;
-        return Ok(());
+        return Ok(ground.held);
     }
     for face in 0..3 {
         place_across_face(context, work, owner, &opportunity, face)?;
@@ -232,7 +256,7 @@ pub(super) fn place(
         context.run(&owner.place_households, &transfers)?;
     }
     trace_distribution(context.state(), "after gathering")?;
-    Ok(())
+    Ok(ground.held)
 }
 
 fn neighbour_exchange(heads: [f64; 2], weights: [f64; 2], areas: [f64; 2]) -> f64 {

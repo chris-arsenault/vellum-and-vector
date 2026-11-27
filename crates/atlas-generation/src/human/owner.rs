@@ -37,6 +37,20 @@ impl HumanLayers {
         }
         Ok(())
     }
+    /// Land leaves a use and lies open. Nothing of the use remains on it.
+    pub(super) fn withdraw(&mut self, action: &Lay) -> io::Result<()> {
+        if !catalogue::facts(action.kind).area {
+            return Err(io::Error::other("Only a use of land can be withdrawn"));
+        }
+        for cell in 0..self.mesh.len() {
+            let band = &mut self.bands.layers[action.kind as usize];
+            let taken = positive(action.amount.get(cell)?).min(band.get(cell)?);
+            if taken > 0.0 {
+                band.set(cell, band.get(cell)? - taken)?;
+            }
+        }
+        Ok(())
+    }
     pub(super) fn convert(&mut self, action: &Convert) -> io::Result<()> {
         if !catalogue::facts(action.from).area || !catalogue::facts(action.to).area {
             return Err(io::Error::other(

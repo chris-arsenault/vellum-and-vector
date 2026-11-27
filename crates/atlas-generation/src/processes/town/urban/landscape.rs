@@ -26,6 +26,10 @@ pub(super) const USES: [&str; 6] = [
     "Working ground",
     "Common ground",
 ];
+/// The built share of the ground round a cell from which the City maps a land use there.
+const TRACT_BUILT: f64 = 0.25;
+/// The built share from which ground belongs to a district: more of it built than not.
+const DISTRICT_BUILT: f64 = 0.5;
 pub(super) struct SettlementGround {
     centre: atlas_map::Position,
     radius: f64,
@@ -141,10 +145,11 @@ mod district_ground_tests {
     use atlas_map::{regions::rectangle, Bounds, Position};
 
     #[test]
-    fn district_ground_accepts_inhabited_housing_without_built_stock() {
+    fn district_ground_is_claimed_and_mostly_built() {
         let housing = super::super::fields::Claims {
             home: 0.7,
             people: 1400.,
+            built: 0.9,
             ..Default::default()
         };
         let farmland = super::super::fields::Claims {
@@ -153,12 +158,17 @@ mod district_ground_tests {
             farm: 0.65,
             ..Default::default()
         };
-        let eligible = |claim| {
+        let eligible = |claim: super::super::fields::Claims| {
             let occupied = occupation(claim, 0.4, 0., 0., true);
-            district_margin(occupied, 1.) > 0.
+            district_margin(occupied, 1., claim.built) > 0.
         };
         assert!(eligible(housing));
         assert!(!eligible(farmland));
+        // People on ground that is mostly open do not make it a district.
+        assert!(!eligible(super::super::fields::Claims {
+            built: 0.2,
+            ..housing
+        }));
         assert!(!eligible(super::super::fields::Claims {
             reserved: true,
             ..housing
@@ -375,9 +385,11 @@ fn occupation(
     (x.home * (0.70 + 0.42 * access) + x.work * 0.65 + x.built * 3. + civic * 0.5) / reserve
 }
 
-fn district_margin(occupied: f64, demand: f64) -> f64 {
-    // The interior prior strengthens local claims. It cannot claim unoccupied land on its own.
-    occupied + 1.25 * demand * occupied.min(1.) - 0.68
+// owner-direction(2026-11-27): city districts should have near 100 percent urban coverage
+/// Ground belongs to a district where claims occupy it and more of it is built than not.
+/// The interior prior strengthens local claims; it cannot claim unoccupied land on its own.
+fn district_margin(occupied: f64, demand: f64, built: f64) -> f64 {
+    (occupied + 1.25 * demand * occupied.min(1.) - 0.68).min(built - DISTRICT_BUILT)
 }
 
 fn land_use_bids(
@@ -398,7 +410,8 @@ fn land_use_bids(
         // Actual occupied land can follow an approach well beyond the contiguous core.
         let occupied = occupation(x, access, civic, work.commons, u.fields.inside[c]);
         u.fields.developed[c] = occupied;
-        let tract_margin = occupied - 0.40;
+        // Land use describes ground that is built on.
+        let tract_margin = (occupied - 0.40).min(x.built - TRACT_BUILT);
         let program = super::programs::at(u, c);
         let prior = u.fields.stencil[c];
         let demand = if x.reserved || x.people + x.built <= 0. {
@@ -406,7 +419,7 @@ fn land_use_bids(
         } else {
             prior
         };
-        main[c] = district_margin(occupied, demand);
+        main[c] = district_margin(occupied, demand, x.built);
         let strength = program.map_or(0., |p| p.strength) * demand;
         let demands = x.demands;
         let local = program.map_or(0., |p| {

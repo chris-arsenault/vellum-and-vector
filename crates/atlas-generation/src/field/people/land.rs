@@ -1,5 +1,6 @@
 // Arconis: docs/architecture/subsystems.arconis#item=pp_found — founds the first people, only on an empty map.
 use super::{
+    building::Building,
     contract::{
         initial_layer, layer_strategy, Condition, Contract, Dispatch, EffectTime, MapType, Product,
         Rule, Strategy, Timing,
@@ -58,7 +59,7 @@ pub const DEMOGRAPHY: Contract<(), LayerId> = Contract {
 #[derive(Clone, Copy)]
 pub enum Investment {
     Historical,
-    Spatial,
+    Spatial(Building),
 }
 // owner-direction(2026-11-27): physically and socially motivated processes create built ground as a numeric field, the way ice coverage, rivers and population migration are created, with no simple formula equating people to built ground
 // owner-direction(2026-11-27): the processes are tunable so towns, cities and districts come out right
@@ -74,6 +75,9 @@ pub const BUILT_GROUND: Contract<Investment, LayerId> = Contract {
         Product::Layer(LayerId::Pasture),
         Product::Question("building"),
         Product::Question("wealth"),
+        Product::Question("room"),
+        Product::Question("support"),
+        Product::DistrictPrograms,
     ],
     writes: &[
         Product::Layer(LayerId::BuiltUp),
@@ -92,7 +96,7 @@ pub const BUILT_GROUND: Contract<Investment, LayerId> = Contract {
         ),
         layer_strategy(
             "built-ground",
-            Investment::Spatial,
+            Investment::Spatial(Building::DEFAULT),
             EffectTime::SpatialIteration,
             LayerId::BuiltUp,
             Condition::None,
@@ -122,7 +126,7 @@ pub const MAINTENANCE: Contract<Investment, LayerId> = Contract {
         ),
         layer_strategy(
             "current-condition",
-            Investment::Spatial,
+            Investment::Spatial(Building::DEFAULT),
             EffectTime::SpatialIteration,
             LayerId::Standing,
             Condition::None,
@@ -175,18 +179,14 @@ impl Operations {
                 vec![],
                 move |context, input: &WorkInput<Capital>| {
                     let work = input.work.borrow();
-                    let strategy = input.strategy;
-                    let stock = initial_layer(context.state(), &strategy)?;
-                    match strategy.algorithm {
+                    match input.strategy.algorithm {
                         Investment::Historical => harden(context, &work, &questions, &owner),
-                        Investment::Spatial => redistribute_stock(
-                            context,
-                            &work,
-                            &questions,
-                            &owner,
-                            LayerId::BuiltUp,
-                            &stock,
-                        ),
+                        Investment::Spatial(building) => {
+                            let built = initial_layer(context.state(), &input.strategy)?;
+                            super::building::develop(
+                                context, &work, &questions, &owner, &built, building,
+                            )
+                        }
                     }
                 },
             ),
@@ -200,13 +200,12 @@ impl Operations {
                     let strategy = input.strategy;
                     let stock = initial_layer(field, &strategy)?;
                     match strategy.algorithm {
-                        Investment::Spatial => {
-                            redistribute_stock(
+                        Investment::Spatial(_) => {
+                            redistribute_standing(
                                 context,
                                 &work,
                                 &maintain_q,
                                 &maintain_o,
-                                LayerId::Standing,
                                 &stock,
                             )?;
                             let harm = context.query(&maintain_q.harm)?.values();
@@ -404,20 +403,18 @@ fn upkeep_conditions(field: &Field, cell: usize, harm: f64) -> std::io::Result<(
     Ok((institutions, exposure * harm.max(0.0)))
 }
 
-fn redistribute_stock(
+/// Standing works gather on built ground in step with the crowd and trade that keep them.
+fn redistribute_standing(
     context: &mut CommandContext<'_, Field>,
     work: &Work,
     questions: &Questions,
     owner: &operations::Operations<Field>,
-    kind: LayerId,
     stock: &crate::storage::ReadBand<f64>,
 ) -> ExecutionResult<()> {
     let harm = context.query(&questions.harm)?.values();
     let builders = context.query(&questions.building)?.values();
     let field = context.state();
     let built = field.people.view(HumanField::Layer(LayerId::BuiltUp));
-    let farms = field.people.view(HumanField::Layer(LayerId::Farmland));
-    let pasture = field.people.view(HumanField::Layer(LayerId::Pasture));
     let mut value = working(field);
     for cell in 0..field.mesh.len() {
         if !habitable(field, cell)? {
@@ -428,17 +425,13 @@ fn redistribute_stock(
         let (institutions, risk) = upkeep_conditions(field, cell, harm.get(cell)?)?;
         let condition = (builders.get(cell)? + institutions) / (1.0 + risk);
         let heads = people * (1.0 + market.ln_1p());
-        let weight = match kind {
-            LayerId::Standing => built.get(cell)? * heads.sqrt() * condition,
-            _ => heads * condition / (1.0 + farms.get(cell)? + pasture.get(cell)?),
-        };
-        value.set(cell, weight)?;
+        value.set(cell, built.get(cell)? * heads.sqrt() * condition)?;
     }
-    super::gather::distribute(context, work, owner, kind, stock, &value)
+    super::gather::distribute(context, work, owner, LayerId::Standing, stock, &value)
 }
 /// Take vacant ground first. Where urban demand wins over working land, the
 /// same amount leaves its previous use through the human owner's conversion.
-fn occupy_land(
+pub(super) fn occupy_land(
     context: &mut CommandContext<'_, Field>,
     owner: &operations::Operations<Field>,
     requested: &crate::storage::Band<f64>,

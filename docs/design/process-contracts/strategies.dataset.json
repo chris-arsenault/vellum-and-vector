@@ -107,7 +107,7 @@
         "Active / no-op": "Active — present spatial",
         "Execution mode": "Spatial iteration",
         "Implementation reference": "https://github.com/chris-arsenault/vellum-and-vector/blob/a616cefbeaa404cfe1aa16504f7cabaf2be1cfa6/crates/atlas-generation/src/field/people/gather.rs",
-        "Behavior / strategy": "Place the captured population across habitable ground using market access, provision, built capacity and hazard exposure.",
+        "Behavior / strategy": "Place the captured population across habitable ground using market access, provision, built capacity and hazard exposure. It works out how tightly households live at each cell: more closely with more neighbours within a walk, less closely with a fuller purse, and as a district program says. On a City map households take places in proportion to the room a cell's built ground has and how good its location is. The land's own households weigh in with the ground that feeds them, open ground beside built ground counts for what builders can add, and standing walls raise a location's worth.",
         "Initial condition source": "Current resident and developed-land stocks on the child map.",
         "Boundary condition source": "Parent-connected routes and market access influence the opportunities available to households."
       },
@@ -1660,10 +1660,10 @@
         {
           "Map type": "Region",
           "Map-specific fields": {
-            "Behavior / strategy": "Redistribute inherited BuiltUp/Standing/ruin stocks and develop local intensity patterns by interacting with market access, population pressure, crowding, materials, hazard and maintenance.",
-            "Boundary condition handling": "Read the market access, occupation and exposure available on the shared working state. The strategy has no separate external funding or hazard binding.",
+            "Behavior / strategy": "Bring inherited BuiltUp to stand where its people are. Builders add a share of the ground people lack, on open ground first and on working land where the people lacking room outweigh the people the field feeds. Built ground beyond what its people need returns to the working land round it, or lies open where there is none. Built ground holds more people where many live within a short walk and fewer where trade fills its households' purse.",
+            "Boundary condition handling": "Read the people, the land's food and how tightly households live on the shared working state. The strategy has no separate external funding or hazard binding.",
             "Boundary condition source": "Outside infrastructure, building resources, hazards and non-local trade/investment.",
-            "External context provider": "Shared built-stock owner operations; `building`, `wealth`, crowding, exposure, `draw`, `livable`.",
+            "External context provider": "Shared built-stock owner operations; `building`, `room`, `support`, and the people a built square kilometre holds as household placement found it from `wealth` and the neighbours within a walk.",
             "Initial condition handling": "Treat quantity and character as inherited stock, not uniform finished coverage. Develop spatially varied extent versus intensity through local pressure and competition.",
             "Initial condition source": "Sampled BuiltUp/Standing/ruins, population, rural use, material condition; no predefined city footprint.",
             "Review notes": "Use existing BuiltUp, Standing, RuinedBuiltUp, RuinedStanding before adding new numeric stock.",
@@ -1680,8 +1680,8 @@
         {
           "Map type": "City",
           "Map-specific fields": {
-            "Behavior / strategy": "Resolve urban land shares/capacity/condition at finer City scale using existing regional stock and nonlinear local economy, hazard and access feedback; no required lots or buildings.",
-            "Boundary condition handling": "Read the market access, occupation and exposure available on the shared working state. The strategy has no separate external funding or hazard binding.",
+            "Behavior / strategy": "Resolve urban land shares at City scale from the room people lack. Households settle where built ground has room and builders add a share of what is still short, so ground worth living on fills and crowds while poor ground returns to the fields. Neighbours within a walk, the households' purse and the district's character set how tightly people live; standing walls raise what a location is worth. No required lots or buildings, no outline to fill and no coverage to reach.",
+            "Boundary condition handling": "Read the people, the land's food and how tightly households live on the shared working state, with the district programs' dwelling character from the City. The strategy has no separate external funding or hazard binding.",
             "Boundary condition source": "Outside-city goods, market demand, access and environmental continuation.",
             "External context provider": "Built-stock shared question/writer; no duplicate town-construction numeric owner.",
             "Initial condition handling": "Refine present built geography, not refound historical capital; established dense quarters remain plausible.",
@@ -1703,8 +1703,8 @@
       "Shared contract": {
         "Active / no-op": "Active — present spatial",
         "Execution mode": "Spatial iteration",
-        "Implementation reference": "https://github.com/chris-arsenault/vellum-and-vector/blob/a616cefbeaa404cfe1aa16504f7cabaf2be1cfa6/crates/atlas-generation/src/field/people/land.rs",
-        "Behavior / strategy": "Redistribute developed land and standing capital in response to access, occupancy, and exposure at the captured moment.",
+        "Implementation reference": "crates/atlas-generation/src/field/people/building.rs, with how tightly households live in crates/atlas-generation/src/field/people/dwelling.rs",
+        "Behavior / strategy": "Add built ground where people lack room and return ground beyond what its people need to working land, at the captured moment.",
         "Initial condition source": "Inherited developed-land and capital stocks plus current settlement demand."
       },
       "Strategy ID": "built-ground",

@@ -22,6 +22,9 @@ pub struct Work {
     pub connections: std::rc::Rc<Vec<super::feed::Connection>>,
     pub(crate) markets: std::rc::Rc<Vec<crate::field::refinement::people::SettlementCensus>>,
     pub city: Option<std::rc::Rc<super::growth::Guidance>>,
+    /// The people a built square kilometre holds at each cell, as settling last found it:
+    /// zero until households have been placed in this pass.
+    pub held: Band<f64>,
 }
 pub fn habitable(field: &Field, cell: usize) -> io::Result<bool> {
     Ok(field.water.borrow().kind_at(cell)? == 0)
@@ -96,7 +99,25 @@ impl Work {
             connections: Default::default(),
             markets: Default::default(),
             city: None,
+            held: working(field),
         })
+    }
+    /// The people built ground holds at ease at `cell`, as a multiple of ordinary ground:
+    /// what the city's districts say of their households, and one anywhere else.
+    pub fn dwelling(&self, cell: usize) -> f64 {
+        self.city
+            .as_ref()
+            .and_then(|city| city.dwelling.get(cell))
+            .copied()
+            .unwrap_or(1.)
+    }
+    /// How many standing walls enclose `cell`.
+    pub fn enclosed(&self, cell: usize) -> f64 {
+        self.city
+            .as_ref()
+            .and_then(|city| city.enclosed.get(cell))
+            .copied()
+            .unwrap_or(0.)
     }
     pub fn reach(
         &self,

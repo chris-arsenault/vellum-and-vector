@@ -698,27 +698,36 @@ const directions: readonly OwnerDirection[] = [
     given: "2026-11-27",
     direction:
       "physically and socially motivated processes create built ground as a numeric field, the way ice coverage, rivers and population migration are created, with no simple formula equating people to built ground",
-    marks: ["crates/atlas-generation/src/field/people/land.rs"],
-    test: "crates/atlas-generation/src/field/people/land.rs",
+    marks: [
+      "crates/atlas-generation/src/field/people/land.rs",
+      "crates/atlas-generation/src/field/people/gather/catchments.rs",
+    ],
+    test: [
+      "crates/atlas-generation/src/field/people/building.rs",
+      "crates/atlas-generation/src/field/people/gather/catchments.rs",
+    ],
   },
   {
     given: "2026-11-27",
     direction: "the processes are tunable so towns, cities and districts come out right",
     marks: ["crates/atlas-generation/src/field/people/land.rs"],
-    test: "crates/atlas-generation/src/field/people/land.rs",
+    test: "crates/atlas-generation/src/field/people/building.rs",
   },
   {
     given: "2026-11-27",
     direction:
       "tenement density of people is much higher, near-wall density higher and noble estate density lower because the processes work together",
     marks: ["crates/atlas-generation/src/field/people/land.rs"],
-    test: "crates/atlas-generation/src/field/people/land.rs",
+    test: "crates/atlas-generation/src/field/people/gather/catchments.rs",
   },
   {
     given: "2026-11-27",
     direction: "city districts should have near 100 percent urban coverage",
-    marks: ["crates/atlas-generation/src/field/people/land.rs"],
-    test: "crates/atlas-generation/src/field/people/land.rs",
+    marks: [
+      "crates/atlas-generation/src/field/people/land.rs",
+      "crates/atlas-generation/src/processes/town/urban/landscape.rs",
+    ],
+    test: "crates/atlas-generation/src/processes/town/urban/landscape.rs",
   },
   {
     given: "2026-11-25",

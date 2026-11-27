@@ -80,8 +80,12 @@ pub(super) fn compete(
             .map(|c| neighborhood(mesh, [&membership], c, reach)[0])
             .collect();
     }
-    let new_programs = found(state, u, template, sponsors, catchment_scale, settings)?;
+    let (new_programs, reach) = found(state, u, template, sponsors, catchment_scale, settings)?;
+    for program in &mut u.programs {
+        program.reach = reach;
+    }
     u.programs.extend(new_programs);
+    u.dwelling_weight = settings.dwelling;
     for program in &mut u.programs {
         if let Some(claim) = u.fields.claims.get(program.cell) {
             program.strength =
@@ -122,7 +126,7 @@ fn found(
     mut sources: Vec<Feature>,
     catchment_scale: f64,
     settings: Settings,
-) -> io::Result<Vec<Program>> {
+) -> io::Result<(Vec<Program>, f64)> {
     let f = state.field();
     let mesh = f.mesh();
     let points: Vec<_> = (0..mesh.len()).map(|c| position(mesh, c)).collect();
@@ -142,10 +146,10 @@ fn found(
         &mut support,
         &points,
         reach,
-        u.programs.iter().map(|p| (p.cell, p.reach)),
+        u.programs.iter().map(|p| p.cell),
     );
     if centres.is_empty() {
-        return Ok(Vec::new());
+        return Ok((Vec::new(), reach));
     }
     draws.include(u.programs.iter().flat_map(|program| {
         [program.economic, program.social]
@@ -287,7 +291,7 @@ fn found(
     }
     // hpc-exempt: restore district identities to centre priority for spatial tie-breaking.
     programs.sort_by_key(|(rank, _)| *rank);
-    Ok(programs.into_iter().map(|(_, p)| p).collect())
+    Ok((programs.into_iter().map(|(_, p)| p).collect(), reach))
 }
 
 fn district_support(
@@ -441,12 +445,13 @@ fn new_centres(
     support: &mut [f64],
     points: &[[f64; 2]],
     reach: f64,
-    existing: impl Iterator<Item = (usize, f64)>,
+    existing: impl Iterator<Item = usize>,
 ) -> Vec<usize> {
-    for (cell, old_reach) in existing {
-        let served = old_reach.max(reach);
-        for neighbor in mesh.cells_within(mesh.position(cell), served) {
-            if mesh.physical_distance(cell, neighbor) < served {
+    // A centre serves as far as the settled area warrants now: as a city gathers onto less
+    // ground, its centres stand closer together.
+    for cell in existing {
+        for neighbor in mesh.cells_within(mesh.position(cell), reach) {
+            if mesh.physical_distance(cell, neighbor) < reach {
                 support[neighbor] = 0.;
             }
         }
@@ -494,7 +499,7 @@ mod tests {
         support[neighbor] = 8.;
         support[later] = 6.;
         assert_eq!(
-            super::new_centres(&mesh, &mut support, &at, 100., [(centre, 120.)].into_iter()),
+            super::new_centres(&mesh, &mut support, &at, 100., [centre].into_iter()),
             [later]
         );
     }

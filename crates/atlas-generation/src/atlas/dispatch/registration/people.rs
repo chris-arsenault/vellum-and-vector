@@ -211,6 +211,9 @@ macro_rules! society {
 }
 
 macro_rules! numeric {
+    (harden) => {
+        crate::field::people::building::CONTROLS
+    };
     (gather) => {
         gather::CONTROLS
     };
@@ -291,6 +294,9 @@ pub fn register(
         };
     }
     macro_rules! tune {
+        (harden, $input:expr, $strategy:expr) => {
+            crate::field::people::building::tune($strategy, $input)?
+        };
         (gather, $input:expr, $strategy:expr) => {
             gather::tune($strategy, $input)?
         };

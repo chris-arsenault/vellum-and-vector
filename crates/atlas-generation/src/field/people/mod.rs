@@ -1,9 +1,11 @@
 //! Human processes submit changes to the same canonical layer owner as every other process.
+pub mod building;
 pub mod classifier;
 pub mod contract;
 pub mod country;
 pub mod crafts;
 pub mod dam_sites;
+pub mod dwelling;
 pub mod era_places;
 pub mod events;
 pub mod facts;

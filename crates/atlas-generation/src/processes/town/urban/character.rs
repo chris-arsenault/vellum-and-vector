@@ -31,11 +31,18 @@ const GEOGRAPHY: NumericParameter = NumericParameter {
     minimum: Some(0.),
     ..control("districtGeographyWeight", 1., None)
 };
+/// How strongly a district's character changes how tightly its households live. Zero
+/// leaves every district at ordinary density.
+const DWELLING: NumericParameter = NumericParameter {
+    minimum: Some(0.),
+    ..control("districtDwellingWeight", 1., Some(4.))
+};
 pub(super) const CONTROLS: &[NumericParameter] = &[
     REPEAT,
     ORDINARY,
     GEOGRAPHY,
     CATCHMENT,
+    DWELLING,
     super::partition::CATCHMENT_BOUNDARY,
 ];
 
@@ -45,6 +52,7 @@ pub(super) struct Settings {
     pub repeat: f64,
     pub ordinary: f64,
     pub geography: f64,
+    pub dwelling: f64,
 }
 impl Settings {
     pub const DEFAULT: Self = Self {
@@ -52,6 +60,7 @@ impl Settings {
         repeat: REPEAT.default,
         ordinary: ORDINARY.default,
         geography: GEOGRAPHY.default,
+        dwelling: DWELLING.default,
     };
     pub fn from_input(input: &Input) -> io::Result<Self> {
         Ok(Self {
@@ -59,6 +68,7 @@ impl Settings {
             repeat: input.number(REPEAT.name)?,
             ordinary: input.number(ORDINARY.name)?,
             geography: input.number(GEOGRAPHY.name)?,
+            dwelling: input.number(DWELLING.name)?,
         })
     }
 }

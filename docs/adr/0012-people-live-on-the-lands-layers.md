@@ -92,8 +92,17 @@ processes it changes.
   refinement processes, which produce roughly equal counts the way the other domains'
   refinement processes do; nothing copies, conserves or fits the parent's number. The child
   starts from sampled households, land use and capital. Regional and city development
-  couples market reach, food access, settlement and upkeep. Households and capital
-  redistribute across the captured ground as its uses differentiate. Water and ice
+  couples market reach, food access, settlement, building and upkeep. Built ground holds
+  more people where many live within a short walk, fewer where trade fills its households'
+  purse, and as a district's character has them live. On a city map households settle
+  where built ground has room, in proportion to how good the location is, and the land's
+  own households weigh in with the ground that feeds them. Builders add a share of the
+  ground people still lack, on open ground first and on working land where the people
+  lacking room outweigh the people the field feeds; ground beyond what its people need
+  goes back to the working land round it, or lies open where there is none. Room attracts
+  households and households call for room, so good ground fills and then crowds while
+  poor ground empties toward what its land keeps. Standing capital gathers on built ground
+  with the crowd and trade that keep it. Water and ice
   inform present exposure. Its places, ways and crossings are read by
   the same classifiers and published by the same catalogue. Nothing is written to the parent,
   and no era is lived again. A round's redrawing of relief is not an event in the land's
@@ -120,7 +129,14 @@ processes it changes.
   record; the layers stay what generation made.
 - A coarse value is a share of the ground beneath it. A finer map moves people to where its land
   suits them. Built ground and standing capital start from their own captured shares and
-  respond to demand for land and maintenance of existing works.
+  respond to demand for land and maintenance of existing works. A parent cell's built share
+  arrives spread smoothly over its child cells; settling and building bring it to stand
+  where the people are, so a child cell does not keep a thin share of a town that stands
+  elsewhere.
+- The people a square kilometre of built ground houses for ordinary households in a village
+  is a shared question, `room`. On a finer map settling works out from it how tightly
+  households live at each cell, and building reads that finding. World history still
+  builds from its own figure.
 - Rust visibility and the compile-fail checks in `crates/atlas-generation/src/human/storage.rs`
   keep one writer of the human layers. `rustFoundations.architecture.ts` requires every human
   owner mutation to pass through the registered command boundary.

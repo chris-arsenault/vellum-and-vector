@@ -98,6 +98,7 @@ pub struct Operations<S> {
     pub place_ruins: Command<S, Placement>,
     pub place_land: Command<S, LandPlacement>,
     pub convert: Command<S, Convert>,
+    pub withdraw: Command<S, Lay>,
     pub dwell: Command<S, Dwelling>,
     pub forget: Command<S, f64>,
     pub overlay: Command<S, Overlay>,
@@ -147,6 +148,9 @@ impl<S: 'static> Operations<S> {
             ),
             convert: command("human.layers.convert", Work, access, |owner, _, input| {
                 owner.convert(input)
+            }),
+            withdraw: command("human.layers.withdraw", Work, access, |owner, _, input| {
+                owner.withdraw(input)
             }),
             dwell: command("human.layers.dwell", Elapsed, access, |owner, _, input| {
                 owner.dwell(input)

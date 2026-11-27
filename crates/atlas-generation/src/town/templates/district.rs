@@ -57,6 +57,17 @@ pub(crate) struct Demands {
     pub commons: f64,
     pub access: f64,
     pub civic: f64,
+    /// How tightly households live, in doublings of the people built ground holds. Zero is
+    /// ordinary ground; one doubles them; minus one halves them.
+    #[serde(default)]
+    pub dwelling: f64,
+}
+impl Demands {
+    /// The people built ground holds at ease here, as a multiple of ordinary ground, where
+    /// the district's character acts at `strength`.
+    pub(crate) fn household_density(&self, strength: f64) -> f64 {
+        (self.dwelling * strength).exp2()
+    }
 }
 #[derive(Clone, Copy, Default)]
 pub(crate) struct DistrictLand {
@@ -229,56 +240,71 @@ impl Trope {
     pub fn contribute(self, d: &mut Demands) {
         use Trope::*;
         match self {
+            // Shop-houses share walls along the selling streets.
             Bazaar => {
                 d.trade += 2.;
                 d.access += 1.;
+                d.dwelling += 0.3;
             }
+            // Yards and stores take ground that houses nobody.
             Freight => {
                 d.trade += 1.3;
                 d.workshops += 1.;
                 d.access += 1.5;
+                d.dwelling -= 0.2;
             }
             Granary => {
                 d.workshops += 1.3;
                 d.gardens += 0.5;
                 d.access += 0.6;
+                d.dwelling -= 0.3;
             }
             Artificer => {
                 d.workshops += 2.;
                 d.access += 0.6;
             }
+            // Lodgings let by the room.
             Inn => {
                 d.housing += 1.1;
                 d.trade += 0.5;
                 d.access += 0.5;
+                d.dwelling += 0.4;
             }
             Scribe => {
                 d.civic += 1.2;
                 d.gardens += 0.6;
                 d.housing += 0.7;
+                d.dwelling -= 0.2;
             }
+            // Closely spaced dwellings round shared courts.
             Warrens => {
                 d.housing += 2.6;
                 d.access -= 0.4;
+                d.dwelling += 1.3;
             }
+            // Compounds with open ground between them.
             Estates => {
                 d.gardens += 2.8;
                 d.access -= 0.8;
+                d.dwelling -= 1.5;
             }
             Guild => {
                 d.workshops += 0.8;
                 d.commons += 0.8;
                 d.civic += 0.4;
             }
+            // Arriving families share what housing they find.
             Outlanders => {
                 d.housing += 1.4;
                 d.trade += 0.5;
                 d.commons += 0.7;
+                d.dwelling += 0.5;
             }
             Commons => {
                 d.commons += 1.5;
                 d.housing += 0.7;
                 d.access += 0.4;
+                d.dwelling -= 0.2;
             }
             _ => {}
         }
@@ -294,6 +320,7 @@ impl Trope {
                 d.commons += 1.1 * growth;
                 d.gardens += 0.9 * growth;
                 d.access -= 0.55 * growth;
+                d.dwelling -= 0.4 * growth;
             }
             Rookery => {
                 let nesting = 0.3 + land.trees + land.slope + 0.5 * land.built;
@@ -305,6 +332,7 @@ impl Trope {
                 d.commons += 0.35 + 2.2 * land.wet;
                 d.gardens += 0.35 + land.wet;
                 d.access += 0.35 - 1.8 * land.wet;
+                d.dwelling -= 0.2 + 0.6 * land.wet;
             }
             Veil => {
                 d.access -= 0.3 + 1.5 * land.tearing;
@@ -316,12 +344,15 @@ impl Trope {
                 d.commons += masonry;
                 d.workshops += 0.45 * masonry;
                 d.access += 0.65 * frontage - 0.45 * masonry;
+                // Houses pack against the old line and into its ditch.
+                d.dwelling += 0.3 * masonry;
             }
             Ruins => {
                 let remains = 0.45 + land.ruined + land.built * 0.3;
                 d.civic += remains;
                 d.commons += 0.8 * remains;
                 d.access -= 0.45 * remains;
+                d.dwelling -= 0.3 * remains;
             }
             Spring => {
                 d.commons += 0.45 + land.wet;

@@ -22,6 +22,11 @@ pub struct Guidance {
     pub weight: Vec<f64>,
     /// Each cell's draw from the city's prominent places and works, 0 to 1.
     pub places: Vec<f64>,
+    /// The people built ground holds at ease at each cell, as a multiple of ordinary
+    /// ground: above one where households live closer, below one where each takes more.
+    pub dwelling: Vec<f64>,
+    /// How many standing walls enclose each cell.
+    pub enclosed: Vec<f64>,
 }
 
 /// Resolve the current city's development edges and streets for household placement.

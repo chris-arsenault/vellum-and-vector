@@ -61,6 +61,9 @@ impl Element {
 pub struct Urban {
     #[serde(default)]
     programs: Vec<programs::Program>,
+    /// The district programs' setting for how strongly character changes dwelling density.
+    #[serde(default)]
+    dwelling_weight: f64,
     #[serde(default)]
     fields: fields::CityFields,
     #[serde(default)]
@@ -95,6 +98,23 @@ impl Urban {
     }
     pub(crate) fn road_access(&self) -> &[f64] {
         &self.fields.access
+    }
+    /// The people built ground holds at ease at a cell, as a multiple of ordinary ground:
+    /// the dwelling demand of the district program there, at the strength it acts.
+    pub(crate) fn household_density(&self, cell: usize) -> f64 {
+        let Some(claim) = self.fields.claims.get(cell) else {
+            return 1.;
+        };
+        let program = self
+            .fields
+            .program
+            .get(cell)
+            .and_then(|&id| self.programs.get(id));
+        let strength = program.map_or(0., |p| p.strength)
+            * self.fields.stencil.get(cell).copied().unwrap_or(0.);
+        claim
+            .demands
+            .household_density(strength * self.dwelling_weight)
     }
     pub(crate) fn bridge_links(
         &self,

@@ -136,6 +136,7 @@ impl Pass {
                     opened.markets = input.parent.markets.clone();
                     opened.land.retain();
                     opened.imports.retain();
+                    opened.held.retain();
                     opened.going.passed.retain();
                     *work.borrow_mut() = Some(Rc::new(RefCell::new(opened)));
                 }

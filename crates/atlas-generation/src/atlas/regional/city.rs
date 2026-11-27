@@ -46,13 +46,19 @@ pub(crate) fn start_people_pass(
                 let state = scope.state();
                 let mesh = state.field().mesh();
                 let [ox, oy] = mesh.origin();
-                let urban = &state
+                let city = &state
                     .regional
                     .as_ref()
                     .ok_or_else(|| io::Error::other("City roads require regional state"))?
-                    .city
-                    .urban;
+                    .city;
+                let urban = &city.urban;
                 input.city = Some(Rc::new(growth::Guidance {
+                    dwelling: (0..mesh.len())
+                        .map(|cell| urban.household_density(cell))
+                        .collect(),
+                    enclosed: (0..mesh.len())
+                        .map(|cell| f64::from(crate::town::walls::enclosure(&city.walls, cell)))
+                        .collect(),
                     census: input.parent.census.clone(),
                     weight: (0..mesh.len())
                         .map(|cell| {
