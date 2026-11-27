@@ -134,9 +134,11 @@ processes it changes.
   where the people are, so a child cell does not keep a thin share of a town that stands
   elsewhere.
 - The people a square kilometre of built ground houses for ordinary households in a village
-  is a shared question, `room`. On a finer map settling works out from it how tightly
-  households live at each cell, and building reads that finding. World history still
-  builds from its own figure.
+  is a shared question, `room`. Settling works out from it how tightly households live at
+  each cell, from the neighbours within a walk and the households' purse, and building
+  reads that finding. World history does the same at the grain of its cells: after its
+  journeys it finds how tightly each cell's people live, builders add a share of the
+  ground they lack over the years of the pass, and ground people leave wears to ruin.
 - Rust visibility and the compile-fail checks in `crates/atlas-generation/src/human/storage.rs`
   keep one writer of the human layers. `rustFoundations.architecture.ts` requires every human
   owner mutation to pass through the registered command boundary.

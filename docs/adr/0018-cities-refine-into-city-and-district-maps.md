@@ -42,12 +42,15 @@ fills and its edge sharpens: inside it open ground is taken up, outside it built
 thins to farmsteads. Built ground holds more people where many live within a short walk
 and fewer where trade fills its households' purse. Each district program adds how tightly
 its own households live, so tenement ground holds several times the people of estate
-ground, and ground inside a standing wall is worth more and crowds further. The City
-passes both to the society rounds with its road access and reservations. District centres
-stand as far apart as the settled ground warrants in each round, so a city that gathers
-onto less ground founds more of them. Land-use areas and districts cover ground that is
-built on; the rest of the map is its countryside and neighbouring villages. No step fills
-an outline or sets a coverage.
+ground. Ground inside a wall is worth more to households and to investment, and crowds
+further, by the share of the circuit that stands: a wall begun protects little and a
+ruined one less each time more of it falls out of use. A landmark that needs a wall
+counts any circuit that has been begun. The City passes both to the society rounds with its road access
+and reservations. District centres are founded on built ground and stand as far apart
+as that ground warrants in each round, so a city that gathers onto less ground founds
+more of them where it has come to stand. Land-use areas and districts cover ground that
+is built on; the rest of the map is its countryside and neighbouring villages. No step
+fills an outline or sets a coverage.
 
 The captured settled outline gives the interior a strong preference for urban development.
 The surrounding countryside can support farms, road stops and satellites. The founding
@@ -63,8 +66,19 @@ works remain independent. Magical effects depend on the corresponding medium. Th
 land claims, investment, access and construction. Each round
 reads the previous round's occupied ground and access on the shared lattice.
 
+An institution or major work holds the ground round it as its precinct where its claim is
+stronger than the households'. Its claim falls with the walk from its door. Theirs rises
+where housing is crowded or sought after and on ground outside the city's interior, so a
+precinct is small in a crowded quarter, and a work that asks little of its surroundings
+keeps its own grounds alone. A named control sets how a sponsor's claim weighs against
+the households'.
+
 After these rounds, the City partitions the principal settlement into permanent districts
 around the programs that shaped it, preserving public courts, parks and geographic obstacles.
+The built body nearest the seat is the settlement's own. Each other body near it belongs to
+the settlement whose population draws it most strongly for its distance: a city keeps the
+quarters that have grown to reach a village, that village becoming one of them, and a
+neighbouring town of the city's own size keeps its ground.
 The City publishes district types and polygons, broad developed tracts, major roads,
 open grounds and significant sites.
 

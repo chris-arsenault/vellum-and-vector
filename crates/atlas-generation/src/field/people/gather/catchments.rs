@@ -492,6 +492,12 @@ mod tests {
         let walled = walled.settled();
         assert!(walled.residents[5] > 1.1 * open.residents[5]);
         assert!(walled.density(5) > open.density(5));
+        // A circuit a third built draws fewer households than one that stands whole.
+        let mut begun = Row::new();
+        begun.enclosed[5] = 1. / 3.;
+        let begun = begun.settled();
+        assert!(open.residents[5] < begun.residents[5]);
+        assert!(begun.residents[5] < walled.residents[5]);
     }
 
     #[test]

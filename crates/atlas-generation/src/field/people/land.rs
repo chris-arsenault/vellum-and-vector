@@ -58,7 +58,9 @@ pub const DEMOGRAPHY: Contract<(), LayerId> = Contract {
 
 #[derive(Clone, Copy)]
 pub enum Investment {
-    Historical,
+    /// Over the years of a World history pass.
+    Historical(Building),
+    /// In one pass over a finer map.
     Spatial(Building),
 }
 // owner-direction(2026-11-27): physically and socially motivated processes create built ground as a numeric field, the way ice coverage, rivers and population migration are created, with no simple formula equating people to built ground
@@ -89,7 +91,7 @@ pub const BUILT_GROUND: Contract<Investment, LayerId> = Contract {
     strategies: &[
         layer_strategy(
             "investment",
-            Investment::Historical,
+            Investment::Historical(Building::DEFAULT),
             EffectTime::Elapsed,
             LayerId::BuiltUp,
             Condition::None,
@@ -119,7 +121,7 @@ pub const MAINTENANCE: Contract<Investment, LayerId> = Contract {
     strategies: &[
         layer_strategy(
             "historical-upkeep",
-            Investment::Historical,
+            Investment::Historical(Building::DEFAULT),
             EffectTime::Elapsed,
             LayerId::Standing,
             Condition::None,
@@ -180,7 +182,9 @@ impl Operations {
                 move |context, input: &WorkInput<Capital>| {
                     let work = input.work.borrow();
                     match input.strategy.algorithm {
-                        Investment::Historical => harden(context, &work, &questions, &owner),
+                        Investment::Historical(building) => {
+                            harden(context, &work, &questions, &owner, building)
+                        }
                         Investment::Spatial(building) => {
                             let built = initial_layer(context.state(), &input.strategy)?;
                             super::building::develop(
@@ -235,7 +239,7 @@ impl Operations {
                             )?;
                             context.run(&maintain_o.place_ruins, &plan)
                         }
-                        Investment::Historical => {
+                        Investment::Historical(_) => {
                             if !work.facts.builds {
                                 return Ok(());
                             }
@@ -470,34 +474,49 @@ pub(super) fn occupy_land(
     Ok(())
 }
 
+/// World history builds as finer maps do, at the grain of its cells. The journeys before it
+/// found how tightly each cell's households live from their neighbours and purse. Over the
+/// years of the pass builders add a share of the ground those people still lack, on open
+/// ground first and on fields as far as they give way. Ground people leave is not released
+/// here: neglect wears it to ruin.
 fn harden(
     context: &mut CommandContext<'_, Field>,
     work: &Work,
     q: &Questions,
     owner: &operations::Operations<Field>,
+    building: Building,
 ) -> ExecutionResult<()> {
     if !work.facts.builds {
         return Ok(());
     }
     let builders = context.query(&q.building)?.values();
     let wealth = context.query(&q.wealth)?.values();
+    let room = context.query(&q.room)?.values();
+    let fed = context.query(&q.support)?.values();
     let field = context.state();
     let built = field.people.view(HumanField::Layer(LayerId::BuiltUp));
     let works = field.people.view(HumanField::Layer(LayerId::Standing));
-    let farms = field.people.view(HumanField::Layer(LayerId::Farmland));
     let mut raised = working(field);
-    let building = 1.0 - (-work.facts.years / BUILDING_YEARS).exp();
+    let settings = building.over_years(work.facts.years);
     for cell in 0..field.mesh.len() {
         if !habitable(field, cell)? {
             continue;
         }
-        let labour = field.people.people(cell)? * builders.get(cell)? * wealth.get(cell)?.sqrt();
-        let land_cost = PEOPLE_PER_BUILT_KM2 * (1.0 + farms.get(cell)?);
-        let needed = labour / (land_cost + labour);
-        let standing = built.get(cell)?;
-        if needed > standing {
-            raised.set(cell, (needed - standing) * building)?;
-        }
+        let change = super::building::change(
+            &super::building::Ground {
+                people: field.people.people(cell)?,
+                built: built.get(cell)?,
+                held: super::building::held(work, &room, cell)?,
+                open: field.people.free_area(cell)?,
+                // A cell this wide has a shelf for the few parts in a hundred its people
+                // build on, whatever its mean slope.
+                buildable: 1.,
+                fed: fed.get(cell)?,
+                builders: builders.get(cell)?,
+            },
+            &settings,
+        );
+        raised.set(cell, change.added)?;
     }
     occupy_land(context, owner, &raised)?;
     let gathering = 1.0 - (-work.facts.years / WORKS_YEARS).exp();

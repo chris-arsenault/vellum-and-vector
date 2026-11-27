@@ -263,7 +263,8 @@ fn found(
             eprintln!(
                 "{}",
                 serde_json::json!({"event":"city.district-founded","anchor":point,
-                "economic":econ.id,"social":social.id,"traits":traits,"repeat":settings.repeat,"ordinary":settings.ordinary})
+                "economic":econ.id,"social":social.id,"traits":traits,"repeat":settings.repeat,"ordinary":settings.ordinary,
+                "centreReachM":reach,"foundingGroundKm2":area / 1e6,"quarterM":template.quarter()})
             );
         }
         let mut demands = Demands::default();
@@ -320,9 +321,13 @@ fn district_support(
                 water: false,
             }
             .settlement_support();
-            *v = u.fields.stencil[c]
-                * (p.ln_1p() + 2. * b.sqrt() + ways.get(c)?.sqrt())
-                * template.city_affinity(points[c]).sqrt();
+            // A district is founded on ground that is built: as the city gathers over the
+            // rounds, later centres are founded where it has come to stand.
+            if b >= super::landscape::DISTRICT_BUILT {
+                *v = u.fields.stencil[c]
+                    * (p.ln_1p() + 2. * b.sqrt() + ways.get(c)?.sqrt())
+                    * template.city_affinity(points[c]).sqrt();
+            }
         }
     }
     let at = crate::field::refinement::courses::cell_at(mesh, template.site.centre);

@@ -123,9 +123,10 @@ pub(super) fn resolve(
             + 0.25 * frontage
             + 0.25 * public
             + 0.5 * trade.ln_1p();
-        let enclosed =
-            crate::town::walls::enclosure(&state.regional.as_ref().unwrap().city.walls, c);
-        let investment = (1. + 0.20 * f64::from(enclosed))
+        // Works are worth more behind a wall, by the share of its circuit that stands.
+        let protected =
+            crate::town::walls::protection(&state.regional.as_ref().unwrap().city.walls, c);
+        let investment = (1. + 0.20 * protected)
             * (standing / (b + 0.015)).max(0.)
             * (0.75 + 0.25 * tenure[c].clamp(0., 1.));
         let crowd = people / (600. + b * 5500. + standing * 9000.);

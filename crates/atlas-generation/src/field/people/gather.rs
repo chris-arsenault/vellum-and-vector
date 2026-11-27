@@ -13,6 +13,7 @@ use crate::{
     human::{
         catalogue::LayerId,
         operations::{self, Move},
+        HumanField,
     },
     storage::Band,
 };
@@ -20,7 +21,12 @@ use std::{io, rc::Rc};
 
 #[derive(Clone, Copy)]
 pub enum Movement {
-    Journeys,
+    /// People journey toward room and draw over the years of a pass.
+    Journeys {
+        /// How strongly dear ground thins, and a full purse widens, the ground a household
+        /// takes.
+        ground_thrift: f64,
+    },
     Placement(PlacementSettings),
 }
 
@@ -74,12 +80,14 @@ const LAND_HOLD: NumericParameter = NumericParameter {
     maximum: Some(1.),
     ..CATCHMENT_FALLOFF
 };
+// Read on every map: World history works out how tightly households live as finer maps do.
 const GROUND_THRIFT: NumericParameter = NumericParameter {
     name: "groundThrift",
     unit: "exponent on neighbours over purse",
     default: 0.1,
     minimum: Some(0.),
-    map_types: REFINED,
+    strategy: None,
+    map_types: &[],
     ..CATCHMENT_FALLOFF
 };
 const EDGE_GROWTH: NumericParameter = NumericParameter {
@@ -92,7 +100,7 @@ const EDGE_GROWTH: NumericParameter = NumericParameter {
 };
 const WALL_PREMIUM: NumericParameter = NumericParameter {
     name: "wallPremium",
-    unit: "added worth for each enclosing wall",
+    unit: "added worth for each complete enclosing wall",
     default: 0.2,
     minimum: Some(0.),
     ..CATCHMENT_FALLOFF
@@ -129,17 +137,19 @@ pub(crate) fn tune(
     mut strategy: Placement,
     input: &crate::atlas::dispatch::Input,
 ) -> io::Result<Placement> {
-    if matches!(strategy.algorithm, Movement::Placement(_)) {
-        strategy.algorithm = Movement::Placement(PlacementSettings {
+    let ground_thrift = input.number(GROUND_THRIFT.name)?;
+    strategy.algorithm = match strategy.algorithm {
+        Movement::Journeys { .. } => Movement::Journeys { ground_thrift },
+        Movement::Placement(_) => Movement::Placement(PlacementSettings {
             catchment_spans: input.number(CATCHMENT_SPANS.name)?,
             catchment_falloff: input.number(CATCHMENT_FALLOFF.name)?,
             location_draw: input.number(LOCATION_DRAW.name)?,
             land_hold: input.number(LAND_HOLD.name)?,
             edge_growth: input.number(EDGE_GROWTH.name)?,
             wall_premium: input.number(WALL_PREMIUM.name)?,
-            ground_thrift: input.number(GROUND_THRIFT.name)?,
-        });
-    }
+            ground_thrift,
+        }),
+    };
     Ok(strategy)
 }
 
@@ -166,7 +176,9 @@ pub const MOVEMENT: Contract<Movement, LayerId> = Contract {
     strategies: &[
         layer_strategy(
             "migration",
-            Movement::Journeys,
+            Movement::Journeys {
+                ground_thrift: GROUND_THRIFT.default,
+            },
             EffectTime::Elapsed,
             LayerId::Population,
             Condition::None,
@@ -623,6 +635,30 @@ fn supported_share(willing: f64, spare: f64, source_people: f64) -> f64 {
         0.0
     }
 }
+/// Over the years of a pass, people spill from crowded country toward spare food and, once
+/// they farm, drain toward the places that draw them.
+fn journey(
+    context: &mut CommandContext<'_, Field>,
+    work: &Work,
+    q: &Questions,
+    owner: &operations::Operations<Field>,
+) -> ExecutionResult<()> {
+    let field = context.state();
+    let years = work.facts.years / work.facts.sweeps as f64;
+    let targets = field.coverage.borrow_mut().scratch(field.mesh.len(), 0i32);
+    let mut leaving = Leaving {
+        targets,
+        share: working(field),
+        journeys: Vec::new(),
+    };
+    for _ in 0..work.facts.sweeps {
+        spill(context, work, q, owner, &mut leaving, years)?;
+        if work.facts.farms {
+            drain(context, work, q, owner, &mut leaving, years)?;
+        }
+    }
+    Ok(())
+}
 pub(crate) fn operation(
     q: Rc<Questions>,
     owner: Rc<operations::Operations<Field>>,
@@ -634,31 +670,32 @@ pub(crate) fn operation(
         move |context, input: &WorkInput<Placement>| {
             let strategy = input.strategy;
             let residents = initial_layer(context.state(), &strategy)?;
-            if let Movement::Placement(settings) = strategy.algorithm {
-                // The pass's later steps read how tightly households live from the work.
-                let mut held = {
-                    let work = input.work.borrow();
-                    place(context, &work, &q, &owner, &residents, settings)?
-                };
-                held.retain();
-                input.work.borrow_mut().held = held;
-                return Ok(());
-            }
-            let work = input.work.borrow();
-            let field = context.state();
-            let years = work.facts.years / work.facts.sweeps as f64;
-            let targets = field.coverage.borrow_mut().scratch(field.mesh.len(), 0i32);
-            let mut leaving = Leaving {
-                targets,
-                share: working(field),
-                journeys: Vec::new(),
-            };
-            for _ in 0..work.facts.sweeps {
-                spill(context, &work, &q, &owner, &mut leaving, years)?;
-                if work.facts.farms {
-                    drain(context, &work, &q, &owner, &mut leaving, years)?;
+            // The pass's later steps read how tightly households live from the work.
+            let mut held = {
+                let work = input.work.borrow();
+                match strategy.algorithm {
+                    Movement::Placement(settings) => {
+                        place(context, &work, &q, &owner, &residents, settings)?
+                    }
+                    Movement::Journeys { ground_thrift } => {
+                        journey(context, &work, &q, &owner)?;
+                        let room = context.query(&q.room)?.values();
+                        let wealth = context.query(&q.wealth)?.values();
+                        let field = context.state();
+                        let settled = field.people.view(HumanField::Layer(LayerId::Population));
+                        super::dwelling::settled(
+                            field,
+                            &work,
+                            &settled,
+                            &room,
+                            &wealth,
+                            ground_thrift,
+                        )?
+                    }
                 }
-            }
+            };
+            held.retain();
+            input.work.borrow_mut().held = held;
             Ok(())
         },
     )

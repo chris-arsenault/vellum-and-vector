@@ -238,7 +238,7 @@ fn run(home: &Path, reference_width: bool) -> ExecutionResult<()> {
             bands[band] += 1;
         }
         println!("  Reported settlements by population (<10k, 10–50k, 50–100k, 100–300k, 300–500k, 500k–2m, 2m+): {bands:?}");
-        Ok(())
+        built_ground(field)
     };
     census(&executor, "Captured terrain and people")?;
     let present = recipe.settings.epochs.last().map(|e| e.id.as_str());
@@ -269,6 +269,42 @@ fn run(home: &Path, reference_width: bool) -> ExecutionResult<()> {
             executor.run_with(&pass.dwell, &facts)?;
         }
         census(&executor, &era.id)?;
+    }
+    Ok(())
+}
+/// Built ground against the people on it, for the whole map and by how crowded a cell is:
+/// open country, settled country, town country and city cells.
+fn built_ground(field: &Field) -> ExecutionResult<()> {
+    use atlas_generation::human::{catalogue::LayerId, HumanField};
+    let built = field.people().view(HumanField::Layer(LayerId::BuiltUp));
+    let limits = [20., 100., 500., f64::INFINITY];
+    let mut bands = [[0.; 2]; 4];
+    for cell in 0..field.mesh().len() {
+        let km2 = work::km2(field, cell);
+        let density = field.people().people(cell)?;
+        let band = limits
+            .iter()
+            .position(|&limit| density < limit)
+            .unwrap_or(3);
+        bands[band][0] += density * km2;
+        bands[band][1] += built.get(cell)? * km2;
+    }
+    let [people, ground] = bands
+        .iter()
+        .fold([0.; 2], |sum, band| [sum[0] + band[0], sum[1] + band[1]]);
+    let held = |people: f64, ground: f64| if ground > 0. { people / ground } else { 0. };
+    println!(
+        "  Built ground {ground:.0} km², {:.0} people per built km²",
+        held(people, ground)
+    );
+    for (label, [people, ground]) in ["under 20", "20–100", "100–500", "over 500"]
+        .iter()
+        .zip(bands)
+    {
+        println!(
+            "    cells with {label} people per km²: {people:.0} people on {ground:.0} km² built, {:.0} per built km²",
+            held(people, ground)
+        );
     }
     Ok(())
 }

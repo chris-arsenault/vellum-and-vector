@@ -57,7 +57,7 @@ pub(crate) fn start_people_pass(
                         .map(|cell| urban.household_density(cell))
                         .collect(),
                     enclosed: (0..mesh.len())
-                        .map(|cell| f64::from(crate::town::walls::enclosure(&city.walls, cell)))
+                        .map(|cell| crate::town::walls::protection(&city.walls, cell))
                         .collect(),
                     census: input.parent.census.clone(),
                     weight: (0..mesh.len())

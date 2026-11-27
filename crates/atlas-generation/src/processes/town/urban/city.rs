@@ -40,11 +40,13 @@ pub(super) fn districts(
     let mesh = state.field().mesh();
     let points: Vec<_> = (0..mesh.len()).map(|c| position(mesh, c)).collect();
     let positions: Vec<_> = points.iter().copied().map(pos).collect();
-    let polygons = divide_precincts(state, urban, domain, &points, &positions)?;
+    let polygons = divide_precincts(state, urban, domain, &points, &positions)
+        .map_err(|e| during("dividing the district ground into precincts", e))?;
     if polygons.is_empty() {
         return Ok(());
     }
-    let mut precincts = measure_precincts(state, urban, polygons)?;
+    let mut precincts = measure_precincts(state, urban, polygons)
+        .map_err(|e| during("measuring the precincts", e))?;
     let approaches: Vec<_> = urban
         .routes
         .iter()
@@ -55,13 +57,15 @@ pub(super) fn districts(
         return Ok(());
     }
     let seats: Vec<_> = urban.programs.iter().map(|p| positions[p.cell]).collect();
-    assign_founders(kernel, &seats, policy(state)?.quarter(), &mut precincts)?;
+    assign_founders(kernel, &seats, policy(state)?.quarter(), &mut precincts)
+        .map_err(|e| during("seating the district founders", e))?;
     let origin = crate::atlas::regional::city::captured_settlement(state)?;
     let culture = origin
         .as_ref()
         .and_then(|s| s.attributes.get("namingCulture"))
         .and_then(|v| v.as_str());
-    let districts = super::partition::partition(kernel, &precincts, &approaches, boundary_weight)?;
+    let districts = super::partition::partition(kernel, &precincts, &approaches, boundary_weight)
+        .map_err(|e| during("joining the precincts into districts", e))?;
     for (i, group) in districts.into_iter().enumerate() {
         let members = group.precincts.iter().map(|&j| &precincts[j]);
         let residents: f64 = members.clone().map(|p| p.residents).sum();
@@ -126,6 +130,11 @@ pub(super) fn districts(
         urban.districts.push(district);
     }
     Ok(())
+}
+
+/// An error from one part of the district step, naming that part.
+fn during(part: &str, error: io::Error) -> io::Error {
+    io::Error::other(format!("{part}: {error}"))
 }
 
 fn assign_founders(

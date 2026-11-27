@@ -98,23 +98,26 @@ fn crowd(field: &Field, residents: &ReadBand<f64>) -> io::Result<Vec<f64>> {
     Ok(crowd)
 }
 
-pub(super) fn ground(
+/// The people a built square kilometre holds at each cell: by the people living within a
+/// walk of it, what its households can pay beside the ordinary means of everyone on the
+/// map, and its district's character. On a map whose cells are wider than a walk a cell's
+/// neighbours are its own people, so open country spreads and a crowded cell lives closer.
+pub(super) fn settled(
     field: &Field,
     work: &Work,
-    reads: &Reads<'_>,
-    settings: &PlacementSettings,
-) -> io::Result<Ground> {
-    let mut ground = Ground {
-        worth: working(field),
-        held: working(field),
-    };
-    let crowd = crowd(field, reads.residents)?;
-    // Ordinary means: what the settlement's people can pay, one with another.
+    residents: &ReadBand<f64>,
+    room: &ReadBand<f64>,
+    wealth: &ReadBand<f64>,
+    thrift: f64,
+) -> io::Result<Band<f64>> {
+    let mut held_at = working(field);
+    let crowd = crowd(field, residents)?;
+    // Ordinary means: what the map's people can pay, one with another.
     let (mut people, mut means) = (0., 0.);
     for cell in 0..field.mesh.len() {
-        let living = reads.residents.get(cell)?.max(0.) * km2(field, cell);
+        let living = residents.get(cell)?.max(0.) * km2(field, cell);
         people += living;
-        means += living * reads.wealth.get(cell)?.max(0.);
+        means += living * wealth.get(cell)?.max(0.);
     }
     let ordinary = if people > 0. && means > 0. {
         means / people
@@ -125,22 +128,46 @@ pub(super) fn ground(
         if !habitable(field, cell)? {
             continue;
         }
-        ground.worth.set(
-            cell,
-            worth(reads.opportunity.get(cell)?, work.enclosed(cell), settings),
-        )?;
-        ground.held.set(
+        held_at.set(
             cell,
             held(
-                reads.room.get(cell)?,
+                room.get(cell)?,
                 neighbours(density),
-                reads.wealth.get(cell)? / ordinary,
+                wealth.get(cell)? / ordinary,
                 work.dwelling(cell),
-                settings.ground_thrift,
+                thrift,
             ),
         )?;
     }
-    Ok(ground)
+    Ok(held_at)
+}
+
+pub(super) fn ground(
+    field: &Field,
+    work: &Work,
+    reads: &Reads<'_>,
+    settings: &PlacementSettings,
+) -> io::Result<Ground> {
+    let mut worth_at = working(field);
+    for cell in 0..field.mesh.len() {
+        if habitable(field, cell)? {
+            worth_at.set(
+                cell,
+                worth(reads.opportunity.get(cell)?, work.enclosed(cell), settings),
+            )?;
+        }
+    }
+    Ok(Ground {
+        worth: worth_at,
+        held: settled(
+            field,
+            work,
+            reads.residents,
+            reads.room,
+            reads.wealth,
+            settings.ground_thrift,
+        )?,
+    })
 }
 
 #[cfg(test)]

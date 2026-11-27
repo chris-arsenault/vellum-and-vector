@@ -211,10 +211,13 @@ fn site_cell(
     for i in index.query(Bounds(x, y, x, y))? {
         let cell = &index.geometries[i];
         if cell.intersects(&point).map_err(|e| e.to_string())? {
-            return NativeGeos::json(
+            // A cell is an area. Where it meets the clip along an edge the overlay can add
+            // that edge as a line, and a later overlay refuses an operand of mixed dimension.
+            return Ok(NativeGeos::json(
                 cell.intersection_prec(clip, spatial.precision)
                     .map_err(|e| e.to_string())?,
-            );
+            )?
+            .and_then(atlas_map::regions::polygon));
         }
     }
     Ok(None)

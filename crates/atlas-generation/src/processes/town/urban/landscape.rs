@@ -29,11 +29,29 @@ pub(super) const USES: [&str; 6] = [
 /// The built share of the ground round a cell from which the City maps a land use there.
 const TRACT_BUILT: f64 = 0.25;
 /// The built share from which ground belongs to a district: more of it built than not.
-const DISTRICT_BUILT: f64 = 0.5;
+pub(super) const DISTRICT_BUILT: f64 = 0.5;
 pub(super) struct SettlementGround {
     centre: atlas_map::Position,
     radius: f64,
-    neighbours: Vec<Geometry>,
+    /// The settlement's own census.
+    people: f64,
+    /// Each neighbouring settlement's place and census.
+    neighbours: Vec<(Geometry, f64)>,
+}
+/// The census a settlement record carries. A record without one counts as a single
+/// household.
+fn census(settlement: &Feature) -> f64 {
+    ["settlementPopulation", "population"]
+        .iter()
+        .filter_map(|key| settlement.attributes.get(*key)?.as_f64())
+        .find(|people| *people > 0.)
+        .unwrap_or(5.)
+}
+/// How strongly a settlement of `people` draws ground `distance` away to itself: by its
+/// size, falling with the square of the distance, as trade between two towns divides the
+/// country between them. Ground within a quarter of it is at its door.
+fn pull(people: f64, distance: f64, quarter: f64) -> f64 {
+    people / distance.max(quarter).powi(2)
 }
 impl SettlementGround {
     pub(super) fn captured(state: &State) -> io::Result<Self> {
@@ -51,14 +69,38 @@ impl SettlementGround {
         let neighbours = super::values(state, "settlement")?
             .into_iter()
             .filter(|f| Some(f.id) != id && crate::field::poi::reads::inhabited(f))
-            .map(|f| f.geometry)
+            .map(|f| {
+                let people = census(&f);
+                (f.geometry, people)
+            })
             .collect();
         Ok(Self {
             centre: pos(policy.site.centre),
             radius,
+            people: city.as_ref().map_or(5., census),
             neighbours,
         })
     }
+}
+
+/// Whether a neighbouring settlement draws a body `distance` from the seat more strongly
+/// than this settlement does. A city keeps a quarter that has grown to reach a village;
+/// a town of like size keeps the ground nearer to itself.
+fn drawn_away(
+    kernel: &dyn SpatialKernel,
+    body: &Geometry,
+    distance: f64,
+    settlement: &SettlementGround,
+    quarter: f64,
+) -> io::Result<bool> {
+    let own = pull(settlement.people, distance, quarter);
+    for (place, people) in &settlement.neighbours {
+        let away = kernel.distance(body, place).map_err(io::Error::other)?;
+        if pull(*people, away, quarter) > own {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 /// Nearby occupied banks and banks connected by a surveyed bridge belong to one
@@ -82,38 +124,33 @@ pub(super) fn principal_ground(
         return Ok(None);
     };
     let seat = point(settlement.centre);
-    let nearby = kernel
-        .index(&settlement.neighbours)
-        .map_err(io::Error::other)?;
-    let mut settled = Vec::new();
-    let mut principal = None;
-    let mut best = 0.;
+    let mut bodies = Vec::new();
     for area in parts(&neighborhoods) {
-        let Some(occupied) = kernel
+        if let Some(occupied) = kernel
             .overlay(ground, &area, Overlay::Intersection)
             .map_err(io::Error::other)?
             .and_then(atlas_map::regions::polygon)
-        else {
-            continue;
-        };
-        let m2 = kernel.area(&occupied).map_err(io::Error::other)?;
-        let distance = kernel
-            .distance(&occupied, &seat)
-            .map_err(io::Error::other)?;
-        let atlas_map::Bounds(w, s, e, n) = kernel.bounds(&occupied).map_err(io::Error::other)?;
-        let search = atlas_map::Bounds(w - distance, s - distance, e + distance, n + distance);
-        let mut separate = false;
-        for i in nearby.query(search).map_err(io::Error::other)? {
-            if kernel
-                .distance(&occupied, &settlement.neighbours[i])
-                .map_err(io::Error::other)?
-                < distance
-            {
-                separate = true;
-                break;
-            }
+        {
+            let distance = kernel
+                .distance(&occupied, &seat)
+                .map_err(io::Error::other)?;
+            bodies.push((occupied, distance));
         }
-        if separate {
+    }
+    // The body nearest the seat, within the settlement's own radius, is the settlement's
+    // whoever its neighbours are: the seat may stand on a court inside it, and a small town
+    // beside a great one still has its own ground.
+    let home = bodies
+        .iter()
+        .map(|(_, distance)| *distance)
+        .fold(f64::INFINITY, f64::min)
+        .min(settlement.radius);
+    let mut settled = Vec::new();
+    let mut principal = None;
+    let mut best = 0.;
+    for (occupied, distance) in bodies {
+        let m2 = kernel.area(&occupied).map_err(io::Error::other)?;
+        if distance > home && drawn_away(kernel, &occupied, distance, settlement, quarter)? {
             continue;
         }
         if distance <= settlement.radius {
@@ -143,6 +180,19 @@ pub(super) fn crossings(u: &Urban, mesh: &crate::lattice::TriangularLattice) -> 
 mod district_ground_tests {
     use super::*;
     use atlas_map::{regions::rectangle, Bounds, Position};
+
+    #[test]
+    fn a_precinct_holds_only_ground_households_do_not_want_more() {
+        // At its door, on ordinary settled ground, a sponsor holds its precinct.
+        assert!(precinct_margin(1., 1., 0.72) > 0.);
+        // The same claim a long walk away loses to ordinary housing.
+        assert!(precinct_margin(0.6, 1., 0.72) < 0.);
+        // Crowded housing outbids the sponsor even at its door.
+        assert!(precinct_margin(1., 1., 1.4) < 0.);
+        // A work that asks less of its surroundings holds less of them.
+        assert!(precinct_margin(0.85, 1., 0.72) > 0.);
+        assert!(precinct_margin(0.85, 0.55, 0.72) < 0.);
+    }
 
     #[test]
     fn district_ground_is_claimed_and_mostly_built() {
@@ -186,7 +236,8 @@ mod district_ground_tests {
         let settlement = SettlementGround {
             centre: Position::xy(0., 0.),
             radius: 150.,
-            neighbours: vec![point(Position::xy(520., 0.))],
+            people: 2_000.,
+            neighbours: vec![(point(Position::xy(520., 0.)), 1_500.)],
         };
         let sites = [[0., 0.], [290., 0.], [0., 120.], [520., 0.], [150., 0.]].map(pos);
         let membership = |crossings: &[Geometry]| {
@@ -211,6 +262,50 @@ mod district_ground_tests {
             membership(&crossings(&u, &mesh)),
             [true, true, true, false, false]
         );
+    }
+
+    #[test]
+    fn built_bodies_go_to_the_settlement_whose_people_draw_them_most() {
+        let k = atlas_gis::geometry::NativeGeos::new(0.001).unwrap();
+        // The seat stands on an open court. Its home quarter lies to the west, a second
+        // quarter to the east with a hamlet's marker inside it, and a third body further
+        // east round another settlement's marker. A quarter is 300 m.
+        let home = rectangle(Bounds(-2_000., -400., -350., 400.));
+        let east = rectangle(Bounds(500., -400., 2_000., 400.));
+        let far = rectangle(Bounds(3_000., -300., 3_600., 300.));
+        let ground = k.union_all(&[home, east, far]).unwrap().unwrap();
+        let sites = [[-1_000., 0.], [1_000., 0.], [3_300., 0.]].map(pos);
+        let hamlet = point(Position::xy(1_500., 0.));
+        let other = point(Position::xy(3_300., 0.));
+        let membership = |people: f64, neighbours: Vec<(Geometry, f64)>| {
+            let settlement = SettlementGround {
+                centre: Position::xy(0., 0.),
+                radius: 4_000.,
+                people,
+                neighbours,
+            };
+            let g = principal_ground(&k, &ground, &settlement, 300., &[])
+                .unwrap()
+                .unwrap();
+            k.covers_points(&g, &sites).unwrap()
+        };
+        // A city keeps the quarter a hamlet stands in; a town of its own size keeps its
+        // ground.
+        let town = vec![(hamlet.clone(), 400.), (other.clone(), 150_000.)];
+        assert_eq!(membership(200_000., town), [true, true, false]);
+        // A village the city has grown to reach becomes one of its quarters.
+        let village = vec![(hamlet.clone(), 400.), (other.clone(), 500.)];
+        assert_eq!(membership(200_000., village), [true, true, true]);
+        // Places of like size divide the ground between them by distance.
+        let peers = vec![(hamlet.clone(), 600.), (other.clone(), 600.)];
+        assert_eq!(membership(600., peers), [true, false, false]);
+        // A small town keeps its home body with a great neighbour's marker inside it.
+        let great = vec![
+            (point(Position::xy(-1_200., 0.)), 20_000.),
+            (hamlet, 400.),
+            (other, 20_000.),
+        ];
+        assert_eq!(membership(800., great), [true, false, false]);
     }
 }
 
@@ -291,8 +386,12 @@ pub(super) fn develop(
     let mut secondary = [vec![0.; n], vec![0.; n]];
     let mut mix = vec![[0.; 3]; n];
     u.fields.activity = super::activity::develop(state, u, template.quarter(), activity)?;
-    let main = land_use_bids(u, mesh, template, &mut layers, &mut secondary, &mut mix);
-    let reserved_land = reserve_public_ground(state, u, reserved, k, union, n)?;
+    let (main, rival) = land_use_bids(u, mesh, template, &mut layers, &mut secondary, &mut mix);
+    let households = Households {
+        claim: &rival,
+        sponsor_weight: activity.precincts,
+    };
+    let reserved_land = reserve_public_ground(state, u, reserved, k, union, households)?;
     let secondary_masks = [
         contour(state, &secondary[0], 0.)?,
         contour(state, &secondary[1], 0.)?,
@@ -399,9 +498,12 @@ fn land_use_bids(
     layers: &mut [Vec<f64>],
     secondary: &mut [Vec<f64>; 2],
     mix: &mut [[f64; 3]],
-) -> Vec<f64> {
+) -> (Vec<f64>, Vec<f64>) {
     let n = mesh.len();
     let mut main = vec![0.; n];
+    // The strongest claim households make on each cell, as settled, crowded or garden
+    // housing.
+    let mut rival = vec![0.; n];
     for c in 0..n {
         let x = u.fields.claims[c];
         let access = u.fields.access[c];
@@ -441,6 +543,7 @@ fn land_use_bids(
             strength * demands.commons * (0.4 + 0.6 * texture + 0.4 * x.farm) / (1. + x.built),
         ];
         let housing = bids[0].max(bids[1]).max(bids[2]);
+        rival[c] = housing;
         let weights = [housing, bids[3], bids[4]].map(|v| v.max(0.).powi(3));
         let total = weights.iter().sum::<f64>();
         mix[c] = weights.map(|w| w / total);
@@ -461,7 +564,23 @@ fn land_use_bids(
             layers[kind][c] = tract_margin.min(bids[kind] - other);
         }
     }
-    main
+    (main, rival)
+}
+
+/// A sponsor holds the ground round it as its precinct where its claim is stronger than the
+/// households'. Its claim falls with the walk from its door; theirs rises where housing is
+/// crowded or sought after and on ground outside the city's interior, so a precinct is
+/// small in a crowded quarter and a sponsor that asks little of its surroundings keeps its
+/// own grounds alone. Trades and workshops work inside a precinct as they do among homes.
+fn precinct_margin(civic: f64, sponsor_demand: f64, households: f64) -> f64 {
+    civic * sponsor_demand - households
+}
+
+/// The households' claim on each cell and how a sponsor's claim weighs against it.
+#[derive(Clone, Copy)]
+struct Households<'a> {
+    claim: &'a [f64],
+    sponsor_weight: f64,
 }
 
 fn reserve_public_ground(
@@ -470,7 +589,7 @@ fn reserve_public_ground(
     reserved: &[Feature],
     k: &dyn SpatialKernel,
     union: impl Fn(&[Geometry]) -> Result<Option<Geometry>, io::Error>,
-    n: usize,
+    households: Households<'_>,
 ) -> Result<Option<Geometry>, io::Error> {
     let mut masks: Vec<Geometry> = reserved.iter().map(|f| f.geometry.clone()).collect();
     let park_shapes: Vec<_> = u.parks.iter().map(|p| p.geometry.clone()).collect();
@@ -487,16 +606,19 @@ fn reserve_public_ground(
                 masks.push(area);
             }
         }
-        let strength: Vec<_> = (0..n)
+        let demand =
+            households.sponsor_weight * s.work.map_or(1., |(family, _)| family.demands().civic);
+        let rival = households.claim;
+        let strength: Vec<_> = (0..rival.len())
             .map(|c| {
                 if u.fields.sponsor[c] == Some(i) && u.fields.inside[c] {
-                    u.fields.civic[c] * s.work.map_or(1., |(family, _)| family.demands().civic)
+                    precinct_margin(u.fields.civic[c], demand, rival[c])
                 } else {
-                    0.
+                    -1.
                 }
             })
             .collect();
-        if let Some(shape) = contour(state, &strength, 0.37)? {
+        if let Some(shape) = contour(state, &strength, 0.)? {
             if let Some(shape) = buildable(k, shape, reserved)? {
                 let shape = if let Some(mask) = &park_mask {
                     let Some(shape) = k

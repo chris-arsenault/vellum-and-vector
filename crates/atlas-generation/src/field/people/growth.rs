@@ -25,7 +25,8 @@ pub struct Guidance {
     /// The people built ground holds at ease at each cell, as a multiple of ordinary
     /// ground: above one where households live closer, below one where each takes more.
     pub dwelling: Vec<f64>,
-    /// How many standing walls enclose each cell.
+    /// The protection walls give each cell: every circuit round it, by the share of that
+    /// circuit that stands.
     pub enclosed: Vec<f64>,
 }
 

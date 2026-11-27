@@ -306,6 +306,27 @@ fn site_topology_returns_original_indices_and_clipped_cells_in_site_order() {
 }
 
 #[test]
+fn a_site_cell_is_an_area_also_on_the_clips_edges_and_corners() {
+    let spatial = NativeGeos::new(0.001).unwrap();
+    let sites = [
+        Position::xy(0.0, 0.0),
+        Position::xy(4.0, 0.0),
+        Position::xy(2.0, 4.0),
+        Position::xy(0.0, 2.0),
+        Position::xy(2.0, 2.0),
+        Position::xy(2.0005, 2.0005),
+    ];
+    let cells = spatial
+        .voronoi_cells(&sites, Bounds(0.0, 0.0, 4.0, 4.0))
+        .unwrap();
+    assert_eq!(cells.len(), sites.len());
+    assert!(cells.into_iter().flatten().all(|cell| matches!(
+        cell,
+        Geometry::Polygon { .. } | Geometry::MultiPolygon { .. }
+    )));
+}
+
+#[test]
 fn bulk_masks_preserve_operand_direction_and_select_faces_without_publishing_all_of_them() {
     let spatial = NativeGeos::new(0.001).unwrap();
     let mask = polygon(0.0, 0.0, 4.0);

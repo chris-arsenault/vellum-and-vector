@@ -111,7 +111,7 @@ impl Work {
             .copied()
             .unwrap_or(1.)
     }
-    /// How many standing walls enclose `cell`.
+    /// The protection walls give `cell`: every circuit round it, by the share that stands.
     pub fn enclosed(&self, cell: usize) -> f64 {
         self.city
             .as_ref()

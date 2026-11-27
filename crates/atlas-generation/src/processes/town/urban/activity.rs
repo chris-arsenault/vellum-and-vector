@@ -19,23 +19,33 @@ const HOUSEHOLD_WEIGHT: crate::parameters::NumericParameter = crate::parameters:
     name: "householdServiceWeight",
     ..ROAD_WEIGHT
 };
+/// How strongly an institution's or major work's claim on the ground round it counts
+/// against the households' claim. Zero leaves every sponsor its own grounds alone.
+const PRECINCT_WEIGHT: crate::parameters::NumericParameter = crate::parameters::NumericParameter {
+    name: "precinctClaimWeight",
+    ..ROAD_WEIGHT
+};
 pub(super) const CONTROLS: &[crate::parameters::NumericParameter] =
-    &[ROAD_WEIGHT, HOUSEHOLD_WEIGHT];
+    &[ROAD_WEIGHT, HOUSEHOLD_WEIGHT, PRECINCT_WEIGHT];
 
 #[derive(Clone, Copy)]
 pub(super) struct Settings {
     roads: f64,
     households: f64,
+    /// The weight of a sponsor's claim against the households' claim on the same ground.
+    pub precincts: f64,
 }
 impl Settings {
     pub const DEFAULT: Self = Self {
         roads: ROAD_WEIGHT.default,
         households: HOUSEHOLD_WEIGHT.default,
+        precincts: PRECINCT_WEIGHT.default,
     };
     pub fn from_input(input: &crate::atlas::dispatch::Input) -> io::Result<Self> {
         Ok(Self {
             roads: input.number(ROAD_WEIGHT.name)?,
             households: input.number(HOUSEHOLD_WEIGHT.name)?,
+            precincts: input.number(PRECINCT_WEIGHT.name)?,
         })
     }
 }
