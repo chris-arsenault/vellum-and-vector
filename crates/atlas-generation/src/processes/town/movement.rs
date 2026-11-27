@@ -74,6 +74,7 @@ fn unplaced_street_workers(district_people: Option<f64>, housed: f64) -> f64 {
     district_people.map_or(0., |people| 0.5 * (people - housed).max(0.))
 }
 
+// owner-direction(2026-11-27): a city cannot be constructed by one process that lays out streets from a setting, such as a grid with grid spacing as a variable; a table of such values per template is right when each value is one part of a formula and the processes feed back
 pub fn advance(town: &mut Town, context: &mut Frontage<'_>) -> io::Result<()> {
     let (mut participants, mut housed) = (0., 0.);
     for holding in town.holdings().iter().filter(|h| h.occupation > 0.) {

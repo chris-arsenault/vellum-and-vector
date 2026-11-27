@@ -1,5 +1,22 @@
 # Vellum & Vector
 
+## The fundamental rule
+
+**Owner direction — 2026-11-27.** Districts, cities, streets and the world must all be
+the result of chaotic interactions: processes execute multiple times and feed forward
+and back into each other, producing very different results even when input differences
+are small.
+
+Read every other instruction, ADR, plan phase and memory in the light of this rule; it
+governs when a narrower one seems to ask for something else. It forbids constructing a
+result, such as one process that lays streets on a grid with grid spacing as its
+variable. It does not forbid tables of numbers: a table of grid spacings per template is
+right when each value is one part of a formula inside processes that run repeatedly and
+feed back. Before designing or changing generation, run the four checks in
+[AGENTS.md](AGENTS.md#the-fundamental-rule): more than one process, results crossing
+between rounds, a loop that amplifies early differences, and a small input change that
+gives a visibly different result.
+
 ## Project instructions
 
 Read and follow [AGENTS.md](AGENTS.md) for the product direction, application

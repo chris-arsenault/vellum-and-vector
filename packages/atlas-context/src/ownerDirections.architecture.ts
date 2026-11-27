@@ -16,6 +16,20 @@ import { realScaleDirections, type OwnerDirection } from "./ownerDirections.real
  * owner gives a direction, add its mark, its entry and, where a test can state it, its test.
  */
 const directions: readonly OwnerDirection[] = [
+  // The fundamental rule of generation (AGENTS.md, "The fundamental rule"). Read every other
+  // direction, plan and design document in its light.
+  {
+    direction:
+      "districts, cities, streets and the world must all be the result of chaotic interactions where processes execute multiple times and feed forward and back into each other, producing very different results even when input differences are small",
+    given: "2026-11-27",
+    marks: ["crates/atlas-generation/src/processes/town/mod.rs"],
+  },
+  {
+    direction:
+      "a city cannot be constructed by one process that lays out streets from a setting, such as a grid with grid spacing as a variable; a table of such values per template is right when each value is one part of a formula and the processes feed back",
+    given: "2026-11-27",
+    marks: ["crates/atlas-generation/src/processes/town/movement.rs"],
+  },
   {
     direction:
       "the district catalog is the design authority and Street responses reflect City behavior",

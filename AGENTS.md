@@ -1,5 +1,44 @@
 # Vellum & Vector
 
+## The fundamental rule
+
+**Owner direction — 2026-11-27.** Districts, cities, streets and the world must all be
+the result of chaotic interactions: processes execute multiple times and feed forward
+and back into each other, producing very different results even when input differences
+are small.
+
+Every other rule in this file, every ADR, plan phase, design document and agent memory
+is a consequence of this rule or a detail under it. Read each of them in its light. When
+a narrower rule seems to ask for something else, the fundamental rule governs; say which
+rule you are reading and ask the owner before acting on the narrower reading.
+
+**What it forbids.** Constructing a result. A city whose streets are laid on a grid by
+one process, with grid spacing as its variable, is constructed: the setting decides the
+outcome and nothing else acts on it. So is any step that writes the finished pattern
+from its inputs in one pass, any fill that reaches a target by a chosen multiplier, and
+any output fitted to one seed.
+
+**What it does not forbid.** Tables of numbers. A table of grid spacings per template is
+right when each spacing is one part of a formula inside processes that run again and
+again and act on each other's results. Catalogues, settings, multipliers and per-kind
+values are how causes speak; they are never the fault. The fault is a process that does
+not interact.
+
+**How to check a design or a change before building it.**
+
+1. Name the processes that act on the thing. If there is one, it is constructed.
+2. Name what each process reads that another process wrote in an earlier round, and
+   what it writes that another reads later. If nothing crosses, there is no interaction.
+3. Name the loop that amplifies: where an early chance difference grows across rounds.
+   Loops that only damp (shares that equalise, costs that rise with what stands, greedy
+   choice by one benefit) pull every place to the same result.
+4. Change one input a little, on a small field or one kept map, and compare. The same
+   result with a small change of grain is a failed check, whatever the numbers say.
+
+A direction that names a mechanism ("no static modifiers", "no caps", "behind
+contracts") is this rule seen from one side. Do not read it as a ban on numbers,
+tables or settings, and do not rebuild working code to satisfy a narrower reading.
+
 ## Product and source authority
 
 Build the fictional-world atlas described in [docs/product-spec.md](docs/product-spec.md).

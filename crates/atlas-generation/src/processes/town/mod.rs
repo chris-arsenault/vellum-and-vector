@@ -82,6 +82,7 @@ pub enum Reads {
     Livelihood,
     Exposure,
 }
+// owner-direction(2026-11-27): districts, cities, streets and the world must all be the result of chaotic interactions where processes execute multiple times and feed forward and back into each other, producing very different results even when input differences are small
 pub const STEPS: &[Step] = &[
     Step {
         id: "town.movement",
