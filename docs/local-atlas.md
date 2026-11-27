@@ -124,8 +124,10 @@ feature.key=number` changes numeric feature settings for that map alone, several
 by commas, such as `city --set built.layout.districtCatchmentScale=1.8`; a child otherwise
 generates with the settings its world was made with. A street map takes how its towns are
 ordered the same way: `built.layout.streetSpacing`, `backLaneReach`, `crossingSpacing`,
-`shortcutSaving`, `streetWorkShare`, `plotFrontage` and `plotDepth`. Use the same parent,
-settlement and hex settings for each comparison.
+`shortcutSaving`, `streetWorkShare`, `plotFrontage`, `plotDepth`, `wealthSpread`,
+`birthright`, `deference`, `survey`, `wornWays`, `marketFrontage`, `character`,
+`clustering`, `satiety` and `signature`. Use the same parent, settlement and hex settings
+for each comparison.
 A finished map is saved to the server library and reported in
 `.artifacts/local-atlas/maps/<name>/`:
 

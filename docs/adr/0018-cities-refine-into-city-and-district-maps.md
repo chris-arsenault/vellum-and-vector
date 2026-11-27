@@ -138,6 +138,20 @@ over its garden. A standalone town has no City to say and chooses as it always h
 Every town on a street map carries a record of how it is ordered: the spacing its streets
 keep, how far a back lane runs, where a main street's crossings fall, the saving that
 earns a shortcut, the street work its residents give and the size of the plots it offers.
+It also says how far apart households' lots lie, how much birth counts beside work, how
+strongly standing draws standing, how much the town lays frontage streets ahead of
+building against surfacing the ways feet wear, how far trade keeps to busy frontage, how
+strongly the template shows, how much like trades draw together and how much a town's
+own signature trades outbid the rest. Every term is one part of a rule inside the rounds;
+none lays out a result by itself.
+
+Three loops in the rounds grow an early difference. A great house lends its street
+standing, and where an order defers to standing the better born settle where standing is
+above the town's usual and leave the places below it, so one early great house can make
+a great street beside a common one. Premises of one family make their street cheaper
+for more of that family, so a street's first smith can make it the smiths' street.
+Chance gives each town a few working trades as its own at founding, weighted toward what
+its district lives by, and those outbid the rest wherever custom lets them stand.
 The causes that vary a town and the rules that build it meet in this record. A cause
 writes a term; a rule reads it where it would otherwise hold a number of its own. The
 map's settings write first and the settlement's civic order writes over them. Each term

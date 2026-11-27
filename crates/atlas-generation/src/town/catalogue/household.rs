@@ -195,6 +195,13 @@ pub(super) fn residence(variant: Residence) -> Definition {
         roles: Roles {
             effects: Effects {
                 improvement: Some(Improvement::UpperStorey),
+                // A great house lends its street standing, and a town's order says how
+                // far a household's means rise with the standing round it.
+                dignifies: match variant {
+                    Residence::Compound => 0.9,
+                    Residence::Courtyard => 0.4,
+                    _ => 0.,
+                },
                 ..Effects::EMPTY
             },
             household: true,

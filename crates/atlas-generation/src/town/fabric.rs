@@ -119,6 +119,46 @@ impl Holding {
         self.means * self.occupation.clamp(0., 1.) * self.condition.clamp(0., 1.) * 0.4
     }
 }
+/// How many trades a town is given as its own.
+const SIGNATURE_TRADES: usize = 3;
+/// The trades chance gives a town as its own: each rolled on the town's identity and the
+/// map's seed among the kinds of working premises, the ones a district lives by counting
+/// three times. Chance chooses; the rounds then decide how far each takes hold.
+pub(crate) fn signature_trades(
+    town: &[u8],
+    seed: i32,
+    livelihood: Option<super::catalogue::Activity>,
+) -> Vec<Kind> {
+    use atlas_map::town::BuildingFunction;
+    let mut trades: Vec<(Kind, f64)> = super::catalogue::PLACES
+        .into_iter()
+        .filter(|kind| {
+            let definition = kind.definition();
+            matches!(definition.function, BuildingFunction::Economic)
+                && !definition.roles.household
+                && !kind.open()
+        })
+        .map(|kind| {
+            let lived_by = Some(kind.definition().activity) == livelihood;
+            (kind, if lived_by { 3. } else { 1. })
+        })
+        .collect();
+    let mut chosen = Vec::new();
+    for pick in 0..SIGNATURE_TRADES.min(trades.len()) {
+        let total: f64 = trades.iter().map(|(_, weight)| weight).sum();
+        let salt = (seed as u64).wrapping_add(0x51_97a7 + pick as u64);
+        let mut ticket = crate::field::poi::true_sizes::roll_bytes(town, salt) * total;
+        let index = trades
+            .iter()
+            .position(|(_, weight)| {
+                ticket -= weight;
+                ticket < 0.
+            })
+            .unwrap_or(trades.len() - 1);
+        chosen.push(trades.remove(index).0);
+    }
+    chosen
+}
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Town {
     #[serde(skip)]
@@ -131,6 +171,14 @@ pub struct Town {
     /// How the town is ordered: the terms its causes write and its rules read.
     #[serde(default)]
     pub order: super::order::Order,
+    /// The few trades chance gave this town as its own at founding. Their premises bid
+    /// above the rest, and each one built draws more to its street.
+    #[serde(default)]
+    pub signature: Vec<Kind>,
+    /// The standing an open site of the town usually has this round, which each site's
+    /// own standing is set beside.
+    #[serde(default)]
+    pub usual_standing: f64,
     /// The fidelity the town develops at; its processes read lengths through `scale`.
     #[serde(default)]
     pub fidelity: super::scale::Fidelity,
@@ -781,11 +829,17 @@ impl Town {
     }
     /// Gives the town its order: what the map's settings say, then what its civic order
     /// writes over them.
-    pub fn ordered(&mut self, settings: super::order::Order) {
+    pub fn ordered(&mut self, settings: super::order::Order, seed: i32) {
         self.order = settings;
         if let Some(civic) = self.template.civic {
             civic.write(&mut self.order);
         }
+        let livelihood = self
+            .district
+            .as_ref()
+            .and_then(|site| site.program.as_ref())
+            .map(|program| program.livelihood());
+        self.signature = signature_trades(&self.seat.key.to_bytes(), seed, livelihood);
     }
     pub fn new(seat: Seat, forced: Option<Layout>) -> Self {
         let layout = super::story::layout(&seat.story, forced);
@@ -801,6 +855,8 @@ impl Town {
             seat,
             layout,
             order: Default::default(),
+            signature: Vec::new(),
+            usual_standing: 0.,
             fidelity: Default::default(),
             streets: vec![],
             growing_ways: vec![],
@@ -1168,6 +1224,40 @@ fn assign_buildings(
 mod fitting_tests {
     use super::*;
     use crate::town::network::{Arm, Class};
+
+    #[test]
+    fn chance_gives_each_town_a_few_working_trades_of_its_own() {
+        use crate::town::catalogue::Activity;
+        let draw = |seed: i32, livelihood| signature_trades(b"one town", seed, livelihood);
+        // Three different trades, each a working premises and no household or open ground.
+        let own = draw(7, None);
+        assert_eq!(own.len(), SIGNATURE_TRADES);
+        assert!(own[0] != own[1] && own[1] != own[2] && own[0] != own[2]);
+        assert!(own
+            .iter()
+            .all(|kind| !kind.definition().roles.household && !kind.open()));
+        // The same town on another seed, and another town on the same seed, draw otherwise.
+        let sets: Vec<_> = (0..30).map(|seed| draw(seed, None)).collect();
+        let distinct = sets
+            .iter()
+            .enumerate()
+            .filter(|(i, set)| !sets[..*i].contains(set))
+            .count();
+        assert!(distinct >= 20, "{distinct} different draws in 30 seeds");
+        assert_ne!(signature_trades(b"another town", 7, None), own);
+        // A district that lives by making draws makers' trades more often, not always.
+        let makers = |livelihood| {
+            (0..200)
+                .flat_map(|seed| draw(seed, livelihood))
+                .filter(|kind| kind.definition().activity == Activity::Production)
+                .count()
+        };
+        let (by_making, by_chance) = (makers(Some(Activity::Production)), makers(None));
+        assert!(
+            by_making > by_chance && by_making < 600,
+            "{by_making} against {by_chance}"
+        );
+    }
 
     #[test]
     fn projection_uses_the_actual_course_and_sees_new_roads() {

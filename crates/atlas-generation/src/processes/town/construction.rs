@@ -22,7 +22,24 @@ struct FittedProject {
 struct Demand {
     space: UnmetDemand,
     families: [f64; PLACES.len()],
+    /// The same supply counted street by street, by street number.
+    on_streets: Vec<[f64; PLACES.len()]>,
     housing: Vec<(Kind, HousingOffer)>,
+}
+/// What a set of holdings supplies of each family of premises: its occupied share, and a
+/// little for standing at all.
+fn supply<'a>(
+    holdings: impl Iterator<Item = &'a crate::town::fabric::Holding> + Clone,
+) -> [f64; PLACES.len()] {
+    PLACES.map(|kind| {
+        holdings
+            .clone()
+            .filter(|h| {
+                kind.same_family(h.kind) || h.secondary.is_some_and(|k| kind.same_family(k))
+            })
+            .map(|h| h.occupation + 0.25)
+            .sum::<f64>()
+    })
 }
 enum Offer<'a> {
     Premises(PremisesBid<'a>),
@@ -73,18 +90,28 @@ pub fn advance(town: &mut Town, context: &mut Frontage<'_>) -> io::Result<()> {
     for holding in town.holdings() {
         space.add(FloorSpace::holding(holding, context.spatial)?);
     }
-    let supplied = PLACES.map(|kind| {
-        town.holdings()
-            .iter()
-            .filter(|h| {
-                kind.same_family(h.kind) || h.secondary.is_some_and(|k| kind.same_family(k))
-            })
-            .map(|h| h.occupation + 0.25)
-            .sum::<f64>()
-    });
+    // The standing an open site usually has this round, which each site's own is set beside.
+    town.usual_standing = context
+        .candidates
+        .iter()
+        .map(|c| c.conditions.patronage + c.conditions.effects.prestige)
+        .sum::<f64>()
+        / context.candidates.len().max(1) as f64;
+    let supplied = supply(town.holdings().iter());
+    // What each street already holds of each family, so like can draw like.
+    let on_streets = (0..town.streets().len())
+        .map(|street| {
+            supply(
+                town.holdings()
+                    .iter()
+                    .filter(|h| h.slot.street == Some(street)),
+            )
+        })
+        .collect();
     let demand = Demand {
         space: space.need(town.seat.story.people),
         families: supplied,
+        on_streets,
         housing: housing_offers(),
     };
     let scale = town.scale();
@@ -251,7 +278,7 @@ fn develop_site(
     let project = project.map(|p| (p.purpose, p.plot));
     let financed = project.is_some();
     let definition = kind.definition();
-    let means = resources(candidate);
+    let means = resources(town, candidate);
     let edit = match proposal(town, candidate, kind, sample, project, context) {
         Ok(edit) => edit,
         Err(reason) => return Ok(reason),
@@ -496,7 +523,7 @@ fn proposal(
     slot.tenure = town
         .template
         .tenure(definition.activity, slot.front, charter_unit(town));
-    let means = resources(candidate);
+    let means = resources(town, candidate);
     let outdoor = kind.open();
     let buildings = crate::town::roofs::components_at(&slot, kind, means, sample, scale);
     Ok(FabricEdit::Establish {
@@ -625,17 +652,19 @@ fn site_affinity(town: &Town, candidate: &super::Candidate, kind: Kind) -> f64 {
         charter_unit(town),
     )
 }
-fn resources(candidate: &super::Candidate) -> f64 {
+/// The means of the household a site would hold: the lot it is born to, lifted by the
+/// standing of the places round it, beside what its work brings in. The town's order says
+/// how far apart lots lie, how much birth counts and how strongly standing draws standing.
+fn resources(town: &Town, candidate: &super::Candidate) -> f64 {
     let support = candidate.opportunities.for_activity(Activity::Household);
     let income = (support.demand + support.capability) / (1. + support.burden);
-    let patronage = candidate.conditions.patronage + candidate.conditions.effects.prestige;
-    let endowment =
-        crate::noise::hash_unit(0x4312, candidate.slot.front[0], candidate.slot.front[1]);
+    let standing = candidate.conditions.patronage + candidate.conditions.effects.prestige;
+    let draw = crate::noise::hash_unit(0x4312, candidate.slot.front[0], candidate.slot.front[1]);
     let local = candidate.conditions;
     let costs = 1. + local.density + local.nuisance + local.waste;
     let working_income = income / (2. + income) / costs;
-    let patron = patronage / (1. + patronage);
-    (endowment * (1. + patron) + working_income) / (2. + patron)
+    town.order
+        .means(draw, [standing, town.usual_standing], working_income)
 }
 /// A site as the businesses that might take it see it.
 struct Siting<'a> {
@@ -691,12 +720,24 @@ impl Siting<'_> {
         if audience < required {
             return Err("too little custom and supply");
         }
+        let order = self.town.order;
+        let on_street = candidate
+            .slot
+            .street
+            .and_then(|street| demand.on_streets.get(street))
+            .map_or(0., |street| street[i]);
+        // A town's own signature trades bid above the rest.
+        let signature = if self.town.signature.iter().any(|own| own.same_family(kind)) {
+            order.signature
+        } else {
+            1.
+        };
         let bid = Bid {
             audience,
-            fit: self.location.attraction(definition),
+            fit: self.location.attraction(definition) * order.trade_pull(self.location.traffic),
             cost: (1. + (definition.typical_means - self.means).max(0.) * 3.)
-                * (1. + demand.families[i]),
-            affinity: site_affinity(self.town, candidate, kind),
+                * order.crowding(demand.families[i], on_street),
+            affinity: order.favour(site_affinity(self.town, candidate, kind)) * signature,
             working: demand.space.working,
         };
         if bid.weight() <= 0. {
@@ -737,7 +778,7 @@ fn choose(
         activities,
         influence: town.placement_at(candidate.slot.front, spatial).ok()?,
         location: location(town, candidate),
-        means: resources(candidate),
+        means: resources(town, candidate),
     };
     let activity = candidate.opportunities.for_activity(Activity::Trade).demand;
     let local = candidate.conditions;
@@ -808,7 +849,7 @@ fn choose(
             conditions: local,
             distance_from_seat: distance,
             trade_demand: activity,
-            means: resources(candidate),
+            means: resources(town, candidate),
             form_sample: sample,
             livelihood_sample: farming,
         },

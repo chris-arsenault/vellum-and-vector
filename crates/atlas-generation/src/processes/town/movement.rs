@@ -134,10 +134,17 @@ pub fn advance(town: &mut Town, context: &mut Frontage<'_>) -> io::Result<()> {
             "outlying": context.outlying.len()
         })
     });
+    // A way worn by walking is worth surfacing by its wear and by how much the town's
+    // order values worn ways beside the streets it lays ahead of building.
+    let worn = town.order.worn;
     let mut investments: Vec<_> = projects
         .into_iter()
         .map(|p| (p.benefit, Investment::Route(p)))
-        .chain(paths.into_iter().map(|p| (p.wear, Investment::Surface(p))))
+        .chain(
+            paths
+                .into_iter()
+                .map(|p| (p.wear * worn, Investment::Surface(p))),
+        )
         .chain(
             widening
                 .into_iter()
@@ -791,16 +798,19 @@ fn prospects(
                 .first()
                 .and_then(|arm| arm.points.windows(2).next())
                 .map_or(c.slot.direction, |leg| unit(sub(leg[1], leg[0])));
+            let order = town.order;
             let (direction, priority) = street_bearing(
-                town.layout,
+                (town.layout, order.alignment()),
                 axis,
                 sub(start, town.seat.centre),
                 c.slot.inward,
                 c.slot.depth,
             );
             // Open access to the rear of the occupied row. Its new frontage can
-            // support an extension once premises actually reach that street end.
-            let end = add(start, scale(direction, c.slot.depth));
+            // support an extension once premises actually reach that street end. A town
+            // that surveys ahead lays a longer run and values it more; the run still has
+            // to win its effort from every other street work.
+            let end = add(start, scale(direction, c.slot.depth * order.survey.max(1.)));
             let focal = 1. / (1. + distance(start, town.seat.centre) / centre_pull);
             let demand = c.opportunities.for_activity(Activity::Household).demand;
             Project {
@@ -808,14 +818,16 @@ fn prospects(
                 joins_junctions: false,
                 class: Class::Lane,
                 points: vec![start, end],
-                benefit: priority * (pressure * 3. * focal + demand / (1. + demand)),
+                benefit: order.survey * priority * (pressure * 3. * focal + demand / (1. + demand)),
             }
         })
         .collect()
 }
 /// Choose the bearing for new frontage. Connections to an existing destination retain its position.
+/// A town with no layout of its own lets each street run the way its plot faces, turned
+/// toward the town's bearing by `alignment`: not at all at zero, wholly at one.
 fn street_bearing(
-    layout: Layout,
+    (layout, alignment): (Layout, f64),
     axis: Point,
     from_centre: Point,
     outward: Point,
@@ -848,7 +860,13 @@ fn street_bearing(
             aligned(unit(from_centre)),
             1. / (1. + crate::town::geometry::length(from_centre) / (4. * depth)),
         ),
-        Layout::Organic => (outward, 1.),
+        Layout::Organic => (
+            unit(add(
+                scale(outward, 1. - alignment),
+                scale(aligned(axis), alignment),
+            )),
+            1.,
+        ),
     }
 }
 struct Traffic {
@@ -1513,6 +1531,25 @@ mod tests {
             surface(town, context, course).unwrap(),
             Decision::Built
         ));
+    }
+    #[test]
+    fn a_surveying_town_turns_new_frontage_toward_its_own_bearing() {
+        // A town with no layout of its own, whose main way runs east. A plot facing
+        // north-east opens a street behind it.
+        let (axis, facing) = ([1., 0.], unit([1., 0.6]));
+        let bearing = |alignment: f64| {
+            street_bearing((Layout::Organic, alignment), axis, [50., 30.], facing, 25.).0
+        };
+        // Unsurveyed, the street runs the way the plot faces.
+        assert_eq!(bearing(0.), facing);
+        // The more the town surveys, the nearer the street runs to the town's bearing.
+        let along = |direction: Point| dot(direction, axis);
+        assert!(along(bearing(0.5)) > along(bearing(0.)));
+        assert!(along(bearing(0.9)) > along(bearing(0.5)));
+        assert!((along(bearing(1.)) - 1.).abs() < 1e-12);
+        // A town laid out as a grid keeps its bearing whatever it surveys.
+        let grid = street_bearing((Layout::Grid, 0.), axis, [50., 30.], facing, 25.).0;
+        assert_eq!(grid, axis);
     }
     #[test]
     fn shortcuts_need_a_real_detour_and_people_at_both_ends() {

@@ -28,7 +28,8 @@ pub enum Civic {
 
 /// How a civic order changes each term of a town's order, as a multiple of what the map
 /// gave it: street spacing, back lane, crossing spacing, shortcut saving, street work,
-/// plot frontage and plot depth.
+/// plot frontage and plot depth; then how far apart households' lots lie, how much birth
+/// counts beside work, and how strongly standing draws standing.
 struct Hand {
     street_spacing: f64,
     back_lane: f64,
@@ -37,8 +38,16 @@ struct Hand {
     street_work: f64,
     plot_frontage: f64,
     plot_depth: f64,
+    wealth_spread: f64,
+    birthright: f64,
+    deference: f64,
+    survey: f64,
+    worn: f64,
+    market: f64,
+    clustering: f64,
+    satiety: f64,
 }
-const fn hand(streets: [f64; 4], street_work: f64, plot: [f64; 2]) -> Hand {
+const fn hand(streets: [f64; 4], street_work: f64, plot: [f64; 2], wealth: [f64; 3]) -> Hand {
     Hand {
         street_spacing: streets[0],
         back_lane: streets[1],
@@ -47,6 +56,31 @@ const fn hand(streets: [f64; 4], street_work: f64, plot: [f64; 2]) -> Hand {
         street_work,
         plot_frontage: plot[0],
         plot_depth: plot[1],
+        wealth_spread: wealth[0],
+        birthright: wealth[1],
+        deference: wealth[2],
+        survey: 1.,
+        worn: 1.,
+        market: 1.,
+        clustering: 1.,
+        satiety: 1.,
+    }
+}
+impl Hand {
+    /// How much the order lays streets ahead of building, how much it values ways worn by
+    /// walking, and how far it keeps trade to busy frontage.
+    const fn laid(mut self, ways: [f64; 3]) -> Self {
+        self.survey = ways[0];
+        self.worn = ways[1];
+        self.market = ways[2];
+        self
+    }
+    /// How much like trades draw together under the order, and how strongly what a town
+    /// already has of a trade deters more.
+    const fn trading(mut self, trades: [f64; 2]) -> Self {
+        self.clustering = trades[0];
+        self.satiety = trades[1];
+        self
     }
 }
 
@@ -118,20 +152,43 @@ impl Civic {
     }
     fn hand(self) -> Hand {
         match self {
-            // A few broad ways to the seat; the town grows as it will.
-            Self::PrincelySeat => hand([1.2, 1., 1., 1.2], 1.2, [1.1, 1.1]),
-            // Broad, widely spaced streets and large regular plots, laid by decree.
-            Self::Autocracy => hand([2., 1., 1.5, 1.6], 2., [1.3, 1.3]),
-            // Few ways through, little street work, small plots for the held.
-            Self::SlaveHolding => hand([1.5, 0.5, 1.5, 2.], 0.8, [0.7, 0.7]),
-            // Close lanes that end inside each kin's ground, few ways through.
-            Self::CouncilOfElders => hand([0.5, 1.5, 0.7, 1.8], 0.7, [0.8, 0.8]),
-            // Wide plots, and streets only where households wear them.
-            Self::Freehold => hand([1., 1., 1., 1.], 0.8, [1.6, 1.5]),
+            // A few broad ways to the seat; the town grows as it will. A court's standing
+            // gathers the great round it.
+            Self::PrincelySeat => {
+                hand([1.2, 1., 1., 1.2], 1.2, [1.1, 1.1], [2., 1.5, 2.5]).laid([1.5, 1., 1.2])
+            }
+            // Broad, widely spaced streets and large regular plots, laid by decree; rank
+            // is given, not earned.
+            Self::Autocracy => {
+                hand([2., 1., 1.5, 1.6], 2., [1.3, 1.3], [2., 2., 2.]).laid([3., 0.5, 1.6])
+            }
+            // Few ways through, little street work, small plots for the held. A few own
+            // nearly everything and birth decides it.
+            // Work is kept inside owners' holdings, off the public frontage.
+            Self::SlaveHolding => {
+                hand([1.5, 0.5, 1.5, 2.], 0.8, [0.7, 0.7], [4., 3., 3.]).laid([2., 0.6, 0.6])
+            }
+            // Close lanes that end inside each kin's ground, few ways through. Lots lie
+            // near one another and a kin's standing is shared.
+            // Ways follow feet, and a kin's trade keeps to the kin's lanes.
+            Self::CouncilOfElders => hand([0.5, 1.5, 0.7, 1.8], 0.7, [0.8, 0.8], [0.7, 1.5, 1.5])
+                .laid([0.5, 2., 0.7])
+                .trading([1.5, 1.]),
+            // Wide plots, and streets only where households wear them. Households are
+            // born near even and answer to no one's standing.
+            Self::Freehold => {
+                hand([1., 1., 1., 1.], 0.8, [1.6, 1.5], [0.5, 0.7, 0.5]).laid([0.7, 1.5, 0.8])
+            }
             // An even standard and many ways through.
-            Self::Democracy => hand([1.2, 1., 1., 0.5], 1.3, [1., 1.]),
-            // Narrow deep plots on busy frontage, with lanes behind.
-            Self::MerchantCouncil => hand([0.8, 1.2, 0.8, 0.7], 1.5, [0.8, 1.2]),
+            Self::Democracy => {
+                hand([1.2, 1., 1., 0.5], 1.3, [1., 1.], [0.6, 0.6, 0.5]).laid([1.2, 1., 1.])
+            }
+            // Narrow deep plots on busy frontage, with lanes behind. Fortunes differ
+            // widely and are made by trade, not birth.
+            // Trade crowds the busy streets, and each trade gathers on a street of its own.
+            Self::MerchantCouncil => hand([0.8, 1.2, 0.8, 0.7], 1.5, [0.8, 1.2], [2., 0.6, 1.])
+                .laid([1.3, 1., 2.])
+                .trading([2., 0.7]),
         }
     }
     /// Writes the order's hand onto a town's order.
@@ -144,6 +201,14 @@ impl Civic {
         order.street_work *= hand.street_work;
         order.plot_frontage *= hand.plot_frontage;
         order.plot_depth *= hand.plot_depth;
+        order.wealth_spread *= hand.wealth_spread;
+        order.birthright *= hand.birthright;
+        order.deference *= hand.deference;
+        order.survey *= hand.survey;
+        order.worn *= hand.worn;
+        order.market *= hand.market;
+        order.clustering *= hand.clustering;
+        order.satiety *= hand.satiety;
     }
 }
 

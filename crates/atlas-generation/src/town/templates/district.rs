@@ -103,6 +103,10 @@ impl UseMix {
 }
 
 impl InheritedProgram {
+    /// The activity the district's economic role lives by.
+    pub(crate) fn livelihood(&self) -> Activity {
+        self.economic.activity()
+    }
     // owner-direction(2026-11-26): the district catalog is the design authority and Street responses reflect City behavior
     pub(crate) fn street_demand(&self, land: DistrictLand, mix: UseMix) -> Demands {
         let mut demand = Demands::default();

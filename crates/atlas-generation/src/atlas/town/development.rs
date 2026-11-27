@@ -596,7 +596,7 @@ fn settle(
             town.fidelity = fidelity;
             town.template = selection.clone();
             town.template.selected = template;
-            town.ordered(settings.order);
+            town.ordered(settings.order, settings.seed);
             if crate::town::founding::establish(&mut town, ground, state.spatial.as_ref(), local)? {
                 town.template
                     .ranked
@@ -920,7 +920,7 @@ impl Operations {
                     SettlementStart::District(district) => {
                         let mut town = street_context::inherit(state, &district, &neighbours)?;
                         town.template.civic = settings.civic.or(town.template.civic);
-                        town.ordered(settings.order);
+                        town.ordered(settings.order, settings.seed);
                         let mut ground = site::terrain(state, site::bounds(state)?)?;
                         if let Some(site) = &town.district {
                             ground.mark_shapes(
