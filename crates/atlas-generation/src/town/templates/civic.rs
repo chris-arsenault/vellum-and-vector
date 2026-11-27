@@ -191,6 +191,46 @@ impl Civic {
                 .trading([2., 0.7]),
         }
     }
+    /// How much the order favours a resident character when a city's districts are drawn.
+    /// It weighs who lives in a district and never what the district lives by.
+    pub(crate) fn resident_draw(self, character: super::district::Trope) -> f64 {
+        use super::district::Trope::{Commons, Estates, Guild, Outlanders, Warrens};
+        match (self, character) {
+            (Self::PrincelySeat, Estates) => 2.,
+            (Self::PrincelySeat, Warrens) => 1.3,
+            (Self::PrincelySeat, Commons) => 0.7,
+            (Self::Autocracy, Estates | Warrens) => 1.5,
+            (Self::Autocracy, Guild) => 0.7,
+            (Self::Autocracy, Commons) => 0.5,
+            (Self::SlaveHolding, Estates | Warrens) => 2.5,
+            (Self::SlaveHolding, Guild) => 0.5,
+            (Self::SlaveHolding, Commons) => 0.3,
+            (Self::CouncilOfElders, Commons) => 1.5,
+            (Self::CouncilOfElders, Guild) => 1.3,
+            (Self::CouncilOfElders, Estates) => 0.7,
+            (Self::Freehold, Commons) => 2.5,
+            (Self::Freehold, Estates | Warrens) => 0.5,
+            (Self::Democracy, Commons) => 2.,
+            (Self::Democracy, Guild) => 1.3,
+            (Self::Democracy, Estates) => 0.6,
+            (Self::MerchantCouncil, Guild) => 2.,
+            (Self::MerchantCouncil, Outlanders) => 1.8,
+            (Self::MerchantCouncil, Estates) => 1.2,
+            _ => 1.,
+        }
+    }
+    /// How far apart the order sets the tightest and the loosest districts' dwelling, as a
+    /// multiple of what the city's setting gives.
+    pub fn district_contrast(self) -> f64 {
+        match self {
+            Self::SlaveHolding => 2.5,
+            Self::PrincelySeat | Self::Autocracy => 1.5,
+            Self::MerchantCouncil => 1.3,
+            Self::CouncilOfElders => 0.8,
+            Self::Democracy => 0.6,
+            Self::Freehold => 0.5,
+        }
+    }
     /// Writes the order's hand onto a town's order.
     pub fn write(self, order: &mut Order) {
         let hand = self.hand();
@@ -274,5 +314,53 @@ mod tests {
             Civic::from_name("merchant-council"),
             Some(Civic::MerchantCouncil)
         );
+    }
+
+    #[test]
+    fn an_orders_hand_reaches_street_laying_trade_and_wealth() {
+        let usual = Order::default();
+        let written = |civic: Civic| {
+            let mut order = usual;
+            civic.write(&mut order);
+            order
+        };
+        // Decree surveys ahead of building; kin follow the ways their feet wear.
+        assert!(written(Civic::Autocracy).survey > written(Civic::CouncilOfElders).survey);
+        assert!(written(Civic::CouncilOfElders).worn > written(Civic::Autocracy).worn);
+        // Traders keep trade to busy frontage; owners keep work inside their holdings.
+        assert!(written(Civic::MerchantCouncil).market > 1.);
+        assert!(written(Civic::SlaveHolding).market < 1.);
+        // The few own nearly everything where people are held, and little where all vote.
+        assert!(written(Civic::SlaveHolding).wealth_spread > 2. * usual.wealth_spread);
+        assert!(written(Civic::Democracy).wealth_spread < usual.wealth_spread);
+    }
+
+    #[test]
+    fn an_order_weighs_who_lives_in_a_citys_districts_and_never_what_they_live_by() {
+        use super::super::district::Trope;
+        // Estates and tenements stand side by side where people are held; commons where
+        // households hold their own.
+        assert!(Civic::SlaveHolding.resident_draw(Trope::Estates) > 2.);
+        assert!(Civic::SlaveHolding.resident_draw(Trope::Warrens) > 2.);
+        assert!(Civic::SlaveHolding.resident_draw(Trope::Commons) < 0.5);
+        assert!(Civic::Freehold.resident_draw(Trope::Commons) > 2.);
+        // No order weighs a district's economic role or its traits.
+        for civic in Civic::ALL {
+            for role in [
+                Trope::Bazaar,
+                Trope::Artificer,
+                Trope::Freight,
+                Trope::Granary,
+                Trope::Inn,
+                Trope::Scribe,
+                Trope::Veil,
+                Trope::Ordinary,
+            ] {
+                assert_eq!(civic.resident_draw(role), 1., "{civic:?} {role:?}");
+            }
+        }
+        // Districts live furthest apart where people are held and nearest where all hold.
+        assert!(Civic::SlaveHolding.district_contrast() > Civic::PrincelySeat.district_contrast());
+        assert!(Civic::Freehold.district_contrast() < 1.);
     }
 }

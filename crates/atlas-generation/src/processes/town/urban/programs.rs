@@ -85,7 +85,10 @@ pub(super) fn compete(
         program.reach = reach;
     }
     u.programs.extend(new_programs);
-    u.dwelling_weight = settings.dwelling;
+    // How far apart districts live in how tightly they dwell is the setting's, widened or
+    // narrowed by the city's civic order.
+    u.dwelling_weight =
+        settings.dwelling * template.civic.map_or(1., |order| order.district_contrast());
     for program in &mut u.programs {
         if let Some(claim) = u.fields.claims.get(program.cell) {
             program.strength =
@@ -244,8 +247,11 @@ fn found(
             veil: template.site.medium[6] > 0.,
             sources: facts,
         };
+        // The city's civic order weighs the resident characters its districts may take.
+        let civic = template.civic;
         let weight = |id: Trope| {
             e.weight(id)
+                * civic.map_or(1., |order| order.resident_draw(id))
                 * (0.6
                     + template
                         .affinity(id.activity(), point, template.quarter())

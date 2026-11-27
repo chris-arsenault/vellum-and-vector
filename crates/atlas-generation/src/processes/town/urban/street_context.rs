@@ -377,23 +377,17 @@ pub(crate) fn respond(
             // new household takes and how readily its neighbours build upward.
             candidate.conditions.spaciousness = tract.and_then(DistrictTract::spaciousness);
             let demand = demand_at(&candidate.slot, candidate.conditions, tract)?;
-            candidate
-                .opportunities
-                .add_local(Activity::Household, demand.housing, demand.gardens);
-            candidate
-                .opportunities
-                .add_local(Activity::Trade, demand.trade, -demand.access);
-            candidate.opportunities.add_local(
-                Activity::Production,
-                demand.workshops,
-                -demand.access,
-            );
-            candidate
-                .opportunities
-                .add_local(Activity::Service, demand.civic, demand.commons);
-            candidate
-                .opportunities
-                .add_local(Activity::Agriculture, demand.gardens, 0.);
+            // How strongly the district's role shows beyond the usual town.
+            let show = (town.order.character - 1.).max(0.);
+            for (activity, asked) in [
+                (Activity::Household, [demand.housing, demand.gardens]),
+                (Activity::Trade, [demand.trade, -demand.access]),
+                (Activity::Production, [demand.workshops, -demand.access]),
+                (Activity::Service, [demand.civic, demand.commons]),
+                (Activity::Agriculture, [demand.gardens, 0.]),
+            ] {
+                candidate.opportunities.add_local(activity, asked, show);
+            }
             accepted.push(candidate);
         }
     }

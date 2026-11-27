@@ -439,9 +439,14 @@ impl Opportunities {
     pub fn for_activity(&self, activity: Activity) -> &Support {
         &self.activities[activity as usize]
     }
-    pub(crate) fn add_local(&mut self, activity: Activity, demand: f64, cost: f64) {
+    /// What a district asks for here of an activity. Its demand joins the custom the site
+    /// already has, and multiplies that custom by how strongly the town shows its
+    /// character (`show`), so a district's role decides what its sites are good for
+    /// instead of adding a little to every site alike.
+    pub(crate) fn add_local(&mut self, activity: Activity, [demand, cost]: [f64; 2], show: f64) {
         let support = &mut self.activities[activity as usize];
-        support.demand += demand.max(0.);
+        let demand = demand.max(0.);
+        support.demand = support.demand * (1. + show.max(0.) * demand) + demand;
         support.burden = (support.burden + cost).max(0.);
     }
 }
@@ -609,6 +614,27 @@ pub fn respond(previous: f64, desired: f64, exposure: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_districts_role_multiplies_the_custom_its_sites_already_have() {
+        // Two sites with the same custom for making and for trade. One lies in a district
+        // of workshops, which asks for making; the other in a district that asks nothing.
+        let site = |asked: f64, show: f64| {
+            let mut site = Opportunities::default();
+            for activity in [Activity::Production, Activity::Trade] {
+                site.activities[activity as usize].demand = 24.;
+            }
+            site.add_local(Activity::Production, [asked, 0.], show);
+            site.for_activity(Activity::Production).demand
+                / site.for_activity(Activity::Trade).demand
+        };
+        // A town that shows its character no more than usual adds the district's little.
+        assert!((site(2., 0.) - 26. / 24.).abs() < 1e-12);
+        // One that shows it makes the workshop district's sites worth several times as
+        // much to a maker as to a trader, and leaves the other district's sites alone.
+        assert!(site(2., 1.) > 3.);
+        assert_eq!(site(0., 1.), 1.);
+    }
 
     /// A reading of these sites at street fidelity.
     fn at_street(sites: &[Conditions]) -> Reading<'_> {
