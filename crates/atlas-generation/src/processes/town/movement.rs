@@ -69,13 +69,26 @@ impl StreetTrace<'_> {
     }
 }
 
+/// The street work of a City district's people whose homes this map has not placed yet. The
+/// City records them as living in the district already, so they walk and cart its ways and
+/// share in making them, as residents without means of their own do. A standalone town has
+/// only the residents it has housed.
+fn unplaced_street_workers(district_people: Option<f64>, housed: f64) -> f64 {
+    district_people.map_or(0., |people| 0.5 * (people - housed).max(0.))
+}
+
 pub fn advance(town: &mut Town, context: &mut Frontage<'_>) -> io::Result<()> {
-    let mut participants = 0.;
+    let (mut participants, mut housed) = (0., 0.);
     for holding in town.holdings().iter().filter(|h| h.occupation > 0.) {
         let premises = super::economy::FloorSpace::holding(holding, context.spatial)?;
-        participants +=
-            premises.occupied_residents(holding.occupation) * (0.5 + 0.5 * holding.means);
+        let residents = premises.occupied_residents(holding.occupation);
+        housed += residents;
+        participants += residents * (0.5 + 0.5 * holding.means);
     }
+    participants += unplaced_street_workers(
+        town.district.is_some().then_some(town.seat.story.people),
+        housed,
+    );
     // Each participating resident can supply the same share of street work in an epoch.
     let new_effort = participants * 0.12 * context.exposure;
     town.access_effort += new_effort;
@@ -1483,6 +1496,17 @@ mod tests {
         seat::Seat,
         story::Story,
     };
+
+    #[test]
+    fn a_districts_people_share_in_street_work_before_this_map_houses_them() {
+        // A town has the street work of the residents it has housed and no more.
+        assert_eq!(unplaced_street_workers(None, 300.), 0.);
+        // A district of eleven thousand with three hundred housed has the rest at half a
+        // share each; once all are housed there is nobody left to add.
+        assert_eq!(unplaced_street_workers(Some(11_000.), 300.), 5_350.);
+        assert_eq!(unplaced_street_workers(Some(11_000.), 11_000.), 0.);
+        assert_eq!(unplaced_street_workers(Some(11_000.), 12_500.), 0.);
+    }
 
     fn assert_built(town: &mut Town, context: &mut Frontage<'_>, course: &LaneCourse) {
         assert!(matches!(

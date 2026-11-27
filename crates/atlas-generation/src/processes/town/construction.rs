@@ -637,39 +637,37 @@ fn resources(candidate: &super::Candidate) -> f64 {
     let patron = patronage / (1. + patronage);
     (endowment * (1. + patron) + working_income) / (2. + patron)
 }
-fn choose(
-    town: &Town,
-    candidate: &super::Candidate,
-    sample: f64,
-    demand: &Demand,
-    activities: &[Activity],
-    spatial: &dyn crate::spatial::SpatialKernel,
-) -> Option<Kind> {
-    use crate::town::effects::{Placement, Requirement};
-    let influence = town.placement_at(candidate.slot.front, spatial).ok()?;
-    let activity = candidate.opportunities.for_activity(Activity::Trade).demand;
-    let local = candidate.conditions;
-    let means = resources(candidate);
-    let mut opportunity = 0.;
-    let mut competing_uses = 0.;
-    let mut best = None;
-    let location = location(town, candidate);
-    for (i, kind) in PLACES.iter().copied().enumerate() {
-        let kind = crate::town::catalogue::productive_variant(
-            kind,
-            sample,
-            &candidate.opportunities.production,
-        );
+/// A site as the businesses that might take it see it.
+struct Siting<'a> {
+    town: &'a Town,
+    candidate: &'a super::Candidate,
+    demand: &'a Demand,
+    activities: &'a [Activity],
+    influence: crate::town::siting::PlacementInfluence,
+    location: crate::town::siting::Location,
+    means: f64,
+}
+impl Siting<'_> {
+    /// The weight a kind of business bids for the site with, or why it makes no bid.
+    fn business(&self, i: usize, kind: Kind) -> Result<Bid, &'static str> {
+        use crate::town::effects::{Placement, Requirement};
+        let (candidate, demand) = (self.candidate, self.demand);
         let definition = kind.definition();
         let target = Placement::Premises(kind);
-        if kind.open()
-            || definition.roles.household
-            || demand.space.working <= 0.
-            || !eligible(kind, local, candidate.slot.street)
-            || !influence.permitted(target)
-            || (!activities.is_empty() && !activities.contains(&definition.activity))
-        {
-            continue;
+        if kind.open() || definition.roles.household {
+            return Err("not a business");
+        }
+        if demand.space.working <= 0. {
+            return Err("the town has the working floor it needs");
+        }
+        if !eligible(kind, candidate.conditions, candidate.slot.street) {
+            return Err("the site does not suit it");
+        }
+        if !self.influence.permitted(target) {
+            return Err("its neighbours do not permit it");
+        }
+        if !self.activities.is_empty() && !self.activities.contains(&definition.activity) {
+            return Err("another activity is wanted here");
         }
         let support = candidate.opportunities.for_activity(definition.activity);
         let custom = if definition.roles.effects.attracts.is_empty() {
@@ -685,28 +683,106 @@ fn choose(
             .support(definition.roles.production.needs);
         let audience =
             (custom + support.capability + productive) / (1. + definition.demand + support.burden);
-        let required = influence.requirement(
+        let required = self.influence.requirement(
             target,
             Requirement::Support,
             definition.roles.effects.minimum_support,
         );
         if audience < required {
-            continue;
+            return Err("too little custom and supply");
         }
-        let fit = location.attraction(definition);
-        let cost =
-            (1. + (definition.typical_means - means).max(0.) * 3.) * (1. + demand.families[i]);
-        let weight =
-            audience * fit * demand.space.working / cost * site_affinity(town, candidate, kind);
-        if weight <= 0. {
-            continue;
+        let bid = Bid {
+            audience,
+            fit: self.location.attraction(definition),
+            cost: (1. + (definition.typical_means - self.means).max(0.) * 3.)
+                * (1. + demand.families[i]),
+            affinity: site_affinity(self.town, candidate, kind),
+            working: demand.space.working,
+        };
+        if bid.weight() <= 0. {
+            return Err("nothing draws it to this site");
         }
+        Ok(bid)
+    }
+}
+/// What a business's bid for a site is made of: the custom and supply it can reach, how
+/// well the location suits it, what it costs its household beside how many of its family
+/// already stand, how the town's template favours it there, and the working floor the
+/// town still lacks.
+#[derive(Clone, Copy, serde::Serialize)]
+struct Bid {
+    audience: f64,
+    fit: f64,
+    cost: f64,
+    affinity: f64,
+    working: f64,
+}
+impl Bid {
+    fn weight(&self) -> f64 {
+        self.audience * self.fit * self.working / self.cost * self.affinity
+    }
+}
+fn choose(
+    town: &Town,
+    candidate: &super::Candidate,
+    sample: f64,
+    demand: &Demand,
+    activities: &[Activity],
+    spatial: &dyn crate::spatial::SpatialKernel,
+) -> Option<Kind> {
+    let siting = Siting {
+        town,
+        candidate,
+        demand,
+        activities,
+        influence: town.placement_at(candidate.slot.front, spatial).ok()?,
+        location: location(town, candidate),
+        means: resources(candidate),
+    };
+    let activity = candidate.opportunities.for_activity(Activity::Trade).demand;
+    let local = candidate.conditions;
+    let mut opportunity = 0.;
+    let mut competing_uses = 0.;
+    let mut best = None;
+    // A few sites of a traced town record every business's bid or why it made none.
+    let traced = std::env::var("ATLAS_TRACE_TOWN").is_ok_and(|name| name == town.seat.name)
+        && site_draw(town, candidate, 0x7ace) < 0.004;
+    let mut bids = Vec::new();
+    for (i, kind) in PLACES.iter().copied().enumerate() {
+        let kind = crate::town::catalogue::productive_variant(
+            kind,
+            sample,
+            &candidate.opportunities.production,
+        );
+        let bid = siting.business(i, kind);
+        if traced {
+            bids.push(serde_json::json!({
+                "place": kind.definition().label,
+                "weight": bid.as_ref().ok().map(Bid::weight),
+                "bid": bid.as_ref().ok(),
+                "declined": bid.as_ref().err(),
+            }));
+        }
+        let Ok(weight) = bid.map(|bid| bid.weight()) else {
+            continue;
+        };
         opportunity += weight;
         competing_uses += 1.;
         let order = weighted_order(weight, site_draw(town, candidate, 0x6080 + i as i32));
         if best.is_none_or(|(previous, _)| order > previous) {
             best = Some((order, kind));
         }
+    }
+    if traced {
+        eprintln!(
+            "{}",
+            serde_json::json!({
+                "event": "town.construction-choice", "town": town.seat.name,
+                "round": town.round + 1, "at": candidate.slot.front,
+                "workingNeed": demand.space.working, "livingNeed": demand.space.living,
+                "bids": bids,
+            })
+        );
     }
     if let Some((_, kind)) = best {
         let work = candidate.opportunities.for_activity(Activity::Household);
