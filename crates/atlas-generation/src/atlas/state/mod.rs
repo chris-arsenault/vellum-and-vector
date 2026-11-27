@@ -17,7 +17,7 @@ mod publication;
 mod reads;
 mod real_scale_ground;
 mod real_scale_trails;
-mod real_scale_water;
+pub(crate) mod real_scale_water;
 mod regional_causes;
 mod regional_climate;
 mod regional_ecology;

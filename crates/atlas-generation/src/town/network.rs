@@ -14,6 +14,8 @@ pub use atlas_map::town::StreetClass as Class;
 pub struct StreetProposal {
     pub demand: &'static str,
     pub points: Vec<Point>,
+    /// A shortcut earns its benefit only when both existing junctions connect.
+    pub joins_junctions: bool,
     pub benefit: f64,
     pub class: Class,
 }

@@ -10,7 +10,7 @@ use crate::town::{
     fabric::{EditOutcome, FabricEdit, FabricOwner, Proposal, Relationship, Specification, Town},
     geometry::rectangle,
     ground::{Rectangle, PLOT},
-    influence::{respond, Conditions, Support},
+    influence::{Conditions, Support},
 };
 use std::io;
 type PurposeSite = (crate::town::fabric::Anchor, Relationship);
@@ -25,11 +25,17 @@ struct Demand {
     housing: Vec<(Kind, HousingOffer)>,
 }
 enum Offer<'a> {
-    Premises(&'a super::Candidate, f64, Kind, Option<Box<FittedProject>>),
+    Premises(PremisesBid<'a>),
     Partners {
         existing: Vec<FabricEdit>,
         additions: Vec<(Kind, FabricEdit)>,
     },
+}
+struct PremisesBid<'a> {
+    candidate: &'a super::Candidate,
+    sample: f64,
+    kind: Kind,
+    project: Option<Box<FittedProject>>,
 }
 pub fn advance(town: &mut Town, context: &mut Frontage<'_>) -> io::Result<()> {
     let trace = std::env::var("ATLAS_TRACE_TOWN").is_ok_and(|name| name == town.seat.name);
@@ -82,6 +88,7 @@ pub fn advance(town: &mut Town, context: &mut Frontage<'_>) -> io::Result<()> {
         housing: housing_offers(),
     };
     let scale = town.scale();
+    let frontage = crate::town::plots::OccupiedFronts::new(town);
     let mut ranked: Vec<_> = context
         .candidates
         .iter()
@@ -152,27 +159,33 @@ pub fn advance(town: &mut Town, context: &mut Frontage<'_>) -> io::Result<()> {
                     .as_ref()
                     .map_or(0., |(p, _)| project_pull(p, candidate.slot.front, scale));
             let affinity = site_affinity(town, candidate, kind);
-            let order = weighted_order(score * affinity, site_draw(town, candidate, 0x47cc));
+            let row = if kind.definition().roles.dwelling {
+                frontage.infill(&candidate.slot)
+            } else {
+                1.
+            };
+            let order = weighted_order(score * affinity * row, site_draw(town, candidate, 0x47cc));
             Some((
                 order,
-                Offer::Premises(
+                Offer::Premises(PremisesBid {
                     candidate,
                     sample,
                     kind,
-                    project.map(|(p, plot)| {
+                    project: project.map(|(p, plot)| {
                         Box::new(FittedProject {
                             purpose: (p.3, p.4),
                             plot,
                             initial_holdings,
                         })
                     }),
-                ),
+                }),
             ))
         })
         .collect();
     ranked.extend(participant_offers(town, context, &demand)?);
     // hpc-exempt: ranks exact geometric development proposals, not numerical lattice cells.
     ranked.sort_by(|a, b| b.0.total_cmp(&a.0));
+    let mut pledges = super::investment::Pledges::default();
     // Building labour is reckoned per premises: a holding standing for many premises takes
     // the labour of them all.
     for (order, offer) in ranked {
@@ -181,11 +194,12 @@ pub fn advance(town: &mut Town, context: &mut Frontage<'_>) -> io::Result<()> {
         }
         let before = town.holdings().len();
         match offer {
-            Offer::Premises(candidate, sample, kind, project) => {
-                if project.is_none() && !space.need(town.seat.story.people).supports(kind) {
+            Offer::Premises(bid) => {
+                let (candidate, kind) = (bid.candidate, bid.kind);
+                if bid.project.is_none() && !space.need(town.seat.story.people).supports(kind) {
                     continue;
                 }
-                let result = develop_site(town, context, candidate, sample, kind, project)?;
+                let result = develop_site(town, context, bid, &mut pledges)?;
                 log("town.construction-decision", town, &|| {
                     serde_json::json!({
                         "at": candidate.slot.front, "place": kind.definition().label,
@@ -219,11 +233,15 @@ pub fn advance(town: &mut Town, context: &mut Frontage<'_>) -> io::Result<()> {
 fn develop_site(
     town: &mut Town,
     context: &mut Frontage<'_>,
-    candidate: &super::Candidate,
-    sample: f64,
-    kind: Kind,
-    project: Option<Box<FittedProject>>,
+    bid: PremisesBid<'_>,
+    pledges: &mut super::investment::Pledges,
 ) -> io::Result<&'static str> {
+    let PremisesBid {
+        candidate,
+        sample,
+        kind,
+        project,
+    } = bid;
     if let Some(p) = &project {
         let (site, relation) = p.purpose;
         if relation.served_since(site, p.initial_holdings, town, context.spatial)? {
@@ -239,7 +257,7 @@ fn develop_site(
         Err(reason) => return Ok(reason),
     };
     let Some(edit) = (if financed {
-        super::investment::finance(town, edit)
+        pledges.finance(town, edit)
     } else {
         Some(edit)
     }) else {
@@ -248,6 +266,9 @@ fn develop_site(
     let EditOutcome::Premises(id) = town.apply(edit, context.spatial)? else {
         return Ok("fabric");
     };
+    if financed {
+        pledges.paid(town, id);
+    }
     context.ground.mark_shapes(
         std::slice::from_ref(&town.holdings()[id.0 as usize].outline),
         PLOT,
@@ -736,29 +757,14 @@ pub fn maintain(town: &mut Town, context: &super::Exposure<'_>) -> io::Result<()
         let site = context.conditions.get(i).copied().unwrap_or_default();
         let care = holding.means * holding.occupation;
         let exposure = site.flood + site.waste + site.nuisance;
-        let condition = respond(
-            holding.condition,
-            (0.25 + care) / (1. + exposure),
-            context.exposure * 0.18,
-        )
-        .clamp(0., 1.);
-        let strength = (0.5 + holding.means + site.protection) * (0.5 + holding.occupation);
-        let persistence = if strength < holding.claim {
-            site.forgetting * site.yielding
+        let condition = ((site.standing.unwrap_or(0.25) + care) / (1. + exposure)).clamp(0., 1.);
+        let claim = (0.5 + holding.means + site.protection) * (0.5 + holding.occupation);
+        let claim = if site.forgetting * site.yielding <= 0. {
+            holding.claim.max(claim)
         } else {
-            1.
+            claim
         };
-        let claim = respond(
-            holding.claim,
-            strength,
-            context.exposure * 0.1 * persistence,
-        );
-        let occupation = if condition < 0.12 {
-            holding.occupation * (-context.exposure * 0.3).exp()
-        } else {
-            holding.occupation
-        };
-        town.maintain(holding.id, condition, claim, occupation);
+        town.maintain(holding.id, condition, claim, holding.occupation);
     }
     Ok(())
 }

@@ -40,7 +40,7 @@
       "politicalReach": 1,
       "townThreshold": 5000,
       "cityReach": 0.05,
-      "districtCatchmentScale": 3.6,
+      "districtCatchmentScale": 1.8,
       "roadTraffic": 1000,
       "highways": 2
     },
@@ -3353,7 +3353,7 @@
         "settings": {
           "townThreshold": 5000,
           "cityReach": 0.05,
-          "districtCatchmentScale": 3.6,
+          "districtCatchmentScale": 1.8,
           "roadTraffic": 1000,
           "highways": 2
         }

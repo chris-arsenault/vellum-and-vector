@@ -38,6 +38,45 @@ fn native_geometry_uses_geos_for_overlay_and_bulk_point_predicates() {
         [true, true, false]
     );
 }
+
+#[test]
+fn retained_area_clips_parcels_and_tests_routes_across_a_hole() {
+    let geos = NativeGeos::new(0.001).unwrap();
+    let district = geos
+        .overlay(
+            &polygon(0., 0., 10.),
+            &polygon(4., 4., 2.),
+            Overlay::Difference,
+        )
+        .unwrap()
+        .unwrap();
+    let area = geos.prepare_area(&district).unwrap();
+    let inside = polygon(1., 1., 2.);
+    assert!(area.covers(&inside).unwrap());
+    assert_eq!(
+        geos.area(&area.intersection(&inside).unwrap().unwrap())
+            .unwrap(),
+        4.
+    );
+    assert!(area
+        .intersection(&polygon(4.4, 4.4, 0.5))
+        .unwrap()
+        .is_none());
+    let over_hole = polygon(3., 3., 3.);
+    assert_eq!(
+        geos.area(&area.intersection(&over_hole).unwrap().unwrap())
+            .unwrap(),
+        5.
+    );
+    let across_hole = Geometry::LineString {
+        coordinates: vec![Position::xy(2., 5.), Position::xy(8., 5.)],
+    };
+    assert!(!area.covers(&across_hole).unwrap());
+    let edge = Geometry::LineString {
+        coordinates: vec![Position::xy(0., 0.), Position::xy(10., 0.)],
+    };
+    assert!(area.covers(&edge).unwrap());
+}
 #[test]
 fn native_geometry_keeps_multipart_buffers_and_linear_referencing() {
     let spatial = NativeGeos::new(0.001).unwrap();

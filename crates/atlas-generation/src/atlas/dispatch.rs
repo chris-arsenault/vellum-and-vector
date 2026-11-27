@@ -231,11 +231,15 @@ impl Process {
     }
     pub fn publication(specification: Specification, publish: Publish) -> Self {
         let id = specification.contract.id.clone();
+        Self::publication_command(specification, publication::command(&id, publish))
+    }
+    fn publication_command(specification: Specification, command: Command<State, Input>) -> Self {
+        let id = specification.contract.id.clone();
         Self {
             specification: specification.publication(),
             salt: 0,
             select: None,
-            operation: Operation::Publication(publication::command(&id, publish)),
+            operation: Operation::Publication(command),
             source_command: id,
             registered_at: None,
         }

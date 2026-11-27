@@ -17,6 +17,9 @@ use std::{fs, io, time::Instant};
 pub(super) struct Measure {
     pub channel: String,
     pub footprint: Option<String>,
+    /// Retain the actual City partition and its measurements from the final trial state.
+    #[serde(default)]
+    pub districts: bool,
     #[serde(default = "samples")]
     pub samples_across: usize,
     #[serde(default)]

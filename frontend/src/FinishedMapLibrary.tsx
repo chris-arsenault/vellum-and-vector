@@ -21,6 +21,7 @@ export function FinishedMapLibrary(props: LibraryProps) {
         <h2>{title}</h2>
         <button
           onClick={() => {
+            void library.maps.refetch();
             void library.inventory.refetch();
             void library.jobs.refetch();
           }}
@@ -31,8 +32,12 @@ export function FinishedMapLibrary(props: LibraryProps) {
           ×
         </button>
       </header>
-      {library.inventory.isPending && <p>Loading maps…</p>}
-      {library.inventory.data && <LibraryContents library={library} />}
+      {library.inventory.isPending && (
+        <p role="status">
+          {library.contents ? "Checking stored maps and files…" : "Loading maps…"}
+        </p>
+      )}
+      {library.contents && <LibraryContents library={library} />}
       <DeleteContextPrompt state={library} />
       <ErrorMessage
         error={
@@ -47,7 +52,7 @@ export function FinishedMapLibrary(props: LibraryProps) {
   );
 }
 function LibraryContents({ library }: { library: LibraryState }) {
-  const inventory = library.inventory.data!;
+  const inventory = library.contents!;
   const [collapsed, setCollapsed] = useState(new Set<string>());
   const tree = useMemo(
     () => buildLibrary(inventory, library.jobs.data ?? inventory.jobs),
@@ -160,7 +165,7 @@ function Leftovers({
   superseded: StoredContext[];
   detached: StoredContext[];
 }) {
-  const inventory = library.inventory.data!;
+  const inventory = library.contents!;
   const count = superseded.length + detached.length + inventory.orphans.length;
   if (!count && !inventory.problems.length && !inventory.cleanup.length) return null;
   return (

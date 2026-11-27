@@ -49,6 +49,11 @@ pub const CONCENTRATION: f64 = 0.3;
 pub const MARKET_SHARE: f64 = 0.2;
 pub const CLEARING_YEARS: f64 = 50.0;
 pub const PEOPLE_PER_BUILT_KM2: f64 = 8000.0;
+/// Developed ground per effective construction worker before competition for land.
+pub const CONSTRUCTION_M2_PER_WORKER: f64 = 300.;
+/// Gross bids for premises, grounds and shared uses, relative to the named survey's
+/// developed land per resident. Competition and usable land determine what is taken.
+pub const CITY_PLOT_DEMAND_SCALE: f64 = 11.5;
 pub const BUILDING_YEARS: f64 = 50.0;
 pub const WORKS_YEARS: f64 = 300.0;
 pub const FOUNDERS: f64 = 0.3;

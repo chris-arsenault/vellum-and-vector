@@ -91,7 +91,20 @@ pub(super) fn capture(
             } else {
                 shape
             };
-            let feature = rebind(region, feature.clone(), shape, footprint, ids);
+            let mut feature = feature.clone();
+            if matches!(
+                feature.geometry,
+                Geometry::LineString { .. } | Geometry::MultiLineString { .. }
+            ) && shape != feature.geometry
+            {
+                atlas_generation::features::line_profile::clip_profiles(
+                    &mut feature.attributes,
+                    &feature.geometry,
+                    &shape,
+                    region.spatial,
+                )?;
+            }
+            let feature = rebind(region, feature, shape, footprint, ids);
             let network = *networks
                 .entry(feature.layer_id.clone())
                 .or_insert_with(|| is_network(output, &feature.layer_id));

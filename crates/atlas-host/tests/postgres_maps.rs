@@ -86,6 +86,10 @@ fn postgis_publication_queries_saves_and_reader_boundary() -> Result<(), Box<dyn
     let reader_url = url.replace("user=postgres", "user=atlas_reader");
     let reader = PostgresMaps::connect(&reader_url)?;
     assert!(reader.find_head(id("island"))?.is_some());
+    assert!(reader
+        .map_index()?
+        .iter()
+        .any(|map| map.head && map.complete));
     let mut restricted = postgres::Client::connect(&reader_url, postgres::NoTls)?;
     assert!(restricted
         .query("SELECT * FROM generation.inputs", &[])
@@ -200,6 +204,12 @@ fn http_facade(writer: &str, reader: &str) -> Result<(), Box<dyn std::error::Err
     let running = server.clone();
     let thread = std::thread::spawn(move || map_http::serve(running, services));
     let result = (|| -> Result<(), Box<dyn std::error::Error>> {
+        let catalog = request(address, "/api/contexts", json!({"method": "maps"}))?;
+        assert!(catalog
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|map| map["head"] == true));
         let map = request(
             address,
             "/api/maps/read",
@@ -332,8 +342,12 @@ fn scoped_queries(store: &mut PostgresMaps) -> io::Result<()> {
     };
     let page = store.features(&map.reference, &query)?;
     assert_eq!(page.items.len(), 256);
+    query.type_ids = Some(vec!["place".into()]);
     query.cursor = page.next;
     assert_eq!(store.features(&map.reference, &query)?.items.len(), 2);
+    query.type_ids = Some(vec!["missing".into()]);
+    assert!(store.features(&map.reference, &query)?.items.is_empty());
+    query.type_ids = None;
     assert_eq!(
         store
             .history(&map.reference, None, Some(&[id("last")]))?

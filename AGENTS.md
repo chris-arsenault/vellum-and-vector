@@ -335,10 +335,20 @@ itself says which is which.
   A large dimension entered to test a form is configuration, not permission to
   generate that world. Test physical algorithms and people's operations and
   classifiers in Vitest, on small explicit fields.
+- When resuming a generation investigation, read the active plan's decisions and use
+  `scripts/local-atlas.sh experiment history <city-or-process>` to find the saved trials.
+  Reuse the measurements for an unchanged question. Record a settled result once in
+  the active plan with its capture, what was measured, the conclusion and the trial
+  path. Replace any phase note that still directs a future session to investigate it.
+  Before another generation, identify what changed and which open decision the result
+  can settle. A contradictory observation is a reason to reopen a finding.
 - A check that needs a generated map runs natively on the
   [local atlas](docs/local-atlas.md): its one kept world, and real-scale maps opened from
   it with `make local-real`. A failed job resumes with `make local-resume` after the fix.
   Do not generate in a browser to verify generation, and do not write another driver.
+- Query the local map database through `scripts/local-atlas.sh sql -c '…'` or
+  `make local-sql`. The harness opens the local database socket directly. Run it
+  without `with-cred` or a hand-written Docker invocation.
 - Start ordinary browser scenarios with `openFixtureMap` from `tests/harness.ts`.
   It reuses completed map catalogs and numerical resources across scenarios, then
   restores independent copies into their isolated browser contexts. Reuse the

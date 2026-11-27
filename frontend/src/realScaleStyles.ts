@@ -6,6 +6,7 @@ import type { Geometry } from "geojson";
 import type { MapDescriptor } from "@atlas/map";
 import type { PublishedFeature } from "./publishedAppearance";
 import { isHexLayer, type RealScalePresentation } from "./realScale";
+import { footpathColour, footpathStroke, roadStroke, surveyedRoadWidth } from "./roadStyles";
 import type { LayerStyle } from "./types";
 
 /** Colours of the hex fill view and of each real-scale kind's ground. */
@@ -28,6 +29,7 @@ const objectColours: Record<string, string> = {
   fountain: "#508eaa",
   statue: "#686669",
 };
+const scenery = new Set(["tree", "shrub", "reeds", "boulder"]);
 const roofPalette = new Map([
   ["residential", "#ab6e58"],
   ["civic", "#587689"],
@@ -37,6 +39,11 @@ const publicSurfaces = new Map<unknown, string>([
   ["paving", "#d9cbaf"],
   ["grass", "#95ad77"],
 ]);
+const plotColours: Record<string, string> = {
+  yard: "#cec8b5",
+  field: "#c9bb8d",
+  square: "#d9cbaf",
+};
 // owner-direction(2026-11-18): colour house roofs by residential, civic and economic function.
 export function roofColour(buildingFunction: unknown): string | undefined {
   return typeof buildingFunction === "string" ? roofPalette.get(buildingFunction) : undefined;
@@ -66,7 +73,12 @@ function footprintGeometry(footprint: unknown) {
 }
 /** Proper names label the map; a part named only by its kind (a passage, a chamber) does not. */
 function label(feature: PublishedFeature, resolution: number) {
-  if (!feature.name || resolution > 2 || feature.attributes.nameStatus === "label")
+  if (
+    !feature.name ||
+    resolution > 2 ||
+    feature.attributes.nameStatus === "label" ||
+    (feature.kind === "thoroughfare" && feature.name === feature.attributes.class)
+  )
     return undefined;
   const line = feature.geometry.type.includes("Line");
   return new Text({
@@ -95,7 +107,8 @@ export function groundColours(map: MapDescriptor): ReadonlyMap<string, string> {
 function hexStyle(
   feature: PublishedFeature,
   view: RealScalePresentation,
-  grounds: ReadonlyMap<string, string>
+  grounds: ReadonlyMap<string, string>,
+  pixelsAcross: number
 ) {
   const { fill: mark, ground, cover } = feature.attributes;
   const colour =
@@ -104,7 +117,11 @@ function hexStyle(
     undefined;
   const filled = view.hexView === "fill";
   const fill = filled && colour ? new Fill({ color: colour }) : undefined;
-  const outline = new Style({ fill, stroke: new Stroke({ color: "#3a3a3a55", width: 1 }) });
+  const opacity = Math.min(0.28, pixelsAcross / 200);
+  const outline = new Style({
+    fill,
+    stroke: new Stroke({ color: [58, 58, 58, opacity], width: 0.8 }),
+  });
   const tint = typeof cover === "string" ? grounds.get(`cover:${cover}`) : undefined;
   return filled && tint ? [outline, new Style({ fill: new Fill({ color: tint }) })] : outline;
 }
@@ -115,28 +132,28 @@ function pointStyle(
   resolution: number,
   base: LayerStyle
 ) {
+  const radius = scenery.has(feature.kind) ? Math.min(5, 3 / resolution) : 5;
   return new Style({
     image: new Circle({
-      radius: 5,
+      radius,
       fill: new Fill({ color: colour }),
-      stroke: new Stroke({ color: "#fffaf0", width: 2 }),
+      stroke: new Stroke({ color: "#fffaf0", width: Math.min(2, radius / 2) }),
     }),
     text: base.labels ? label(feature, resolution) : undefined,
   });
 }
-function courseStroke(feature: PublishedFeature, colour: string) {
+function courseStroke(feature: PublishedFeature, colour: string, resolution: number) {
   if (!feature.geometry.type.includes("Line")) return undefined;
-  // A constant screen-width centreline would obscure narrow lanes and passages at town scale.
-  if (feature.layerId === "roads" && feature.footprint) return undefined;
+  if (feature.layerId === "roads") return roadStroke(feature, colour, resolution);
   return new Stroke({ color: feature.footprint ? "#ffffff66" : colour, width: 2 });
 }
-/** A measured road draws the ground its carriageway covers. */
 function pointStyles(
   feature: PublishedFeature,
   colour: string,
   resolution: number,
   base: LayerStyle
 ) {
+  if (scenery.has(feature.kind) && resolution > 5) return [];
   const marker = pointStyle(feature, colour, resolution, base);
   if (feature.kind !== "majorWork" || !feature.footprint) return [marker];
   return [
@@ -147,23 +164,24 @@ function pointStyles(
     marker,
   ];
 }
-function groundStyles(
+function groundFootprints(
   feature: PublishedFeature,
   colour: string,
   resolution: number,
-  base: LayerStyle
+  road: boolean
 ) {
-  if (feature.geometry.type === "Point") return pointStyles(feature, colour, resolution, base);
   const styles: Style[] = [];
   if (feature.footprint)
     styles.push(
       new Style({
         geometry: footprintGeometry(feature.footprint),
         fill: new Fill({ color: colour }),
-        stroke: new Stroke({ color: "#00000033", width: 1 }),
+        stroke: new Stroke({
+          color: road ? "#897454" : "#00000033",
+          width: Math.min(1, 1 / resolution),
+        }),
       })
     );
-  const line = feature.geometry.type.includes("Line");
   const floors = feature.attributes.storeys;
   if (feature.kind === "building" && typeof floors === "number" && floors > 1) {
     const shadow = footprintGeometry(feature.geometry).clone();
@@ -172,23 +190,74 @@ function groundStyles(
       new Style({ geometry: shadow, fill: new Fill({ color: "#42362766" }), zIndex: -1 })
     );
   }
+  return styles;
+}
+function groundStyles(
+  feature: PublishedFeature,
+  colour: string,
+  resolution: number,
+  base: LayerStyle
+) {
+  if (feature.geometry.type === "Point") return pointStyles(feature, colour, resolution, base);
+  if (feature.kind === "footpath") return footpathStyles(feature, resolution, base.labels);
+  const road = feature.layerId === "roads";
+  const styles = groundFootprints(feature, colour, resolution, road);
+  const line = feature.geometry.type.includes("Line");
+  const stroke = courseStroke(feature, colour, resolution);
+  if (road && stroke)
+    styles.push(
+      new Style({ stroke: new Stroke({ color: "#897454", width: (stroke.getWidth() ?? 0) + 0.8 }) })
+    );
   styles.push(
     new Style({
-      stroke: courseStroke(feature, colour),
+      stroke,
       fill: line ? undefined : new Fill({ color: colour }),
       text: base.labels ? label(feature, resolution) : undefined,
     })
   );
-  if (!line) styles[styles.length - 1].setStroke(new Stroke({ color: "#2b2620", width: 1 }));
+  if (!line)
+    styles[styles.length - 1].setStroke(
+      new Stroke({
+        color: feature.layerId === "plots" ? "#61584175" : "#2b2620",
+        width: Math.min(1, 1 / resolution),
+      })
+    );
   return styles;
 }
+function footpathStyles(feature: PublishedFeature, resolution: number, labels?: boolean) {
+  const metres = surveyedRoadWidth(feature);
+  const colour = footpathColour(feature.attributes.wear, metres);
+  const text = labels ? label(feature, resolution) : undefined;
+  if (!feature.footprint)
+    return [new Style({ stroke: footpathStroke(metres, resolution, colour), text, zIndex: -1 })];
+  // The published tread already has its surveyed width, including at a clipped map edge.
+  const tread = new Style({
+    geometry: footprintGeometry(feature.footprint),
+    fill: new Fill({ color: colour }),
+    zIndex: -1,
+  });
+  return text ? [tread, new Style({ text })] : [tread];
+}
+function plotColour(domain: PublishedFeature) {
+  return (
+    publicSurfaces.get(domain.attributes.publicSurface) ??
+    plotColours[domain.kind] ??
+    markColours.plot
+  );
+}
 function featureColour(domain: PublishedFeature, base: LayerStyle) {
-  if (domain.layerId === "plots")
-    return publicSurfaces.get(domain.attributes.publicSurface) ?? markColours.plot;
+  if (domain.layerId === "roads") return roadColour(domain);
+  if (domain.layerId === "plots") return plotColour(domain);
   if (domain.kind === "building" && domain.layerId === "structures")
     return roofColour(domain.attributes.buildingFunction) ?? markColours.structure;
   if (domain.layerId === "objects") return objectColours[domain.kind] ?? markColours.object;
-  return markColours[kindMark[domain.layerId]] ?? base.color ?? "#777777";
+  return markColours[kindMark[domain.layerId]] ?? base.color;
+}
+function roadColour(domain: PublishedFeature) {
+  if (domain.kind === "footpath" || domain.kind === "trail") return markColours.way;
+  return domain.kind === "thoroughfare" || domain.attributes.roadClass === "mainStreet"
+    ? "#f4d69b"
+    : "#fff4d9";
 }
 /** Real-scale presentation of one feature; hidden creator layers draw nothing. A feature that
  * names no creator layer belongs to the map's first one. */
@@ -196,13 +265,15 @@ export function realScaleStyle(
   base: LayerStyle,
   view: RealScalePresentation,
   firstLayer: string,
-  grounds: ReadonlyMap<string, string> = new Map()
+  grounds: ReadonlyMap<string, string> = new Map(),
+  acrossFlats = 30
 ): StyleLike {
   return (feature, resolution) => {
     const domain = feature.get("domain") as PublishedFeature;
     const named = domain.attributes.creatorLayer;
     const layer = typeof named === "string" ? named : firstLayer;
-    if (isHexLayer(domain.layerId)) return hexStyle(domain, view, grounds);
+    if (isHexLayer(domain.layerId))
+      return hexStyle(domain, view, grounds, acrossFlats / resolution);
     if (view.hidden.includes(layer)) return [];
     return groundStyles(domain, featureColour(domain, base), resolution, base);
   };

@@ -80,9 +80,8 @@ pub(super) fn compete(
             .map(|c| neighborhood(mesh, [&membership], c, reach)[0])
             .collect();
     }
-    if u.programs.is_empty() {
-        u.programs = found(state, u, template, sponsors, catchment_scale, settings)?;
-    }
+    let new_programs = found(state, u, template, sponsors, catchment_scale, settings)?;
+    u.programs.extend(new_programs);
     for program in &mut u.programs {
         if let Some(claim) = u.fields.claims.get(program.cell) {
             program.strength =
@@ -129,14 +128,30 @@ fn found(
     let points: Vec<_> = (0..mesh.len()).map(|c| position(mesh, c)).collect();
     let (mut support, assets, residents) = district_support(state, u, template, &points)?;
     // owner-direction(2026-11-24): geography and social processes determine district count and districts cover all districtable ground
-    let area = state
-        .spatial
-        .area(state.scope.settled_outline())
-        .map_err(io::Error::other)?;
+    let area: f64 = support
+        .iter()
+        .enumerate()
+        .filter(|(_, score)| **score > 0.)
+        .map(|(c, _)| mesh.area(c))
+        .sum();
     // owner-direction(2026-11-24): tune how far a district centre serves, leaving the district count to the city.
     let reach = catchment(template.quarter(), area, mesh.spacing(), catchment_scale);
     let mut draws = retained_draws(state, &points, &mut support)?;
-    let centres = crate::town::city::hot_spots(&support, &points, reach, usize::MAX);
+    let centres = new_centres(
+        mesh,
+        &mut support,
+        &points,
+        reach,
+        u.programs.iter().map(|p| (p.cell, p.reach)),
+    );
+    if centres.is_empty() {
+        return Ok(Vec::new());
+    }
+    draws.include(u.programs.iter().flat_map(|program| {
+        [program.economic, program.social]
+            .into_iter()
+            .chain(program.traits.iter().copied())
+    }));
     for feature in super::selected(state, None)? {
         if feature_trope(&feature).is_some() && !sources.iter().any(|f| f.id == feature.id) {
             sources.push(feature);
@@ -288,17 +303,54 @@ fn district_support(
     let capital = band(LayerId::Standing);
     let ways = f.people().view(HumanField::KeptLine);
     let mut support = vec![0.; mesh.len()];
-    let mut residents = 0.;
-    let mut assets = 0.;
+    let slope = f.shared().scalar(crate::field::shared::Scalar::Slope);
+    let mut occupation = vec![0.; mesh.len()];
     for (c, v) in support.iter_mut().enumerate() {
         let p = f.people().people(c)?;
         let b = built.get(c)?;
-        if u.fields.stencil[c] > 0.5 && habitable(f, c)? && p > 0. && b > 0. {
-            residents += p * mesh.area(c);
-            assets += capital.get(c)? * mesh.area(c);
+        if u.fields.stencil[c] > 0.5 && habitable(f, c)? && p > 0. {
+            occupation[c] = crate::town::city::outline::Ground {
+                residents_per_km2: p,
+                built_share: b,
+                slope: slope.get(c)?.max(0.),
+                water: false,
+            }
+            .settlement_support();
             *v = u.fields.stencil[c]
                 * (p.ln_1p() + 2. * b.sqrt() + ways.get(c)?.sqrt())
                 * template.city_affinity(points[c]).sqrt();
+        }
+    }
+    let at = crate::field::refinement::courses::cell_at(mesh, template.site.centre);
+    let threshold =
+        crate::town::city::outline::settlement_threshold(at.map_or(0., |c| occupation[c]));
+    let principal = match super::landscape::contour(state, &occupation, threshold)? {
+        Some(g) => super::landscape::principal_ground(
+            state.spatial.as_ref(),
+            &g,
+            &super::landscape::SettlementGround::captured(state)?,
+            template.quarter(),
+            &super::landscape::crossings(u, mesh),
+        )?,
+        None => None,
+    };
+    let Some(ground) = principal else {
+        support.fill(0.);
+        return Ok((support, 0., 0.));
+    };
+    let positions: Vec<_> = points.iter().copied().map(pos).collect();
+    let inside = state
+        .spatial
+        .covers_points(&ground, &positions)
+        .map_err(io::Error::other)?;
+    let mut residents = 0.;
+    let mut assets = 0.;
+    for (c, score) in support.iter_mut().enumerate() {
+        if inside[c] && occupation[c] > threshold {
+            residents += f.people().people(c)? * mesh.area(c);
+            assets += capital.get(c)? * mesh.area(c);
+        } else {
+            *score = 0.;
         }
     }
     Ok((support, assets, residents))
@@ -384,6 +436,24 @@ fn catchment(quarter: f64, settled_area: f64, spacing: f64, scale: f64) -> f64 {
     (scale * (quarter * city_radius).sqrt()).max(2. * spacing)
 }
 
+fn new_centres(
+    mesh: &crate::lattice::TriangularLattice,
+    support: &mut [f64],
+    points: &[[f64; 2]],
+    reach: f64,
+    existing: impl Iterator<Item = (usize, f64)>,
+) -> Vec<usize> {
+    for (cell, old_reach) in existing {
+        let served = old_reach.max(reach);
+        for neighbor in mesh.cells_within(mesh.position(cell), served) {
+            if mesh.physical_distance(cell, neighbor) < served {
+                support[neighbor] = 0.;
+            }
+        }
+    }
+    crate::town::city::hot_spots(support, points, reach, usize::MAX)
+}
+
 fn feature_trope(f: &Feature) -> Option<Trope> {
     use crate::field::poi::catalogue::{settlement_use, SettlementUse::*};
     Some(match settlement_use(f)? {
@@ -405,6 +475,29 @@ fn feature_trope(f: &Feature) -> Option<Trope> {
 #[cfg(test)]
 mod tests {
     use super::catchment;
+    #[test]
+    fn later_residents_can_found_a_neighborhood_beyond_existing_district_service() {
+        let mesh = crate::lattice::WorldLatticeOptions::default()
+            .build(atlas_map::Bounds(0., 0., 1000., 400.), 400., 0., |_, _| {
+                true
+            })
+            .unwrap();
+        let at: Vec<_> = (0..mesh.len()).map(|i| mesh.position(i)).collect();
+        let mut support = vec![0.; mesh.len()];
+        let centre = mesh.cell_at(0., 0.).unwrap();
+        let neighbor = (0..3).find_map(|e| mesh.neighbor(centre, e)).unwrap();
+        let later = at
+            .iter()
+            .position(|&p| (p[0] - at[centre][0]).abs() > 300.)
+            .unwrap();
+        support[centre] = 12.;
+        support[neighbor] = 8.;
+        support[later] = 6.;
+        assert_eq!(
+            super::new_centres(&mesh, &mut support, &at, 100., [(centre, 120.)].into_iter()),
+            [later]
+        );
+    }
     #[test]
     fn catchment_scale_groups_nearby_centres_without_limiting_distant_ones() {
         let candidates = [[0., 0.], [2800., 0.], [7700., 0.]];

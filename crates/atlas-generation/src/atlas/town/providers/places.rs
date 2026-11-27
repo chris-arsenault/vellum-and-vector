@@ -5,7 +5,7 @@ use crate::{
     town::{
         access::Access,
         catalogue::Kind,
-        effects::{response, Nuisance, Service},
+        effects::{response, Contribution, Nuisance, Service},
         fabric::{Holding, HoldingId, Town},
         geometry::{dot, sub, Point},
         ground::Ground,
@@ -26,7 +26,11 @@ pub(super) fn accessible(
     spatial: &dyn SpatialKernel,
     conditions: &mut [Conditions],
 ) -> io::Result<()> {
-    let providers: Vec<_> = town.holdings().iter().filter_map(Accessible::new).collect();
+    let providers: Vec<_> = town
+        .holdings()
+        .iter()
+        .filter_map(|holding| Accessible::new(holding, town.round))
+        .collect();
     if providers.is_empty() {
         return Ok(());
     }
@@ -47,33 +51,28 @@ pub(super) fn accessible(
             travel(DAILY_REACH),
             spatial,
             |provider, site, cost| {
-                for (kind, strength) in providers[provider].uses.iter().copied() {
-                    let profile = providers[provider].holding.effects_as(kind);
-                    for service in profile.serves {
+                for offer in &providers[provider].uses {
+                    for service in offer.services {
                         claims.push(Claim {
                             provider,
                             site,
                             service: service.kind,
                             cost,
-                            strength: strength * service.strength * response(cost, service_reach),
+                            strength: offer.strength
+                                * service.strength
+                                * response(cost, service_reach),
                         });
                     }
-                    let tenure = town
-                        .round
-                        .saturating_sub(providers[provider].holding.established);
-                    let community = strength.max(conditions[site].households * 0.1);
-                    let knowledge = profile.teaches
-                        * community
-                        * (1. - response(f64::from(tenure) + 1., 6.))
-                        * response(cost, learning_reach);
-                    record(&mut learning[site], kind, knowledge);
-                    for burden in profile
-                        .burdens
-                        .iter()
-                        .filter(|b| b.kind == Nuisance::Disorder)
-                    {
+                    if offer.teaches > 0. || offer.disorder != 0. {
+                        let proximity = response(cost, learning_reach);
+                        let community = offer.strength.max(conditions[site].households * 0.1);
+                        record(
+                            &mut learning[site],
+                            offer.kind,
+                            offer.teaches * community * proximity,
+                        );
                         conditions[site].effects.nuisance[Nuisance::Disorder as usize] +=
-                            strength * burden.strength * response(cost, learning_reach);
+                            offer.disorder * proximity;
                     }
                 }
             },
@@ -87,16 +86,35 @@ pub(super) fn accessible(
 
 struct Accessible<'a> {
     holding: &'a Holding,
-    uses: Vec<(Kind, f64)>,
+    uses: Vec<AccessibleUse>,
+}
+struct AccessibleUse {
+    kind: Kind,
+    strength: f64,
+    services: &'static [Contribution<Service>],
+    teaches: f64,
+    disorder: f64,
 }
 impl<'a> Accessible<'a> {
-    fn new(holding: &'a Holding) -> Option<Self> {
+    fn new(holding: &'a Holding, round: u32) -> Option<Self> {
+        let tenure = round.saturating_sub(holding.established);
         let uses = active_uses(holding)
-            .filter(|(kind, _)| {
-                let profile = holding.effects_as(*kind);
-                !profile.serves.is_empty()
+            .filter_map(|(kind, strength)| {
+                let profile = holding.effects_as(kind);
+                let disorder = profile
+                    .burdens
+                    .iter()
+                    .filter(|b| b.kind == Nuisance::Disorder);
+                (!profile.serves.is_empty()
                     || profile.teaches > 0.
-                    || profile.burdens.iter().any(|b| b.kind == Nuisance::Disorder)
+                    || disorder.clone().next().is_some())
+                .then(|| AccessibleUse {
+                    kind,
+                    strength,
+                    services: profile.serves,
+                    teaches: profile.teaches * (1. - response(f64::from(tenure) + 1., 6.)),
+                    disorder: disorder.map(|b| strength * b.strength).sum(),
+                })
             })
             .collect::<Vec<_>>();
         (!uses.is_empty()).then_some(Self { holding, uses })
@@ -385,7 +403,7 @@ mod tests {
         }
         let providers: Vec<_> = town.holdings()[..2]
             .iter()
-            .filter_map(Accessible::new)
+            .filter_map(|holding| Accessible::new(holding, town.round))
             .collect();
         let claim = |provider, site, cost, strength| Claim {
             provider,

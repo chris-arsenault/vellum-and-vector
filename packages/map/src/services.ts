@@ -34,6 +34,7 @@ export interface FeatureQuery {
   geometry?: Geometry;
   featureIds?: string[];
   layerIds?: string[];
+  typeIds?: string[];
   text?: string;
   cursor?: string;
 }

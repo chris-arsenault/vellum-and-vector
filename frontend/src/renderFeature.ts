@@ -18,6 +18,7 @@ export interface RenderFeature {
 }
 export type MagicDepiction = "site" | "course" | "area";
 export interface FeatureAppearance<F extends RenderFeature = RenderFeature> {
+  realScale?: boolean;
   type(feature: F): FeatureType;
   name(feature: F): string;
   magic(feature: F): MagicDepiction;

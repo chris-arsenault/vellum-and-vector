@@ -522,6 +522,27 @@ fn addresses_are_found_by_number_and_street_or_by_street_alone() -> io::Result<(
     Ok(())
 }
 #[test]
+fn feature_type_queries_intersect_selected_layers() -> io::Result<()> {
+    let (store, reference, _path) = publish()?;
+    let read = |types: &[&str]| {
+        store.features(
+            &reference,
+            &FeatureQuery {
+                space_id: id("surface"),
+                layer_ids: Some(vec!["vector:roads".into()]),
+                type_ids: Some(types.iter().map(|id| (*id).into()).collect()),
+                ..Default::default()
+            },
+        )
+    };
+    let selected = read(&["street", "building"])?.items;
+    assert_eq!(selected.len(), 3);
+    assert!(selected.iter().all(|record| record.kind == "street"));
+    assert!(read(&["building"])?.items.is_empty());
+    assert!(read(&[])?.items.is_empty());
+    Ok(())
+}
+#[test]
 fn a_new_plot_records_the_street_it_fronts_and_its_building_is_addressed_there() -> io::Result<()> {
     let (store, reference, _) = publish()?;
     // The plot's middle lies nearer North Row behind it than High Street in front.

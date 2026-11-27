@@ -21,6 +21,12 @@ const fn control(name: &'static str, default: f64, maximum: Option<f64>) -> Nume
 }
 const REPEAT: NumericParameter = control("districtRepeatFactor", 0.8, Some(1.));
 const ORDINARY: NumericParameter = control("ordinaryTraitWeight", 2., None);
+// owner-direction(2026-11-27): aim for 6–10 coherent districts near 90% developed in a city of about 200,000 by tuning the procedure
+const CATCHMENT: NumericParameter = NumericParameter {
+    unit: "relative reach",
+    minimum: Some(0.1),
+    ..control("districtCatchmentScale", 1.8, None)
+};
 const GEOGRAPHY: NumericParameter = NumericParameter {
     minimum: Some(0.),
     ..control("districtGeographyWeight", 1., None)
@@ -29,23 +35,27 @@ pub(super) const CONTROLS: &[NumericParameter] = &[
     REPEAT,
     ORDINARY,
     GEOGRAPHY,
+    CATCHMENT,
     super::partition::CATCHMENT_BOUNDARY,
 ];
 
 #[derive(Clone, Copy)]
 pub(super) struct Settings {
+    pub catchment: f64,
     pub repeat: f64,
     pub ordinary: f64,
     pub geography: f64,
 }
 impl Settings {
     pub const DEFAULT: Self = Self {
+        catchment: CATCHMENT.default,
         repeat: REPEAT.default,
         ordinary: ORDINARY.default,
         geography: GEOGRAPHY.default,
     };
     pub fn from_input(input: &Input) -> io::Result<Self> {
         Ok(Self {
+            catchment: input.number(CATCHMENT.name)?,
             repeat: input.number(REPEAT.name)?,
             ordinary: input.number(ORDINARY.name)?,
             geography: input.number(GEOGRAPHY.name)?,
@@ -58,22 +68,25 @@ pub(super) struct Draws {
     uses: [usize; Trope::Ordinary as usize + 1],
 }
 impl Draws {
+    pub fn include(&mut self, tropes: impl Iterator<Item = Trope>) {
+        for id in tropes {
+            self.uses[id as usize] += 1;
+        }
+    }
     pub fn include_retained(&mut self, program: &serde_json::Value) {
         let traits = program
             .get("traits")
             .and_then(|v| v.as_array())
             .into_iter()
             .flatten();
-        for value in program
-            .get("economic")
-            .into_iter()
-            .chain(program.get("social"))
-            .chain(traits)
-        {
-            if let Ok(id) = serde_json::from_value::<Trope>(value.clone()) {
-                self.uses[id as usize] += 1;
-            }
-        }
+        self.include(
+            program
+                .get("economic")
+                .into_iter()
+                .chain(program.get("social"))
+                .chain(traits)
+                .filter_map(|value| serde_json::from_value::<Trope>(value.clone()).ok()),
+        );
     }
     // owner-direction(2026-11-25): repeats become progressively less likely as more districts use a type.
     fn repeat_log_weight(&self, id: Trope, factor: f64) -> f64 {

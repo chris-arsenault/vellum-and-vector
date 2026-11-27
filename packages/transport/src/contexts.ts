@@ -1,12 +1,21 @@
-import type { ContextManagement, ContextInventory, DeleteContext } from "@atlas/context";
+import type {
+  ContextManagement,
+  ContextInventory,
+  DeleteContext,
+  StoredContext,
+} from "@atlas/context";
 import type { ReadOptions } from "@atlas/map";
 import { Decoder, Encoder } from "cbor-x";
 import { cborOptions } from "./cbor";
 
-export type ContextCall = { method: "list" } | { method: "delete"; request: DeleteContext };
+export type ContextCall =
+  { method: "maps" | "list" } | { method: "delete"; request: DeleteContext };
 type Transport = (call: ContextCall, options?: ReadOptions) => Promise<unknown>;
 export class RpcContextManagement implements ContextManagement {
   constructor(private send: Transport) {}
+  async maps(options?: ReadOptions) {
+    return (await this.send({ method: "maps" }, options)) as StoredContext[];
+  }
   async list(options?: ReadOptions) {
     return (await this.send({ method: "list" }, options)) as ContextInventory;
   }

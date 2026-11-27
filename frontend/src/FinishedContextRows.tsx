@@ -138,6 +138,7 @@ function MapRow({ node, tree }: { node: MapNode; tree: TreeState }) {
       name={
         <button
           className="lib-name"
+          data-map-revision={map.reference.revision}
           disabled={!!map.problem || library.opening.isPending || !map.complete}
           onClick={() => library.opening.mutate(map)}
         >

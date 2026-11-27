@@ -110,11 +110,36 @@ pub(crate) struct StreetLines<'a> {
     spatial: &'a dyn SpatialKernel,
 }
 impl<'a> StreetLines<'a> {
+    /// Only a road in this envelope can intersect the proposal or receive a snapped end.
+    pub(crate) fn near(
+        town: &super::fabric::Town,
+        course: &[Point],
+        reach: f64,
+        spatial: &'a dyn SpatialKernel,
+    ) -> io::Result<Self> {
+        // A departure snapped onto its own destination still has a search
+        // envelope, even though its two positions no longer form a line.
+        let positions = Geometry::MultiPoint {
+            coordinates: course.iter().map(|p| Position::xy(p[0], p[1])).collect(),
+        };
+        let Bounds(w, s, e, n) = spatial.bounds(&positions).map_err(io::Error::other)?;
+        let ids = town.nearby_roads(Bounds(w - reach, s - reach, e + reach, n + reach), spatial)?;
+        let lines = ids
+            .into_iter()
+            .map(|i| line(&town.streets()[i].points))
+            .collect();
+        Self::from_lines(lines, spatial)
+    }
+    pub(crate) fn is_empty(&self) -> bool {
+        self.lines.is_empty()
+    }
     pub(crate) fn new(
         streets: &[super::network::Street],
         spatial: &'a dyn SpatialKernel,
     ) -> io::Result<Self> {
-        let lines: Vec<_> = streets.iter().map(|s| line(&s.points)).collect();
+        Self::from_lines(streets.iter().map(|s| line(&s.points)).collect(), spatial)
+    }
+    fn from_lines(lines: Vec<Geometry>, spatial: &'a dyn SpatialKernel) -> io::Result<Self> {
         let index = spatial.index(&lines).map_err(io::Error::other)?;
         Ok(Self {
             lines,
@@ -123,6 +148,9 @@ impl<'a> StreetLines<'a> {
         })
     }
     pub(crate) fn project(&self, at: Point) -> io::Result<Option<Point>> {
+        Ok(self.project_onto_street(at)?.map(|(_, p)| p))
+    }
+    pub(crate) fn project_onto_street(&self, at: Point) -> io::Result<Option<(usize, Point)>> {
         let p = Position::xy(at[0], at[1]);
         let Some(i) = self.index.nearest(p).map_err(io::Error::other)? else {
             return Ok(None);
@@ -131,7 +159,45 @@ impl<'a> StreetLines<'a> {
             .spatial
             .nearest_points(&self.lines[i], &point(at))
             .map_err(io::Error::other)?;
-        Ok(Some(xy(on_road)))
+        Ok(Some((i, xy(on_road))))
+    }
+    /// Walking junctions are stored to the millimetre. Recover their exact
+    /// centreline contact before a walked course becomes a routable street.
+    pub(crate) fn attach_walk(&self, points: &mut [Point]) -> io::Result<bool> {
+        if self.lines.is_empty() {
+            return Ok(true);
+        }
+        if points.len() < 2 {
+            return Ok(false);
+        }
+        let mut joined = false;
+        for i in [0, points.len() - 1] {
+            if let Some(p) = self.project(points[i])? {
+                if distance(p, points[i]) <= JUNCTION_TOLERANCE {
+                    points[i] = p;
+                    joined = true;
+                }
+            }
+        }
+        if joined {
+            return Ok(true);
+        }
+        let trace = line(points);
+        let bounds = self.spatial.bounds(&trace).map_err(io::Error::other)?;
+        for i in self.index.query(bounds).map_err(io::Error::other)? {
+            if self
+                .spatial
+                .relation(
+                    &trace,
+                    &self.lines[i],
+                    atlas_map::spatial::Predicate::Intersects,
+                )
+                .map_err(io::Error::other)?
+            {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
     pub(crate) fn constrain(
         &self,
@@ -205,4 +271,60 @@ fn local_constraint(
         }
     }
     Ok(Some((target, joined)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::town::{
+        fabric::Town,
+        network::{Class, Street},
+        seat::Seat,
+    };
+
+    #[test]
+    fn a_snapped_santa_spoza_journey_declines_only_the_collapsed_connection() {
+        let spatial = atlas_gis::geometry::NativeGeos::new(0.000001).unwrap();
+        let from = [91682.67129439015, 403399.55720964476];
+        let destination = [91672.71936467697, 403289.484404];
+        let junction = [91672.719365, 403289.484404];
+        let mut town = Town::new(
+            Seat {
+                key: atlas_map::Id::from_name("Santa Spoza"),
+                name: "Santa Spoza".into(),
+                centre: junction,
+                story: Default::default(),
+                arms: vec![],
+                culture: None,
+            },
+            None,
+        );
+        let road = |points| Street::new(points, Class::Street, town.seat.story.size());
+        town.set_approaches(vec![road(vec![
+            [junction[0], junction[1] - 100.],
+            junction,
+        ])]);
+        let departure = town.project_onto_road(from, &spatial).unwrap().unwrap().1;
+        let course = [departure, destination];
+        let nearby = StreetLines::near(&town, &course, 60., &spatial).unwrap();
+        assert!(nearby.constrain(&course, 60.).unwrap().is_none());
+
+        let crossing = [junction[0], junction[1] + 50.];
+        let size = town.seat.story.size();
+        town.set_approaches(vec![
+            town.streets()[0].clone(),
+            Street::new(
+                vec![
+                    [crossing[0] - 40., crossing[1]],
+                    [crossing[0] + 40., crossing[1]],
+                ],
+                Class::Street,
+                size,
+            ),
+        ]);
+        let course = [departure, [junction[0], junction[1] + 100.]];
+        let nearby = StreetLines::near(&town, &course, 60., &spatial).unwrap();
+        let (at, joined) = nearby.constrain(&course, 60.).unwrap().unwrap();
+        assert!(joined && distance(at, crossing) < JUNCTION_TOLERANCE);
+    }
 }

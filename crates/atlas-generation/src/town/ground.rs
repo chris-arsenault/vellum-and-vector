@@ -24,6 +24,16 @@ pub struct Ground {
     pub rows: usize,
     owners: Vec<u32>,
     hillside: Vec<[f32; 2]>,
+    pub(crate) cultivation: std::rc::Rc<WalkingFields>,
+}
+
+#[derive(Clone, Default)]
+pub(crate) struct WalkingFields {
+    ploughed: Vec<bool>,
+    outlines: Vec<atlas_map::Geometry>,
+    plots: atlas_map::spatial::BoundsIndex,
+    pub rims: Vec<Vec<Point>>,
+    pub index: atlas_map::spatial::BoundsIndex,
 }
 /// A shape laid on the ground: what it covers, its extent and the points the grid checks.
 pub trait Shape {
@@ -117,6 +127,7 @@ impl Ground {
             rows,
             owners: vec![FREE; columns * rows],
             hillside: vec![[0.; 2]; columns * rows],
+            cultivation: Default::default(),
         }
     }
     pub fn index(&self, p: Point) -> Option<usize> {
@@ -139,6 +150,36 @@ impl Ground {
     }
     pub fn owner_at(&self, index: usize) -> u32 {
         self.owners[index]
+    }
+    /// Walks and street surveys use the map's actual ground, including holes in a district.
+    pub fn restrict_to(
+        &mut self,
+        footprint: &atlas_map::Geometry,
+        bounds: atlas_map::Bounds,
+        spatial: &dyn crate::spatial::SpatialKernel,
+    ) -> std::io::Result<()> {
+        if spatial
+            .relation(
+                footprint,
+                &atlas_map::regions::rectangle(bounds),
+                crate::spatial::Predicate::Covers,
+            )
+            .map_err(std::io::Error::other)?
+        {
+            return Ok(());
+        }
+        self.walks.take();
+        spatial
+            .with_point_coverage(footprint, &mut |inside| {
+                for i in 0..self.count() {
+                    let [x, y] = self.centre(i);
+                    if !inside(atlas_map::Position::xy(x, y))? {
+                        self.owners[i] = OUTSIDE;
+                    }
+                }
+                Ok(())
+            })
+            .map_err(std::io::Error::other)
     }
     pub fn set_hillside(&mut self, index: usize, gradient: Point) {
         self.hillside[index] = gradient.map(|g| g as f32);
@@ -187,26 +228,101 @@ impl Ground {
         spatial: &dyn crate::spatial::SpatialKernel,
     ) -> std::io::Result<()> {
         for shape in shapes {
-            let atlas_map::Bounds(w, s, e, n) =
-                spatial.bounds(shape).map_err(std::io::Error::other)?;
-            let cells = self.cells_within([w, s, e, n]);
-            let centres: Vec<atlas_map::Position> = cells
-                .iter()
-                .map(|&i| {
-                    let [x, y] = self.centre(i);
-                    atlas_map::Position::xy(x, y)
-                })
-                .collect();
-            let covered = spatial
-                .covers_points(shape, &centres)
-                .map_err(std::io::Error::other)?;
-            for (index, inside) in cells.into_iter().zip(covered) {
-                if inside {
-                    self.withhold(index, mark);
+            for i in self.covered_cells(shape, spatial)? {
+                self.withhold(i, mark);
+            }
+        }
+        Ok(())
+    }
+
+    fn covered_cells(
+        &self,
+        shape: &atlas_map::Geometry,
+        spatial: &dyn crate::spatial::SpatialKernel,
+    ) -> std::io::Result<Vec<usize>> {
+        let atlas_map::Bounds(w, s, e, n) = spatial.bounds(shape).map_err(std::io::Error::other)?;
+        let cells = self.cells_within([w, s, e, n]);
+        let centres = cells
+            .iter()
+            .map(|&i| {
+                let [x, y] = self.centre(i);
+                atlas_map::Position::xy(x, y)
+            })
+            .collect::<Vec<_>>();
+        let covered = spatial
+            .covers_points(shape, &centres)
+            .map_err(std::io::Error::other)?;
+        Ok(cells
+            .into_iter()
+            .zip(covered)
+            .filter_map(|(i, yes)| yes.then_some(i))
+            .collect())
+    }
+
+    /// Worked strips offer easier footing along their surveyed boundaries.
+    /// Keep the walking overlay separate from the land a building can buy.
+    pub(crate) fn mark_ploughed(
+        &mut self,
+        shapes: &[atlas_map::Geometry],
+        spatial: &dyn crate::spatial::SpatialKernel,
+    ) -> std::io::Result<()> {
+        for shape in shapes {
+            let cells = self.covered_cells(shape, spatial)?;
+            let count = self.count();
+            let fields = std::rc::Rc::make_mut(&mut self.cultivation);
+            fields
+                .plots
+                .push(spatial.bounds(shape).map_err(std::io::Error::other)?);
+            fields.outlines.push(shape.clone());
+            fields.ploughed.resize(count, false);
+            for i in cells {
+                fields.ploughed[i] = true;
+            }
+            for rim in atlas_map::regions::boundary_lines(shape) {
+                if rim.len() < 3 {
+                    continue;
+                }
+                let line = atlas_map::Geometry::LineString { coordinates: rim };
+                let simple = spatial
+                    .resample_trace(&line, self.cell * 0.5, None)
+                    .map_err(std::io::Error::other)?;
+                for part in atlas_map::regions::boundary_lines(&simple) {
+                    if part.len() < 4 {
+                        continue;
+                    }
+                    let bounds = spatial
+                        .bounds(&atlas_map::Geometry::LineString {
+                            coordinates: part.clone(),
+                        })
+                        .map_err(std::io::Error::other)?;
+                    fields.index.push(bounds);
+                    fields.rims.push(
+                        part.iter()
+                            .map(|p| {
+                                let [x, y, _] = p.coordinates();
+                                [x, y]
+                            })
+                            .collect(),
+                    );
                 }
             }
         }
         Ok(())
+    }
+
+    pub(crate) fn ploughed(&self, p: Point) -> bool {
+        !self.cultivation.ploughed.is_empty()
+            && self.index(p).is_some_and(|i| self.cultivation.ploughed[i])
+    }
+    pub(crate) fn worked_fields(
+        &self,
+        bounds: atlas_map::Bounds,
+    ) -> impl Iterator<Item = &atlas_map::Geometry> {
+        self.cultivation
+            .plots
+            .query(bounds)
+            .into_iter()
+            .map(|i| &self.cultivation.outlines[i])
     }
     pub fn is_water(&self, p: Point) -> bool {
         self.owner(p) == WATER

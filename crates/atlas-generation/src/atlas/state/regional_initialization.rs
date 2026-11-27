@@ -124,6 +124,18 @@ impl State {
                 self.records.features.remove(feature.id)?;
                 continue;
             };
+            if matches!(
+                feature.geometry,
+                Geometry::LineString { .. } | Geometry::MultiLineString { .. }
+            ) && shape != feature.geometry
+            {
+                crate::features::line_profile::clip_profiles(
+                    &mut feature.attributes,
+                    &feature.geometry,
+                    &shape,
+                    self.spatial.as_ref(),
+                )?;
+            }
             feature.geometry = shape;
             if let Some(footprint) = &feature.footprint {
                 feature.footprint = self.clip_to_frame(footprint)?;

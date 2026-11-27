@@ -32,6 +32,8 @@ pub struct Settlement {
     streets: Vec<(Vec<Point>, Vec<f64>, bool)>,
     passages: Vec<Geometry>,
     footpaths: Vec<([Point; 2], f64)>,
+    #[serde(default)]
+    footpath_wear: Vec<f64>,
     plots: Vec<Geometry>,
     buildings: Vec<(Geometry, String, Option<String>)>,
 }
@@ -210,14 +212,14 @@ fn ground(canvas: &mut Canvas, observed: &Observed<'_>) {
 }
 /// Streets at their widths, footpaths, passages, walls, crossings and major works.
 fn ways(canvas: &mut Canvas, town: &Settlement) {
+    for (i, (ends, width)) in town.footpaths.iter().enumerate() {
+        canvas.footpath(&[ends.to_vec()], *width, town.footpath_wear.get(i).copied());
+    }
     for (points, widths, _) in &town.streets {
         for (i, pair) in points.windows(2).enumerate() {
             let width = (widths.get(i).unwrap_or(&6.) + widths.get(i + 1).unwrap_or(&6.)) / 2.;
             canvas.line(pair, width, 0.8, STREET);
         }
-    }
-    for (ends, width) in &town.footpaths {
-        canvas.line(ends, *width, 0.5, FOOTPATH);
     }
     for passage in &town.passages {
         canvas.outline(passage, 1.5, 0.5, "#9e9182");

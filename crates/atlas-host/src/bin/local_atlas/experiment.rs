@@ -78,6 +78,7 @@ struct Results {
 pub(super) fn command(harness: &Harness, options: &Options) -> io::Result<()> {
     match (options.positional(1), options.positional(2)) {
         (Some("processes"), None) => processes(),
+        (Some("history"), query) => history(&harness.reports.join("experiments"), query),
         (Some("run"), Some(path)) => run(harness, Path::new(path)),
         (Some("land-use"), Some(path)) => {
             let distance = options.get("near").unwrap_or("300").parse().map_err(io::Error::other)?;
@@ -94,8 +95,44 @@ pub(super) fn command(harness: &Harness, options: &Options) -> io::Result<()> {
             };
             render::write(&results, path.parent().unwrap_or(Path::new(".")), metric, logarithmic)
         }
-        _ => Err(io::Error::other("Usage: local_atlas experiment processes | run <experiment.json> | render <results.json> | land-use <trial-directory> [--near metres]")),
+        _ => Err(io::Error::other("Usage: local_atlas experiment processes | history [search] | run <experiment.json> | render <results.json> | land-use <trial-directory> [--near metres]")),
     }
+}
+
+/// Search the small saved specifications; a trial's grids can be hundreds of megabytes.
+fn history(root: &Path, query: Option<&str>) -> io::Result<()> {
+    if !root.try_exists()? {
+        println!("No saved experiments in {}", root.display());
+        return Ok(());
+    }
+    let query = query.unwrap_or_default().to_lowercase();
+    let mut matches = Vec::new();
+    for entry in fs::read_dir(root)? {
+        let folder = entry?.path();
+        let path = folder.join("experiment.json");
+        if !folder.is_dir() || !path.try_exists()? {
+            continue;
+        }
+        let contents = fs::read_to_string(&path)?;
+        if contents.to_lowercase().contains(&query) {
+            let spec: serde_json::Value = serde_json::from_str(&contents)?;
+            let name = spec["name"].as_str().unwrap_or("Unnamed experiment");
+            matches.push((fs::metadata(path)?.modified()?, folder, name.to_owned()));
+        }
+    }
+    matches.sort_by_key(|(time, _, _)| std::cmp::Reverse(*time));
+    if matches.is_empty() {
+        println!("No saved experiments match {query:?}");
+    }
+    for (_, folder, name) in matches {
+        let table = folder.join("measurements.csv");
+        if table.is_file() {
+            println!("{name}\t{}", table.display());
+        } else {
+            println!("{name}\t{} (no measurement table)", folder.display());
+        }
+    }
+    Ok(())
 }
 
 fn processes() -> io::Result<()> {
@@ -141,7 +178,10 @@ fn run(harness: &Harness, path: &Path) -> io::Result<()> {
         search.validate()?;
     }
     if matches!(spec.source, Source::Inspect { .. })
-        && (spec.only.is_some() || !spec.changes.is_empty() || spec.search.is_some())
+        && (spec.only.is_some()
+            || !spec.changes.is_empty()
+            || spec.search.is_some()
+            || spec.observe.districts)
     {
         return Err(io::Error::other(
             "Saved-map inspections take measurements only",

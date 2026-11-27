@@ -54,7 +54,8 @@ pub(super) fn districts(
     if urban.programs.is_empty() {
         return Ok(());
     }
-    assign_founders(urban, kernel, &positions, &mut precincts)?;
+    let seats: Vec<_> = urban.programs.iter().map(|p| positions[p.cell]).collect();
+    assign_founders(kernel, &seats, policy(state)?.quarter(), &mut precincts)?;
     let origin = crate::atlas::regional::city::captured_settlement(state)?;
     let culture = origin
         .as_ref()
@@ -128,26 +129,51 @@ pub(super) fn districts(
 }
 
 fn assign_founders(
-    urban: &Urban,
     kernel: &dyn SpatialKernel,
-    positions: &[Position],
+    seats: &[Position],
+    quarter: f64,
     precincts: &mut [super::partition::Precinct],
 ) -> io::Result<()> {
-    let mut available: Vec<_> = (0..precincts.len()).collect();
-    for (number, program) in urban.programs.iter().enumerate() {
-        if available.is_empty() {
-            break;
-        }
-        let shapes: Vec<_> = available
-            .iter()
-            .map(|&i| precincts[i].shape.clone())
-            .collect();
-        let index = kernel.index(&shapes).map_err(io::Error::other)?;
-        if let Some(i) = index
-            .nearest(positions[program.cell])
+    let shapes: Vec<_> = precincts.iter().map(|p| p.shape.clone()).collect();
+    let index = kernel.index(&shapes).map_err(io::Error::other)?;
+    for (number, &seat) in seats.iter().enumerate() {
+        let [x, y, _] = seat.coordinates();
+        let b = atlas_map::Bounds(x - quarter, y - quarter, x + quarter, y + quarter);
+        let closest = index
+            .distances(b, seat)
             .map_err(io::Error::other)?
+            .into_iter()
+            .filter(|&(i, d)| {
+                d <= quarter
+                    && precincts[i].anchor.is_none()
+                    && precincts[i].residents > 0.
+                    && (d == 0. || precincts[i].program == Some(number))
+            })
+            .min_by(|a, b| a.1.total_cmp(&b.1).then(a.0.cmp(&b.0)));
+        if let Some((i, _)) = closest {
+            precincts[i].anchor = Some(number);
+        }
+    }
+    // A severed block can still belong to an established district. A provisional
+    // catchment which never established a seat cannot create another district there.
+    let established: Vec<_> = precincts.iter().filter_map(|p| p.anchor).collect();
+    if !established.is_empty() {
+        let centres: Vec<_> = established
+            .iter()
+            .map(|&i| atlas_map::regions::point(seats[i]))
+            .collect();
+        let accepted = kernel.index(&centres).map_err(io::Error::other)?;
+        for p in precincts
+            .iter_mut()
+            .filter(|p| !p.program.is_some_and(|i| established.contains(&i)))
         {
-            precincts[available.swap_remove(i)].anchor = Some(number);
+            let at = kernel
+                .interior_position(&p.shape)
+                .map_err(io::Error::other)?;
+            p.program = accepted
+                .nearest(at)
+                .map_err(io::Error::other)?
+                .map(|i| established[i]);
         }
     }
     Ok(())
@@ -327,4 +353,38 @@ fn exclude_existing_districts(
         polygons = vacant;
     }
     Ok(polygons)
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use super::super::partition::{partition, Precinct};
+    use super::*;
+    use atlas_map::{regions::rectangle, Bounds};
+
+    #[test]
+    fn an_outlying_founder_cannot_claim_a_distant_city_precinct_or_revive_on_an_island() {
+        let k = atlas_gis::geometry::NativeGeos::new(0.001).unwrap();
+        let seats = [[-5., 50.], [820., 50.]].map(pos);
+        let mut blocks: Vec<_> = [(0., 0), (100., 1), (360., 1)]
+            .map(|(x, program)| Precinct {
+                shape: rectangle(Bounds(x, 0., x + 100., 100.)),
+                area: 10_000.,
+                residents: 100.,
+                built: 0.009,
+                service_load: 0.,
+                works: 0,
+                character: 0.,
+                program: Some(program),
+                anchor: None,
+            })
+            .into();
+        assign_founders(&k, &seats, 50., &mut blocks).unwrap();
+        assert_eq!(
+            blocks.iter().map(|p| p.anchor).collect::<Vec<_>>(),
+            [Some(0), None, None]
+        );
+        let districts = partition(&k, &blocks, &[], 1.).unwrap();
+        assert_eq!(districts.len(), 1);
+        assert_eq!(districts[0].precincts, [0, 1, 2]);
+    }
 }

@@ -68,9 +68,15 @@ fn read_from(state: &State, features: &dyn FeatureReader, area: Option<Id>) -> i
     })
 }
 /// The map's terrain on the town ground, its cells and walls sized at the map's town scale.
-fn terrain(state: &State, bounds: [f64; 4]) -> io::Result<Ground> {
+pub(crate) fn terrain(state: &State, bounds: [f64; 4]) -> io::Result<Ground> {
     let scale = state.town.scale();
     let mut ground = ground(state.field(), bounds, scale)?;
+    let [w, s, e, n] = bounds;
+    ground.restrict_to(
+        &state.scope.footprint,
+        atlas_map::Bounds(w, s, e, n),
+        state.spatial.as_ref(),
+    )?;
     let current = state.records.features.as_ref();
     let area = Some(state.scope.area);
     let water = drawn_water(current, area, state.spatial.as_ref())?;
@@ -106,7 +112,9 @@ pub(super) fn terrain_key(state: &State) -> io::Result<u64> {
         ("rivers", None),
         ("lakes", None),
         ("structures", Some("wall")),
+        ("structures", Some("cityWall")),
         ("structures", Some("gate")),
+        ("structures", Some("cityGate")),
     ] {
         for feature in features.values(FeatureSelection {
             area_id: area,
@@ -189,7 +197,12 @@ fn fortifications(
         ground::WALL,
         settings::{GATE_WIDTH, WALL_THICKNESS},
     };
-    for (kind, width) in [("wall", WALL_THICKNESS), ("gate", GATE_WIDTH)] {
+    for (kind, width, is_wall) in [
+        ("wall", WALL_THICKNESS, true),
+        ("cityWall", WALL_THICKNESS, true),
+        ("gate", GATE_WIDTH, false),
+        ("cityGate", GATE_WIDTH, false),
+    ] {
         let width = scale.length(width, Measure::Width);
         for item in features.values(FeatureSelection {
             area_id: area,
@@ -210,7 +223,7 @@ fn fortifications(
                     },
                 },
             };
-            if kind == "wall" {
+            if is_wall {
                 ground.mark_shapes(&[outline], WALL, spatial)?;
             } else {
                 ground.release_shape(&outline, WALL, spatial)?;
@@ -264,7 +277,7 @@ pub fn water_shapes(
 }
 /// Every line in the roads layer except sea lanes, with its widest stated width; a way with
 /// none stated takes the unstated width at `scale`.
-fn ways(
+pub(crate) fn ways(
     features: &dyn FeatureReader,
     area: Option<Id>,
     scale: TownScale,

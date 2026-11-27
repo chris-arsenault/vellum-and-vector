@@ -73,13 +73,10 @@ pub fn establish(
             continue;
         }
         let Some(shape) = shape else { continue };
-        let direction = match index.nearest(point).map_err(io::Error::other)? {
-            Some(i) => tangent(&ways[i], point, spatial)?,
-            None => [1., 0.],
-        };
         let shapes = if pasture > farm {
             vec![shape]
         } else {
+            let direction = field_frontage(&shape, point, ways, index.as_ref(), spatial)?;
             strips(&shape, at, direction, spatial, town_scale)?
         };
         for outline in shapes {
@@ -97,6 +94,46 @@ pub fn establish(
     }
     Ok(fields)
 }
+/// Strips open onto a way that crosses their estate. Away from roads, run
+/// their long sides along the longest estate boundary.
+fn field_frontage(
+    shape: &Geometry,
+    centre: Position,
+    ways: &[Geometry],
+    index: &dyn crate::spatial::SpatialIndex,
+    spatial: &dyn SpatialKernel,
+) -> io::Result<Point> {
+    let at = atlas_map::regions::point(centre);
+    let mut closest = None;
+    for i in index
+        .query(spatial.bounds(shape).map_err(io::Error::other)?)
+        .map_err(io::Error::other)?
+    {
+        if spatial
+            .relation(shape, &ways[i], crate::spatial::Predicate::Intersects)
+            .map_err(io::Error::other)?
+        {
+            let gap = spatial.distance(&ways[i], &at).map_err(io::Error::other)?;
+            if closest.is_none_or(|(best, _)| gap < best) {
+                closest = Some((gap, i));
+            }
+        }
+    }
+    if let Some((_, i)) = closest {
+        return tangent(&ways[i], centre, spatial);
+    }
+    let edges = atlas_map::regions::boundary_lines(shape);
+    let direction = edges
+        .iter()
+        .flat_map(|ring| ring.windows(2))
+        .map(|edge| {
+            let [x, y, _] = edge[0].coordinates();
+            let [u, v, _] = edge[1].coordinates();
+            [u - x, v - y]
+        })
+        .max_by(|a, b| super::geometry::length(*a).total_cmp(&super::geometry::length(*b)));
+    Ok(left(unit(direction.unwrap_or([1., 0.]))))
+}
 fn tangent(way: &Geometry, point: Position, spatial: &dyn SpatialKernel) -> io::Result<Point> {
     let fraction = spatial
         .line_fraction(way, point)
@@ -111,6 +148,7 @@ fn tangent(way: &Geometry, point: Position, spatial: &dyn SpatialKernel) -> io::
         .coordinates();
     Ok(unit(sub([b[0], b[1]], [a[0], a[1]])))
 }
+
 fn strips(
     shape: &Geometry,
     at: Point,
@@ -154,12 +192,22 @@ pub fn develop(
     spatial: &dyn SpatialKernel,
 ) -> io::Result<()> {
     fabric.fields.append(&mut fabric.fallow);
+    if fabric.fields.is_empty() {
+        return Ok(());
+    }
     let verge = fabric.scale().length(WAY_VERGE, Measure::Plot);
     let mut excluded: Vec<_> = fabric
         .towns
         .iter()
         .flat_map(|t| t.holdings().iter().map(|h| h.outline.clone()))
         .collect();
+    excluded.extend(
+        fabric
+            .towns
+            .iter()
+            .filter_map(|town| town.district.as_ref())
+            .flat_map(|district| district.reserves.iter().cloned()),
+    );
     for (points, width) in ways {
         if let Some(mask) = spatial
             .buffer(&line(points), width / 2. + verge)
@@ -174,27 +222,64 @@ pub fn develop(
         }
     }
     exclude_unworkable_ground(ground, &mut excluded);
-    if !excluded.is_empty() {
-        if let Some(mask) = spatial
-            .union_all(&excluded)
-            .map_err(io::Error::other)?
-            .and_then(atlas_map::regions::polygon)
-        {
-            let plots: Vec<_> = fabric.fields.iter().map(|f| f.outline.clone()).collect();
-            let fitted = spatial
-                .overlays(&mask, &plots, Overlay::Difference)
-                .map_err(io::Error::other)?;
-            for (field, result) in fabric.fields.iter_mut().zip(fitted) {
-                if let Some(outline) = result.and_then(atlas_map::regions::polygon) {
-                    field.outline = outline;
-                } else {
-                    field.suitability = 0.;
-                }
+    fit_fields(&mut fabric.fields, &excluded, spatial)?;
+    fabric.fields.retain(|f| f.suitability > 0.);
+    assign(fabric, ground, spatial)?;
+    Ok(())
+}
+/// Strips in one farm estate share an exclusion mask. A street or building
+/// elsewhere in the district cannot remove cropland from this estate.
+fn fit_fields(
+    fields: &mut [Field],
+    excluded: &[Geometry],
+    spatial: &dyn SpatialKernel,
+) -> io::Result<()> {
+    if excluded.is_empty() {
+        return Ok(());
+    }
+    let mut obstructions = atlas_map::spatial::BoundsIndex::default();
+    for shape in excluded {
+        obstructions.push(spatial.bounds(shape).map_err(io::Error::other)?);
+    }
+    // hpc-exempt: group retained field geometries by their estate identity.
+    let mut estates = std::collections::BTreeMap::<u32, (Bounds, Vec<usize>)>::new();
+    for (i, field) in fields.iter().enumerate() {
+        let bounds = spatial.bounds(&field.outline).map_err(io::Error::other)?;
+        let (extent, members) = estates
+            .entry(field.estate)
+            .or_insert_with(|| (bounds, Vec::new()));
+        *extent = Bounds(
+            extent.0.min(bounds.0),
+            extent.1.min(bounds.1),
+            extent.2.max(bounds.2),
+            extent.3.max(bounds.3),
+        );
+        members.push(i);
+    }
+    for (extent, members) in estates.into_values() {
+        let nearby: Vec<_> = obstructions
+            .query(extent)
+            .into_iter()
+            .map(|i| excluded[i].clone())
+            .collect();
+        if nearby.is_empty() {
+            continue;
+        }
+        let Some(mask) = spatial.union_all(&nearby).map_err(io::Error::other)? else {
+            continue;
+        };
+        let strips: Vec<_> = members.iter().map(|&i| fields[i].outline.clone()).collect();
+        let fitted = spatial
+            .overlays(&mask, &strips, Overlay::Difference)
+            .map_err(io::Error::other)?;
+        for (i, result) in members.into_iter().zip(fitted) {
+            if let Some(outline) = result.and_then(atlas_map::regions::polygon) {
+                fields[i].outline = outline;
+            } else {
+                fields[i].suitability = 0.;
             }
         }
     }
-    fabric.fields.retain(|f| f.suitability > 0.);
-    assign(fabric, ground, spatial)?;
     Ok(())
 }
 fn exclude_unworkable_ground(ground: &Ground, excluded: &mut Vec<Geometry>) {
@@ -247,13 +332,16 @@ fn assign(fabric: &mut Fabric, ground: &Ground, spatial: &dyn SpatialKernel) -> 
         .scale()
         .length(settings::FIELD_BLOCK, Measure::Travel);
     for town in &fabric.towns {
-        let access = super::access::Access::for_town(town, spatial)?.on_ground(ground);
         let farms: Vec<_> = town
             .holdings()
             .iter()
             .filter(|h| h.kind.definition().roles.works_fields && h.occupation > 0.2)
             .collect();
         let origins: Vec<_> = farms.iter().map(|h| h.slot.front).collect();
+        if origins.is_empty() {
+            continue;
+        }
+        let access = super::access::Access::for_town(town, spatial)?.on_ground(ground);
         let routes = access.travel_costs(&origins, &targets, spatial)?;
         for (farm, costs) in farms.into_iter().zip(routes) {
             let worker = Worker {
@@ -295,4 +383,31 @@ fn assign(fabric: &mut Fabric, ground: &Ground, spatial: &dyn SpatialKernel) -> 
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod field_tests {
+    use super::*;
+
+    #[test]
+    fn field_strips_face_a_local_road_or_follow_the_estate_boundary() {
+        let spatial = atlas_gis::geometry::NativeGeos::new(0.001).unwrap();
+        let estate = atlas_map::regions::rectangle(Bounds(0., 0., 100., 30.));
+        let centre = Position::xy(50., 15.);
+        let remote = line(&[[0., 100.], [100., 100.]]);
+        let index = spatial.index(std::slice::from_ref(&remote)).unwrap();
+        let front = field_frontage(
+            &estate,
+            centre,
+            std::slice::from_ref(&remote),
+            index.as_ref(),
+            &spatial,
+        )
+        .unwrap();
+        assert!(front[1].abs() > 0.99);
+        let ways = [remote, line(&[[0., 1.], [90., 10.]])];
+        let index = spatial.index(&ways).unwrap();
+        let front = field_frontage(&estate, centre, &ways, index.as_ref(), &spatial).unwrap();
+        assert!(front[0] > 0.99 && front[1] > 0.);
+    }
 }

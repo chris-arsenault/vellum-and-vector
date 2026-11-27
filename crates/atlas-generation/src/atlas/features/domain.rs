@@ -198,28 +198,36 @@ pub(super) fn features() -> Vec<Feature> {
         )],
         "town.develop" => {
             let mut ids = vec!["town.cultivation"];
-            ids.extend(crate::processes::town::operation_ids());
+            // Service access affects premises at the inherited date. The elapsed
+            // sanitation operation would remove the same town's waste on every pass.
+            ids.extend(
+                crate::processes::town::operation_ids()
+                    .into_iter()
+                    .filter(|id| *id != "town.sanitation"),
+            );
             operations(&ids)
         }
         "town.publish" => operations(&[
             "town.cultivation",
-            "real-scale.settlement",
             "town.urban-geography",
+            "real-scale.settlement",
         ]),
         "city.claims" => operations(&["town.land-competition"]),
         "city.invest" => operations(&["town.collective-investment"]),
         "city.routes" => operations(&["town.movement"]),
-        "city.programs" | "city.partition" => vec![invoke(
+        "city.programs" => {
+            let mut settings = Values::from_iter([("strategy".into(), "district-programs".into())]);
+            if let Some(scale) = context.selection["built.layout"]
+                .settings
+                .get("districtCatchmentScale")
+            {
+                settings.insert("districtCatchmentScale".into(), scale.clone());
+            }
+            vec![invoke("town.districts", settings)]
+        }
+        "city.partition" => vec![invoke(
             "town.districts",
-            Values::from_iter([(
-                "strategy".into(),
-                (if slot == "city.programs" {
-                    "district-programs"
-                } else {
-                    "district-partition"
-                })
-                .into(),
-            )]),
+            Values::from_iter([("strategy".into(), "district-partition".into())]),
         )],
         "city.landscape" => operations(&["town.construction"]),
         "city.publish" => operations(&["town.urban-geography"]),

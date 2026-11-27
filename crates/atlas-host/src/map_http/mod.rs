@@ -66,19 +66,7 @@ fn handle(request: &mut Request, services: &Services) -> io::Result<ResponseBox>
             return Ok(Response::empty(415).boxed());
         }
         let body = match path.as_str() {
-            "/api/contexts" => {
-                let call: crate::context_inventory::Call = decode_request(request)?;
-                let result = services
-                    .jobs
-                    .as_ref()
-                    .ok_or_else(|| {
-                        io::Error::other("Context management is not configured on this server")
-                    })?
-                    .contexts(call)?;
-                let mut bytes = Vec::new();
-                ciborium::into_writer(&result, &mut bytes).map_err(io::Error::other)?;
-                bytes
-            }
+            "/api/contexts" => context_response(services, decode_request(request)?)?,
             "/api/generation" => {
                 let call: crate::native_jobs::Call = decode_request(request)?;
                 let result = services
@@ -182,6 +170,22 @@ fn handle(request: &mut Request, services: &Services) -> io::Result<ResponseBox>
             .with_header(header("Content-Type", "application/json")?)
             .boxed(),
     )
+}
+fn context_response(
+    services: &Services,
+    call: crate::context_inventory::Call,
+) -> io::Result<Vec<u8>> {
+    let mut bytes = Vec::new();
+    if matches!(call, crate::context_inventory::Call::Maps) {
+        let maps = lock(&services.reader)?.map_index()?;
+        ciborium::into_writer(&maps, &mut bytes).map_err(io::Error::other)?;
+    } else {
+        let jobs = services.jobs.as_ref().ok_or_else(|| {
+            io::Error::other("Context management is not configured on this server")
+        })?;
+        ciborium::into_writer(&jobs.contexts(call)?, &mut bytes).map_err(io::Error::other)?;
+    }
+    Ok(bytes)
 }
 fn lock(store: &Mutex<PostgresMaps>) -> io::Result<MutexGuard<'_, PostgresMaps>> {
     store

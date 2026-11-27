@@ -31,6 +31,8 @@ export type DeleteContext =
   | { kind: "orphan"; orphan: OrphanContext }
   | { kind: "cleanup"; id: string };
 export interface ContextManagement {
+  /** Navigation rows before the full inventory checks individual revisions and retained files. */
+  maps(options?: ReadOptions): Promise<StoredContext[]>;
   list(options?: ReadOptions): Promise<ContextInventory>;
   delete(target: DeleteContext, options?: ReadOptions): Promise<ContextInventory>;
 }

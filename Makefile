@@ -91,6 +91,10 @@ local-up:
 local-down:
 	scripts/local-atlas.sh down
 
+.PHONY: local-sql
+local-sql:
+	@scripts/local-atlas.sh sql
+
 local-world:
 	scripts/local-atlas.sh world
 

@@ -436,8 +436,9 @@ impl FabricOwner for Town {
                 Ok(EditOutcome::Premises(premises))
             }
             FabricEdit::Connect { street, priority } => {
+                use crate::town::network::Class;
                 let target =
-                    Placement::Access(if street.class == crate::town::network::Class::Lane {
+                    Placement::Access(if matches!(street.class, Class::Lane | Class::Alley) {
                         crate::town::catalogue::AccessUse::Foot
                     } else {
                         crate::town::catalogue::AccessUse::Freight

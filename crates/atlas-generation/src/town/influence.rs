@@ -60,6 +60,10 @@ pub struct Conditions {
     pub workshops: f64,
     pub exchange: f64,
     pub population: f64,
+    pub standing: Option<f64>,
+    pub housing_demand: f64,
+    pub common_demand: f64,
+    pub garden_demand: f64,
     pub cultivated: f64,
     pub rooted: bool,
     pub rural_service: f64,
@@ -168,6 +172,82 @@ pub(crate) enum FrontageRead {
     HouseholdDemand,
     Construction,
 }
+
+/// An undirected street journey costs the same from either door. When few
+/// frontages are available, search from each of them to the competing livelihoods.
+pub(crate) fn household_demand_from_sites(
+    sources: &[OpportunitySource],
+    competitors: impl Fn(&OpportunitySource) -> f64,
+    reading: Reading<'_>,
+    sites: &[usize],
+    queries: &mut super::access::DistanceQueries<'_>,
+) -> Option<Vec<Opportunities>> {
+    let mut offers: Vec<_> = sources
+        .iter()
+        .enumerate()
+        .filter(|(_, s)| s.productive.is_none() && compatible(Activity::Household, s.activity))
+        .map(|(origin, s)| (s.id, origin))
+        .collect();
+    if sites.len() >= offers.len() {
+        return None;
+    }
+    // hpc-exempt: alternate entrances share one demand, with ties resolved in provider order.
+    offers.sort_by_key(|offer| offer.0);
+    let mut entrances = Vec::new();
+    let mut groups = 0;
+    for alternatives in offers.chunk_by(|a, b| a.0 == b.0) {
+        if alternatives
+            .iter()
+            .any(|&(_, origin)| sources[origin].demand != 0.)
+        {
+            entrances.extend(alternatives.iter().map(|&(_, origin)| (origin, groups)));
+            groups += 1;
+        }
+    }
+    if sites.len() >= entrances.len() {
+        return None;
+    }
+    let providers = queries.destinations(
+        entrances
+            .iter()
+            .enumerate()
+            .map(|(i, &(origin, _))| (origin, i)),
+    );
+    let weights: Vec<_> = entrances
+        .iter()
+        .map(|&(origin, _)| {
+            let s = &sources[origin];
+            s.demand / (1. + competitors(s))
+        })
+        .collect();
+    let reach = reading
+        .scale
+        .length(super::settings::DAILY_REACH, Measure::Travel);
+    let mut nearest = vec![(f64::INFINITY, usize::MAX); groups];
+    let mut reached_groups = Vec::new();
+    let mut result = Vec::with_capacity(sites.len());
+    for (&site, &conditions) in sites.iter().zip(reading.sites) {
+        queries.within(site, reach);
+        queries.reached(&providers, reach, |offer, cost| {
+            let group = entrances[offer].1;
+            if nearest[group].1 == usize::MAX {
+                reached_groups.push(group);
+            }
+            if (cost, offer) < nearest[group] {
+                nearest[group] = (cost, offer);
+            }
+        });
+        let mut total = Totals::default();
+        for group in reached_groups.drain(..) {
+            let (cost, offer) = std::mem::replace(&mut nearest[group], (f64::INFINITY, usize::MAX));
+            total.demand += weights[offer] * pull(cost, reading.scale);
+        }
+        let mut opportunities = Opportunities::default();
+        opportunities.activities[Activity::Household as usize] = total.finish(conditions);
+        result.push(opportunities);
+    }
+    Some(result)
+}
 /// `distances(source, visit)` names each site the source reaches and its travel cost;
 /// a site it does not name is out of reach. Travel costs are read at the reading's scale.
 pub(crate) fn frontage_support(
@@ -238,6 +318,27 @@ fn batch<'a, const N: usize>(
     // (site, offer within its identity's group, travel cost) for each site a group reaches.
     let mut reached: Vec<(usize, usize, f64)> = Vec::new();
     for group in order.chunk_by(|a, b| a.source.id == b.source.id) {
+        if N == 1 && group.iter().all(|offer| offer.source.demand == 0.) {
+            continue;
+        }
+        // Most offers come from one holding at one entrance. Its one distance
+        // per site already identifies the cheapest access to this source.
+        if let [offer] = group {
+            let serves = activities.map(|activity| compatible(activity, offer.source.activity));
+            distances(offer.origin, &mut |site, cost| {
+                if cost.is_finite() {
+                    for (a, &yes) in serves.iter().enumerate() {
+                        if yes {
+                            accumulate(&mut totals[site][a], offer, cost);
+                        }
+                    }
+                    if N > 1 {
+                        add_custom(offer, cost, &mut audience[site], scale);
+                    }
+                }
+            });
+            continue;
+        }
         reached.clear();
         for (member, offer) in group.iter().enumerate() {
             distances(offer.origin, &mut |site, cost| {
@@ -289,12 +390,18 @@ fn collect_custom(
         let Some(&(site, member, cost)) = paths.iter().min_by(|a, b| a.2.total_cmp(&b.2)) else {
             continue;
         };
-        let offer = &group[member];
-        let Some(clientele) = offer.source.clientele.filter(|_| offer.unserved > 0.) else {
-            continue;
-        };
+        add_custom(&group[member], cost, &mut audience[site], scale);
+    }
+}
+fn add_custom(
+    offer: &Offer<'_>,
+    cost: f64,
+    audience: &mut [f64; super::effects::Clientele::ALL.len()],
+    scale: TownScale,
+) {
+    if let Some(clientele) = offer.source.clientele.filter(|_| offer.unserved > 0.) {
         let draw = clientele.draw(1., cost, scale);
-        audience[site][clientele as usize] +=
+        audience[clientele as usize] +=
             offer.unserved * draw / (1. + draw * offer.unserved / offer.source.demand);
     }
 }
@@ -314,6 +421,11 @@ impl Opportunities {
     }
     pub fn for_activity(&self, activity: Activity) -> &Support {
         &self.activities[activity as usize]
+    }
+    pub(crate) fn add_local(&mut self, activity: Activity, demand: f64, cost: f64) {
+        let support = &mut self.activities[activity as usize];
+        support.demand += demand.max(0.);
+        support.burden = (support.burden + cost).max(0.);
     }
 }
 /// Households seek livelihoods; occupied households supply an audience for workplaces.
@@ -337,6 +449,68 @@ pub fn support_for(
         conditions,
         scale,
     )
+}
+
+/// All premises in a development round read the same providers. Group their
+/// alternative entrances once, then compare only the paths one holding reaches.
+pub(crate) struct OperatingSupport<'a> {
+    sources: &'a [OpportunitySource],
+    group: Vec<usize>,
+    nearest: Vec<Option<(usize, f64, f64)>>,
+    reached: Vec<usize>,
+}
+
+impl<'a> OperatingSupport<'a> {
+    pub(crate) fn new(sources: &'a [OpportunitySource]) -> Self {
+        let mut order: Vec<_> = (0..sources.len())
+            .filter(|&i| sources[i].productive.is_none())
+            .collect();
+        // hpc-exempt: alternative entrances of the same economic provider share an identity.
+        order.sort_unstable_by_key(|&i| sources[i].id);
+        let mut group = vec![usize::MAX; sources.len()];
+        let mut nearest = Vec::new();
+        for alternatives in order.chunk_by(|&a, &b| sources[a].id == sources[b].id) {
+            for &i in alternatives {
+                group[i] = nearest.len();
+            }
+            nearest.push(None);
+        }
+        Self {
+            sources,
+            group,
+            nearest,
+            reached: Vec::new(),
+        }
+    }
+
+    pub(crate) fn offer(&mut self, i: usize, activity: Activity, cost: f64, competitors: f64) {
+        let group = self.group[i];
+        if group == usize::MAX
+            || !cost.is_finite()
+            || !compatible(activity, self.sources[i].activity)
+        {
+            return;
+        }
+        let current = &mut self.nearest[group];
+        if current.is_none() {
+            self.reached.push(group);
+        }
+        if current.is_none_or(|(old, best, _)| (cost, i) < (best, old)) {
+            *current = Some((i, cost, competitors));
+        }
+    }
+
+    pub(crate) fn finish(&mut self, conditions: Conditions, scale: TownScale) -> Support {
+        // hpc-exempt: resolve equally strong providers in their stable identity order.
+        self.reached.sort_unstable();
+        let mut total = Totals::default();
+        for group in self.reached.drain(..) {
+            if let Some((i, cost, competitors)) = self.nearest[group].take() {
+                total.add(&self.sources[i], cost, competitors, scale);
+            }
+        }
+        total.finish(conditions)
+    }
 }
 /// Bind a counterparty for an actual use. Retained custom favours an operating
 /// relationship while an unavailable destination gradually loses its strength.
@@ -602,6 +776,16 @@ mod tests {
             support(&paths, Conditions::default(), TownScale::default()).demand,
             4.
         );
+        let scale = TownScale::default();
+        let alternatives = [source.clone(), source];
+        let mut operating = OperatingSupport::new(&alternatives);
+        operating.offer(0, Activity::Household, 100., 2.);
+        operating.offer(1, Activity::Household, 0., 2.);
+        assert_eq!(operating.finish(Conditions::default(), scale).demand, 4.);
+        // The next holding has no path to the second entrance.
+        operating.offer(0, Activity::Household, 0., 0.);
+        assert_eq!(operating.finish(Conditions::default(), scale).demand, 12.);
+        assert_eq!(operating.finish(Conditions::default(), scale).demand, 0.);
     }
     #[test]
     fn blocked_access_and_competition_have_distinct_effects() {

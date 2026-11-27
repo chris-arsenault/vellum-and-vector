@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type { DeleteContext, GenerationStatus, StoredContext } from "@atlas/context";
 import type { MapRef, MapNavigationState, SavedMapDocument } from "@atlas/map";
@@ -11,14 +11,28 @@ export interface LibraryProps {
   observe(job: GenerationStatus): void;
   retained(mapIds: Set<string>): void;
 }
+export function useStoredMaps(context: Pick<FinishedContext, "contexts" | "mode">) {
+  return useQuery({
+    queryKey: ["stored-contexts", context.mode, "maps"],
+    queryFn: ({ signal }) => context.contexts.maps({ signal }),
+  });
+}
 export function useContextLibrary(props: LibraryProps) {
   const { context, open, observe } = props;
   const cache = useQueryClient();
   const [deleting, confirmDelete] = useState<{ target: DeleteContext; name: string } | null>(null);
+  const maps = useStoredMaps(context);
   const inventory = useQuery({
     queryKey: ["stored-contexts", context.mode],
     queryFn: ({ signal }) => context.contexts.list({ signal }),
+    enabled: !maps.isPending,
   });
+  const contents = useMemo(
+    () =>
+      inventory.data ??
+      (maps.data && { maps: maps.data, jobs: [], orphans: [], cleanup: [], problems: [] }),
+    [inventory.data, maps.data]
+  );
   const jobs = useQuery({
     queryKey: ["generation-jobs", context.mode],
     queryFn: ({ signal }) => context.generation.jobs({ signal }),
@@ -26,8 +40,11 @@ export function useContextLibrary(props: LibraryProps) {
   });
   const opening = useMutation({
     mutationFn: async (map: StoredContext) => {
-      await context.maps.open(map.reference);
-      const saved = await context.library.find(map.reference.mapId);
+      const [descriptor, saved] = await Promise.all([
+        context.maps.open(map.reference),
+        context.library.find(map.reference.mapId),
+      ]);
+      cache.setQueryData(["finished-map", map.reference], descriptor);
       return {
         reference: map.reference,
         saved: saved?.reference.revision === map.reference.revision ? saved : undefined,
@@ -42,6 +59,7 @@ export function useContextLibrary(props: LibraryProps) {
   const remove = useMutation({
     mutationFn: (target: DeleteContext) => context.contexts.delete(target),
     onSuccess: (value) => {
+      cache.setQueryData(["stored-contexts", context.mode, "maps"], value.maps);
       cache.setQueryData(["stored-contexts", context.mode], value);
       props.retained(new Set(value.maps.map((map) => map.reference.mapId)));
       const retained = new Set(value.maps.map((map) => map.reference.mapId));
@@ -58,7 +76,9 @@ export function useContextLibrary(props: LibraryProps) {
     },
   });
   return {
+    maps,
     inventory,
+    contents,
     jobs,
     deleting,
     confirmDelete,

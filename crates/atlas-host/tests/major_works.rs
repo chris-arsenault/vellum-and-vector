@@ -75,6 +75,7 @@ fn build(town: &mut Town, ground: &mut Ground, spatial: &dyn SpatialKernel) {
         town,
         &mut Frontage {
             walking_ground: &walking,
+            channel_depth: &|_| Ok(None),
             outlying: &[],
             links: &links,
             sources: &[],

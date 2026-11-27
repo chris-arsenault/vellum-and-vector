@@ -261,7 +261,7 @@ pub fn width_outline(
         }
         let (nx, ny) = (-(by - ay) / length, (bx - ax) / length);
         let (ha, hb) = (widths[i] / 2.0, widths[i + 1] / 2.0);
-        parts.push(ring(&[
+        parts.extend(ring(&[
             [ax + nx * ha, ay + ny * ha],
             [bx + nx * hb, by + ny * hb],
             [bx - nx * hb, by - ny * hb],
@@ -269,18 +269,30 @@ pub fn width_outline(
         ]));
     }
     for (point, width) in points.iter().zip(widths) {
-        parts.push(disc(*point, width / 2.0));
+        parts.extend(disc(*point, width / 2.0));
+    }
+    if parts.is_empty() {
+        return Ok(None);
     }
     spatial.union_all(&parts)
 }
-fn ring(corners: &[[f64; 2]]) -> Geometry {
+fn ring(corners: &[[f64; 2]]) -> Option<Geometry> {
+    // A narrow track's left and right edges can coincide at world coordinates.
+    // A convex strip or cap contributes a surface only if it spans a triangle.
+    let [x, y] = corners[0];
+    if !corners[1..].windows(2).any(|pair| {
+        let [a, b] = [pair[0], pair[1]];
+        (a[0] - x) * (b[1] - y) != (a[1] - y) * (b[0] - x)
+    }) {
+        return None;
+    }
     let mut ring: Vec<_> = corners.iter().map(|&[x, y]| Position::xy(x, y)).collect();
     ring.push(ring[0]);
-    Geometry::Polygon {
+    Some(Geometry::Polygon {
         coordinates: vec![ring],
-    }
+    })
 }
-fn disc([x, y]: [f64; 2], radius: f64) -> Geometry {
+fn disc([x, y]: [f64; 2], radius: f64) -> Option<Geometry> {
     let corners: Vec<_> = (0..16)
         .map(|i| {
             let angle = f64::from(i) * std::f64::consts::TAU / 16.0;

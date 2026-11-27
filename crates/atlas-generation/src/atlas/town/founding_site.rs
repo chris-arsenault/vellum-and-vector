@@ -71,8 +71,8 @@ pub(crate) fn observe_landscape(
     Ok(())
 }
 impl<'a> Context<'a> {
-    pub fn new(state: &'a State, seats: &[Seat]) -> io::Result<Self> {
-        let records = providers::contextual_features(state)?
+    pub fn new(state: &'a State, seats: &[Seat], neighbours: Vec<Feature>) -> io::Result<Self> {
+        let records = neighbours
             .into_iter()
             .filter(|feature| {
                 state.catalogue.offers_for(feature).is_some()

@@ -4,7 +4,7 @@ use crate::town::{
     access::{Access, Entrance},
     catalogue::{AccessUse, Operation, PlaceRules},
     fabric::{Endpoint, Town},
-    influence::{operating_tie, respond, support_for, Reachable},
+    influence::{operating_tie, respond, OperatingSupport, Reachable},
     scale::{Measure, TownScale},
 };
 use std::io;
@@ -107,6 +107,15 @@ fn competing_claims(town: &Town) -> ([f64; 7], Commitments) {
 }
 pub fn advance(town: &mut Town, context: &Livelihood<'_>) -> io::Result<()> {
     let (competitors, commitments) = competing_claims(town);
+    // Every reachable household or business sees the same custom already
+    // committed to this offer. Resolve it once for the current round.
+    let committed: Vec<_> = context
+        .sources
+        .iter()
+        .map(|s| {
+            commitments.get(&s.endpoint).copied().unwrap_or(0.) / (1. + s.demand + s.capability)
+        })
+        .collect();
     let floor_areas = town
         .holdings()
         .iter()
@@ -184,6 +193,9 @@ pub fn advance(town: &mut Town, context: &Livelihood<'_>) -> io::Result<()> {
         })
         .collect::<Vec<_>>();
     let mut dues = 0.;
+    let mut reached = Vec::new();
+    let mut paths = Vec::new();
+    let mut operating = OperatingSupport::new(context.sources);
     for (i, needs) in modes.iter().enumerate() {
         let holding = &town.holdings()[i];
         let conditions = context.conditions.get(i).copied().unwrap_or_default();
@@ -207,22 +219,32 @@ pub fn advance(town: &mut Town, context: &Livelihood<'_>) -> io::Result<()> {
                 || productive[i].iter().any(|need| need.access.contains(mode))
         }) {
             routes.within(i, reach);
-            let mut reached = Vec::new();
+            reached.clear();
             routes.reached(sources, reach, |j, cost| reached.push((j, cost)));
             // hpc-exempt: reached sources in provider order, so equal offers resolve as listed.
             reached.sort_unstable_by_key(|&(j, _)| j);
-            let paths: Vec<_> = reached
-                .into_iter()
-                .map(|(j, cost)| (&context.sources[j], cost))
-                .filter(|(s, _)| s.endpoint != own_source)
-                .map(|(source, cost)| Reachable {
+            paths.clear();
+            let reads_support = *mode
+                == holding
+                    .secondary
+                    .unwrap_or(holding.kind)
+                    .definition()
+                    .operating_access();
+            paths.extend(reached.iter().filter_map(|&(j, cost)| {
+                let source = &context.sources[j];
+                if source.endpoint == own_source {
+                    return None;
+                }
+                let competition = competitors[activity as usize] + committed[j];
+                if reads_support {
+                    operating.offer(j, activity, cost, competition);
+                }
+                Some(Reachable {
                     source,
                     cost,
-                    competitors: competitors[activity as usize]
-                        + commitments.get(&source.endpoint).copied().unwrap_or(0.)
-                            / (1. + source.demand + source.capability),
+                    competitors: competition,
                 })
-                .collect();
+            }));
             crate::town::production::compare_partners(
                 &productive[i],
                 &paths,
@@ -231,14 +253,8 @@ pub fn advance(town: &mut Town, context: &Livelihood<'_>) -> io::Result<()> {
                 &mut partners,
                 scale,
             );
-            if *mode
-                == holding
-                    .secondary
-                    .unwrap_or(holding.kind)
-                    .definition()
-                    .operating_access()
-            {
-                opportunity = support_for(activity, &paths, conditions, scale);
+            if reads_support {
+                opportunity = operating.finish(conditions, scale);
             }
             ties.extend(ordinary_ties(
                 holding,
@@ -293,7 +309,8 @@ pub fn advance(town: &mut Town, context: &Livelihood<'_>) -> io::Result<()> {
         let crowding = if place.roles.dwelling {
             let living_space = floor_areas[i].living;
             let neighbours = conditions.households / (1. + conditions.households);
-            let local_pressure = neighbours * conditions.density / (1. + conditions.density);
+            let local_pressure = neighbours * (conditions.density + conditions.housing_demand)
+                / (1. + conditions.density + conditions.housing_demand);
             (pressure + local_pressure) * (1. - means) * occupation
                 / (1. + living_space / (HOUSEHOLD_SPACE * scale.premises()))
         } else {

@@ -22,13 +22,13 @@ export function useViewedChrome(
   viewed: ViewedChrome | undefined
 ) {
   const [appearance, change] = useState(() =>
-    startingPresentation(map, saved, viewed?.read()?.presentation ?? null)
+    startingPresentation(map, saved, viewed?.read() ?? null)
   );
   const [tool, setRegionTool] = useState(() => usableTool(viewed?.read()?.tool, map));
   const [panel, showPanel] = useState(() => viewed?.read()?.panel ?? "regions");
   useEffect(
-    () => viewed?.write({ presentation: appearance, panel, tool }),
-    [viewed, appearance, panel, tool]
+    () => viewed?.write(map, { presentation: appearance, panel, tool }),
+    [map, viewed, appearance, panel, tool]
   );
   return { appearance, change, tool, setRegionTool, panel, showPanel };
 }

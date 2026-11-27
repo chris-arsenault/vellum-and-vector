@@ -2,9 +2,10 @@ import LayerGroup from "ol/layer/Group.js";
 import type Projection from "ol/proj/Projection.js";
 import type { MapDescriptor, MapLayer, MapReader } from "@atlas/map";
 import { terrainLayerId } from "@atlas/map";
-import { publishedRaster, publishedStyle } from "./publishedRaster";
+import { publishedRaster, publishedStyle, type RasterView } from "./publishedRaster";
 import { configureTerrainContours } from "./terrainContours";
 import type { FieldStyle, RasterPresentation } from "./types";
+import { vectorFamily } from "./renderFeature";
 
 /** Immutable map assets stay open across appearance changes; only visible overlays are fetched. */
 export class PublishedMapLayers {
@@ -24,8 +25,9 @@ export class PublishedMapLayers {
     private readonly spaceId = descriptor.primarySpaceId
   ) {}
 
-  async update(presentation: RasterPresentation) {
+  async update(settings: RasterPresentation) {
     const sequence = ++this.sequence;
+    const presentation = { ...settings, settlement: this.settlementSurface() };
     const enabled = new Map(
       presentation.fields.filter((field) => field.visible).map((field) => [field.channel, field])
     );
@@ -62,7 +64,16 @@ export class PublishedMapLayers {
       if (field.visible && layer) this.overlays.getLayers().push(layer);
     }
   }
-  private open(layer: MapLayer, presentation: RasterPresentation, field?: FieldStyle) {
+  private settlementSurface() {
+    if (this.descriptor.realScale?.kind !== "ground") return false;
+    const structures = this.descriptor.layers.find(
+      (layer) => layer.spaceId === this.spaceId && vectorFamily(layer.id) === "structures"
+    );
+    return structures?.catalog.featureTypes.some(
+      (type) => type.kind === "building" && type.count > 0
+    );
+  }
+  private open(layer: MapLayer, presentation: RasterView, field?: FieldStyle) {
     const key = layerKey(layer, field);
     const held = this.layers.get(key);
     if (held) return Promise.resolve(held);
@@ -133,7 +144,7 @@ export class PublishedMapLayers {
 function applyRasterStyle(
   layer: MapLayer,
   raster: ReturnType<typeof publishedRaster>,
-  presentation: RasterPresentation,
+  presentation: RasterView,
   field?: FieldStyle
 ) {
   if (layer.source.kind !== "raster") return;

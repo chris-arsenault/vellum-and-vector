@@ -26,6 +26,183 @@ pub(super) const USES: [&str; 6] = [
     "Working ground",
     "Common ground",
 ];
+pub(super) struct SettlementGround {
+    centre: atlas_map::Position,
+    radius: f64,
+    neighbours: Vec<Geometry>,
+}
+impl SettlementGround {
+    pub(super) fn captured(state: &State) -> io::Result<Self> {
+        let policy = policy(state)?;
+        let city = crate::atlas::regional::city::captured_settlement(state)?;
+        let radius = city
+            .as_ref()
+            .and_then(|f| f.attributes.get("builtKm2"))
+            .and_then(serde_json::Value::as_f64)
+            .filter(|&km2| km2 > 0.)
+            .map_or(policy.quarter(), |km2| {
+                (km2 * 1e6 / std::f64::consts::PI).sqrt()
+            });
+        let id = state.scope.city.as_ref().map(|c| c.settlement);
+        let neighbours = super::values(state, "settlement")?
+            .into_iter()
+            .filter(|f| Some(f.id) != id && crate::field::poi::reads::inhabited(f))
+            .map(|f| f.geometry)
+            .collect();
+        Ok(Self {
+            centre: pos(policy.site.centre),
+            radius,
+            neighbours,
+        })
+    }
+}
+
+/// Nearby occupied banks and banks connected by a surveyed bridge belong to one
+/// settlement. The space used to find those neighbours stays outside its land.
+pub(super) fn principal_ground(
+    kernel: &dyn SpatialKernel,
+    ground: &Geometry,
+    settlement: &SettlementGround,
+    quarter: f64,
+    crossings: &[Geometry],
+) -> io::Result<Option<Geometry>> {
+    let mut joins = vec![ground.clone()];
+    joins.extend_from_slice(crossings);
+    let Some(joined) = kernel.union_all(&joins).map_err(io::Error::other)? else {
+        return Ok(None);
+    };
+    let Some(neighborhoods) = kernel
+        .buffer(&joined, quarter / 2.)
+        .map_err(io::Error::other)?
+    else {
+        return Ok(None);
+    };
+    let seat = point(settlement.centre);
+    let nearby = kernel
+        .index(&settlement.neighbours)
+        .map_err(io::Error::other)?;
+    let mut settled = Vec::new();
+    let mut principal = None;
+    let mut best = 0.;
+    for area in parts(&neighborhoods) {
+        let Some(occupied) = kernel
+            .overlay(ground, &area, Overlay::Intersection)
+            .map_err(io::Error::other)?
+            .and_then(atlas_map::regions::polygon)
+        else {
+            continue;
+        };
+        let m2 = kernel.area(&occupied).map_err(io::Error::other)?;
+        let distance = kernel
+            .distance(&occupied, &seat)
+            .map_err(io::Error::other)?;
+        let atlas_map::Bounds(w, s, e, n) = kernel.bounds(&occupied).map_err(io::Error::other)?;
+        let search = atlas_map::Bounds(w - distance, s - distance, e + distance, n + distance);
+        let mut separate = false;
+        for i in nearby.query(search).map_err(io::Error::other)? {
+            if kernel
+                .distance(&occupied, &settlement.neighbours[i])
+                .map_err(io::Error::other)?
+                < distance
+            {
+                separate = true;
+                break;
+            }
+        }
+        if separate {
+            continue;
+        }
+        if distance <= settlement.radius {
+            settled.push(occupied);
+            continue;
+        }
+        let score = m2 / (1. + distance / quarter).powi(2);
+        if score > best {
+            best = score;
+            principal = Some(occupied);
+        }
+    }
+    if settled.is_empty() {
+        return Ok(principal);
+    }
+    kernel.union_all(&settled).map_err(io::Error::other)
+}
+
+pub(super) fn crossings(u: &Urban, mesh: &crate::lattice::TriangularLattice) -> Vec<Geometry> {
+    u.bridge_links(mesh)
+        .into_iter()
+        .map(|deck| super::geometry::line(&[position(mesh, deck.a), position(mesh, deck.b)]))
+        .collect()
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod district_ground_tests {
+    use super::*;
+    use atlas_map::{regions::rectangle, Bounds, Position};
+
+    #[test]
+    fn district_ground_accepts_inhabited_housing_without_built_stock() {
+        let housing = super::super::fields::Claims {
+            home: 0.7,
+            people: 1400.,
+            ..Default::default()
+        };
+        let farmland = super::super::fields::Claims {
+            home: 0.02,
+            people: 30.,
+            farm: 0.65,
+            ..Default::default()
+        };
+        let eligible = |claim| {
+            let occupied = occupation(claim, 0.4, 0., 0., true);
+            district_margin(occupied, 1.) > 0.
+        };
+        assert!(eligible(housing));
+        assert!(!eligible(farmland));
+        assert!(!eligible(super::super::fields::Claims {
+            reserved: true,
+            ..housing
+        }));
+    }
+
+    #[test]
+    fn principal_city_keeps_detached_homes_and_a_bridged_bank_without_taking_a_neighboring_town() {
+        let k = atlas_gis::geometry::NativeGeos::new(0.001).unwrap();
+        let a = rectangle(Bounds(-70., -40., 60., 40.));
+        let b = rectangle(Bounds(240., -40., 340., 40.));
+        let detached = rectangle(Bounds(-15., 105., 15., 135.));
+        let other_town = rectangle(Bounds(480., -40., 560., 40.));
+        let ground = k.union_all(&[a, b, detached, other_town]).unwrap().unwrap();
+        let settlement = SettlementGround {
+            centre: Position::xy(0., 0.),
+            radius: 150.,
+            neighbours: vec![point(Position::xy(520., 0.))],
+        };
+        let sites = [[0., 0.], [290., 0.], [0., 120.], [520., 0.], [150., 0.]].map(pos);
+        let membership = |crossings: &[Geometry]| {
+            let g = principal_ground(&k, &ground, &settlement, 30., crossings)
+                .unwrap()
+                .unwrap();
+            k.covers_points(&g, &sites).unwrap()
+        };
+        assert_eq!(membership(&[]), [true, false, true, false, false]);
+        let mesh = crate::lattice::WorldLatticeOptions::default()
+            .build(Bounds(-150., -150., 750., 200.), 100., 0., |_, _| true)
+            .unwrap();
+        let mut u = Urban::default();
+        let deck = super::super::geometry::line(&[[50., 0.], [250., 0.]]);
+        let mut bridge = Element::way(deck, "thoroughfare", "Avenue", 8.);
+        bridge.attributes.insert(
+            "roadFeatures".into(),
+            serde_json::json!([{"kind":"bridge", "segment":0}]),
+        );
+        u.routes.push(bridge);
+        assert_eq!(
+            membership(&crossings(&u, &mesh)),
+            [true, true, true, false, false]
+        );
+    }
+}
 
 pub(super) fn contour(state: &State, values: &[f64], level: f64) -> io::Result<Option<Geometry>> {
     let members: Vec<_> = values
@@ -184,6 +361,25 @@ pub(super) fn develop(
     Ok(())
 }
 
+fn occupation(
+    x: super::fields::Claims,
+    access: f64,
+    civic: f64,
+    commons: f64,
+    inside: bool,
+) -> f64 {
+    if x.reserved || !inside {
+        return 0.;
+    }
+    let reserve = 1. + x.farm * 2. + x.ruin * 3. + civic * commons;
+    (x.home * (0.70 + 0.42 * access) + x.work * 0.65 + x.built * 3. + civic * 0.5) / reserve
+}
+
+fn district_margin(occupied: f64, demand: f64) -> f64 {
+    // The interior prior strengthens local claims. It cannot claim unoccupied land on its own.
+    occupied + 1.25 * demand * occupied.min(1.) - 0.68
+}
+
 fn land_use_bids(
     u: &mut Urban,
     mesh: &crate::lattice::TriangularLattice,
@@ -199,14 +395,10 @@ fn land_use_bids(
         let access = u.fields.access[c];
         let civic = u.fields.civic[c];
         let work = u.work_at(c);
-        let reserve = 1. + x.farm * 2. + x.ruin * 3. + civic * work.commons;
         // Actual occupied land can follow an approach well beyond the contiguous core.
-        let occupied = if x.reserved || !u.fields.inside[c] {
-            0.
-        } else {
-            (x.home * (0.70 + 0.42 * access) + x.work * 0.65 + x.built * 3. + civic * 0.5) / reserve
-        };
+        let occupied = occupation(x, access, civic, work.commons, u.fields.inside[c]);
         u.fields.developed[c] = occupied;
+        let tract_margin = occupied - 0.40;
         let program = super::programs::at(u, c);
         let prior = u.fields.stencil[c];
         let demand = if x.reserved || x.people + x.built <= 0. {
@@ -214,7 +406,7 @@ fn land_use_bids(
         } else {
             prior
         };
-        main[c] = occupied + 1.25 * demand;
+        main[c] = district_margin(occupied, demand);
         let strength = program.map_or(0., |p| p.strength) * demand;
         let demands = x.demands;
         let local = program.map_or(0., |p| {
@@ -243,9 +435,9 @@ fn land_use_bids(
             .iter_mut()
             .zip([(bids[3], bids[4]), (bids[4], bids[3])])
         {
-            layer[c] = (occupied - 0.4).min(bid - (0.80 * housing).max(other));
+            layer[c] = tract_margin.min(bid - (0.80 * housing).max(other));
         }
-        layers[0][c] = occupied - 0.40;
+        layers[0][c] = tract_margin;
         for kind in 1..bids.len() {
             let other = bids
                 .iter()
@@ -253,7 +445,7 @@ fn land_use_bids(
                 .filter(|(i, _)| *i != kind)
                 .map(|(_, v)| *v)
                 .fold(0., f64::max);
-            layers[kind][c] = (occupied - 0.4).min(bids[kind] - other);
+            layers[kind][c] = tract_margin.min(bids[kind] - other);
         }
     }
     main
@@ -307,6 +499,17 @@ fn reserve_public_ground(
                 };
                 let mut area = ground(shape.clone(), "Civic precinct");
                 area.name = format!("{} precinct", s.name);
+                let at = k.interior_position(&shape).map_err(io::Error::other)?;
+                if let Some(c) = crate::field::refinement::courses::cell_at(
+                    state.field().mesh(),
+                    super::geometry::xy(at),
+                ) {
+                    let claims = u.fields.claims[c];
+                    area.attributes
+                        .insert("density".into(), claims.people.into());
+                    area.attributes
+                        .insert("builtShare".into(), claims.built.into());
+                }
                 area.attributes
                     .insert("sponsor".into(), s.source.clone().into());
                 u.blocks.push(area);
@@ -334,21 +537,30 @@ fn districtable_ground(
     let mesh = state.field().mesh();
     let template = policy(state)?;
     u.domain = None;
-    if let Some(shape) = contour(state, main, 0.68)? {
+    if let Some(shape) = contour(state, main, 0.)? {
         let reach = template.quarter().max(mesh.spacing()) * 0.60;
         if let Some(expanded) = k.buffer(&shape, reach).map_err(io::Error::other)? {
             if let Some(closed) = k.buffer(&expanded, -reach).map_err(io::Error::other)? {
-                let pieces = parts(&closed);
-                let centre = point(pos(template.site.centre));
-                let mut best = 0.;
-                for g in pieces {
-                    let area = k.area(&g).map_err(io::Error::other)?;
-                    let distance = k.distance(&g, &centre).map_err(io::Error::other)?;
-                    let score = area * (1. + 1. / (1. + distance / reach));
-                    if score > best {
-                        best = score;
-                        u.domain = Some(g);
+                let mut settled = Vec::new();
+                for g in parts(&closed) {
+                    if k.relation(
+                        &g,
+                        state.scope.settled_outline(),
+                        crate::spatial::Predicate::Intersects,
+                    )
+                    .map_err(io::Error::other)?
+                    {
+                        settled.push(g);
                     }
+                }
+                if let Some(occupied) = union(&settled)? {
+                    u.domain = principal_ground(
+                        k,
+                        &occupied,
+                        &SettlementGround::captured(state)?,
+                        template.quarter(),
+                        &crossings(u, mesh),
+                    )?;
                 }
             }
         }

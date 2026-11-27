@@ -1,7 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
 import type { AtlasContext, StoredContext } from "@atlas/context";
 import type { MapDescriptor, MapRef } from "@atlas/map";
 import { ErrorMessage } from "./ErrorMessage";
+import { useStoredMaps } from "./useContextLibrary";
 
 type Context = Pick<AtlasContext<unknown>, "contexts" | "mode">;
 interface Tree {
@@ -82,11 +82,8 @@ export function MapTree({
   map: MapDescriptor;
   open(reference: MapRef): void;
 }) {
-  const inventory = useQuery({
-    queryKey: ["stored-contexts", context.mode],
-    queryFn: ({ signal }) => context.contexts.list({ signal }),
-  });
-  const tree = inventory.data && buildTree(inventory.data.maps, map.reference.mapId);
+  const inventory = useStoredMaps(context);
+  const tree = inventory.data && buildTree(inventory.data, map.reference.mapId);
   return (
     <nav className="region-list map-tree" aria-label="Maps">
       <h3>Worlds and maps</h3>

@@ -6,8 +6,6 @@ pub(crate) mod founding_site;
 mod held_ground;
 mod providers;
 pub mod site;
-use super::state::State;
-use crate::execution::{Command, CommandKind};
 use story::Layout;
 
 /// The process's settings: a layout the creator forces, or none to let each settlement's
@@ -63,56 +61,6 @@ pub fn sequence(
     }
     sequence.extend(catalogue.compose("town.publish", "town/final", &context, &Values::new())?);
     Ok(sequence)
-}
-pub fn operation() -> Command<State, Settings> {
-    Command::with_inputs(
-        "real-scale.settlement",
-        CommandKind::Publish,
-        vec![],
-        |scope, settings: &Settings| {
-            let _ = settings;
-            let state = scope.state_mut();
-            let fabric = std::mem::take(&mut state.town);
-            let result = crate::publication::town::publish(state, &fabric);
-            state.town = fabric;
-            result?;
-            Ok(())
-        },
-    )
-}
-pub fn cultivation() -> Command<State> {
-    Command::with_inputs(
-        "town.cultivation",
-        CommandKind::Work,
-        vec![],
-        |scope, _: &()| {
-            let state: &mut State = scope.state_mut();
-            let site = site::read(state)?;
-            if state.town.fields.is_empty() && state.town.fallow.is_empty() {
-                let ways: Vec<_> = site
-                    .ways
-                    .iter()
-                    .map(|(p, _)| crate::town::edits::line(p))
-                    .collect();
-                let scale = state.town.scale();
-                state.town.fields = crate::town::land::establish(
-                    site.bounds,
-                    &ways,
-                    &state.scope.area.to_string(),
-                    |p| site::shares(state.field(), p),
-                    state.spatial.as_ref(),
-                    scale,
-                )?;
-            }
-            crate::town::land::develop(
-                &mut state.town,
-                &site.ways,
-                &site.ground,
-                state.spatial.as_ref(),
-            )?;
-            Ok(())
-        },
-    )
 }
 
 #[cfg(test)]

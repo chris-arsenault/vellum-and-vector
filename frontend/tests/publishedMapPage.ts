@@ -41,6 +41,7 @@ const pending = new Map<
   { resolve: (value: unknown) => void; reject: (reason: Error) => void }
 >();
 function send(kind: "read" | "navigation", call: MapCall | NavigationCall) {
+  if (call.method === "entities") output.dataset.entitiesRead = "true";
   return new Promise((resolve, reject) => {
     const id = ++sequence;
     pending.set(id, { resolve, reject });

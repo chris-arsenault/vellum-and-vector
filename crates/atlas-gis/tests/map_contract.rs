@@ -165,6 +165,11 @@ fn unreadable_saved_map_stays_listed_and_does_not_hide_other_maps() {
     // Settings no current reader understands make the map unreadable, not invisible.
     db.execute("UPDATE maps SET real_scale=?", &["{\"kind\":3}".into()])
         .unwrap();
+    let navigation = store.map_index().unwrap();
+    assert_eq!(navigation[0].reference, map.reference);
+    assert!(navigation[0].saved);
+    assert!(store.open(&navigation[0].reference).is_err());
+    assert!(store.inventory().unwrap()[0].problem.is_some());
     assert!(store.find_saved(id("islands")).is_err());
     let listed = store.list_saved(None).unwrap();
     assert_eq!(listed.items[0].reference, map.reference);

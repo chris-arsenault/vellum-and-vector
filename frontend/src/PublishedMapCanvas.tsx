@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Feature from "ol/Feature.js";
 import GeoJSON from "ol/format/GeoJSON.js";
+import { unByKey } from "ol/Observable.js";
 import type { Geometry, Inspection, MapDescriptor, MapReader, RegionSelection } from "@atlas/map";
 import { createPublishedMap, type PublishedMapEngine } from "./publishedMapEngine";
 import { PublishedMapView, type PublishedPresentation } from "./PublishedMapView";
@@ -12,6 +13,7 @@ import { installPublishedRegions, type PublishedRegionEvents } from "./published
 import { installMeasure } from "./realScaleMeasure";
 import type { AuthoringSession } from "./useRealScaleAuthoring";
 import { CanvasEditing } from "./CanvasEditing";
+import { mapPresentationLevel } from "./cityPresentation";
 
 interface Props {
   map: MapDescriptor;
@@ -39,25 +41,16 @@ export function PublishedMapCanvas(props: Props) {
 function MapCanvas(props: Props) {
   const [descriptor] = useState(() => ({ ...props.map }));
   const [viewer, setViewer] = useState<PublishedMapView | null>(null);
-  const [busy, setBusy] = useState(true),
-    [error, setError] = useState<Error | null>(null);
-  const callbacks = useRef(props);
+  const { busy, streetDetail, error, setError, report } = useMapStatus();
+  const tilesLoading = useTilesLoading(viewer);
+  const callbacks = useCallbacks(props);
   const coordinates = useRef<HTMLOutputElement>(null);
-  useEffect(() => {
-    callbacks.current = props;
-  }, [props]);
   const { map, reader, spaceId, tool, presentation, selection } = props;
   const mount = useCallback(
     (element: HTMLDivElement | null) => {
       if (!element) return;
       const engine = createPublishedMap(element, descriptor, reader, spaceId);
-      const next = new PublishedMapView(engine, reader, {
-        busy: (busy) => {
-          setBusy(busy);
-          if (busy) setError(null);
-        },
-        error: setError,
-      });
+      const next = new PublishedMapView(engine, reader, report);
       setViewer(next);
       callbacks.current.onEngine(engine);
       engine.map.getView().fit(descriptor.bounds, { padding: [35, 35, 35, 35] });
@@ -66,13 +59,11 @@ function MapCanvas(props: Props) {
         void next.close();
       };
     },
-    [descriptor, reader, spaceId]
+    [descriptor, reader, spaceId, callbacks, report]
   );
   useEffect(() => {
-    if (viewer) {
-      viewer.receive(map);
-      void viewer.update(presentation);
-    }
+    viewer?.receive(map);
+    void viewer?.update(presentation);
   }, [viewer, presentation, map]);
   useEffect(() => {
     if (!viewer) return;
@@ -81,21 +72,24 @@ function MapCanvas(props: Props) {
       error: setError,
       position: (position) => showCoordinates(coordinates.current, viewer, position),
     }));
-  }, [viewer, reader, tool]);
+  }, [viewer, reader, tool, callbacks, setError]);
   useEffect(() => {
     if (viewer)
       return installPublishedRegions(viewer.engine, tool, () => callbacks.current.regionEvents);
-  }, [viewer, tool]);
+  }, [viewer, tool, callbacks]);
   useHighlight(viewer, selection, props.highlight);
   const measured = useMeasure(viewer, tool, callbacks);
   return (
-    <div className={`map-frame${presentation.drawing.mode === "drawn" ? " drawn-map" : ""}`}>
+    <div
+      className={`map-frame${presentation.drawing.mode === "drawn" ? " drawn-map" : ""}`}
+      data-map-level={mapPresentationLevel(descriptor)}
+    >
       <div
         className="map"
         ref={mount}
         role="application"
         aria-label="World map canvas"
-        aria-busy={busy}
+        aria-busy={busy || tilesLoading}
         onPointerDown={(event) => event.currentTarget.focus()}
       />
       <button className="fit-map" onClick={() => fit(viewer, presentation)}>
@@ -106,10 +100,47 @@ function MapCanvas(props: Props) {
       </output>
       <CanvasEditing viewer={viewer} tool={tool} map={map} authoring={props.authoring} />
       {measured}
-      <div className="map-instruction">{instructions[tool]} · Esc: cancel</div>
+      <div className="map-instruction">
+        {streetDetail && <span role="status">Loading street detail · </span>}
+        {instructions[tool]} · Esc: cancel
+      </div>
       <ErrorMessage error={error} />
     </div>
   );
+}
+function useMapStatus() {
+  const [loading, setLoading] = useState<"map" | "detail" | null>("map");
+  const [error, setError] = useState<Error | null>(null);
+  const report = useMemo(
+    () => ({
+      busy: (value: boolean) => {
+        setLoading(value ? "map" : null);
+        if (value) setError(null);
+      },
+      error: setError,
+      streetDetail: () => setLoading("detail"),
+    }),
+    []
+  );
+  return { busy: loading !== null, streetDetail: loading === "detail", error, setError, report };
+}
+function useCallbacks(props: Props) {
+  const callbacks = useRef(props);
+  useEffect(() => {
+    callbacks.current = props;
+  }, [props]);
+  return callbacks;
+}
+function useTilesLoading(viewer: PublishedMapView | null) {
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    if (!viewer) return;
+    const map = viewer.engine.map;
+    const start = map.on("loadstart", () => setLoading(true));
+    const end = map.on("loadend", () => setLoading(false));
+    return () => unByKey([start, end]);
+  }, [viewer]);
+  return loading;
 }
 function showCoordinates(
   output: HTMLOutputElement | null,

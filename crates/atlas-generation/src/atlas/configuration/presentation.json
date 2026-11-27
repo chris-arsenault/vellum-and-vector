@@ -3687,7 +3687,7 @@
         "label": "City district catchment",
         "unit": "relative reach",
         "minimum": 0.1,
-        "default": 3.6,
+        "default": 1.8,
         "step": 0.1,
         "group": "human"
       },

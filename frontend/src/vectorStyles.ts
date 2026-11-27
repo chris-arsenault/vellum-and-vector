@@ -1,4 +1,4 @@
-import { cityGroundStyle, cityRoadStyle } from "./cityGroundStyle";
+import { cityGroundStyle, outlinedCityRoad } from "./cityGroundStyle";
 import LineString from "ol/geom/LineString.js";
 import { Circle, Fill, RegularShape, Stroke, Style, Text } from "ol/style.js";
 import type { LayerStyle } from "./types";
@@ -79,14 +79,21 @@ export function defaultSymbolStyle(
   };
 }
 
-export function featureStyle(feature: RenderFeature, style: LayerStyle, resolution: number) {
-  if (
-    style.filter &&
-    !JSON.stringify([feature.name, feature.attributes])
+export function matchesTextFilter(feature: RenderFeature, style: LayerStyle) {
+  return (
+    !style.filter ||
+    JSON.stringify([feature.name, feature.attributes])
       .toLowerCase()
       .includes(style.filter.toLowerCase())
-  )
-    return [];
+  );
+}
+export function featureStyle(
+  feature: RenderFeature,
+  style: LayerStyle,
+  resolution: number,
+  realScale?: boolean
+) {
+  if (!matchesTextFilter(feature, style)) return [];
   if (feature.kind === "settlement") return settlementStyle(feature, style);
   if (feature.kind === "politicalRegion")
     return new Style({
@@ -102,8 +109,8 @@ export function featureStyle(feature: RenderFeature, style: LayerStyle, resoluti
   if (style.layerId === "magic" && typeof feature.attributes.rule === "string")
     return magicPlaceStyle(feature, style);
   return (
-    cityRoadStyle(feature, resolution, style.color, style.labels) ??
-    cityGroundStyle(feature, false, style.labels) ??
+    outlinedCityRoad(feature, resolution, style.color, style.labels) ??
+    cityGroundStyle(feature, false, style.labels, realScale ? resolution : undefined) ??
     geographicStyle(feature, style, resolution)
   );
 }

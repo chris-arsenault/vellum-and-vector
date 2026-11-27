@@ -51,8 +51,21 @@ impl BoundsIndex {
         ids.sort_unstable();
         ids
     }
+
+    /// Squared envelope distance is a lower bound on distance to the feature.
+    pub fn nearest_envelopes(&self, point: [f64; 2]) -> impl Iterator<Item = (usize, f64)> + '_ {
+        self.tree
+            .nearest_neighbor_iter_with_distance_2(point)
+            .map(|(item, squared)| (item.data, squared))
+    }
 }
 pub type PointCoverage<'a> = dyn Fn(Position) -> SpatialResult<bool> + 'a;
+
+/// An immutable area used repeatedly for clipping and containment at the kernel's precision.
+pub trait AreaMask: std::fmt::Debug {
+    fn covers(&self, value: &Geometry) -> SpatialResult<bool>;
+    fn intersection(&self, value: &Geometry) -> SpatialResult<Option<Geometry>>;
+}
 
 #[derive(Clone, Copy)]
 pub enum Predicate {
@@ -85,6 +98,7 @@ pub trait SpatialIndex {
 
 /// Coarse geometry operations may process a whole feature or point batch per host crossing.
 pub trait SpatialKernel {
+    fn prepare_area(&self, area: &Geometry) -> SpatialResult<std::rc::Rc<dyn AreaMask>>;
     fn canonical(&self, value: &Geometry) -> SpatialResult<Geometry>;
     fn area(&self, value: &Geometry) -> SpatialResult<f64>;
     fn length(&self, value: &Geometry) -> SpatialResult<f64>;

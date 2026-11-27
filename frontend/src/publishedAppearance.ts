@@ -42,6 +42,7 @@ export function publishedAppearance(
     return { ...value, layerId: feature.layerId };
   };
   return {
+    realScale: !!map.realScale,
     type,
     name: (feature) => {
       const id = polityIdentity(feature);

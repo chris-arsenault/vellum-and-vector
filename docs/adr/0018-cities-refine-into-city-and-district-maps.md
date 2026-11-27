@@ -88,4 +88,17 @@ ground favours straighter runs, while rough ground favours curved approaches.
 
 ## District maps
 
-A district opens as a real-scale map over its outline. The Street map inherits the district identity, type and boundary, its major roads, landmarks, open spaces and developed ground. Local circulation divides that ground into blocks. Individual plots, yards and buildings follow their street frontages.
+A district opens as a real-scale map over its outline. The Street map inherits the district identity, boundary, major roads, landmarks, open spaces and developed ground. The district's selected programs respond to local ground, access and the mix of uses the City resolved. The same development rounds serve district maps and standalone settlements. Local routes create opportunities for frontage and premises, and the places that take hold generate demand for more access. A district's principal roads keep their City identities, including where they continue into neighboring districts.
+
+Inhabited City tracts supply the first streets and premises. Where a tract meets an
+avenue, its developed area determines how far occupied blocks extend behind the
+frontage. Interior quarters survey connections across passable ground. A standalone
+town can establish a public street at a founding workplace or meeting place even
+when no regional road reaches it. Later traffic can turn a well-used walking route
+into a street in either kind of settlement.
+
+During Street development, local conditions inform demand, operating premises
+compete for reachable customers and services, and funded common works can claim
+ground. Accessible clearance already affects nuisance at premises. The separate
+sanitation strategy for laying out local service infrastructure is deferred.
+Development at the inherited date does not run the elapsed waste-removal operation.

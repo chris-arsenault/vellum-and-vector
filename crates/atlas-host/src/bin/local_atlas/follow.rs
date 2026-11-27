@@ -150,7 +150,7 @@ impl Run<'_> {
         }
         let picture = land(&preview, epoch, &self.directory)?;
         self.print(format_args!(
-            "picture {}",
+            "terrain preview {}",
             self.directory.join(&picture.file).display()
         ));
         let reached = until.is_some_and(|label| picture.label.contains(label));
@@ -170,7 +170,7 @@ impl Run<'_> {
             });
         }
         let steps = self.log.join("\n") + "\n";
-        fs::write(self.harness.home.join("last-job-steps.txt"), &steps)?;
+        fs::write(self.harness.runtime.join("last-job-steps.txt"), &steps)?;
         fs::write(directory.join("steps.txt"), &steps)?;
         let listing = directory.join("previews.json");
         let temporary = listing.with_extension("json.tmp");
@@ -187,7 +187,7 @@ impl Run<'_> {
         {
             *after = 0;
         }
-        let Some(ending) = server_gone(&self.harness.home) else {
+        let Some(ending) = server_gone(&self.harness.runtime) else {
             self.print(format_args!("poll failed, retrying: {error}"));
             return Ok(());
         };
@@ -195,7 +195,7 @@ impl Run<'_> {
         self.close()?;
         println!(
             "Server log: {}\nFix the cause, then make local-up and make local-resume (job {}).",
-            self.harness.home.join("server.log").display(),
+            self.harness.runtime.join("server.log").display(),
             self.job
         );
         std::process::exit(1);
@@ -279,13 +279,26 @@ pub fn follow(
 
 /// How the server ended when its process is gone: the supervisor's exit record, or the
 /// server log's last line when there is none. A slow but living server is retried, and so is
-/// a missing process file: `local-up` removes it while it restarts the server.
+/// a missing process file during a restart. An explicit shutdown closes the follower.
 fn server_gone(home: &Path) -> Option<String> {
-    let pid = fs::read_to_string(home.join("server.pid")).ok()?;
-    if Path::new("/proc").join(pid.trim()).exists() {
-        return None;
+    let pid = fs::read_to_string(home.join("server.pid")).ok();
+    if let Some(pid) = &pid {
+        if fs::read_to_string(Path::new("/proc").join(pid.trim()).join("comm"))
+            .is_ok_and(|name| name.trim() == "atlas_server")
+        {
+            return None;
+        }
     }
     let log = fs::read_to_string(home.join("server.log")).unwrap_or_default();
+    if pid.is_none()
+        && !log
+            .lines()
+            .rev()
+            .find(|line| line.contains("\"server.stop-request\""))
+            .is_some_and(|line| line.contains("\"command\":\"down\""))
+    {
+        return None;
+    }
     Some(
         log.lines()
             .rev()

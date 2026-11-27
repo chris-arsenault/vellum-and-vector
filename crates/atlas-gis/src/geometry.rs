@@ -4,6 +4,45 @@ use atlas_map::{Bounds, Geometry, Position};
 use geos::{CoordSeq, Geom, Geometry as Native, GeometryTypes, Precision};
 mod coordinates;
 
+#[derive(yoke::Yokeable)]
+struct Prepared<'a>(geos::PreparedGeometry<'a>);
+
+struct NativeAreaMask {
+    // The prepared GEOS index borrows the native polygon for its entire lifetime.
+    prepared: yoke::Yoke<Prepared<'static>, Box<Native>>,
+    kernel: NativeGeos,
+}
+
+impl std::fmt::Debug for NativeAreaMask {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("NativeAreaMask")
+    }
+}
+
+impl atlas_map::spatial::AreaMask for NativeAreaMask {
+    fn covers(&self, value: &Geometry) -> SpatialResult<bool> {
+        self.prepared
+            .get()
+            .0
+            .covers(&self.kernel.read(value)?)
+            .map_err(|e| e.to_string())
+    }
+    fn intersection(&self, value: &Geometry) -> SpatialResult<Option<Geometry>> {
+        let input = self.kernel.read(value)?;
+        let area = &self.prepared.get().0;
+        if area.covers(&input).map_err(|e| e.to_string())? {
+            return NativeGeos::json(input);
+        }
+        if !area.intersects(&input).map_err(|e| e.to_string())? {
+            return Ok(None);
+        }
+        let clipped = input
+            .intersection_prec(self.prepared.backing_cart().as_ref(), self.kernel.precision)
+            .map_err(|e| e.to_string())?;
+        self.kernel.overlay_result(clipped)
+    }
+}
+
 pub struct NativeGeos {
     pub(crate) precision: f64,
 }
@@ -38,6 +77,10 @@ impl NativeGeos {
     /// when it collapses.
     #[track_caller]
     pub(crate) fn read_exact(&self, value: &Geometry) -> SpatialResult<Native> {
+        self.reduce(value, false)
+    }
+    #[track_caller]
+    fn reduce(&self, value: &Geometry, allow_empty: bool) -> SpatialResult<Native> {
         let geometry = coordinates::read(value).map_err(|e| e.to_string())?;
         if !geometry.is_valid().map_err(|e| e.to_string())? {
             let trace = std::backtrace::Backtrace::capture();
@@ -55,7 +98,7 @@ impl NativeGeos {
         let snapped = geometry
             .set_precision(self.precision, Precision::ValidOutput)
             .map_err(|e| e.to_string())?;
-        if snapped.is_empty().map_err(|e| e.to_string())? {
+        if !allow_empty && snapped.is_empty().map_err(|e| e.to_string())? {
             return Err(format!(
                 "Geometry collapses at its declared precision {} ({:?}, bounds {:?}, read at {})",
                 self.precision,
@@ -197,6 +240,21 @@ impl NativeGeos {
     }
 }
 impl SpatialKernel for NativeGeos {
+    fn prepare_area(
+        &self,
+        area: &Geometry,
+    ) -> SpatialResult<std::rc::Rc<dyn atlas_map::spatial::AreaMask>> {
+        let native = Box::new(self.read(area)?);
+        let prepared =
+            yoke::Yoke::try_attach_to_cart(native, |area| area.to_prepared_geom().map(Prepared))
+                .map_err(|e| e.to_string())?;
+        Ok(std::rc::Rc::new(NativeAreaMask {
+            prepared,
+            kernel: Self {
+                precision: self.precision,
+            },
+        }))
+    }
     fn canonical(&self, value: &Geometry) -> SpatialResult<Geometry> {
         Self::json(self.read_exact(value)?)?
             .ok_or_else(|| "A canonical feature needs nonempty geometry".into())
@@ -245,11 +303,14 @@ impl SpatialKernel for NativeGeos {
         if values.is_empty() {
             return Err("Union requires at least one geometry".into());
         }
-        // The browser adapter reduces precision on the collection as one operand. A narrow
-        // component can disappear there without making the surviving collection empty.
-        let collection = self.read(&Geometry::GeometryCollection {
+        // A union can lose any or all of its area components on the map's grid.
+        let geometry = Geometry::GeometryCollection {
             geometries: values.to_vec(),
-        })?;
+        };
+        let collection = match self.on_grid(&geometry)? {
+            Some(collection) => collection,
+            None => self.reduce(&geometry, true)?,
+        };
         Self::json(
             collection
                 .unary_union_prec(self.precision)

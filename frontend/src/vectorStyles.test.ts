@@ -86,6 +86,8 @@ it("shows occupied City ground with labels off and leaves district interiors vis
     paint("Crowded housing", "Working ground")
   );
   expect(styles({ ...ground, kind: "district" }, 100)[0].getFill()).toBeFalsy();
+  const block = { ...ground, kind: "cityBlock", attributes: { use: "civic" } };
+  expect(styles(block, 100)[0].getFill()?.getColor()).toEqual(paint("Civic precinct"));
 });
 
 it("uses physical bank widths and the longitudinal width profile at close zoom", () => {

@@ -8,6 +8,7 @@ use crate::{
 };
 use atlas_generation::{GenerationState, GenerationStatus};
 use atlas_gis::map_files::MapFiles;
+use atlas_gis::map_store::{MapEntry, MapStore};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs, io,
@@ -21,6 +22,10 @@ const CLEANUP: &str = "/atlas/pending-cleanup";
 impl BrowserWorkspace {
     pub fn contexts(&self, request: &str) -> Result<String, JsValue> {
         let call: Call = serde_json::from_str(request).map_err(error)?;
+        if matches!(call, Call::Maps) {
+            return serde_json::to_string(&self.map_entries(MapStore::map_index).map_err(error)?)
+                .map_err(error);
+        }
         if let Call::Delete(target) = call {
             self.delete_context(target).map_err(error)?;
         }
@@ -43,14 +48,12 @@ impl BrowserWorkspace {
         }
         Ok(entries.into_values().collect())
     }
-    fn inventory(&self) -> io::Result<Inventory> {
+    fn map_entries(
+        &self,
+        read: fn(&MapStore) -> io::Result<Vec<MapEntry>>,
+    ) -> io::Result<Vec<MapEntry>> {
         let mut maps = BTreeMap::new();
-        for entry in self
-            .maps
-            .inventory()?
-            .into_iter()
-            .chain(self.saved()?.inventory()?)
-        {
+        for entry in read(&self.maps)?.into_iter().chain(read(&self.saved()?)?) {
             maps.insert(
                 (
                     entry.reference.map_id.clone(),
@@ -59,7 +62,10 @@ impl BrowserWorkspace {
                 entry,
             );
         }
-        let maps: Vec<_> = maps.into_values().collect();
+        Ok(maps.into_values().collect())
+    }
+    fn inventory(&self) -> io::Result<Inventory> {
+        let maps = self.map_entries(MapStore::inventory)?;
         let jobs: Vec<GenerationStatus> = serde_json::from_str(
             &self
                 .generation_jobs()

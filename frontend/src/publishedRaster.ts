@@ -13,12 +13,17 @@ import type { FieldStyle, RasterPresentation } from "./types";
 import { overlayStyle, terrainStyle } from "./rasterStyles";
 import { configureTerrainContours } from "./terrainContours";
 
+/** Settlement context comes from the open map; saved appearance controls remain portable. */
+export interface RasterView extends RasterPresentation {
+  settlement?: boolean;
+}
+
 /** Source band selection adapts standard map assets to the existing GPU appearance controls. */
 export function publishedRaster(
   layer: MapLayer,
   asset: MapAssetSource,
   projection: Projection,
-  presentation: RasterPresentation,
+  presentation: RasterView,
   overlay?: FieldStyle
 ) {
   if (layer.source.kind !== "raster") throw new Error("Choose a published raster layer.");
@@ -59,14 +64,14 @@ export function publishedRaster(
 export function publishedStyle(
   raster: RasterSource,
   terrain: boolean,
-  presentation: RasterPresentation,
+  presentation: RasterView,
   overlay?: FieldStyle
 ) {
   const value = raster.bands[0];
   const categories =
     (terrain ? raster.bands.find((band) => band.id === "surface") : value)?.categories ?? [];
   const classes = surfaceClasses(categories);
-  if (terrain) return terrainStyle(presentation);
+  if (terrain) return terrainStyle(presentation, presentation.settlement);
   if (!overlay) throw new Error("Choose appearance settings for the map overlay.");
   return overlayStyle(
     overlay,

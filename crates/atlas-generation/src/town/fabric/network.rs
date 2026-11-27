@@ -28,6 +28,37 @@ fn points(value: Geometry) -> Vec<Point> {
     }
 }
 impl Town {
+    /// A place without a captured highway can develop a high street of its own.
+    /// Use actual journeys along occupied frontage to pick the local spine.
+    /// Crossroads and widening subsequently invest in that street in place.
+    pub(crate) fn recognise_high_street(&mut self) {
+        use crate::town::{network::Class, story::Size};
+        if self.seat.story.size() < Size::Town
+            || self.streets.iter().any(|s| s.class == Class::Main)
+        {
+            return;
+        }
+        let depth = self.plot().1;
+        let mut occupied = vec![(f64::INFINITY, f64::NEG_INFINITY, 0.); self.streets.len()];
+        for holding in &self.holdings {
+            if let Some(i) = holding.slot.street.filter(|_| holding.occupation > 0.) {
+                let row = &mut occupied[i];
+                row.0 = row.0.min(holding.slot.along);
+                row.1 = row.1.max(holding.slot.along);
+                row.2 += holding.occupation * holding.slot.frontage;
+            }
+        }
+        let strongest = occupied
+            .into_iter()
+            .enumerate()
+            .filter(|(i, (start, end, _))| end - start >= depth * 3. && self.wear[*i] > 0.)
+            .max_by(|(a, (_, _, front_a)), (b, (_, _, front_b))| {
+                (front_a * self.wear[*a]).total_cmp(&(front_b * self.wear[*b]))
+            });
+        if let Some((i, _)) = strongest {
+            self.streets[i].class = Class::Main;
+        }
+    }
     /// Fit the added shoulders to the loaded portion of the existing carriageway.
     /// Width tapers back to the old profile at either end of the investment.
     pub fn widen(
@@ -36,6 +67,13 @@ impl Town {
         ground: &mut crate::town::ground::Ground,
         spatial: &dyn SpatialKernel,
     ) -> io::Result<bool> {
+        if self
+            .district
+            .as_ref()
+            .is_some_and(|d| load.street < d.streets.len())
+        {
+            return Ok(false);
+        }
         use crate::town::{
             geometry::{add, at, distance, left, scale, sub, unit},
             ground::{FIRST_STREET, PLOT},
@@ -184,8 +222,9 @@ impl Town {
         tail: Street,
         spatial: &dyn SpatialKernel,
     ) -> io::Result<bool> {
-        if self.streets[id].points.last() != tail.points.first()
-            || !self.connect_route(tail, 2., spatial)?
+        if self.district.as_ref().is_some_and(|d| id < d.streets.len())
+            || self.streets[id].points.last() != tail.points.first()
+            || !self.fit_route(tail, 2., Some(id), spatial)?
         {
             return Ok(false);
         }
@@ -211,11 +250,38 @@ impl Town {
         priority: f64,
         spatial: &dyn SpatialKernel,
     ) -> io::Result<bool> {
+        self.fit_route(street, priority, None, spatial)
+    }
+
+    fn fit_route(
+        &mut self,
+        street: Street,
+        priority: f64,
+        extending: Option<usize>,
+        spatial: &dyn SpatialKernel,
+    ) -> io::Result<bool> {
         let trace = line(&street.points);
         let Some(corridor) = street.corridor(0., spatial).map_err(io::Error::other)? else {
             return Ok(false);
         };
         let bounds = spatial.bounds(&corridor).map_err(io::Error::other)?;
+        if let Some(district) = &self.district {
+            if !self
+                .district_mask(district, spatial)?
+                .covers(&trace)
+                .map_err(io::Error::other)?
+                || spatial
+                    .intersection_areas(
+                        &corridor,
+                        &self.nearby_reserves(district, bounds, spatial)?,
+                    )
+                    .map_err(io::Error::other)?
+                    .iter()
+                    .any(|area| *area > 0.0001)
+            {
+                return Ok(false);
+            }
+        }
         let nearby = self.surface_holdings(bounds, spatial)?;
         let buildings: Vec<_> = nearby
             .iter()
@@ -253,7 +319,6 @@ impl Town {
             };
             changed.push((i, outline));
         }
-        let mut joins = vec![street.points[0], *street.points.last().unwrap()];
         let tol = crate::town::settings::JUNCTION_TOLERANCE;
         let road_ids = self.nearby_roads(
             atlas_map::Bounds(
@@ -264,20 +329,18 @@ impl Town {
             ),
             spatial,
         )?;
-        for &i in &road_ids {
-            let road = &self.streets[i];
-            if let Some(crossing) = spatial
-                .overlay(&trace, &line(&road.points), Overlay::Intersection)
-                .map_err(io::Error::other)?
-            {
-                if spatial.length(&crossing).map_err(io::Error::other)? > 0.001 {
-                    return Ok(false);
-                }
-                joins.extend(points(crossing));
-            }
-        }
+        let Some(mut joins) =
+            self.carriageway_junctions(&street, extending, bounds, &road_ids, spatial)?
+        else {
+            return Ok(false);
+        };
+        joins.extend([street.points[0], *street.points.last().unwrap()]);
+        // Crossings with captured avenues still node the new street. Those avenues
+        // keep their surveyed vertices, so only local roads need to be staged.
+        let inherited = self.district.as_ref().map_or(0, |d| d.streets.len());
+        let local_ids: Vec<_> = road_ids.into_iter().filter(|&id| id >= inherited).collect();
         let mut network = crate::town::lanes::Network {
-            streets: road_ids
+            streets: local_ids
                 .iter()
                 .map(|&id| self.streets[id].clone())
                 .collect(),
@@ -292,7 +355,7 @@ impl Town {
             .iter()
             .map(|road| super::road_bounds(road, spatial))
             .collect::<io::Result<Vec<_>>>()?;
-        for ((id, road), envelope) in road_ids.into_iter().zip(network.streets).zip(envelopes) {
+        for ((id, road), envelope) in local_ids.into_iter().zip(network.streets).zip(envelopes) {
             self.fitting.get_mut().roads.replace(id, envelope);
             self.streets[id] = road;
         }
@@ -302,6 +365,59 @@ impl Town {
             self.holdings[i].outline = outline;
         }
         Ok(true)
+    }
+
+    fn carriageway_junctions(
+        &self,
+        street: &Street,
+        extending: Option<usize>,
+        bounds: atlas_map::Bounds,
+        road_ids: &[usize],
+        spatial: &dyn SpatialKernel,
+    ) -> io::Result<Option<Vec<Point>>> {
+        let trace = line(&street.points);
+        let tol = crate::town::settings::JUNCTION_TOLERANCE;
+        let mut joins = Vec::new();
+        let mut paving = Vec::new();
+        for &i in road_ids {
+            let road = &self.streets[i];
+            let axis = line(&road.points);
+            if let Some(crossing) = spatial
+                .overlay(&trace, &axis, Overlay::Intersection)
+                .map_err(io::Error::other)?
+            {
+                if spatial.length(&crossing).map_err(io::Error::other)? > 0.001 {
+                    return Ok(None);
+                }
+                joins.extend(points(crossing));
+            } else {
+                let distance = spatial.distance(&trace, &axis).map_err(io::Error::other)?;
+                if distance > road.width() / 2. + tol {
+                    continue;
+                }
+                if distance <= tol {
+                    let [at, _] = spatial
+                        .nearest_points(&trace, &axis)
+                        .map_err(io::Error::other)?;
+                    let [x, y, _] = at.coordinates();
+                    joins.push([x, y]);
+                }
+            }
+            if extending != Some(i) {
+                if let Some(roadway) = self.road_corridor(i, spatial)? {
+                    if let Some(local) = spatial
+                        .clip_by_rect(&roadway, bounds)
+                        .map_err(io::Error::other)?
+                    {
+                        paving.push(local);
+                    }
+                }
+            }
+        }
+        if !opens_street(street, &trace, paving, &joins, self.plot().1, spatial)? {
+            return Ok(None);
+        }
+        Ok(Some(joins))
     }
     pub(super) fn repurpose(&mut self, id: HoldingId, kind: Kind) -> bool {
         let Some(holding) = self.holdings.get_mut(id.0 as usize) else {
@@ -316,5 +432,137 @@ impl Town {
         holding.craft = None;
         holding.cause = "Existing premises adapted to a new use".into();
         true
+    }
+}
+
+/// Count the existing carriageways at a junction as one paved area. A crossing
+/// or a connection between street axes can span a wide intersection. A dead end
+/// mostly on existing pavement needs enough new ground to reach past a plot.
+fn opens_street(
+    street: &Street,
+    trace: &Geometry,
+    mut paving: Vec<Geometry>,
+    joins: &[Point],
+    plot_depth: f64,
+    spatial: &dyn SpatialKernel,
+) -> io::Result<bool> {
+    use crate::town::{geometry::distance, settings::JUNCTION_TOLERANCE as TOL};
+    use atlas_map::Position;
+    let paved = if paving.len() > 1 {
+        spatial.union_all(&paving).map_err(io::Error::other)?
+    } else {
+        paving.pop()
+    };
+    let Some(paved) = paved else { return Ok(true) };
+    let Some(inside) = spatial
+        .overlay(trace, &paved, Overlay::Intersection)
+        .map_err(io::Error::other)?
+    else {
+        return Ok(true);
+    };
+    let used = spatial.length(&inside).map_err(io::Error::other)?;
+    if used <= TOL {
+        return Ok(true);
+    }
+    let fresh = street.length() - used;
+    if fresh <= TOL || joins.is_empty() {
+        return Ok(false);
+    }
+    let contacts = Geometry::MultiPoint {
+        coordinates: joins.iter().map(|&[x, y]| Position::xy(x, y)).collect(),
+    };
+    for part in crate::features::network_parts::line_parts(&inside) {
+        let run = Geometry::LineString {
+            coordinates: part.to_vec(),
+        };
+        if spatial
+            .distance(&run, &contacts)
+            .map_err(io::Error::other)?
+            > TOL
+        {
+            return Ok(false);
+        }
+    }
+    if fresh >= used || fresh >= plot_depth {
+        return Ok(true);
+    }
+    let ends = [street.points[0], *street.points.last().unwrap()];
+    if ends
+        .iter()
+        .all(|p| joins.iter().any(|q| distance(*p, *q) <= TOL))
+    {
+        return Ok(true);
+    }
+    let covered = spatial
+        .covers_points(&paved, &ends.map(|[x, y]| Position::xy(x, y)))
+        .map_err(io::Error::other)?;
+    Ok(!covered.into_iter().any(|inside| inside))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::town::{
+        fabric::DistrictSite,
+        network::Class,
+        seat::Seat,
+        story::{Size, Story},
+    };
+    use atlas_map::Id;
+
+    fn assert_avenue_entries(mut connect: impl FnMut(Vec<Point>) -> bool) {
+        assert!(!connect(vec![[-120., 0.], [-3., 11.]]));
+        assert!(!connect(vec![[-100., 10.], [-50., 10.], [-40., 17.]]));
+        assert!(!connect(vec![[-35., 0.], [-35., 19.]]));
+        assert!(connect(vec![[2., -17.], [2., 17.]]));
+        assert!(connect(vec![[25., 0.], [25., 52.]]));
+        assert!(connect(vec![[60., -40.], [80., -40.]]));
+    }
+
+    #[test]
+    fn streets_use_new_ground_and_join_through_real_carriageways() {
+        let spatial = atlas_gis::geometry::NativeGeos::new(0.001).unwrap();
+        let mut town = Town::new(
+            Seat {
+                key: Id::from_name("junction"),
+                name: "Junction".into(),
+                centre: [0., 0.],
+                story: Story {
+                    people: 3000.,
+                    ..Default::default()
+                },
+                arms: Vec::new(),
+                culture: None,
+            },
+            None,
+        );
+        let mut avenue = Street::new(vec![[-150., 0.], [150., 0.]], Class::Main, Size::Town);
+        avenue.widths.fill(28.);
+        let original = avenue.points.clone();
+        town.set_approaches(vec![avenue]);
+        town.district = Some(DistrictSite {
+            outline: super::super::polygon(&[
+                [-200., -100.],
+                [200., -100.],
+                [200., 100.],
+                [-200., 100.],
+                [-200., -100.],
+            ]),
+            reserves: vec![],
+            streets: vec![(Id::from_name("avenue"), "Avenue".into())],
+            program: None,
+            tracts: vec![],
+            density_per_km2: None,
+            old_walls: None,
+        });
+        assert_avenue_entries(|points| {
+            town.connect_route(Street::new(points, Class::Lane, Size::Town), 2., &spatial)
+                .unwrap()
+        });
+        assert_eq!(town.streets()[0].points, original);
+        assert_eq!(town.district.as_ref().unwrap().streets[0].1, "Avenue");
+        assert!(town.streets()[1].points.contains(&[2., 0.]));
+        let continuation = Street::new(vec![[80., -40.], [81., -40.]], Class::Lane, Size::Town);
+        assert!(town.extend_street(3, continuation, &spatial).unwrap());
     }
 }

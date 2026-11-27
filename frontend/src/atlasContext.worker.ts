@@ -53,7 +53,7 @@ function geography(
   return operation.service === "editing" ? maps.edit(request) : maps.navigate(request);
 }
 function manage(workspace: Awaited<ReturnType<typeof open>>, call: ContextCall) {
-  if (call.method === "list") return JSON.parse(workspace.maps.contexts(JSON.stringify(call)));
+  if (call.method !== "delete") return JSON.parse(workspace.maps.contexts(JSON.stringify(call)));
   return navigator.locks.request("atlas-context-mutation", { ifAvailable: true }, (lock) => {
     if (!lock) throw new Error("Stop active browser generation jobs before removing stored data.");
     return JSON.parse(workspace.maps.contexts(JSON.stringify(call)));

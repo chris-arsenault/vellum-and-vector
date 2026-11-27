@@ -7,12 +7,13 @@ use super::{
     geometry::{at, distance, Point},
     network::Street,
 };
-use crate::{
-    hpc::{Direction, KeyedHeap},
-    spatial::SpatialKernel,
-};
+use crate::spatial::SpatialKernel;
 use atlas_map::{Geometry, Position};
-use std::{collections::BTreeMap, io};
+use std::{
+    cmp::Reverse,
+    collections::{BTreeMap, BinaryHeap},
+    io,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct JunctionId(pub i64, pub i64);
@@ -41,11 +42,13 @@ pub struct StreetLoad {
 pub struct Footpath {
     pub points: [Point; 2],
     pub wear: f64,
+    #[serde(default)]
+    pub beaten: bool,
 }
 impl Footpath {
     /// A beaten walking track remains narrow until investment builds a street.
     pub fn width(&self) -> f64 {
-        0.7
+        0.7 * self.wear.clamp(0., 1.).sqrt()
     }
 }
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -137,6 +140,7 @@ impl Entrance {
 #[derive(Clone, Copy, Debug)]
 struct Leg {
     street: usize,
+    segment: usize,
     width: f64,
     ends: [Point; 2],
 }
@@ -150,6 +154,53 @@ pub struct Noded {
     by_street: Vec<Vec<usize>>,
 }
 impl Noded {
+    pub(crate) fn street_groups(&self, count: usize) -> crate::hpc::UnionFind {
+        let mut groups = crate::hpc::UnionFind::new(count);
+        for i in 0..count {
+            groups.make(i);
+        }
+        let mut at = BTreeMap::new(); // hpc-exempt: streets sharing a noded junction.
+        for leg in &self.legs {
+            for point in leg.ends {
+                if let Some(other) = at.insert(JunctionId::at(point), leg.street) {
+                    groups.union(leg.street, other);
+                }
+            }
+        }
+        groups
+    }
+    /// Bind walked vertices to actual surveyed streets, including mid-block arrivals.
+    pub(crate) fn street_contacts(
+        &self,
+        streets: &[Street],
+        nodes: impl Iterator<Item = JunctionId>,
+        spatial: &dyn SpatialKernel,
+    ) -> io::Result<BTreeMap<JunctionId, (usize, Point)>> {
+        let index = spatial.index(&self.geometries).map_err(io::Error::other)?;
+        let mut contacts = BTreeMap::new(); // hpc-exempt: junctions on the retained street network.
+        for id in nodes {
+            let p = id.point();
+            let [x, y] = p;
+            // Walked coordinates are rounded to millimetres.
+            let b = atlas_map::Bounds(x - 0.001, y - 0.001, x + 0.001, y + 0.001);
+            let hits = index.distances(b, pos(p)).map_err(io::Error::other)?;
+            if let Some((i, _)) = hits
+                .into_iter()
+                .filter(|(_, d)| *d <= 0.001)
+                .min_by(|a, b| a.1.total_cmp(&b.1))
+            {
+                let point = atlas_map::regions::point(pos(p));
+                let leg = self.legs[i];
+                let original =
+                    super::edits::line(&streets[leg.street].points[leg.segment..=leg.segment + 1]);
+                let [on, _] = spatial
+                    .nearest_points(&original, &point)
+                    .map_err(io::Error::other)?;
+                contacts.insert(id, (leg.street, xy(on)));
+            }
+        }
+        Ok(contacts)
+    }
     /// A fingerprint of what noding reads: every street's points and widths.
     pub fn key(streets: &[Street]) -> u64 {
         use std::hash::{Hash, Hasher};
@@ -302,11 +353,13 @@ impl<'a> Access<'a> {
                 s.points
                     .windows(2)
                     .zip(s.widths.windows(2))
-                    .filter(|(p, _)| JunctionId::at(p[0]) != JunctionId::at(p[1]))
-                    .map(move |(p, w)| {
+                    .enumerate()
+                    .filter(|(_, (p, _))| JunctionId::at(p[0]) != JunctionId::at(p[1]))
+                    .map(move |(segment, (p, w))| {
                         (
                             Leg {
                                 street,
+                                segment,
                                 width: w[0].min(w[1]),
                                 ends: [p[0], p[1]],
                             },
@@ -483,7 +536,10 @@ impl<'a> Access<'a> {
             let start = graph.vertex(a);
             let end = graph.vertex(b);
             let effort = 1. + (walking::EFFORT - 1.) / (1. + path.wear);
-            graph.connect(start, end, distance(a, b) * effort, Course::Walk);
+            let cost = self
+                .ground
+                .map_or(distance(a, b) * effort, |g| walking::cost(g, a, b, effort));
+            graph.connect(start, end, cost, Course::Walk);
         }
         Ok(graph)
     }
@@ -661,7 +717,12 @@ impl<'a> Access<'a> {
             if mode == AccessUse::Foot {
                 let door = graph.vertex(entrance.point);
                 let road = graph.vertex(projected);
-                graph.connect(door, road, gap * walking::EFFORT, Course::Walk);
+                graph.connect(
+                    door,
+                    road,
+                    walking::cost(ground, entrance.point, projected, walking::EFFORT),
+                    Course::Walk,
+                );
                 return Some((door, entrance.walk));
             }
         }
@@ -681,8 +742,36 @@ pub struct BoundNetwork {
     edges: Vec<Vec<Edge>>,
     points: Vec<Point>,
     entrances: Vec<Option<(usize, f64)>>,
+    components: std::cell::OnceCell<Vec<usize>>,
 }
 impl BoundNetwork {
+    /// Movement has already surveyed these vertices and noded the new street.
+    /// Include its actual length in further journeys during this investment round.
+    pub(crate) fn add_public_street(&mut self, id: usize, street: &Street) {
+        for pair in street.points.windows(2) {
+            let a = self.vertex(pair[0]);
+            let b = self.vertex(pair[1]);
+            if a != b {
+                self.connect(
+                    a,
+                    b,
+                    distance(pair[0], pair[1]),
+                    Course::Street(Stretch::between(id, pair[0], pair[1])),
+                );
+            }
+        }
+    }
+    pub(crate) fn junction_cost(&self, from: Point, to: Point) -> Option<f64> {
+        let &a = self.vertices.get(&JunctionId::at(from))?;
+        let &b = self.vertices.get(&JunctionId::at(to))?;
+        let routes = self.search(
+            [(a, 0., None)].into_iter(),
+            false,
+            Labels::Sparse(Default::default()),
+            |id| id == b,
+        );
+        Some(routes.labels.get(b).cost)
+    }
     pub(crate) fn connect_door(&mut self, index: usize, point: Point, porch: usize, cost: f64) {
         if let Some((outside, _)) = self.entrances[porch] {
             let door = self.vertex(point);
@@ -691,6 +780,7 @@ impl BoundNetwork {
         }
     }
     pub(crate) fn exclude_walks(&mut self, blocked: &std::collections::BTreeSet<[JunctionId; 2]>) {
+        self.components.take();
         for (i, edges) in self.edges.iter_mut().enumerate() {
             edges.retain(|edge| {
                 !matches!(edge.course, Course::Walk)
@@ -703,12 +793,14 @@ impl BoundNetwork {
     }
     fn vertex(&mut self, p: Point) -> usize {
         *self.vertices.entry(JunctionId::at(p)).or_insert_with(|| {
+            self.components.take();
             self.edges.push(vec![]);
             self.points.push(p);
             self.edges.len() - 1
         })
     }
     fn connect(&mut self, a: usize, b: usize, cost: f64, course: Course) {
+        self.components.take();
         self.edges[a].push(Edge {
             to: b,
             cost,
@@ -738,14 +830,37 @@ impl BoundNetwork {
         origin: usize,
         destinations: impl Iterator<Item = usize>,
     ) -> Routes<'_> {
+        let origin = self.entrances[origin];
+        let components = self.components.get_or_init(|| {
+            let mut regions = vec![usize::MAX; self.edges.len()];
+            let mut pending = Vec::new();
+            for start in 0..regions.len() {
+                if regions[start] != usize::MAX {
+                    continue;
+                }
+                regions[start] = start;
+                pending.push(start);
+                while let Some(node) = pending.pop() {
+                    for next in &self.edges[node] {
+                        if regions[next.to] == usize::MAX {
+                            regions[next.to] = start;
+                            pending.push(next.to);
+                        }
+                    }
+                }
+            }
+            regions
+        });
+        // An unreachable destination otherwise makes every traveller explore
+        // their entire district even after reaching every connected stop.
+        let region = origin.map(|(node, _)| components[node]);
         // hpc-exempt: the few destination nodes one search still has to settle.
         let mut needed: std::collections::HashSet<usize> = destinations
             .filter_map(|destination| self.entrances[destination].map(|(node, _)| node))
+            .filter(|&node| Some(components[node]) == region)
             .collect();
         self.search(
-            self.entrances[origin]
-                .into_iter()
-                .map(|(node, cost)| (node, cost, None)),
+            origin.into_iter().map(|(node, cost)| (node, cost, None)),
             false,
             Labels::Sparse(Default::default()),
             |node| {
@@ -760,9 +875,21 @@ impl BoundNetwork {
     pub fn distance_queries(&self) -> DistanceQueries<'_> {
         let mut offsets = Vec::with_capacity(self.edges.len() + 1);
         let mut arcs = Vec::new();
-        for adjacent in &self.edges {
+        let mut legs = Vec::new();
+        for (node, adjacent) in self.edges.iter().enumerate() {
             offsets.push(arcs.len());
-            arcs.extend(adjacent.iter().map(|edge| (edge.to, edge.cost)));
+            legs.clear();
+            legs.extend(
+                adjacent
+                    .iter()
+                    .filter(|edge| edge.to != node)
+                    .map(|edge| (edge.to, edge.cost)),
+            );
+            // A worn path, street and walking mesh can join the same two doors.
+            // The mode was applied at binding; only the cheapest permitted leg matters here.
+            legs.sort_unstable_by(|a, b| a.0.cmp(&b.0).then_with(|| a.1.total_cmp(&b.1)));
+            legs.dedup_by_key(|edge| edge.0);
+            arcs.extend_from_slice(&legs);
         }
         offsets.push(arcs.len());
         DistanceQueries {
@@ -771,7 +898,8 @@ impl BoundNetwork {
             arcs,
             costs: vec![f64::INFINITY; self.edges.len()],
             touched: Vec::new(),
-            heap: KeyedHeap::new([Direction::Ascending], Direction::Ascending),
+            pending: DistanceQueue::default(),
+            last_search: None,
         }
     }
     /// The shortest walked course from each door to any traversable named way.
@@ -791,7 +919,7 @@ impl BoundNetwork {
         mut labels: Labels,
         mut finished: impl FnMut(usize) -> bool,
     ) -> Routes<'_> {
-        let mut heap = KeyedHeap::new([Direction::Ascending], Direction::Ascending);
+        let mut heap = CostQueue::default();
         for (start, offset, street) in roots {
             labels.set(
                 start,
@@ -801,10 +929,9 @@ impl BoundNetwork {
                     street,
                 },
             );
-            heap.push(start as u32, [offset]);
+            heap.push(start, offset);
         }
-        while let Some((id, [cost])) = heap.pop() {
-            let id = id as usize;
+        while let Some((id, cost)) = heap.pop() {
             let here = labels.get(id);
             if cost > here.cost {
                 continue;
@@ -826,7 +953,7 @@ impl BoundNetwork {
                             street: here.street,
                         },
                     );
-                    heap.push(edge.to as u32, [next]);
+                    heap.push(edge.to, next);
                 }
             }
         }
@@ -875,6 +1002,62 @@ impl Labels {
         }
     }
 }
+/// Nonnegative travel costs have the same ordering as their IEEE bit patterns.
+/// Store cost and junction together so the heap moves them in a single sift.
+#[derive(Default)]
+struct CostQueue(BinaryHeap<Reverse<(u64, usize)>>);
+impl CostQueue {
+    fn push(&mut self, node: usize, cost: f64) {
+        debug_assert!(cost >= 0.);
+        self.0.push(Reverse((cost.abs().to_bits(), node)));
+    }
+    fn pop(&mut self) -> Option<(usize, f64)> {
+        self.0
+            .pop()
+            .map(|Reverse((cost, node))| (node, f64::from_bits(cost)))
+    }
+}
+/// Distances within a finite reach can be processed in bands. A cheaper arrival queues the
+/// junction again, including within its current band. Nonnegative legs can never enter an
+/// earlier band, so draining each band settles its costs without ordering its individual doors.
+#[derive(Default)]
+struct DistanceQueue {
+    bands: Vec<Vec<(usize, f64)>>,
+    current: usize,
+    bands_per_unit: f64,
+    unbounded: CostQueue,
+}
+impl DistanceQueue {
+    fn start(&mut self, reach: f64) {
+        const BANDS: usize = 256;
+        self.current = 0;
+        self.bands_per_unit = 0.;
+        if reach.is_finite() && reach > 0. {
+            self.bands.resize_with(BANDS, Vec::new);
+            self.bands_per_unit = BANDS as f64 / reach;
+        }
+    }
+    fn push(&mut self, node: usize, cost: f64) {
+        if self.bands_per_unit == 0. {
+            self.unbounded.push(node, cost);
+        } else {
+            let band = ((cost * self.bands_per_unit) as usize).min(self.bands.len() - 1);
+            self.bands[band].push((node, cost));
+        }
+    }
+    fn pop(&mut self) -> Option<(usize, f64)> {
+        if self.bands_per_unit == 0. {
+            return self.unbounded.pop();
+        }
+        while let Some(band) = self.bands.get_mut(self.current) {
+            if let Some(entry) = band.pop() {
+                return Some(entry);
+            }
+            self.current += 1;
+        }
+        None
+    }
+}
 pub struct DistanceQueries<'a> {
     entrances: &'a [Option<(usize, f64)>],
     offsets: Vec<usize>,
@@ -882,7 +1065,8 @@ pub struct DistanceQueries<'a> {
     costs: Vec<f64>,
     /// The nodes the last search labelled, so the next search clears only those.
     touched: Vec<usize>,
-    heap: KeyedHeap,
+    pending: DistanceQueue,
+    last_search: Option<(usize, f64, f64)>,
 }
 /// Destinations grouped by the network node their entrance joins, so a bounded search can
 /// name the destinations it reached without looking at the others.
@@ -896,16 +1080,94 @@ impl Destinations {
     }
 }
 impl DistanceQueries<'_> {
+    /// At a frontage only the best available offer for a commodity matters. Visit
+    /// producers from highest capability to lowest. Once a previous producer can
+    /// reach a junction at lower cost, it also beats this one on every continuation.
+    pub(crate) fn improving_offers(
+        &self,
+        strongest_first: &[(usize, f64)],
+        destinations: &Destinations,
+        reach: f64,
+        mut visit: impl FnMut(usize, f64, f64),
+    ) {
+        let mut nearest = vec![f64::INFINITY; self.costs.len()];
+        let mut heap = CostQueue::default();
+        for &(origin, capability) in strongest_first {
+            let Some((start, approach)) = self.entrances[origin] else {
+                continue;
+            };
+            if approach > reach || approach >= nearest[start] {
+                continue;
+            }
+            nearest[start] = approach;
+            heap.push(start, approach);
+            while let Some((node, cost)) = heap.pop() {
+                if cost > nearest[node] {
+                    continue;
+                }
+                for &(site, offset) in destinations.at(node) {
+                    if cost + offset <= reach {
+                        visit(site, capability, cost + offset);
+                    }
+                }
+                for &(next, length) in &self.arcs[self.offsets[node]..self.offsets[node + 1]] {
+                    let arrival = cost + length;
+                    if arrival <= reach && arrival < nearest[next] {
+                        nearest[next] = arrival;
+                        heap.push(next, arrival);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Each reachable source and destination pair. Streets and links are undirected
+    /// and both approach costs count, so the smaller set can supply the search roots.
+    pub(crate) fn pairs_within(
+        &mut self,
+        sources: &[usize],
+        destinations: &[usize],
+        reach: f64,
+        mut visit: impl FnMut(usize, usize, f64),
+    ) {
+        if sources.is_empty() || destinations.is_empty() {
+            return;
+        }
+        let reverse = destinations.len() < sources.len();
+        let (roots, leaves) = if reverse {
+            (destinations, sources)
+        } else {
+            (sources, destinations)
+        };
+        let indexed = self.destinations(leaves.iter().map(|&place| (place, place)));
+        for &root in roots {
+            self.within(root, reach);
+            self.reached(&indexed, reach, |leaf, cost| {
+                if reverse {
+                    visit(leaf, root, cost);
+                } else {
+                    visit(root, leaf, cost);
+                }
+            });
+        }
+    }
     pub fn from(&mut self, origin: usize) {
         self.within(origin, f64::INFINITY);
     }
     /// Costs from `origin` to every node no dearer than `reach`; dearer nodes stay unreached,
     /// and the search never visits them.
     pub fn within(&mut self, origin: usize, reach: f64) {
+        // A workshop's goods, second business and ordinary work can all use
+        // the same door. Their different identities share this distance tree.
+        let search = self.entrances[origin].map(|(node, offset)| (node, offset, reach));
+        if self.last_search == search {
+            return;
+        }
+        self.last_search = search;
         for node in self.touched.drain(..) {
             self.costs[node] = f64::INFINITY;
         }
-        let Some((start, offset)) = self.entrances[origin] else {
+        let Some((start, offset, _)) = search else {
             return;
         };
         if offset > reach {
@@ -913,20 +1175,35 @@ impl DistanceQueries<'_> {
         }
         self.costs[start] = offset;
         self.touched.push(start);
-        self.heap.push(start as u32, [offset]);
-        while let Some((node, [cost])) = self.heap.pop() {
-            let node = node as usize;
+        self.pending.start(reach);
+        self.pending.push(start, offset);
+        while let Some((node, cost)) = self.pending.pop() {
             if cost > self.costs[node] {
                 continue;
             }
-            for &(next, length) in &self.arcs[self.offsets[node]..self.offsets[node + 1]] {
-                let candidate = cost + length;
-                if candidate <= reach && candidate < self.costs[next] {
+            for &(first, length) in &self.arcs[self.offsets[node]..self.offsets[node + 1]] {
+                let (mut previous, mut next, mut candidate) = (node, first, cost + length);
+                while candidate <= reach && candidate < self.costs[next] {
                     if self.costs[next] == f64::INFINITY {
                         self.touched.push(next);
                     }
                     self.costs[next] = candidate;
-                    self.heap.push(next as u32, [candidate]);
+                    // Price every frontage and walking portal, but only queue a junction
+                    // where the journey can branch. A cheaper arrival from the other end
+                    // can still improve any part of the street.
+                    match &self.arcs[self.offsets[next]..self.offsets[next + 1]] {
+                        [] | [_] => break,
+                        [a, b] => {
+                            let &(onward, leg) = if a.0 == previous { b } else { a };
+                            previous = next;
+                            next = onward;
+                            candidate += leg;
+                        }
+                        _ => {
+                            self.pending.push(next, candidate);
+                            break;
+                        }
+                    }
                 }
             }
         }
@@ -1034,6 +1311,27 @@ mod tests {
         found.sort_by_key(|&(d, _)| d);
         found
     }
+    #[test]
+    fn a_nearby_weaker_supplier_can_beat_the_more_distant_stronger_offer() {
+        let graph = line();
+        let queries = graph.distance_queries();
+        let sites = queries.destinations((0..4).map(|i| (i, i)));
+        let mut best = [0_f64; 4];
+        queries.improving_offers(
+            &[(0, 2.), (3, 1.), (3, 0.5)],
+            &sites,
+            30.,
+            |site, capability, cost| {
+                best[site] = best[site].max(capability / (1. + cost / 10.));
+            },
+        );
+        assert_eq!(best[0], 2.);
+        assert_eq!(best[1], 1.);
+        assert_eq!(best[2], 2. / 3.);
+        // From the other end the final door is 35 m away. From its own
+        // supplier the two approaches cost 10 m.
+        assert_eq!(best[3], 0.5);
+    }
     /// A town's noded streets are reused until a street's points or widths change.
     #[test]
     fn noded_streets_are_keyed_by_what_noding_reads() {
@@ -1074,5 +1372,189 @@ mod tests {
         queries.within(3, 15.);
         assert_eq!(reached(&queries, &destinations, 15.), [(2, 15.), (3, 10.)]);
         assert_eq!(queries.cost(0), f64::INFINITY);
+    }
+    #[test]
+    fn frontage_costs_on_a_loop_include_transfers_and_every_door_approach() {
+        let mut graph = BoundNetwork::default();
+        for i in 0..9 {
+            let node = graph.vertex([10. * i as f64, 0.]);
+            graph.entrances.push(Some((node, i as f64 / 2.)));
+        }
+        // The last door is across an unbridged gap. Six others share a loop
+        // with a faster transfer on one side and a dead end off the middle.
+        for (a, b, cost) in [
+            (0, 1, 6.),
+            (1, 2, 6.),
+            (2, 3, 6.),
+            (3, 4, 6.),
+            (4, 5, 6.),
+            (5, 0, 2.),
+            (3, 6, 1.),
+            (6, 7, 2.),
+        ] {
+            graph.connect(a, b, cost, Course::Walk);
+        }
+        graph.connect(2, 1, 0.5, Course::Link);
+        graph.connect(2, 2, 0., Course::Walk);
+        let mut queries = graph.distance_queries();
+        let sites = queries.destinations((0..9).map(|i| (i, i)));
+        for source in 0..9 {
+            let routes = graph.routes(source);
+            for reach in [5., 12., 22., 50.] {
+                queries.within(source, reach);
+                let expected: Vec<_> = (0..9)
+                    .map(|door| (door, routes.cost(door)))
+                    .filter(|&(_, cost)| cost <= reach)
+                    .collect();
+                assert_eq!(reached(&queries, &sites, reach), expected);
+            }
+        }
+    }
+    #[test]
+    fn a_zero_cost_transfer_reprices_a_junction_and_keeps_its_doors_in_caller_order() {
+        let mut graph = BoundNetwork::default();
+        for i in 0..7 {
+            let node = graph.vertex([i as f64, 0.]);
+            graph.entrances.push(Some((node, 0.)));
+        }
+        for (a, b, cost) in [
+            (0, 1, 0.125),
+            (0, 2, 0.75),
+            (1, 2, 0.),
+            (1, 3, 2.),
+            (2, 4, 0.25),
+            (2, 5, 255.875),
+            (2, 6, 255.876),
+        ] {
+            graph.connect(a, b, cost, Course::Walk);
+        }
+        let mut queries = graph.distance_queries();
+        let sites = queries.destinations([(5, 19), (6, 27), (5, 3), (5, 12)].into_iter());
+        // In the first band the direct arrival at 2 can be expanded before the transfer.
+        // Repricing 2 must reach the distant building exactly at the daily limit.
+        queries.within(0, 256.);
+        let mut doors = Vec::new();
+        queries.reached(&sites, 256., |door, cost| doors.push((door, cost)));
+        assert_eq!(doors, [(19, 256.), (3, 256.), (12, 256.)]);
+        assert_eq!(queries.cost(4), 0.375);
+        assert_eq!(queries.cost(6), f64::INFINITY);
+        queries.from(0);
+        assert!(queries.cost(6) > 256. && queries.cost(6) < 257.);
+        queries.within(0, 0.);
+        assert_eq!(queries.cost(2), f64::INFINITY);
+    }
+    #[test]
+    fn distance_pairs_keep_door_offsets_and_directions_from_either_side() {
+        let mut graph = line();
+        graph.entrances.push(None);
+        let mut queries = graph.distance_queries();
+        let mut pairs = Vec::new();
+        queries.pairs_within(&[0, 1, 2, 4], &[3], 25., |a, b, cost| {
+            pairs.push((a, b, cost));
+        });
+        pairs.sort_by_key(|p| p.0);
+        assert_eq!(pairs, [(1, 3, 25.), (2, 3, 15.)]);
+        pairs.clear();
+        queries.pairs_within(&[3], &[0, 1, 2, 4], 25., |a, b, cost| {
+            pairs.push((a, b, cost));
+        });
+        pairs.sort_by_key(|p| p.1);
+        assert_eq!(pairs, [(3, 1, 25.), (3, 2, 15.)]);
+    }
+
+    #[test]
+    fn a_vacant_front_reads_the_same_competing_workplaces_from_either_door() {
+        use super::super::{
+            catalogue::Activity,
+            fabric::Endpoint,
+            influence::{
+                frontage_support, household_demand_from_sites, Conditions, FrontageRead,
+                OpportunitySource, Reading, SourceId,
+            },
+        };
+        let mut graph = line();
+        graph.entrances.push(graph.entrances[2]); // Second door at the same distance.
+        graph.entrances.push(None); // A different, unreachable workplace.
+        let source = |name: &str, demand| {
+            let id = atlas_map::Id::from_name(name);
+            OpportunitySource {
+                endpoint: Endpoint::External(id),
+                id: SourceId::Named(id),
+                label: name.to_owned(),
+                position: [0., 0.],
+                activity: Activity::Production,
+                demand,
+                capability: 0.,
+                productive: None,
+                clientele: None,
+            }
+        };
+        let sources = [
+            source("mill", 10.),
+            source("mill", 0.),
+            source("market", 6.),
+            source("inn", 4.),
+            source("market", 100.),
+            source("island", 50.),
+        ];
+        let sites = [0, 3];
+        let conditions = [Conditions::default(); 2];
+        let reading = Reading {
+            sites: &conditions,
+            scale: Default::default(),
+        };
+        let competitors = |s: &OpportunitySource| f64::from(s.demand == 6.) * 2.;
+        let mut paths = graph.distance_queries();
+        let reverse =
+            household_demand_from_sites(&sources, competitors, reading, &sites, &mut paths)
+                .unwrap();
+        let forward = frontage_support(
+            &sources,
+            competitors,
+            |_| 0.,
+            FrontageRead::HouseholdDemand,
+            reading,
+            |origin, visit| {
+                paths.from(origin);
+                for (site, &entrance) in sites.iter().enumerate() {
+                    visit(site, paths.cost(entrance));
+                }
+            },
+        );
+        for (a, b) in forward.iter().zip(&reverse) {
+            let a = a.for_activity(Activity::Household).demand;
+            let b = b.for_activity(Activity::Household).demand;
+            assert!((a - b).abs() < 1e-10);
+        }
+        assert!(
+            reverse[0].for_activity(Activity::Household).demand
+                > reverse[1].for_activity(Activity::Household).demand
+        );
+        assert!(household_demand_from_sites(
+            &sources[..1],
+            competitors,
+            reading,
+            &sites,
+            &mut paths
+        )
+        .is_none());
+    }
+    #[test]
+    fn journeys_to_a_separate_road_respond_to_opening_and_closing_a_path() {
+        let mut graph = line();
+        let p = [50., 0.];
+        let island = graph.vertex(p);
+        graph.entrances.push(Some((island, 0.)));
+        let routes = graph.routes_to(0, [1, 4].into_iter());
+        assert_eq!(routes.cost(1), 10.);
+        assert!(!routes.cost(4).is_finite());
+        // The disconnected destination does not force a search past the first stop.
+        assert!(!routes.cost(3).is_finite());
+        let end = graph.entrances[3].unwrap().0;
+        graph.connect(end, island, 20., Course::Walk);
+        assert_eq!(graph.routes_to(0, [4].into_iter()).cost(4), 50.);
+        let key = super::super::fabric::walks::path_key([30., 0.], p);
+        graph.exclude_walks(&[key].into());
+        assert!(!graph.routes_to(0, [4].into_iter()).cost(4).is_finite());
     }
 }

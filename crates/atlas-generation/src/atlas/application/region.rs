@@ -56,6 +56,7 @@ pub(super) fn create(
         parent_people.markets = std::rc::Rc::new(crate::field::refinement::people::markets(
             state.field(),
             records,
+            state.scope.city.as_ref().map(|city| city.settlement),
         )?);
     }
     let material = captured.material();

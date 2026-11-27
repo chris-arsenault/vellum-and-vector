@@ -36,6 +36,7 @@ pub(super) fn occupied_arcs(town: &Town, unit: f64, spacing: f64) -> Vec<StreetP
                 .collect();
             StreetProposal {
                 points,
+                joins_junctions: false,
                 benefit,
                 class: Class::Street,
                 demand: "occupied charter arc",

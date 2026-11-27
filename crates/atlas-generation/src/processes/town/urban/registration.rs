@@ -1,4 +1,5 @@
-use super::{circulation, city, claims, investment, landscape, programs, street, values};
+use super::{circulation, city, claims, investment, landscape, programs, values};
+use crate::town::{ground::Ground, influence::SiteConditions};
 use crate::{
     atlas::{
         dispatch::{Process, Registry, Schedule, SemanticRegistration, Specification},
@@ -11,6 +12,7 @@ use crate::{
 };
 use atlas_map::Geometry;
 use std::io;
+use std::rc::Rc;
 
 #[derive(Clone, Copy)]
 enum Task {
@@ -23,15 +25,19 @@ enum Task {
     Districts(f64),
     Landscape(super::activity::Settings),
     Circulation,
+    Livelihood,
     Premises,
+    Parcels,
+    Commons,
 }
 #[derive(Clone, Copy)]
 enum Origin {
     Partition,
     Frame,
+    OccupiedGround,
 }
 impl Source for Origin {
-    type Value = Geometry;
+    type Value = Evidence<Geometry, Rc<Ground>>;
 }
 #[derive(Clone, Copy)]
 enum Boundary {
@@ -39,13 +45,76 @@ enum Boundary {
     Defenses,
     Approaches,
     Districts,
-    CityStreets,
     Land,
+    LocalConditions,
 }
 impl Source for Boundary {
-    type Value = Vec<Feature>;
+    type Value = Evidence<Vec<Feature>, Rc<SiteConditions>>;
+}
+enum Evidence<C, S> {
+    City(C),
+    Street(S),
+}
+/// The town operations use their cached walking ground and the sampled conditions at
+/// each holding and proposed frontage. City operations request their own GIS inputs.
+#[derive(Clone, Copy)]
+pub(crate) struct LocalInputs {
+    initial: Condition<Origin>,
+    boundary: Condition<Boundary>,
+}
+impl LocalInputs {
+    pub(crate) const TOWN: Self = Self {
+        initial: Condition::From {
+            source: Origin::OccupiedGround,
+            absent: Absent::Error("Town development needs walking ground"),
+        },
+        boundary: Condition::From {
+            source: Boundary::LocalConditions,
+            absent: Absent::Error("Town development needs site conditions"),
+        },
+    };
+    pub(crate) fn ground(
+        self,
+        read: impl FnOnce() -> io::Result<Rc<Ground>>,
+    ) -> io::Result<Rc<Ground>> {
+        match self.initial.bind(|source| match source {
+            Origin::OccupiedGround => Ok(Some(Evidence::Street(read()?))),
+            _ => Err(io::Error::other(
+                "City geometry supplied to Street development",
+            )),
+        })? {
+            Some(Evidence::Street(ground)) => Ok(ground),
+            _ => Err(io::Error::other("Missing town ground")),
+        }
+    }
+    pub(crate) fn conditions(
+        self,
+        read: impl FnOnce() -> crate::execution::ExecutionResult<Rc<SiteConditions>>,
+    ) -> io::Result<Rc<SiteConditions>> {
+        match self.boundary.bind(|source| match source {
+            Boundary::LocalConditions => Ok(Some(Evidence::Street(
+                read().map_err(|e| io::Error::other(format!("{e:?}")))?,
+            ))),
+            _ => Err(io::Error::other(
+                "City boundary records supplied to Street development",
+            )),
+        })? {
+            Some(Evidence::Street(conditions)) => Ok(conditions),
+            _ => Err(io::Error::other("Missing town site conditions")),
+        }
+    }
 }
 type UrbanStrategy = Strategy<Task, Origin, Boundary>;
+const fn local(name: &'static str, task: Task) -> UrbanStrategy {
+    UrbanStrategy {
+        name,
+        time: EffectTime::Present,
+        slot: "town development",
+        algorithm: task,
+        initial: LocalInputs::TOWN.initial,
+        boundary: LocalInputs::TOWN.boundary,
+    }
+}
 const fn strategy(
     name: &'static str,
     task: Task,
@@ -74,12 +143,7 @@ const MOVEMENT: &[UrbanStrategy] = &[
         Origin::Frame,
         Boundary::Approaches,
     ),
-    strategy(
-        "local-circulation",
-        Task::Circulation,
-        Origin::Frame,
-        Boundary::CityStreets,
-    ),
+    local("local-circulation", Task::Circulation),
 ];
 const DISTRICTS: &[UrbanStrategy] = &[
     strategy(
@@ -102,25 +166,23 @@ const BUILD: &[UrbanStrategy] = &[
         Origin::Frame,
         Boundary::Land,
     ),
-    strategy("premises", Task::Premises, Origin::Frame, Boundary::Land),
+    local("premises", Task::Premises),
 ];
 type Registration = SemanticRegistration<Task, Origin, Boundary>;
-const CARRIED: UrbanStrategy = strategy(
-    "pending-unassigned",
-    Task::Pending,
-    Origin::Frame,
-    Boundary::Land,
-);
+const CARRIED: UrbanStrategy = local("pending-unassigned", Task::Pending);
+const LIVELIHOOD: &[UrbanStrategy] = &[CARRIED, local("premise-viability", Task::Livelihood)];
 const CLAIMS: &[UrbanStrategy] = &[
+    CARRIED,
     strategy(
         "city-area-claims",
         Task::Claims,
         Origin::Frame,
         Boundary::Land,
     ),
-    CARRIED,
+    local("parcel-claims", Task::Parcels),
 ];
 const INVEST: &[UrbanStrategy] = &[
+    CARRIED,
     strategy(
         "civic-precincts",
         Task::Civic(investment::PARCEL_WEIGHT.default),
@@ -133,18 +195,19 @@ const INVEST: &[UrbanStrategy] = &[
         Origin::Frame,
         Boundary::Defenses,
     ),
-    CARRIED,
+    local("local-commons-and-works", Task::Commons),
 ];
 pub(crate) fn owns(id: &str) -> bool {
     matches!(
         id,
         "town.movement"
             | "town.construction"
+            | "town.livelihood"
             | "town.land-competition"
             | "town.collective-investment"
     )
 }
-fn owners() -> [Registration; 5] {
+fn owners() -> [Registration; 6] {
     let make = |id, effect, reads, writes, strategies| Registration {
         owner: Contract {
             id,
@@ -160,6 +223,17 @@ fn owners() -> [Registration; 5] {
         produces: "",
     };
     [
+        make(
+            "town.livelihood",
+            "Resolve viable occupants, customers and suppliers through local access",
+            &[
+                Product::Premises,
+                Product::Travel,
+                Product::OccupiedFrontage,
+            ],
+            &[Product::Question("town operating ties")],
+            LIVELIHOOD,
+        ),
         make(
             "town.land-competition",
             "Resolve competing area claims",
@@ -257,11 +331,7 @@ fn controls(id: &str) -> &'static [crate::parameters::NumericParameter] {
         _ => &[],
     }
 }
-pub fn register(
-    registry: &mut Registry,
-    operations: Option<&Operations>,
-    district_catchment_scale: f64,
-) -> io::Result<()> {
+pub fn register(registry: &mut Registry, operations: Option<&Operations>) -> io::Result<()> {
     for owner in owners() {
         let id = owner.owner.id;
         let standalone = operations
@@ -272,97 +342,103 @@ pub fn register(
             CommandKind::Work,
             vec![],
             move |scope, input: &UrbanStrategy| {
-                if matches!(input.algorithm, Task::Pending) {
+                if matches!(
+                    input.algorithm,
+                    Task::Pending
+                        | Task::Circulation
+                        | Task::Livelihood
+                        | Task::Premises
+                        | Task::Parcels
+                        | Task::Commons
+                ) {
                     if let Some(op) = &standalone {
-                        scope.run(op, &())?;
+                        scope.run(
+                            op,
+                            &LocalInputs {
+                                initial: input.initial,
+                                boundary: input.boundary,
+                            },
+                        )?;
+                    } else if !matches!(input.algorithm, Task::Pending) {
+                        return Err(
+                            io::Error::other(format!("Missing Street operation for {id}")).into(),
+                        );
                     }
                     return Ok(());
                 }
                 let state: &mut State = scope.state_mut();
-                if matches!(input.algorithm, Task::Circulation | Task::Premises)
-                    && !state
-                        .regional
-                        .as_ref()
-                        .is_some_and(|r| r.city.urban.district_child)
-                {
-                    if let Some(operation) = &standalone {
-                        scope.run(operation, &())?;
-                    }
-                    return Ok(());
-                }
                 let Some(region) = state.regional.as_mut() else {
                     return Ok(());
                 };
                 let mut urban = std::mem::take(&mut region.city.urban);
                 let round = region.round;
                 let result = (|| -> io::Result<()> {
-                    let Some(domain) = input.initial.bind(|source| match source {
-                        Origin::Partition => Ok(urban
-                            .domain
-                            .clone()
-                            .or_else(|| state.scope.outline.clone())
-                            .or_else(|| Some(state.scope.footprint.clone()))),
-                        Origin::Frame => Ok(Some(
-                            state
-                                .scope
-                                .outline
-                                .as_ref()
-                                .unwrap_or(&state.scope.footprint)
-                                .clone(),
-                        )),
+                    let Some(Evidence::City(domain)) = input.initial.bind(|source| {
+                        Ok(match source {
+                            Origin::Partition => urban
+                                .domain
+                                .clone()
+                                .or_else(|| state.scope.outline.clone())
+                                .or_else(|| Some(state.scope.footprint.clone())),
+                            Origin::Frame => Some(
+                                state
+                                    .scope
+                                    .outline
+                                    .as_ref()
+                                    .unwrap_or(&state.scope.footprint)
+                                    .clone(),
+                            ),
+                            Origin::OccupiedGround => {
+                                return Err(io::Error::other(
+                                    "Street walking ground in City process",
+                                ))
+                            }
+                        }
+                        .map(Evidence::City))
                     })?
                     else {
                         urban.fields = Default::default();
                         return Ok(());
                     };
-                    let boundary = input
-                        .boundary
-                        .bind(|source| {
-                            Ok(Some(match source {
-                                Boundary::Approaches => {
-                                    let mut roads = super::ground_routes(state)?;
-                                    if roads.is_empty() {
-                                        roads.extend(values(state, "road")?);
-                                    }
-                                    roads.extend(values(state, "thoroughfare")?);
-                                    roads
+                    let Some(Evidence::City(boundary)) = input.boundary.bind(|source| {
+                        Ok(Some(Evidence::City(match source {
+                            Boundary::Approaches => {
+                                let mut roads = super::ground_routes(state)?;
+                                if roads.is_empty() {
+                                    roads.extend(values(state, "road")?);
                                 }
-                                Boundary::Sponsors => {
-                                    let mut sponsors = values(state, "institution")?;
-                                    sponsors.extend(values(state, "majorWork")?);
-                                    sponsors
-                                }
-                                Boundary::Defenses => {
-                                    let mut works = values(state, "cityWall")?;
-                                    works.extend(values(state, "cityGate")?);
-                                    works
-                                }
-                                Boundary::Districts => values(state, "district")?,
-                                Boundary::CityStreets => urban
-                                    .captured
-                                    .iter()
-                                    .filter(|f| f.kind == "thoroughfare")
-                                    .cloned()
-                                    .collect(),
-                                Boundary::Land if urban.district_child => urban
-                                    .captured
-                                    .iter()
-                                    .filter(|f| {
-                                        f.kind != "district"
-                                            && (f.protected
-                                                || matches!(
-                                                    f.kind.as_str(),
-                                                    "square" | "park" | "building"
-                                                ))
-                                    })
-                                    .cloned()
-                                    .collect(),
-                                Boundary::Land => super::reservations(state)?,
-                            }))
-                        })?
-                        .unwrap_or_default();
+                                roads.extend(values(state, "thoroughfare")?);
+                                roads
+                            }
+                            Boundary::Sponsors => {
+                                let mut sponsors = values(state, "institution")?;
+                                sponsors.extend(values(state, "majorWork")?);
+                                sponsors
+                            }
+                            Boundary::Defenses => {
+                                let mut works = values(state, "cityWall")?;
+                                works.extend(values(state, "cityGate")?);
+                                works
+                            }
+                            Boundary::Districts => values(state, "district")?,
+                            Boundary::Land => super::reservations(state)?,
+                            Boundary::LocalConditions => {
+                                return Err(io::Error::other(
+                                    "Street site conditions in City process",
+                                ))
+                            }
+                        })))
+                    })?
+                    else {
+                        return Ok(());
+                    };
                     match input.algorithm {
-                        Task::Pending => unreachable!(),
+                        Task::Pending
+                        | Task::Circulation
+                        | Task::Livelihood
+                        | Task::Premises
+                        | Task::Parcels
+                        | Task::Commons => unreachable!(),
                         Task::Claims => claims::resolve(state, &mut urban, &domain, &boundary),
                         Task::Civic(weight) => {
                             investment::civic(state, &mut urban, &domain, boundary, weight)
@@ -380,7 +456,7 @@ pub fn register(
                             state,
                             &mut urban,
                             boundary,
-                            district_catchment_scale,
+                            settings.catchment,
                             settings,
                         ),
                         Task::Districts(weight) => {
@@ -389,13 +465,6 @@ pub fn register(
                         Task::Landscape(settings) => {
                             landscape::develop(state, &mut urban, &domain, &boundary, settings)
                         }
-                        Task::Circulation => street::circulation(
-                            state,
-                            &mut urban,
-                            &domain,
-                            &boundary.into_iter().map(|f| f.geometry).collect::<Vec<_>>(),
-                        ),
-                        Task::Premises => street::premises(state, &mut urban, &domain, &boundary),
                     }
                 })();
                 state.regional.as_mut().unwrap().city.urban = urban;

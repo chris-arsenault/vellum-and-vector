@@ -35,37 +35,42 @@ pub(super) fn visits(
         return visits;
     }
     let mut queries = graph.distance_queries();
-    let targets = Clientele::ALL.map(|group| {
-        queries.destinations(
-            attractions
-                .iter()
-                .enumerate()
-                .filter(move |(_, w)| w[group as usize] > 0.)
-                .map(|(i, _)| (i, i)),
-        )
-    });
-    let mut shares = Vec::new();
     let scale = town.scale();
-    for (i, source) in sources.iter().enumerate() {
-        let Some(group) = source.clientele.filter(|_| source.demand > 0.) else {
-            continue;
-        };
-        let reach = group.reach(scale);
-        shares.clear();
-        queries.within(holdings.len() + i, reach);
-        queries.reached(&targets[group as usize], reach, |target, cost| {
-            if source.endpoint
-                != (Endpoint::Premises {
-                    town: town.seat.key,
-                    holding: holdings[target].id,
-                })
-            {
-                let draw = group.draw(attractions[target][group as usize], cost, scale);
-                shares.push((target, draw));
-            }
-        });
+    let mut draws = vec![Vec::new(); sources.len()];
+    for group in Clientele::ALL {
+        let patrons = sources
+            .iter()
+            .enumerate()
+            .filter(|(_, s)| s.clientele == Some(group) && s.demand > 0.)
+            .map(|(i, _)| holdings.len() + i)
+            .collect::<Vec<_>>();
+        let venues = attractions
+            .iter()
+            .enumerate()
+            .filter(|(_, w)| w[group as usize] > 0.)
+            .map(|(target, _)| target)
+            .collect::<Vec<_>>();
+        queries.pairs_within(
+            &patrons,
+            &venues,
+            group.reach(scale),
+            |origin, target, cost| {
+                let i = origin - holdings.len();
+                if sources[i].endpoint
+                    != (Endpoint::Premises {
+                        town: town.seat.key,
+                        holding: holdings[target].id,
+                    })
+                {
+                    let draw = group.draw(attractions[target][group as usize], cost, scale);
+                    draws[i].push((target, draw));
+                }
+            },
+        );
+    }
+    for (source, shares) in sources.iter().zip(draws) {
         let total = 1. + shares.iter().map(|(_, draw)| draw).sum::<f64>();
-        for &(target, attraction) in &shares {
+        for (target, attraction) in shares {
             visits[target].push(OperatingTie {
                 purpose: Operation::Customers,
                 destination: source.endpoint.clone(),
@@ -73,7 +78,7 @@ pub(super) fn visits(
                 access: AccessUse::Foot,
                 strength: source.demand * attraction / total,
                 productive: None,
-                clientele: Some(group),
+                clientele: source.clientele,
             });
         }
     }

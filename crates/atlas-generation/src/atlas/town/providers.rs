@@ -412,7 +412,8 @@ pub fn use_exposure() -> Query<State, crate::town::influence::SiteConditions> {
     Query::new("town.exposure.use", vec![], |state: &State, reader| {
         let requests = reader.input::<super::development::SiteRequests>()?;
         let mut results = Vec::new();
-        for (town, points) in state.town.towns.iter().zip(&requests.0) {
+        for (town, request) in state.town.towns.iter().zip(&requests.towns) {
+            let points = &request.points;
             let reach = Reach::of(town.scale());
             let mut services = vec![Conditions::default(); points.len()];
             let fields: Vec<_> = state
@@ -446,7 +447,7 @@ pub fn use_exposure() -> Query<State, crate::town::influence::SiteConditions> {
             for (site, &p) in points.iter().enumerate() {
                 let mut local = places::LocalSite::new(
                     p,
-                    requests.3[results.len()][site],
+                    request.memberships[site],
                     places::Carrier::at(state.field(), p)?,
                     town.scale(),
                 );
@@ -464,13 +465,15 @@ pub fn use_exposure() -> Query<State, crate::town::influence::SiteConditions> {
                 }
                 sites.push(local);
             }
-            places::accessible(
-                town,
-                points,
-                &requests.2,
-                state.spatial.as_ref(),
-                &mut services,
-            )?;
+            if request.needs_services {
+                places::accessible(
+                    town,
+                    points,
+                    &requests.ground,
+                    state.spatial.as_ref(),
+                    &mut services,
+                )?;
+            }
             for (site, condition) in sites.into_iter().zip(&mut services) {
                 site.finish(condition);
             }

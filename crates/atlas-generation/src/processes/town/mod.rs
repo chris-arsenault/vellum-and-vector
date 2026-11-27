@@ -2,6 +2,7 @@
 pub mod competition;
 pub mod construction;
 mod crossroads;
+pub(crate) mod cultivation;
 pub mod economy;
 pub mod investment;
 pub mod movement;
@@ -25,6 +26,7 @@ pub struct Candidate {
 }
 pub struct Frontage<'a> {
     pub walking_ground: &'a Ground,
+    pub channel_depth: &'a dyn Fn(crate::town::geometry::Point) -> io::Result<Option<f64>>,
     pub outlying: &'a [(&'a crate::town::founding::OutlyingSite, [Conditions; 2])],
     pub links: &'a [(
         crate::town::geometry::Point,

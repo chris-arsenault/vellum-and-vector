@@ -12,9 +12,12 @@ use std::{collections::BTreeMap, fs, io};
 
 impl Jobs {
     pub fn contexts(&self, call: Call) -> io::Result<Value> {
+        let maps = PostgresMaps::connect(&self.settings.database_url)?;
+        if matches!(call, Call::Maps) {
+            return serde_json::to_value(maps.map_index()?).map_err(Into::into);
+        }
         // Start/resume and deletion share this host lock; running workers retain their data.
         let mut jobs = self.jobs.lock().map_err(poisoned)?;
-        let maps = PostgresMaps::connect(&self.settings.database_url)?;
         let inputs = PrivateInputs::connect(&self.settings.generation_url)?;
         if let Call::Delete(target) = call {
             self.delete_context(target, &mut jobs, &maps, &inputs)?;

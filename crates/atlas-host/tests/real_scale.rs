@@ -82,6 +82,30 @@ fn shapes_mark_the_hexes_they_cover_or_cross() {
 }
 
 #[test]
+fn a_beaten_takaoka_path_can_publish_its_line_without_a_surface() {
+    let spatial = NativeGeos::new(1e-6).unwrap();
+    let line = [
+        Position::xy(99932.021, 420440.658),
+        Position::xy(99932.831, 420441.623),
+    ];
+    let worn_width = 7.9926055537316e-12;
+    let path = Geometry::LineString {
+        coordinates: line.to_vec(),
+    };
+    for widths in [[worn_width; 2], [1e-8, 3e-8]] {
+        let footprint =
+            atlas_map::hexes::widened_footprint(&path, Some(&serde_json::json!(widths)), &spatial)
+                .unwrap();
+        assert!(footprint.is_none());
+    }
+    assert!(spatial.length(&path).unwrap() > 1.0);
+    let tapered = width_outline(&line, &[worn_width, 0.7], &spatial)
+        .unwrap()
+        .unwrap();
+    assert!(spatial.area(&tapered).unwrap() > 0.);
+}
+
+#[test]
 fn a_line_with_changing_width_covers_more_ground_where_it_widens() {
     let spatial = NativeGeos::new(1e-9).unwrap();
     let line = [

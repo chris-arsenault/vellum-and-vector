@@ -6,7 +6,7 @@ import type { MapFeature } from "@atlas/map";
 import { descriptor } from "./testSupport/mapProductFixture";
 import { publishedAppearance, publishedFeature, publishedStyles } from "./publishedAppearance";
 import { typeStyle } from "./typeStyles";
-import { publishedWindows } from "./publishedScene";
+import { publishedStreetScene, publishedWindows, streetSceneStages } from "./publishedScene";
 
 function fixture() {
   const map = descriptor("styles"),
@@ -111,4 +111,66 @@ it("queries both canonical windows while panning across a cylindrical map", () =
     [0, 2, 2, 6],
   ]);
   expect(publishedWindows(space, [-10, 2, 20, 6])).toEqual([[0, 2, 10, 6]]);
+});
+it("opens the requested Street layers from principal roads to detail, including unclassified roads", () => {
+  const { map, layer } = fixture();
+  const roadLayer = (id: string, kinds: string[]) => ({
+    ...layer,
+    id,
+    catalog: {
+      ...layer.catalog,
+      featureTypes: kinds.map((kind) => ({
+        ...layer.catalog.featureTypes[0],
+        id: `type-${kind}`,
+        kind,
+      })),
+    },
+  });
+  map.layers.push(
+    roadLayer("vector:roads", ["thoroughfare", "street", "alley", "footpath"]),
+    roadLayer("vector:roads@floor", []),
+    roadLayer("vector:structures", ["building"]),
+    roadLayer("vector:hexes", ["hex"]),
+    roadLayer("vector:lakes", ["lake"])
+  );
+  const selected = map.layers
+    .filter((entry) => entry.source.kind === "vector" && entry.id !== "vector:lakes")
+    .map(({ id }) => id);
+  expect(streetSceneStages(map, selected)).toEqual([
+    [
+      { layerIds: ["vector:rivers"] },
+      { layerIds: ["vector:roads"], typeIds: ["type-thoroughfare"] },
+    ],
+    [
+      { layerIds: ["vector:roads"], typeIds: ["type-street", "type-alley"] },
+      { layerIds: ["vector:roads@floor"] },
+    ],
+    [{ layerIds: ["vector:structures"] }],
+    [{ layerIds: ["vector:roads"], typeIds: ["type-footpath"] }, { layerIds: ["vector:hexes"] }],
+  ]);
+});
+it("cancels superseded Street reads after the first visible geography", async () => {
+  const { map, feature } = fixture();
+  const abort = new AbortController();
+  const reads: string[][] = [];
+  const run = publishedStreetScene(
+    {
+      async features(_ref, query, options) {
+        expect(options?.signal).toBe(abort.signal);
+        reads.push(query.layerIds ?? []);
+        return { items: [feature], next: null };
+      },
+    },
+    map,
+    map.primarySpaceId,
+    map.bounds,
+    ["vector:rivers", "vector:structures"],
+    abort.signal,
+    async (records) => {
+      expect(records).toEqual([feature]);
+      abort.abort();
+    }
+  );
+  await expect(run).rejects.toMatchObject({ name: "AbortError" });
+  expect(reads).toEqual([["vector:rivers"]]);
 });

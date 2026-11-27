@@ -116,9 +116,12 @@ function surfaced(base: Expr): Expr {
     base,
   ];
 }
-export function terrainStyle(view: RasterPresentation): Style {
+/** At Street scale the occupied settlement is the foreground on a Surface basemap. */
+export function terrainStyle(view: RasterPresentation, settlement = false): Style {
   const { slope, light } = gradients();
   const water = band(terrainBand.water);
+  const streetSurface = settlement && view.base === "surface";
+  const land = surfaced(landColor());
   const sea = ramp(band(terrainBand.relative), ["#6f9dab", "#b6d4d7"], -6000, 0);
   const color: Expr = [
     "case",
@@ -126,7 +129,7 @@ export function terrainStyle(view: RasterPresentation): Style {
     "#a1c8ce",
     [">", water, 0.5],
     surfaced(sea),
-    surfaced(landColor()),
+    streetSurface ? ["interpolate", ["linear"], 0.72, 0, "#f2eedf", 1, land] : land,
   ];
   // owner-direction(2026-11-16): on a topo map, ice fields must not block everything else out
   // Ice tints the terrain beneath, so elevation colour, hillshade and contours stay readable.
@@ -137,7 +140,11 @@ export function terrainStyle(view: RasterPresentation): Style {
   ];
   return {
     variables: terrainVariables(view),
-    brightness: ["-", ["*", 0.55, light], 0.4],
+    brightness: [
+      "*",
+      streetSurface ? ["case", ["<", water, 0.5], 0.24, 1] : 1,
+      ["-", ["*", 0.55, light], 0.4],
+    ],
     color: [
       "case",
       mask,

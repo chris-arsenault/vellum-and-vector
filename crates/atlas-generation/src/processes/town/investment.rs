@@ -2,7 +2,9 @@
 use super::Exposure;
 use crate::town::{
     catalogue::{Kind, PlaceRules},
-    fabric::{Anchor, FabricEdit, FabricOwner, Purpose, Relationship, Specification, Town},
+    fabric::{
+        Anchor, FabricEdit, FabricOwner, HoldingId, Purpose, Relationship, Specification, Town,
+    },
     scale::Measure,
 };
 use std::io;
@@ -13,6 +15,7 @@ const PREMISES_PAD: f64 = 5.;
 pub fn advance(town: &mut Town, context: &Exposure<'_>) -> io::Result<()> {
     extend_precincts(town, context)?;
     collective_needs(town, context);
+    let mut pledges = Pledges::default();
     let mut investments = Vec::new();
     for i in 0..town.purposes().len() {
         let purpose = &town.purposes()[i];
@@ -40,7 +43,7 @@ pub fn advance(town: &mut Town, context: &Exposure<'_>) -> io::Result<()> {
             );
         }
         if let Some((value, edit)) = adaptations.into_iter().max_by(|a, b| a.0.total_cmp(&b.0)) {
-            investments.extend(finance(town, edit).map(|funded| (value, funded)));
+            investments.extend(pledges.finance(town, edit).map(|funded| (value, funded)));
         }
     }
     investments.extend(town.holdings().iter().zip(context.conditions).filter_map(
@@ -63,14 +66,15 @@ pub fn advance(town: &mut Town, context: &Exposure<'_>) -> io::Result<()> {
                     + definition.roles.learns_from * local.effects.learning);
             (support > definition.demand)
                 .then(|| {
-                    finance(
-                        town,
-                        FabricEdit::Improve {
-                            premises: holding.id,
-                            use_,
-                        },
-                    )
-                    .map(|edit| (support, edit))
+                    pledges
+                        .finance(
+                            town,
+                            FabricEdit::Improve {
+                                premises: holding.id,
+                                use_,
+                            },
+                        )
+                        .map(|edit| (support, edit))
                 })
                 .flatten()
         },
@@ -85,53 +89,86 @@ fn invest_together(
 ) -> io::Result<()> {
     // hpc-exempt: patrons choose among specific town fabric interventions.
     improvements.sort_by(|a, b| b.0.total_cmp(&a.0));
-    let mut groups: Vec<(Vec<crate::town::fabric::HoldingId>, Vec<FabricEdit>)> = Vec::new();
+    let mut groups: Vec<Vec<FabricEdit>> = Vec::new();
+    let mut first_group = vec![usize::MAX; town.holdings().len()];
     for (_, edit) in improvements {
         let contributors = match &edit {
-            FabricEdit::Sponsored { contributors, .. } => contributors.clone(),
-            _ => Vec::new(),
+            FabricEdit::Sponsored { contributors, .. } => contributors.as_slice(),
+            _ => &[],
         };
-        if let Some((funders, projects)) = groups
-            .iter_mut()
-            .find(|(funders, _)| contributors.iter().any(|id| funders.contains(id)))
-        {
-            funders.extend(contributors);
-            projects.push(FabricEdit::Optional(Box::new(edit)));
+        let group = contributors
+            .iter()
+            .map(|id| first_group[id.0 as usize])
+            .min()
+            .unwrap_or(usize::MAX)
+            .min(groups.len());
+        for id in contributors {
+            let first = &mut first_group[id.0 as usize];
+            *first = (*first).min(group);
+        }
+        if group < groups.len() {
+            groups[group].push(FabricEdit::Optional(Box::new(edit)));
         } else {
-            groups.push((contributors, vec![edit]));
+            groups.push(vec![edit]);
         }
     }
-    for (_, projects) in groups {
+    for projects in groups {
         town.apply(FabricEdit::Project(projects), spatial)?;
     }
     Ok(())
 }
 /// A collective purpose may draw on several operating premises across town. Physical
 /// requirements belong to its proposed site, independently of contributors' addresses.
-pub(super) fn finance(town: &Town, edit: FabricEdit) -> Option<FabricEdit> {
-    let (kind, existing) = edit.accommodation()?;
-    let cost = kind.definition().investment_cost();
-    let mut offers: Vec<_> = town
-        .holdings()
-        .iter()
-        .filter(|h| Some(h.id) != existing && h.pledge() > 0.)
-        .map(|h| (h.id, h.pledge()))
-        .collect();
-    // hpc-exempt: compares named premises making financial offers for one physical project.
-    offers.sort_by(|a, b| b.1.total_cmp(&a.1));
-    let mut funds = 0.;
-    let mut contributors = Vec::new();
-    for (id, pledge) in offers {
-        contributors.push(id);
-        funds += pledge;
-        if funds >= cost {
-            return Some(FabricEdit::Sponsored {
-                contributors,
-                placement: Box::new(edit),
-            });
+#[derive(Default)]
+pub(super) struct Pledges {
+    // hpc-exempt: positive named pledges rank by amount, then by their order in the town.
+    ranked: std::collections::BTreeSet<(std::cmp::Reverse<u64>, HoldingId)>,
+    previous: Vec<u64>,
+}
+impl Pledges {
+    fn record(&mut self, id: HoldingId, amount: f64) {
+        let index = id.0 as usize;
+        let pledge = amount.max(0.).to_bits();
+        if index < self.previous.len() {
+            let old = std::mem::replace(&mut self.previous[index], pledge);
+            self.ranked.remove(&(std::cmp::Reverse(old), id));
+        } else {
+            self.previous.push(pledge);
+        }
+        if amount > 0. {
+            self.ranked.insert((std::cmp::Reverse(pledge), id));
         }
     }
-    None
+    fn contributors(&self, cost: f64, existing: Option<HoldingId>) -> Option<Vec<HoldingId>> {
+        let mut funds = 0.;
+        let mut contributors = Vec::new();
+        for &(std::cmp::Reverse(amount), id) in &self.ranked {
+            if Some(id) == existing {
+                continue;
+            }
+            funds += f64::from_bits(amount);
+            contributors.push(id);
+            if funds >= cost {
+                return Some(contributors);
+            }
+        }
+        None
+    }
+    pub(super) fn finance(&mut self, town: &Town, edit: FabricEdit) -> Option<FabricEdit> {
+        let (kind, existing) = edit.accommodation()?;
+        for holding in &town.holdings()[self.previous.len()..] {
+            self.record(holding.id, holding.pledge());
+        }
+        Some(FabricEdit::Sponsored {
+            contributors: self.contributors(kind.definition().investment_cost(), existing)?,
+            placement: Box::new(edit),
+        })
+    }
+    pub(super) fn paid(&mut self, town: &Town, project: HoldingId) {
+        for &id in &town.holdings()[project.0 as usize].sponsors {
+            self.record(id, town.holdings()[id.0 as usize].pledge());
+        }
+    }
 }
 
 fn extend_precincts(town: &mut Town, context: &Exposure<'_>) -> io::Result<()> {
@@ -176,6 +213,11 @@ fn extend_precincts(town: &mut Town, context: &Exposure<'_>) -> io::Result<()> {
 }
 fn collective_needs(town: &mut Town, context: &Exposure<'_>) {
     for &kind in &crate::town::catalogue::PLACES {
+        let Some(requested) =
+            crate::town::catalogue::development::collective_need(kind, town.seat.story.people)
+        else {
+            continue;
+        };
         // Sites already seeking this kind, gathered once rather than per holding.
         let sought: Vec<_> = town
             .purposes()
@@ -189,14 +231,7 @@ fn collective_needs(town: &mut Town, context: &Exposure<'_>) {
             .iter()
             .zip(context.conditions)
             .filter(|(h, c)| {
-                h.condition > 0.35
-                    && h.occupation > 0.2
-                    && crate::town::catalogue::development::collective_need(
-                        kind,
-                        town.seat.story.people,
-                        h.slot.front,
-                        c.waste,
-                    )
+                h.condition > 0.35 && h.occupation > 0.2 && requested(h.slot.front, c.waste)
             })
             .filter(|(h, _)| {
                 !sought
@@ -206,7 +241,13 @@ fn collective_needs(town: &mut Town, context: &Exposure<'_>) {
             .max_by(|(a, ca), (b, cb)| {
                 let intensity =
                     |h: &crate::town::fabric::Holding, c: &crate::town::influence::Conditions| {
-                        h.occupation * (1. + c.households + c.workshops + c.density + c.waste)
+                        h.occupation
+                            * (1.
+                                + c.households
+                                + c.workshops
+                                + c.density
+                                + c.waste
+                                + c.common_demand)
                     };
                 intensity(a, ca).total_cmp(&intensity(b, cb))
             })
@@ -319,4 +360,25 @@ fn share(
             use_: kind,
         },
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{HoldingId, Pledges};
+
+    #[test]
+    fn projects_draw_the_highest_live_pledges_excluding_their_own_premises() {
+        let [a, b, c, d] = [0, 1, 2, 3].map(HoldingId);
+        let mut offers = Pledges::default();
+        for (owner, amount) in [(a, 3.), (b, 4.), (c, 4.), (d, 0.)] {
+            offers.record(owner, amount);
+        }
+        assert_eq!(offers.contributors(5., None), Some(vec![b, c]));
+        assert_eq!(offers.contributors(6., Some(b)), Some(vec![c, a]));
+        offers.record(b, 0.5);
+        offers.record(c, 0.);
+        offers.record(HoldingId(4), 2.);
+        assert_eq!(offers.contributors(4., None), Some(vec![a, HoldingId(4)]));
+        assert_eq!(offers.contributors(6., None), None);
+    }
 }

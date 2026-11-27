@@ -29,6 +29,7 @@ pub struct Orphan {
 #[derive(Deserialize)]
 #[serde(tag = "method", content = "request", rename_all = "camelCase")]
 pub enum Call {
+    Maps,
     List,
     Delete(Target),
 }

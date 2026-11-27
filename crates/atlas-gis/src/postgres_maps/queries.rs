@@ -191,6 +191,9 @@ impl PostgresMaps {
         if let Some(layers) = &query.layer_ids {
             clauses.push(format!("f.layer_id=ANY({})", params.bind(layers.clone())));
         }
+        if let Some(types) = &query.type_ids {
+            clauses.push(format!("f.type_id=ANY({})", params.bind(types.clone())));
+        }
         if let Some(ids) = &query.feature_ids {
             clauses.push(format!("f.id=ANY({})", params.bind(uuids(ids))));
         }

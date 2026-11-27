@@ -27,26 +27,21 @@ export interface PublishedDrawingProducts extends DrawingGeometry {
 export async function updatePublishedDrawing(
   engine: PublishedMapEngine,
   input: PublishedDrawing,
-  products: PublishedDrawingProducts
+  products: PublishedDrawingProducts,
+  partial = false
 ) {
   const drawn = input.view.mode === "drawn",
-    content = publishedDrawingContent(input, products);
-  engine.furniture.set("sheet", content.sheet);
+    content = drawn ? publishedDrawingContent(input, products) : undefined;
+  if (content) engine.furniture.set("sheet", content.sheet);
   configureDrawing(engine, input, drawn);
   const extent = drawn && input.view.clip ? bounds(input.footprint) : undefined;
   await engine.vectors.update(
     input.features,
     input.entities,
     input.styles,
-    drawn
-      ? {
-          view: input.view,
-          footprint: input.view.clip ? input.footprint : undefined,
-          geography: content.geography,
-          features: new Map(products.features.map((feature) => [feature.id, feature])),
-        }
-      : undefined,
-    input.realScale
+    vectorDrawing(input, products, content),
+    input.realScale,
+    partial
   );
   if (engine.drawing.get("input") !== input) return;
   for (const [id, layer] of engine.vectors.layers) {
@@ -55,8 +50,17 @@ export async function updatePublishedDrawing(
   }
   const source = engine.drawing.getSource()!;
   source.clear();
-  if (!drawn) return;
+  if (!content) return;
   engine.drawing.setExtent(extent);
+  illustrate(engine, input, products, content);
+}
+function illustrate(
+  engine: PublishedMapEngine,
+  input: PublishedDrawing,
+  products: PublishedDrawingProducts,
+  content: ReturnType<typeof publishedDrawingContent>
+) {
+  const source = engine.drawing.getSource()!;
   source.addFeature(painted(input.footprint, "#eee4c9", "#8b7c60", -100));
   source.addFeatures(
     products.oceans.map((ocean) =>
@@ -72,6 +76,19 @@ export async function updatePublishedDrawing(
   const mask = engine.mask.getSource()!;
   mask.clear();
   if (products.mask) mask.addFeature(painted(products.mask, "#eee4c9", "#c9b995", 0));
+}
+function vectorDrawing(
+  input: PublishedDrawing,
+  products: PublishedDrawingProducts,
+  content?: ReturnType<typeof publishedDrawingContent>
+) {
+  if (!content) return undefined;
+  return {
+    view: input.view,
+    footprint: input.view.clip ? input.footprint : undefined,
+    geography: content.geography,
+    features: new Map(products.features.map((feature) => [feature.id, feature])),
+  };
 }
 function configureDrawing(engine: PublishedMapEngine, input: PublishedDrawing, drawn: boolean) {
   engine.drawing.set("input", input);

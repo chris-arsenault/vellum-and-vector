@@ -15,6 +15,8 @@ const SLOPE_RESISTANCE: f64 = 0.15;
 
 /// A settlement template's city guidance for one growth pass.
 pub struct Guidance {
+    /// Land inside the captured settled outline, including currently vacant lots.
+    pub settled: Vec<bool>,
     pub census: std::rc::Rc<Vec<crate::field::refinement::people::CensusCell>>,
     pub road_access: Vec<f64>,
     pub crossings: Vec<crate::links::Link>,

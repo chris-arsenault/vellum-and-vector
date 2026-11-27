@@ -120,6 +120,9 @@ impl Canvas {
     pub fn height(&self) -> u32 {
         self.pixmap.height()
     }
+    pub fn pixels(&self, metres: f64) -> f64 {
+        metres * self.scale
+    }
     /// Paint a published categorical raster in its world coordinates, inside the map edge.
     pub fn surface(&mut self, image: &Pixmap, bounds: atlas_map::Bounds, footprint: &Geometry) {
         let Some(path) = self.path(&parts(footprint), true) else {
@@ -220,11 +223,31 @@ impl Canvas {
     }
     /// Draws a line `width` metres wide, at least `least` pixels.
     pub fn line(&mut self, points: &[Point], width: f64, least: f64, hex: &str) {
-        self.lines(&[points.to_vec()], width, least, hex, false);
+        self.lines(&[points.to_vec()], width, least, &Self::paint(hex), false);
     }
     /// Draws every line and ring of a geometry.
     pub fn outline(&mut self, geometry: &Geometry, width: f64, least: f64, hex: &str) {
-        self.lines(&parts(geometry), width, least, hex, is_area(geometry));
+        self.lines(
+            &parts(geometry),
+            width,
+            least,
+            &Self::paint(hex),
+            is_area(geometry),
+        );
+    }
+    /// A beaten tread keeps its measured width, even below one pixel.
+    pub fn footpath(&mut self, lines: &[Vec<Point>], width: f64, wear: Option<f64>) {
+        let wear = wear.unwrap_or(4.).max(0.);
+        let pigment = 0.12 + 0.72 * wear / (wear + 4.);
+        let opacity = (pigment / (width / 0.7).min(1.)).min(0.84);
+        let mut paint = Paint::default();
+        paint.set_color(Color::from_rgba8(
+            115,
+            92,
+            63,
+            (255. * opacity).round() as u8,
+        ));
+        self.lines(lines, width, 0., &paint, false);
     }
     pub fn dashed(&mut self, points: &[Point], width: f64, hex: &str) {
         let Some(path) = self.path(&[points.to_vec()], false) else {
@@ -240,18 +263,13 @@ impl Canvas {
             None,
         );
     }
-    fn lines(&mut self, lines: &[Vec<Point>], width: f64, least: f64, hex: &str, closed: bool) {
+    fn lines(&mut self, lines: &[Vec<Point>], width: f64, least: f64, paint: &Paint, closed: bool) {
         let Some(path) = self.path(lines, closed) else {
             return;
         };
         let stroke = self.stroke(width, least);
-        self.pixmap.stroke_path(
-            &path,
-            &Self::paint(hex),
-            &stroke,
-            Transform::identity(),
-            None,
-        );
+        self.pixmap
+            .stroke_path(&path, paint, &stroke, Transform::identity(), None);
     }
     /// Marks each point of a geometry with a ringed dot `pixels` across, whatever the scale.
     pub fn mark(&mut self, geometry: &Geometry, pixels: f64, hex: &str) {

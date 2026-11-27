@@ -7,6 +7,9 @@ use crate::town::{
 };
 // hpc-exempt: town walks group by geometric junction pairs rather than mesh cells.
 use std::collections::{BTreeMap, BTreeSet};
+pub(super) mod passages;
+// hpc-exempt: demand shared along exact walked junction pairs.
+pub(super) type Worn = BTreeMap<[JunctionId; 2], (f64, Class)>;
 
 struct Use {
     old: f64,
@@ -25,8 +28,84 @@ pub(super) struct Walks {
 
 pub(super) struct LaneCourse {
     pub points: Vec<Point>,
+    pub(super) junctions: Vec<usize>,
     pub wear: f64,
     pub class: Class,
+    pub joins: Option<[usize; 2]>,
+}
+impl LaneCourse {
+    /// A long public walk can be improved one junction at a time when the
+    /// whole route crosses a building, a square, or unaffordable land.
+    pub fn junction_sections<'a>(&self, aligned: &'a [Point]) -> Vec<&'a [Point]> {
+        let mut sections = Vec::new();
+        if self.junctions.is_empty() {
+            return sections;
+        }
+        let mut start = 0;
+        for index in &self.junctions {
+            let Some(offset) = aligned[start + 1..]
+                .iter()
+                .position(|p| *p == self.points[*index])
+            else {
+                continue;
+            };
+            let end = start + 1 + offset;
+            sections.push(&aligned[start..=end]);
+            start = end;
+        }
+        if start > 0 && start + 1 < aligned.len() {
+            sections.push(&aligned[start..]);
+        }
+        sections
+    }
+
+    /// Simplify the turns of the walking mesh within a carriageway. Every
+    /// branch still meets the same physical point, and a shortcut across
+    /// occupied or impassable ground keeps its original path.
+    pub fn alignment(
+        &self,
+        spatial: &dyn crate::spatial::SpatialKernel,
+        ground: &Ground,
+        tolerance: f64,
+    ) -> std::io::Result<Vec<Point>> {
+        let mut result = vec![self.points[0]];
+        let mut start = 0;
+        for end in self
+            .junctions
+            .iter()
+            .copied()
+            .chain(std::iter::once(self.points.len() - 1))
+        {
+            let section = &self.points[start..=end];
+            if section.len() > 2 {
+                let simplified = spatial
+                    .resample_trace(&crate::town::growth::line(section), tolerance, None)
+                    .map_err(std::io::Error::other)?;
+                if let atlas_map::Geometry::LineString { coordinates } = simplified {
+                    let points: Vec<_> = coordinates
+                        .into_iter()
+                        .map(|p| {
+                            let [x, y, _] = p.coordinates();
+                            [x, y]
+                        })
+                        .collect();
+                    if points.len() >= 2
+                        && points
+                            .windows(2)
+                            .all(|pair| walking::clear(ground, pair[0], pair[1]))
+                    {
+                        result.extend_from_slice(&points[1..points.len() - 1]);
+                        result.push(section[section.len() - 1]);
+                        start = end;
+                        continue;
+                    }
+                }
+            }
+            result.extend_from_slice(&section[1..]);
+            start = end;
+        }
+        Ok(result)
+    }
 }
 impl Walks {
     pub fn new(town: &Town, ground: &Ground) -> Self {
@@ -77,25 +156,21 @@ impl Walks {
     pub fn junction(&mut self, point: Point) {
         self.junctions.insert(JunctionId::at(point));
     }
-    pub fn finish(self, town: &mut Town, exposure: f64) -> (Vec<LaneCourse>, usize) {
-        let fade = (-0.35 * exposure).exp();
+    pub fn finish(self, town: &mut Town) -> (Vec<LaneCourse>, Worn) {
         let mut retained = Vec::new();
         // hpc-exempt: wear belongs to a segment of a realized pedestrian course.
         let mut worn = BTreeMap::new();
         for (key @ [a, b], use_) in self.edges {
-            let wear = use_.old * fade + use_.load * exposure;
-            if wear < 0.05 && use_.load == 0. {
+            let wear = use_.load;
+            if wear <= 0. {
                 continue;
             }
             let path = Footpath {
                 points: [a.point(), b.point()],
                 wear,
+                beaten: use_.old > 0. || use_.shared,
             };
-            if use_.old > 0.
-                && use_.load > 0.
-                && wear > 1.
-                && (use_.shared || town.streets().is_empty())
-            {
+            if use_.old > 0. && wear > 1. && use_.shared {
                 worn.insert(
                     key,
                     (
@@ -111,7 +186,7 @@ impl Walks {
             retained.push(path);
         }
         town.record_walks(retained, self.approaches);
-        (surface_courses(&worn, &self.junctions), worn.len())
+        (surface_courses(&worn, &self.junctions), worn)
     }
 }
 
@@ -130,20 +205,11 @@ fn surface_courses(
     let mut claimed = BTreeSet::new(); // hpc-exempt: each physical segment enters at most one proposal.
     let mut courses = Vec::new();
     let key = |a: JunctionId, b: JunctionId| [a.min(b), a.max(b)];
-    let boundary = |node: &JunctionId| {
-        if junctions.contains(node) {
-            return true;
-        }
-        let [a, b] = neighbours[node].as_slice() else {
-            return true;
-        };
-        worn[&key(*node, *a)].1 != worn[&key(*node, *b)].1
-    };
-    // Visit ends and forks before interiors so a street stays one course
-    // through a bend. The last pass also reaches closed circuits.
+    // Trace from street entries and ends first. At a fork the busier arm
+    // continues the lane; a smaller branch can join it without breaking it up.
     let starts = junctions
         .iter()
-        .chain(neighbours.keys().filter(|n| boundary(n)))
+        .chain(neighbours.keys().filter(|n| neighbours[n].len() == 1))
         .chain(neighbours.keys());
     for &start in starts {
         for &first in neighbours.get(&start).into_iter().flatten() {
@@ -153,6 +219,7 @@ fn surface_courses(
             let class = worn[&key(start, first)].1;
             let (mut previous, mut next) = (start, first);
             let mut points = vec![start.point()];
+            let mut forks = Vec::new();
             let (mut length, mut use_metres) = (0., 0.);
             loop {
                 let edge = key(previous, next);
@@ -164,17 +231,42 @@ fn surface_courses(
                 length += metres;
                 use_metres += wear * metres;
                 points.push(next.point());
-                if boundary(&next) {
+                if junctions.contains(&next) || next == start {
                     break;
                 }
-                let [a, b] = neighbours[&next].as_slice() else {
+                let onward = neighbours[&next]
+                    .iter()
+                    .copied()
+                    .filter(|&n| {
+                        let edge = key(next, n);
+                        worn[&edge].1 == class && !claimed.contains(&edge)
+                    })
+                    .max_by(|&a, &b| {
+                        let alignment = |n: JunctionId| {
+                            use crate::town::geometry::{dot, sub, unit};
+                            dot(
+                                unit(sub(next.point(), previous.point())),
+                                unit(sub(n.point(), next.point())),
+                            )
+                        };
+                        worn[&key(next, a)]
+                            .0
+                            .total_cmp(&worn[&key(next, b)].0)
+                            .then_with(|| alignment(a).total_cmp(&alignment(b)))
+                    });
+                let Some(onward) = onward else {
                     break;
                 };
-                (previous, next) = (next, if *a == previous { *b } else { *a });
+                if neighbours[&next].len() > 2 {
+                    forks.push(points.len() - 1);
+                }
+                (previous, next) = (next, onward);
             }
             if length > 0. {
                 courses.push(LaneCourse {
+                    joins: None,
                     points,
+                    junctions: forks,
                     wear: use_metres / length,
                     class,
                 });
@@ -187,6 +279,33 @@ fn surface_courses(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_first_journey_can_be_routed_before_it_beats_a_visible_track() {
+        let mut town = Town::new(
+            crate::town::seat::Seat {
+                key: atlas_map::Id::from_name("cross-country"),
+                name: "Cross Country".into(),
+                centre: [0., 0.],
+                arms: vec![],
+                story: Default::default(),
+                culture: None,
+            },
+            None,
+        );
+        let ground = Ground::new([0., 0., 100., 80.], 1.);
+        let start = [10., 10.];
+        let end = [90., 60.];
+        let mut first = Walks::new(&town, &ground);
+        first.visit(HoldingId(0), 0.1, start, end, true);
+        first.finish(&mut town);
+        assert_eq!(town.footpaths().len(), 1);
+        assert_eq!(town.beaten_paths().count(), 0);
+        let mut returning = Walks::new(&town, &ground);
+        returning.visit(HoldingId(0), 0.1, start, end, true);
+        returning.finish(&mut town);
+        assert!(town.beaten_paths().next().unwrap().width() < 0.3);
+    }
 
     #[test]
     fn surface_only_contiguous_worn_edges_once_even_with_two_street_ends() {
@@ -208,5 +327,60 @@ mod tests {
         let courses = surface_courses(&worn, &junctions);
         assert_eq!(courses.len(), 1);
         assert_eq!(courses[0].points, [street, bend, fork, door]);
+    }
+
+    #[test]
+    fn a_busy_course_continues_through_a_fork_with_a_lighter_side_lane() {
+        let (road, fork, market, door) = ([0., 0.], [20., 0.], [60., 5.], [20., 15.]);
+        // hpc-exempt: explicit walked segments.
+        let worn = BTreeMap::from([
+            (path_key(road, fork), (8., Class::Lane)),
+            (path_key(fork, market), (7., Class::Lane)),
+            (path_key(fork, door), (2., Class::Lane)),
+        ]);
+        let entries = BTreeSet::from([JunctionId::at(road)]); // hpc-exempt: supplied street entrance.
+        let courses = surface_courses(&worn, &entries);
+        assert_eq!(courses.len(), 2);
+        assert_eq!(courses[0].points, [road, fork, market]);
+        assert_eq!(
+            courses[0].junction_sections(&courses[0].points),
+            [&[road, fork][..], &[fork, market][..]]
+        );
+        assert!(courses[1].points.contains(&fork) && courses[1].points.contains(&door));
+    }
+    #[test]
+    fn surfacing_straightens_walking_mesh_steps_and_retains_the_branch_junction() {
+        let spatial = atlas_gis::geometry::NativeGeos::new(0.001).unwrap();
+        let ground = Ground::new([-10., -10., 70., 30.], 1.);
+        let fork = [30., 4.];
+        let course = LaneCourse {
+            joins: None,
+            points: vec![
+                [0., 0.],
+                [6., 0.9],
+                [12., 2.1],
+                fork,
+                [37., 3.8],
+                [45., 2.9],
+                [60., 0.],
+            ],
+            junctions: vec![3],
+            class: Class::Lane,
+            wear: 5.,
+        };
+        assert_eq!(
+            course.alignment(&spatial, &ground, 1.5).unwrap(),
+            [[0., 0.], fork, [60., 0.]]
+        );
+        let arterial = crate::town::network::Street::new(
+            vec![[0., -10.], [0., 15.]],
+            Class::Main,
+            crate::town::story::Size::Town,
+        );
+        let network = crate::town::growth::StreetLines::new(&[arterial], &spatial).unwrap();
+        let mut attached = [[0.0003, 0.], [30., 4.]];
+        assert!(network.attach_walk(&mut attached).unwrap());
+        assert_eq!(attached[0], [0., 0.]);
+        assert!(!network.attach_walk(&mut [[30., 4.], [60., 0.]]).unwrap());
     }
 }

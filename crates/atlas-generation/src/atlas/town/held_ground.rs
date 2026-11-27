@@ -4,7 +4,7 @@
 //! every town at every step; here a step marks only what was added since the last one, and
 //! the ground is built again only when the terrain, a wall or a marked shape changed or went.
 use super::{
-    ground::{Ground, PLOT, SQUARE},
+    ground::{Ground, FIELD, PLOT, SQUARE},
     site,
 };
 use crate::{atlas::state::State, spatial::SpatialKernel};
@@ -21,6 +21,18 @@ struct Marked {
 }
 /// Shapes of one layer by fingerprint.
 type Layer = (u32, Vec<(u64, Geometry)>);
+fn mark_layer(
+    ground: &mut Ground,
+    shapes: &[Geometry],
+    mark: u32,
+    spatial: &dyn SpatialKernel,
+) -> io::Result<()> {
+    if mark == FIELD {
+        ground.mark_ploughed(shapes, spatial)
+    } else {
+        ground.mark_shapes(shapes, mark, spatial)
+    }
+}
 impl Marked {
     /// The ground for `layers` over the base `key`: marked incrementally while every shape
     /// marked before is still present, else built again from `base`.
@@ -50,7 +62,7 @@ impl Marked {
                     .map(|(_, shape)| shape.clone())
                     .collect();
                 if !added.is_empty() {
-                    Rc::make_mut(&mut marked.ground).mark_shapes(&added, *mark, spatial)?;
+                    mark_layer(Rc::make_mut(&mut marked.ground), &added, *mark, spatial)?;
                 }
             }
             marked.layers = current;
@@ -59,7 +71,7 @@ impl Marked {
         let mut ground = base()?;
         for (mark, shapes) in layers {
             let shapes: Vec<Geometry> = shapes.iter().map(|(_, s)| s.clone()).collect();
-            ground.mark_shapes(&shapes, *mark, spatial)?;
+            mark_layer(&mut ground, &shapes, *mark, spatial)?;
         }
         let ground = Rc::new(ground);
         *held = Some(Self {
@@ -99,7 +111,16 @@ impl HeldGround {
     }
     pub fn walking(&self, state: &State) -> io::Result<Rc<Ground>> {
         let (key, terrain) = self.terrain(state)?;
-        let layers = [(PLOT, printed(site::ground_buildings(state)))];
+        let crops = state
+            .town
+            .fields
+            .iter()
+            .filter(|f| !f.pasture && f.worked > 0.)
+            .map(|f| f.outline.clone());
+        let layers = [
+            (PLOT, printed(site::ground_buildings(state))),
+            (FIELD, printed(crops)),
+        ];
         let mut grounds = self.0.borrow_mut();
         Marked::update(
             &mut grounds.walking,
@@ -126,10 +147,14 @@ impl HeldGround {
             .iter()
             .flat_map(|t| &t.works.commissions)
             .filter_map(|w| w.grounds.clone());
+        let reserved = towns
+            .iter()
+            .filter_map(|t| t.district.as_ref())
+            .flat_map(|d| d.reserves.iter().cloned());
         let layers = [
             (PLOT, printed(site::ground_buildings(state))),
             (PLOT, printed(premises)),
-            (SQUARE, printed(works)),
+            (SQUARE, printed(works.chain(reserved))),
         ];
         let mut grounds = self.0.borrow_mut();
         Marked::update(

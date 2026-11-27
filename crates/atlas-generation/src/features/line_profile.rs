@@ -183,3 +183,62 @@ pub fn vertex_values(attributes: &Attributes, name: &str, pieces: &[Piece]) -> O
     }
     values.iter().map(serde_json::Value::as_f64).collect()
 }
+
+/// Locate measurements on the clipped trace. Samples with no source station cannot
+/// be assigned to a child vertex. The channel owner can survey those dimensions locally.
+pub fn clip_profiles(
+    attributes: &mut Attributes,
+    source: &Geometry,
+    clipped: &Geometry,
+    spatial: &dyn SpatialKernel,
+) -> io::Result<()> {
+    let names = [
+        "widths",
+        "discharges",
+        "depths",
+        "elevations",
+        "bedElevations",
+        "catchmentAreas",
+        "flowingMonths",
+    ];
+    if !names.iter().any(|&name| attributes.contains_key(name)) {
+        return Ok(());
+    }
+    let parts = pieces(source);
+    let mut profiles = Vec::new();
+    for name in names {
+        if !attributes.contains_key(name) {
+            continue;
+        }
+        let Some(values) = vertex_values(attributes, name, &parts) else {
+            attributes.remove(name);
+            continue;
+        };
+        profiles.push((name, values));
+    }
+    if profiles.is_empty() {
+        return Ok(());
+    }
+    let profile = Line::new(source, spatial)?;
+    let locations = line_parts(clipped)
+        .into_iter()
+        .flatten()
+        .map(|&position| profile.locate(position))
+        .collect::<io::Result<Vec<_>>>()?;
+    for (name, values) in profiles {
+        let samples = locations
+            .iter()
+            .map(|at| {
+                let a = values[at.offset];
+                let value = a + at.fraction * (values[at.offset + 1] - a);
+                if name == "flowingMonths" {
+                    serde_json::json!(value.round() as i64)
+                } else {
+                    serde_json::json!(value)
+                }
+            })
+            .collect::<Vec<_>>();
+        attributes.insert(name.into(), serde_json::Value::Array(samples));
+    }
+    Ok(())
+}

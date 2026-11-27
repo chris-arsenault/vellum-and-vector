@@ -184,7 +184,13 @@ pub(super) fn run(
         }),
     };
     let control = NativeControl::new(CancellationToken::default(), |_| {});
-    let mut output = Recorder { spec, frame, trial };
+    let mut output = Recorder {
+        spec,
+        frame,
+        trial,
+        folder,
+        partitioned: false,
+    };
     if spec.only.is_some() {
         futures::executor::block_on(generation_execution::run_selected(
             &submission,
@@ -213,6 +219,8 @@ struct Recorder<'a> {
     spec: &'a Spec,
     frame: Option<Frame>,
     trial: &'a mut Trial,
+    folder: &'a Path,
+    partitioned: bool,
 }
 impl Recorder<'_> {
     fn measure(&mut self, state: &State, label: String, values: Values) -> ExecutionResult<()> {
@@ -240,6 +248,11 @@ impl Recorder<'_> {
         path: &[String],
         parameters: &Values,
     ) -> ExecutionResult<()> {
+        if id == "town.districts"
+            && parameters.get("strategy").and_then(|v| v.as_str()) == Some("district-partition")
+        {
+            self.partitioned = true;
+        }
         let changed = self
             .trial
             .changes
@@ -252,6 +265,22 @@ impl Recorder<'_> {
         Ok(())
     }
     fn final_state(&mut self, state: &State) -> ExecutionResult<()> {
+        if self.spec.observe.districts {
+            if !self.partitioned {
+                return Err(io::Error::other(
+                    "District observation requires the final town.districts partition invocation",
+                )
+                .into());
+            }
+            let region = state
+                .regional
+                .as_ref()
+                .ok_or_else(|| io::Error::other("District observation requires a City trial"))?;
+            super::write_json(
+                &self.folder.join("districts.geojson"),
+                &district_collection(region.city.urban.elements()),
+            )?;
+        }
         self.measure(state, "final".into(), Values::new())?;
         if self
             .trial
@@ -266,6 +295,19 @@ impl Recorder<'_> {
         }
         Ok(())
     }
+}
+fn district_collection<'a>(
+    elements: impl Iterator<Item = &'a atlas_generation::processes::town::urban::Element>,
+) -> serde_json::Value {
+    let features: Vec<_> = elements
+        .filter(|e| e.kind == "district")
+        .map(|e| {
+            let mut properties = e.attributes.clone();
+            properties.insert("name".into(), e.name.as_str().into());
+            serde_json::json!({"type":"Feature","properties":properties,"geometry":e.geometry})
+        })
+        .collect();
+    serde_json::json!({"type":"FeatureCollection","coordinateUnits":"metres","features":features})
 }
 impl Output for Recorder<'_> {
     fn validate(&mut self, _: &State) -> ExecutionResult<()> {
@@ -319,6 +361,34 @@ impl Observations for Recorder<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn exports_the_partition_geometry_and_its_measured_district_attributes() {
+        use atlas_generation::processes::town::urban::Element;
+        use serde_json::json;
+        let polygon = json!({"type":"Polygon","coordinates":[[[0.,0.],[4.,0.],[4.,3.],[0.,0.]]]});
+        let district: Element = serde_json::from_value(json!({
+            "kind":"district","name":"Market","geometry":polygon,
+            "attributes":{"population":317,"builtShare":0.4,"adjoiningDistricts":[2,4]}
+        }))
+        .unwrap();
+        let route = Element {
+            kind: "thoroughfare".into(),
+            ..district.clone()
+        };
+        let collection = district_collection([&route, &district].into_iter());
+        assert_eq!(
+            collection["features"],
+            json!([{
+                "type":"Feature","properties":{"name":"Market","population":317,"builtShare":0.4,"adjoiningDistricts":[2,4]},
+                "geometry":polygon
+            }])
+        );
+        assert_eq!(
+            district_collection([&route].into_iter())["features"],
+            json!([])
+        );
+    }
 
     #[test]
     fn full_trial_records_survive_the_workspace() -> io::Result<()> {

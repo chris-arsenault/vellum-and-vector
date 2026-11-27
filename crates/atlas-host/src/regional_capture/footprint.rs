@@ -5,7 +5,7 @@ use atlas_generation::{
     spatial::{Overlay, Predicate, SpatialKernel},
 };
 use atlas_map::{
-    regions::{as_geometry, rectangle, validate_navigation},
+    regions::{as_geometry, contains_outline, rectangle, validate_navigation},
     Bounds, Geometry, MapNavigationState, Position,
 };
 use std::io;
@@ -37,12 +37,7 @@ impl Selection<'_> {
             cylindrical: geography.reference.boundary_mode.as_deref() == Some("cylinder"),
         };
         let subject = as_geometry(&self.selection.geometry);
-        if !spatial
-            .relation(
-                &as_geometry(&self.parent.footprint),
-                &subject,
-                Predicate::Covers,
-            )
+        if !contains_outline(&as_geometry(&self.parent.footprint), &subject, spatial)
             .map_err(io::Error::other)?
         {
             return Err(io::Error::other("Select a region inside its source map"));

@@ -71,6 +71,72 @@ impl Slot {
         super::fabric::polygon(&corners)
     }
 }
+
+/// Occupied intervals on either side of each street, in metres along its centreline.
+pub(crate) struct OccupiedFronts(Vec<[Vec<(f64, f64)>; 2]>);
+impl OccupiedFronts {
+    pub fn new(town: &super::fabric::Town) -> Self {
+        let mut rows = vec![[Vec::new(), Vec::new()]; town.streets().len()];
+        for h in town
+            .holdings()
+            .iter()
+            .filter(|h| h.occupation > 0. && !h.buildings.is_empty())
+        {
+            if let Some(i) = h.slot.street {
+                rows[i][usize::from(h.slot.side == Side::Right)]
+                    .push((h.slot.along, h.slot.frontage));
+            }
+        }
+        for row in rows.iter_mut().flatten() {
+            // hpc-exempt: physical intervals in street address order.
+            row.sort_by(|a, b| a.0.total_cmp(&b.0));
+        }
+        Self(rows)
+    }
+    /// A premise can share access and neighbours on either flank. Independent
+    /// sites still compete at their ordinary value.
+    pub fn infill(&self, slot: &Slot) -> f64 {
+        let Some(i) = slot.street else { return 1. };
+        let row = &self.0[i][usize::from(slot.side == Side::Right)];
+        1. + Self::neighbours(row, slot.along)
+            .map(|&(along, width)| {
+                let gap = ((along - slot.along).abs() - (width + slot.frontage) * 0.5).max(0.);
+                (1. - gap / slot.depth).max(0.)
+            })
+            .sum::<f64>()
+    }
+    /// The occupied frontage on either side nearest a proposed public junction.
+    pub(crate) fn served_front(&self, street: usize, station: f64, reach: f64) -> f64 {
+        self.0[street]
+            .iter()
+            .flat_map(|row| Self::neighbours(row, station))
+            .map(|&(along, width)| {
+                let gap = ((station - along).abs() - width * 0.5).max(0.);
+                width * (1. - gap / reach).max(0.)
+            })
+            .sum()
+    }
+    /// A gap in an occupied bank can give the plots behind it access. Houses
+    /// across the road provide no reason to cut a side lane into an empty bank.
+    pub(crate) fn flanks_opening(&self, slot: &Slot) -> bool {
+        let Some(street) = slot.street else {
+            return false;
+        };
+        let row = &self.0[street][usize::from(slot.side == Side::Right)];
+        let mut adjacent = Self::neighbours(row, slot.along).filter(|&&(along, width)| {
+            (along - slot.along).abs() - (width + slot.frontage) / 2. <= slot.depth
+        });
+        adjacent.next().zip(adjacent.next()).is_some()
+    }
+    fn neighbours(row: &[(f64, f64)], station: f64) -> impl Iterator<Item = &(f64, f64)> {
+        let split = row.partition_point(|(along, _)| *along < station);
+        split
+            .checked_sub(1)
+            .and_then(|i| row.get(i))
+            .into_iter()
+            .chain(row.get(split))
+    }
+}
 /// Every plot place along both sides of a street, from its start, of about this frontage and
 /// depth, each its verge back from the street at `scale`.
 pub fn slots(
@@ -218,6 +284,28 @@ mod tests {
             Class::Main,
             Size::Town,
         )
+    }
+    #[test]
+    fn only_the_inhabited_section_of_a_street_supports_a_new_branch() {
+        let fronts = OccupiedFronts(vec![[vec![(20., 10.)], vec![(30., 8.)]], [vec![], vec![]]]);
+        assert!(fronts.served_front(0, 25., 20.) > 10.);
+        assert_eq!(fronts.served_front(0, 85., 20.), 0.);
+        assert_eq!(fronts.served_front(1, 25., 20.), 0.);
+    }
+    #[test]
+    fn a_developable_back_row_needs_neighbours_on_both_flanks_of_its_own_bank() {
+        let mut slot = slots(0, &street(), 8., 24., TownScale::default()).remove(0);
+        slot.along = 50.;
+        slot.side = Side::Left;
+        let east = vec![(39., 8.), (63., 8.)];
+        let west = vec![(45., 8.)];
+        let fronts = OccupiedFronts(vec![[east, west]]);
+        assert!(fronts.flanks_opening(&slot));
+        slot.side = Side::Right;
+        assert!(!fronts.flanks_opening(&slot));
+        slot.side = Side::Left;
+        slot.along = 10.;
+        assert!(!fronts.flanks_opening(&slot));
     }
     #[test]
     fn candidate_frontages_vary_on_both_sides_of_a_street() {

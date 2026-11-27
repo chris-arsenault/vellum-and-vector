@@ -105,7 +105,11 @@ pub fn publish(state: &mut impl TownWriter, fabric: &Fabric) -> io::Result<()> {
         }
         let streets = publish_streets(state, town)?;
         let numbers = crate::town::addresses::assign(town, state.spatial())?;
-        let wards = publish_wards(state, town)?;
+        let wards = if town.district.is_some() {
+            vec![Some(town.seat.name.clone()); town.holdings().len()]
+        } else {
+            publish_wards(state, town)?
+        };
         let characters = crate::town::neighbourhood::characters(town, state.spatial())?;
         for (holding, character) in town.holdings().iter().zip(characters) {
             holding_records(
@@ -120,7 +124,9 @@ pub fn publish(state: &mut impl TownWriter, fabric: &Fabric) -> io::Result<()> {
                 },
             )?;
         }
-        publish_settlement(state, town)?;
+        if town.district.is_none() {
+            publish_settlement(state, town)?;
+        }
     }
     Ok(())
 }
@@ -184,7 +190,7 @@ fn publish_settlement(state: &mut impl TownWriter, town: &Town) -> io::Result<()
     state.save(settlement)
 }
 fn publish_footpaths(state: &mut impl TownWriter, town: &Town) -> io::Result<()> {
-    for path in town.footpaths() {
+    for path in town.beaten_paths() {
         let [a, b] = crate::town::fabric::walks::path_key(path.points[0], path.points[1]);
         write(
             state,
@@ -206,11 +212,29 @@ fn publish_footpaths(state: &mut impl TownWriter, town: &Town) -> io::Result<()>
     }
     Ok(())
 }
-pub(crate) fn street_name(state: &impl TownWriter, town: &Town, i: usize) -> io::Result<String> {
+pub(crate) fn high_street(town: &Town) -> usize {
+    town.streets()
+        .iter()
+        .position(|road| road.class == crate::town::network::Class::Main)
+        .unwrap_or(0)
+}
+pub(crate) fn street_name(
+    state: &impl TownWriter,
+    town: &Town,
+    i: usize,
+    high_street: usize,
+) -> io::Result<String> {
+    if let Some((_, name)) = town
+        .district
+        .as_ref()
+        .and_then(|district| district.streets.get(i))
+    {
+        return Ok(name.clone());
+    }
     let street = &town.streets()[i];
-    match (&street.destination, i) {
-        (Some(place), _) => Ok(format!("{place} Road")),
-        (None, 0) => Ok("High Street".into()),
+    match &street.destination {
+        Some(place) => Ok(format!("{place} Road")),
+        None if i == high_street => Ok("High Street".into()),
         _ => state.part_name(
             &format!("town:{}:street:{i}", town.seat.key),
             street.class.work(),
@@ -221,9 +245,14 @@ pub(crate) fn street_name(state: &impl TownWriter, town: &Town, i: usize) -> io:
 }
 fn publish_streets(state: &mut impl TownWriter, town: &Town) -> io::Result<Vec<(Id, String)>> {
     let mut streets = Vec::new();
+    let high_street = high_street(town);
     for (i, street) in town.streets().iter().enumerate() {
+        if let Some(retained) = town.district.as_ref().and_then(|d| d.streets.get(i)) {
+            streets.push(retained.clone());
+            continue;
+        }
         let key = format!("town:{}:street:{i}", town.seat.key);
-        let name = street_name(state, town, i)?;
+        let name = street_name(state, town, i, high_street)?;
         let feature = state.record(Record {
             key: &key,
             name: &name,
@@ -233,6 +262,7 @@ fn publish_streets(state: &mut impl TownWriter, town: &Town) -> io::Result<Vec<(
             attributes: attrs([
                 ("widths", json!(street.widths)),
                 ("roadClass", json!(street.class.as_str())),
+                ("bridgeSpans", json!(street.bridges)),
                 ("settlement", json!(town.seat.name)),
                 ("wear", json!(town.wear().get(i))),
                 ("townProcess", json!("town.movement")),

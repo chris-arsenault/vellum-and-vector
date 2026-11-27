@@ -1,6 +1,20 @@
 use crate::spatial::{Overlay, Predicate, SpatialKernel, SpatialResult};
 use crate::{Bounds, Geometry, MapSpace, Position, RegionGeometry};
 
+/// An overlay vertex rounded onto the map grid can lie just off its parent's oblique edge.
+pub fn contains_outline(
+    parent: &Geometry,
+    outline: &Geometry,
+    kernel: &dyn SpatialKernel,
+) -> SpatialResult<bool> {
+    if kernel.relation(parent, outline, Predicate::Covers)? {
+        return Ok(true);
+    }
+    Ok(kernel
+        .overlay(outline, parent, Overlay::Difference)?
+        .is_none())
+}
+
 pub fn as_geometry(value: &RegionGeometry) -> Geometry {
     match value {
         RegionGeometry::Polygon(coordinates) => Geometry::Polygon {

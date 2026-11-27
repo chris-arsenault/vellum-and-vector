@@ -7,7 +7,7 @@ import type { CartographicPresentation, LayerStyle } from "./types";
 import type { RasterPresentation } from "./types";
 import type { RealScalePresentation } from "./realScale";
 import type { PublishedMapEngine } from "./publishedMapEngine";
-import { publishedScene } from "./publishedScene";
+import { publishedScene, publishedStreetScene } from "./publishedScene";
 import { PublishedSamples } from "./PublishedSamples";
 import {
   publishedDrawingContent,
@@ -17,6 +17,15 @@ import {
 import { updatePublishedDrawing } from "./publishedDrawing";
 import { bounds } from "./presentation";
 import { prepareDrawingGeometry } from "./drawingGeometry";
+
+const noDrawing = {
+  features: [],
+  oceans: [],
+  coastEchoes: [],
+  mask: null,
+  terrain: [],
+  fields: [],
+};
 
 export interface PublishedPresentation {
   styles: LayerStyle[];
@@ -32,7 +41,7 @@ interface Scene {
   bounds: Bounds;
   layers: string[];
   features: MapFeature[];
-  entities: MapEntity[];
+  drawingEntities?: MapEntity[];
 }
 /** One map revision and one reader own a viewer; a failed read never changes execution host. */
 export class PublishedMapView {
@@ -47,7 +56,11 @@ export class PublishedMapView {
   constructor(
     readonly engine: PublishedMapEngine,
     private readonly reader: MapReader,
-    private readonly report: { busy(value: boolean): void; error(error: Error): void }
+    private readonly report: {
+      busy(value: boolean): void;
+      error(error: Error): void;
+      streetDetail?(): void;
+    }
   ) {
     this.samples = new PublishedSamples(reader, engine.descriptor);
     this.movement = engine.map.on("moveend", () => {
@@ -124,12 +137,10 @@ export class PublishedMapView {
     const layers = presentation.styles
       .filter((style) => drawn || style.visible)
       .map((style) => style.layerId);
-    const scene = await this.readScene(extent, layers, signal);
-    signal.throwIfAborted();
     const input: PublishedDrawing = {
       map: this.engine.descriptor,
-      features: scene.features,
-      entities: scene.entities,
+      features: [],
+      entities: [],
       styles: presentation.styles,
       view: presentation.drawing,
       footprint: presentation.footprint,
@@ -138,21 +149,25 @@ export class PublishedMapView {
     };
     if (!drawn) {
       this.engine.scale.setUnits(presentation.realScale?.units === "feet" ? "imperial" : "metric");
-      if (this.rasterPresentation !== presentation.raster) {
-        await this.engine.rasters.update(presentation.raster);
-        this.rasterPresentation = presentation.raster;
-      }
+      const preview =
+        input.map.realScale?.kind === "ground" && this.engine.space.id === input.map.primarySpaceId
+          ? async (features: MapFeature[]) => {
+              await updatePublishedDrawing(this.engine, { ...input, features }, noDrawing, true);
+              if (!signal.aborted) this.report.streetDetail?.();
+            }
+          : undefined;
+      const [scene] = await Promise.all([
+        this.readScene(extent, layers, signal, preview),
+        this.updateRaster(presentation.raster, signal),
+      ]);
       signal.throwIfAborted();
-      await updatePublishedDrawing(this.engine, input, {
-        features: [],
-        oceans: [],
-        coastEchoes: [],
-        mask: null,
-        terrain: [],
-        fields: [],
-      });
+      await updatePublishedDrawing(this.engine, { ...input, features: scene.features }, noDrawing);
       return;
     }
+    const scene = await this.readScene(extent, layers, signal);
+    input.features = scene.features;
+    input.entities = await this.drawingEntities(scene, signal);
+    signal.throwIfAborted();
     const geometry = await prepareDrawingGeometry(this.reader, input, { signal });
     signal.throwIfAborted();
     const content = publishedDrawingContent(input, geometry);
@@ -162,25 +177,56 @@ export class PublishedMapView {
     signal.throwIfAborted();
     await updatePublishedDrawing(this.engine, input, { ...geometry, ...marks });
   }
-  private async readScene(extent: Bounds, layers: string[], signal: AbortSignal) {
+  private async updateRaster(raster: RasterPresentation, signal: AbortSignal) {
+    if (this.rasterPresentation === raster) return;
+    await this.engine.rasters.update(raster);
+    if (!signal.aborted) this.rasterPresentation = raster;
+  }
+  private async readScene(
+    extent: Bounds,
+    layers: string[],
+    signal: AbortSignal,
+    preview?: (features: MapFeature[]) => Promise<void>
+  ) {
     const held = this.scene;
-    if (held && same(held.bounds, extent) && same(held.layers, layers)) return held;
+    if (
+      held &&
+      same(held.layers, layers) &&
+      (same(held.bounds, extent) || (preview && contains(held.bounds, extent)))
+    )
+      return held;
     const { descriptor, space } = this.engine;
-    const features = await publishedScene(this.reader, descriptor, space.id, extent, layers, {
-      signal,
-    });
+    const features = preview
+      ? await publishedStreetScene(
+          this.reader,
+          descriptor,
+          space.id,
+          extent,
+          layers,
+          signal,
+          preview
+        )
+      : await publishedScene(this.reader, descriptor, space.id, extent, layers, { signal });
+    signal.throwIfAborted();
+    this.scene = { bounds: extent, layers, features };
+    return this.scene;
+  }
+  private async drawingEntities(scene: Scene, signal: AbortSignal) {
+    if (scene.drawingEntities) return scene.drawingEntities;
     const ids = [
       ...new Set(
-        features.flatMap((feature) => [
+        scene.features.flatMap((feature) => [
           feature.entityId ?? feature.id,
           ...feature.relations.map((relation) => relation.targetId),
         ])
       ),
     ];
-    const entities = await this.reader.entities(descriptor.reference, ids, { signal });
+    const entities = ids.length
+      ? await this.reader.entities(this.engine.descriptor.reference, ids, { signal })
+      : [];
     signal.throwIfAborted();
-    this.scene = { bounds: extent, layers, features, entities };
-    return this.scene;
+    scene.drawingEntities = entities;
+    return entities;
   }
   async close() {
     unByKey(this.movement);
@@ -192,3 +238,5 @@ export class PublishedMapView {
 }
 const same = <T>(a: T[], b: T[]) =>
   a.length === b.length && a.every((value, index) => value === b[index]);
+const contains = (outer: Bounds, inner: Bounds) =>
+  outer[0] <= inner[0] && outer[1] <= inner[1] && outer[2] >= inner[2] && outer[3] >= inner[3];

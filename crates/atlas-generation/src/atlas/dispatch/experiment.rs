@@ -255,6 +255,42 @@ mod tests {
     }
 
     #[test]
+    fn street_recipe_selects_the_local_algorithms_and_a_publication_reader() {
+        let catalogue = catalogue();
+        for (id, expected) in [
+            ("town.movement", "local-circulation"),
+            ("town.land-competition", "parcel-claims"),
+            ("town.construction", "premises"),
+            ("town.cultivation", "local-holdings"),
+            ("town.livelihood", "premise-viability"),
+            ("town.collective-investment", "local-commons-and-works"),
+            ("real-scale.crossings", "crossing-realization"),
+            ("real-scale.trails", "local-footpaths"),
+            ("real-scale.settlement", "street-publication"),
+        ] {
+            let configuration = recipe(id);
+            let stage = configuration.stages().unwrap().remove(0);
+            let StageKind::Process(call) = stage.kind else {
+                unreachable!()
+            };
+            let spec = catalogue.specification(call).unwrap();
+            if id == "real-scale.settlement" {
+                assert!(matches!(spec.category, Category::ClassificationPublication));
+            } else {
+                let strategies = spec.strategy(site(MapType::Street), &stage).unwrap();
+                assert!(matches!(spec.category, Category::Semantic(_)));
+                assert_eq!(
+                    strategies.iter().map(|row| row.name).collect::<Vec<_>>(),
+                    [expected]
+                );
+            }
+            if id.starts_with("real-scale.") {
+                assert!(!spec.workspace_only, "{id} writes map geography");
+            }
+        }
+    }
+
+    #[test]
     fn migrated_control_defaults_and_overrides_use_the_normal_resolver() {
         let mut configuration = recipe("human.land.gather");
         let catalogue = catalogue();

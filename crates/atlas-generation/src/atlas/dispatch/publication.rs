@@ -30,6 +30,30 @@ impl Publication<'_> {
 
 pub type Publish = fn(Publication<'_>, &Input) -> ExecutionResult<()>;
 
+/// Settlement extraction reads finished fabric and writes through TownWriter, which
+/// exposes only named feature and network records to the publisher.
+pub(super) fn settlement() -> Command<State, Input> {
+    Command::with_inputs(
+        "real-scale.settlement",
+        CommandKind::Publish,
+        vec![],
+        |scope, input| {
+            if super::registration::street_strategy(
+                input,
+                "real-scale.settlement",
+                "street-publication",
+            )? {
+                let state: &mut State = scope.state_mut();
+                let fabric = std::mem::take(&mut state.town);
+                let result = crate::publication::town::publish(state, &fabric);
+                state.town = fabric;
+                result?;
+            }
+            Ok(())
+        },
+    )
+}
+
 pub(super) fn command(id: &str, publish: Publish) -> Command<State, Input> {
     Command::with_inputs(id, CommandKind::Publish, vec![], move |scope, input| {
         let state: &mut State = scope.state_mut();

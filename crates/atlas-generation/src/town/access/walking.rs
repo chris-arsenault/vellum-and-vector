@@ -12,6 +12,24 @@ use crate::{
 use std::{collections::BTreeMap, io};
 
 pub(crate) const EFFORT: f64 = 1.6;
+/// Walking through worked rows costs additional effort per metre. The unploughed
+/// balk beside them carries ordinary foot traffic, including access into a field.
+const THROUGH_CROPS: f64 = 2.4;
+
+pub(crate) fn cost(ground: &Ground, a: Point, b: Point, effort: f64) -> f64 {
+    let span = distance(a, b);
+    if ground.cultivation.index.is_empty() || span == 0. {
+        return span * effort;
+    }
+    let steps = (span / ground.cell).ceil() as usize;
+    let cropped = (0..steps)
+        .filter(|&i| {
+            let t = (i as f64 + 0.5) / steps as f64;
+            ground.ploughed([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t])
+        })
+        .count();
+    span * (effort + THROUGH_CROPS * cropped as f64 / steps as f64)
+}
 fn open(owner: u32) -> bool {
     !matches!(owner, WATER | WALL | OUTSIDE | STEEP | PLOT)
 }
@@ -53,10 +71,12 @@ pub(super) fn connect(
         }
         doors.insert(JunctionId::at(entrance.point), (entrance.point, vertex));
     }
-    let doors: Vec<_> = doors.into_values().collect();
     if doors.len() < 2 {
         return Ok(());
     }
+    let entrances: Vec<_> = doors.values().copied().collect();
+    field_margins(ground, &mut doors, graph, spatial)?;
+    let doors: Vec<_> = doors.into_values().collect();
     let points = doors.iter().map(|(p, _)| pos(*p)).collect::<Vec<_>>();
     let mut edges = spatial.delaunay_edges(&points).map_err(io::Error::other)?;
     // GEOS returns no triangles on a line. Lexicographic order follows collinear doors.
@@ -68,13 +88,43 @@ pub(super) fn connect(
         let (p, start) = doors[a];
         let (q, end) = doors[b];
         if clear(ground, p, q) {
-            graph.connect(start, end, distance(p, q) * EFFORT, Course::Walk);
+            graph.connect(start, end, cost(ground, p, q, EFFORT), Course::Walk);
         } else {
             obstructed = true;
         }
     }
     if obstructed {
-        detours(ground, &doors, graph);
+        detours(ground, &entrances, graph);
+    }
+    Ok(())
+}
+
+/// Add the surveyed balks that meet the travel area to the same graph as doors,
+/// streets and worn paths. Only a journey that actually uses a balk leaves a track.
+fn field_margins(
+    ground: &Ground,
+    doors: &mut BTreeMap<JunctionId, (Point, usize)>,
+    graph: &mut BoundNetwork,
+    spatial: &dyn SpatialKernel,
+) -> io::Result<()> {
+    if ground.cultivation.index.is_empty() {
+        return Ok(());
+    }
+    let area = atlas_map::Geometry::MultiPoint {
+        coordinates: doors.values().map(|(p, _)| pos(*p)).collect(),
+    };
+    let bounds = spatial.bounds(&area).map_err(io::Error::other)?;
+    for id in ground.cultivation.index.query(bounds) {
+        for pair in ground.cultivation.rims[id].windows(2) {
+            let (a, b) = (pair[0], pair[1]);
+            if !clear(ground, a, b) {
+                continue;
+            }
+            let (start, end) = (graph.vertex(a), graph.vertex(b));
+            doors.entry(JunctionId::at(a)).or_insert((a, start));
+            doors.entry(JunctionId::at(b)).or_insert((b, end));
+            graph.connect(start, end, distance(a, b) * EFFORT, Course::Walk);
+        }
     }
     Ok(())
 }
@@ -122,13 +172,13 @@ fn detours(ground: &Ground, doors: &[(Point, usize)], graph: &mut BoundNetwork) 
         graph.connect(
             vertices[a],
             portal,
-            distance(mesh.centres[a], via) * EFFORT,
+            cost(ground, mesh.centres[a], via, EFFORT),
             Course::Walk,
         );
         graph.connect(
             portal,
             vertices[b],
-            distance(via, mesh.centres[b]) * EFFORT,
+            cost(ground, via, mesh.centres[b], EFFORT),
             Course::Walk,
         );
     }
@@ -145,7 +195,7 @@ fn detours(ground: &Ground, doors: &[(Point, usize)], graph: &mut BoundNetwork) 
             graph.connect(
                 vertices[span.region],
                 vertex,
-                distance(mesh.centres[span.region], point) * EFFORT,
+                cost(ground, mesh.centres[span.region], point, EFFORT),
                 Course::Walk,
             );
         }
@@ -212,5 +262,52 @@ impl Mesh {
             centres,
             crossings,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::town::{
+        access::Access,
+        catalogue::AccessUse,
+        network::{Class, Street},
+        story::Size,
+    };
+
+    #[test]
+    fn a_through_walk_follows_the_slanting_balk_while_the_crop_remains_reachable() {
+        let spatial = atlas_gis::geometry::NativeGeos::new(0.001).unwrap();
+        let mut ground = Ground::new([-35., -40., 140., 70.], 1.);
+        let corners = [[20., 6.], [90., 18.], [85., 43.], [15., 31.], [20., 6.]];
+        let field = atlas_map::Geometry::Polygon {
+            coordinates: vec![corners.iter().copied().map(pos).collect()],
+        };
+        ground.mark_ploughed(&[field], &spatial).unwrap();
+        let (home, village, crop) = ([-5., 16.], [115., 32.], [54., 23.]);
+        let high_street = Street::new(vec![[115., -20.], [115., 60.]], Class::Main, Size::Village);
+        let access = Access::new(&[high_street], &spatial)
+            .unwrap()
+            .on_ground(&ground);
+        let network = access
+            .bind(
+                &[home, village, crop].map(Entrance::independent),
+                AccessUse::Foot,
+                &spatial,
+            )
+            .unwrap();
+        let routes = network.routes(0);
+        let mut via_balk = false;
+        routes.course(1, |_, a, b| {
+            via_balk |= corners
+                .windows(2)
+                .any(|edge| (a == edge[0] && b == edge[1]) || (b == edge[0] && a == edge[1]));
+        });
+        assert!(
+            via_balk,
+            "the through walk should take a surveyed field edge"
+        );
+        assert!(routes.cost(1) < cost(&ground, home, village, EFFORT));
+        assert!(routes.cost(2).is_finite(), "farmers can enter their field");
     }
 }

@@ -88,6 +88,9 @@ impl SpatialIndex for NativeIndex<'_> {
             let actual = self.geometries[candidate.data]
                 .distance(&point)
                 .map_err(|e| e.to_string())?;
+            if actual == 0. {
+                return Ok(Some((candidate.data, actual)));
+            }
             if actual < distance {
                 best = Some(candidate.data);
                 distance = actual;

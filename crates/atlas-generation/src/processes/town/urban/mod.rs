@@ -14,11 +14,12 @@ mod hillside;
 mod investment;
 mod journeys;
 mod landscape;
+pub(crate) mod neighbourhood;
 mod partition;
 mod places;
 mod programs;
 pub mod registration;
-mod street;
+pub(crate) mod street_context;
 use crate::{
     atlas::state::State,
     features::{records::Attributes, Feature, FeatureSelection},
@@ -78,15 +79,11 @@ pub struct Urban {
     interior: Vec<(usize, Element)>,
     domain: Option<Geometry>,
     routes: Vec<Element>,
-    frontages: Vec<Element>,
     districts: Vec<Element>,
     blocks: Vec<Element>,
     open: Vec<Element>,
-    buildings: Vec<Element>,
-    plots: Vec<Element>,
     landmarks: Vec<Element>,
     captured: Vec<Feature>,
-    street_round: usize,
     district_child: bool,
 }
 impl Urban {
@@ -113,17 +110,12 @@ impl Urban {
             .and_then(|i| self.sponsors.get(i)?.work)
             .map_or_else(Default::default, |(family, _)| family.demands())
     }
-    pub fn district_child(&self) -> bool {
-        self.district_child
-    }
     pub fn elements(&self) -> impl Iterator<Item = &Element> {
         self.districts
             .iter()
             .chain(&self.routes)
             .chain(&self.blocks)
             .chain(&self.open)
-            .chain(&self.plots)
-            .chain(&self.buildings)
             .chain(&self.landmarks)
             .chain(self.interior.iter().map(|(_, place)| place))
     }
@@ -189,7 +181,7 @@ fn ground_routes(state: &State) -> io::Result<Vec<Feature>> {
     }
     Ok(routes)
 }
-fn selected(state: &State, kind: Option<&str>) -> io::Result<Vec<Feature>> {
+pub(crate) fn selected(state: &State, kind: Option<&str>) -> io::Result<Vec<Feature>> {
     let source = state.records.source_features.as_deref();
     let query = FeatureSelection {
         area_id: source.is_none().then_some(state.scope.area),
@@ -221,16 +213,27 @@ pub fn capture_street(state: &mut State) -> io::Result<bool> {
     if regional.city.urban.district_child {
         return Ok(true);
     }
-    let extent = state
-        .scope
-        .outline
-        .as_ref()
-        .unwrap_or(&state.scope.footprint);
-    let mut captured = Vec::new();
+    let Some(extent) = state.scope.outline.as_ref() else {
+        return Ok(false);
+    };
     // owner-direction(2026-11-23): City district boundaries and identities are final at City scale
     let kernel = state.spatial.as_ref();
+    let mut selected = None;
+    for district in values(state, "district")? {
+        if atlas_map::regions::contains_outline(extent, &district.geometry, kernel)
+            .map_err(io::Error::other)?
+        {
+            if selected.is_some() {
+                return Ok(false);
+            }
+            selected = Some(district);
+        }
+    }
+    let Some(district) = selected else {
+        return Ok(false);
+    };
+    let mut captured = vec![district];
     for kind in [
-        "district",
         "cityBlock",
         "urbanGround",
         "cityWall",
@@ -241,31 +244,22 @@ pub fn capture_street(state: &mut State) -> io::Result<bool> {
         "majorWork",
         "cityPlace",
         "building",
+        "bridge",
+        "ford",
     ] {
-        if kind != "district" && captured.is_empty() {
-            return Ok(false);
-        }
         for feature in values(state, kind)? {
             if let Some(f) = within_frame(kernel, feature, extent)? {
                 captured.push(f);
             }
         }
     }
-    let district_child = captured.iter().any(|f| f.kind == "district");
-    if district_child {
-        let city = &mut state.regional.as_mut().unwrap().city;
-        if let Some(saved) = captured
-            .iter()
-            .filter(|f| f.kind == "district")
-            .find_map(|f| f.attributes.get("templatePolicy"))
-        {
-            city.template = Some(serde_json::from_value(saved.clone()).map_err(io::Error::other)?);
-        }
-        let urban = &mut city.urban;
-        urban.district_child = true;
-        urban.captured = captured;
+    let city = &mut state.regional.as_mut().unwrap().city;
+    if let Some(saved) = captured[0].attributes.get("templatePolicy") {
+        city.template = Some(serde_json::from_value(saved.clone()).map_err(io::Error::other)?);
     }
-    Ok(district_child)
+    city.urban.district_child = true;
+    city.urban.captured = captured;
+    Ok(true)
 }
 fn within_frame(
     k: &dyn crate::spatial::SpatialKernel,
@@ -293,7 +287,14 @@ fn within_frame(
             if lines.is_empty() {
                 return Ok(None);
             }
-            Geometry::MultiLineString { coordinates: lines }
+            let clipped = Geometry::MultiLineString { coordinates: lines };
+            crate::features::line_profile::clip_profiles(
+                &mut f.attributes,
+                &f.geometry,
+                &clipped,
+                k,
+            )?;
+            clipped
         }
         Geometry::Polygon { .. } | Geometry::MultiPolygon { .. } => {
             let Some(g) = k

@@ -70,6 +70,42 @@ pub(crate) struct DistrictLand {
     pub tearing: f64,
     pub old_wall: bool,
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub(crate) struct InheritedProgram {
+    economic: Trope,
+    social: Trope,
+    traits: Vec<Trope>,
+}
+
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize)]
+pub(crate) struct UseMix {
+    housing: f64,
+    trade: f64,
+    workshops: f64,
+}
+impl UseMix {
+    pub(crate) fn at_residential_demand(mut self, relative_density: f64) -> Self {
+        self.housing *= relative_density;
+        self
+    }
+}
+
+impl InheritedProgram {
+    // owner-direction(2026-11-26): the district catalog is the design authority and Street responses reflect City behavior
+    pub(crate) fn street_demand(&self, land: DistrictLand, mix: UseMix) -> Demands {
+        let mut demand = Demands::default();
+        self.economic.respond_to_frontage(land, mix, &mut demand);
+        self.social.respond_to_frontage(land, mix, &mut demand);
+        for trait_ in &self.traits {
+            trait_.shape_district(land, &mut demand);
+        }
+        demand.housing += mix.housing;
+        demand.trade += mix.trade;
+        demand.workshops += mix.workshops;
+        demand
+    }
+}
 pub(crate) struct Evidence {
     pub crowd: f64,
     pub capital: f64,
@@ -127,6 +163,58 @@ impl Evidence {
 }
 
 impl Trope {
+    fn respond_to_frontage(self, land: DistrictLand, mix: UseMix, demand: &mut Demands) {
+        use Trope::*;
+        let accessible = land.access / (1. + land.access);
+        let dry = 1. / (1. + land.wet);
+        let settled = land.built / (1. + land.built);
+        match self {
+            Bazaar => demand.trade += accessible * (1. + mix.trade),
+            Artificer => demand.workshops += dry * accessible * (1. + mix.workshops),
+            Freight => {
+                demand.trade += accessible.powi(2);
+                demand.workshops += accessible * dry;
+                demand.access += accessible;
+            }
+            Granary => {
+                demand.workshops += accessible * dry;
+                demand.gardens += dry * (1. - settled) / (1. + land.slope);
+            }
+            Inn => {
+                demand.housing += settled;
+                demand.trade += accessible * settled;
+            }
+            Scribe => {
+                demand.civic += settled * dry;
+                demand.gardens += (1. - settled) * dry;
+                demand.housing += dry * mix.housing;
+            }
+            Warrens => {
+                demand.housing += dry * (settled + mix.housing);
+                demand.commons += settled * accessible;
+            }
+            Estates => {
+                demand.gardens += dry * (1. - settled) / (1. + land.slope);
+                demand.housing += dry * (1. - settled);
+                demand.access -= (1. - settled) * (1. - accessible);
+            }
+            Guild => {
+                demand.workshops += accessible * mix.workshops;
+                demand.commons += accessible * (mix.workshops + settled);
+            }
+            Outlanders => {
+                demand.housing += accessible * dry;
+                demand.trade += accessible * mix.housing;
+                demand.commons += settled;
+            }
+            Commons => {
+                demand.commons += dry * (1. - settled) + accessible;
+                demand.access += dry * mix.housing;
+            }
+            _ => {}
+        }
+    }
+
     pub fn activity(self) -> Activity {
         use Trope::*;
         match self {
@@ -258,6 +346,43 @@ impl Trope {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn street_responses_use_city_character_and_current_frontage() {
+        let program = InheritedProgram {
+            economic: Trope::Bazaar,
+            social: Trope::Warrens,
+            traits: vec![Trope::Flood],
+        };
+        let mix = UseMix {
+            housing: 0.7,
+            trade: 0.2,
+            workshops: 0.1,
+        };
+        let quiet = DistrictLand {
+            built: 0.5,
+            ..Default::default()
+        };
+        let frontage = DistrictLand {
+            access: 2.,
+            ..quiet
+        };
+        let wet = DistrictLand {
+            wet: 0.9,
+            ..frontage
+        };
+        let demand = program.street_demand(frontage, mix);
+        assert!(demand.trade > program.street_demand(quiet, mix).trade);
+        assert!(demand.housing > mix.housing);
+        let flooded = program.street_demand(wet, mix);
+        assert!(flooded.access < demand.access);
+        assert!(flooded.commons > demand.commons);
+        let estates = InheritedProgram {
+            social: Trope::Estates,
+            ..program
+        };
+        assert!(estates.street_demand(frontage, mix).gardens > demand.gardens);
+    }
 
     #[test]
     fn district_traits_act_across_different_ground_without_a_landmark() {

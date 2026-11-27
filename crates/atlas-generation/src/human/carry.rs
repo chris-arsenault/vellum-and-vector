@@ -59,32 +59,29 @@ impl HumanLayers {
         if !catalogue::facts(action.kind).area {
             return Err(io::Error::other("Land placement requires an area layer"));
         }
-        let movement = &action.movement;
+        use super::operations::LandMovement;
         let stock = self.bands.layers[action.kind as usize].snapshot()?;
+        let local;
+        let flows = match &action.movement {
+            LandMovement::Local(movement) => {
+                local = self.local_land_transfers(movement, &stock)?;
+                &local
+            }
+            LandMovement::Surveyed(flows) => flows,
+        };
+        if flows.is_empty() {
+            return Ok(());
+        }
         let mut arrivals = coverage.scratch(self.mesh.len(), 0.0);
         let mut departures = coverage.scratch(self.mesh.len(), 0.0);
-        for from in 0..self.mesh.len() {
-            let to = movement.targets.get(from)?;
-            if !self.ground(to) {
-                continue;
-            }
-            let to = to as usize;
-            let outgoing = stock.get(from)? * unit(movement.share.get(from)?);
-            departures.set(from, outgoing)?;
-            arrivals.set(
-                to,
-                arrivals.get(to)? + outgoing * self.mesh.area(from) / self.mesh.area(to),
-            )?;
+        for &(from, to, area) in flows {
+            departures.set(from, departures.get(from)? + area / self.km2(from))?;
+            arrivals.set(to, arrivals.get(to)? + area / self.km2(to))?;
         }
         let displaced = self.displaced_share(coverage, &arrivals)?;
         let farm = self.bands.layers[LayerId::Farmland as usize].snapshot()?;
         let herd = self.bands.layers[LayerId::Pasture as usize].snapshot()?;
-        for from in 0..self.mesh.len() {
-            let to = movement.targets.get(from)?;
-            if !self.ground(to) {
-                continue;
-            }
-            let to = to as usize;
+        for &(from, to, area) in flows {
             let crop = if action.kind == LayerId::Farmland {
                 0.0
             } else {
@@ -99,7 +96,7 @@ impl HumanLayers {
             if worked <= 0.0 {
                 continue;
             }
-            let exchanged = departures.get(from)? * displaced.get(to)?;
+            let exchanged = area / self.km2(from) * displaced.get(to)?;
             for (kind, share) in [
                 (LayerId::Farmland, crop / worked),
                 (LayerId::Pasture, grazing / worked),
@@ -119,6 +116,24 @@ impl HumanLayers {
             )?;
         }
         Ok(())
+    }
+
+    fn local_land_transfers(
+        &self,
+        movement: &super::operations::Placement,
+        stock: &Band<f64>,
+    ) -> io::Result<Vec<(usize, usize, f64)>> {
+        let mut flows = Vec::new();
+        for from in 0..self.mesh.len() {
+            let to = movement.targets.get(from)?;
+            if self.ground(to) {
+                let area = stock.get(from)? * unit(movement.share.get(from)?) * self.km2(from);
+                if area > 0. {
+                    flows.push((from, to as usize, area));
+                }
+            }
+        }
+        Ok(flows)
     }
 
     fn displaced_share(

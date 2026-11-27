@@ -169,7 +169,7 @@ fn validate_region(
     if 2.0 * area / kernel.length(&shape)? < map.region_scale.minimum_width {
         return Err("Choose a region with useful width".into());
     }
-    if !kernel.relation(&parent, &shape, Predicate::Covers)? {
+    if !super::contains_outline(&parent, &shape, kernel)? {
         return Err("Keep the outline inside its parent region".into());
     }
     if area >= kernel.area(&parent)? {
@@ -181,7 +181,7 @@ fn validate_region(
         }
         let footprint = as_geometry(&other.geometry);
         if other.parent_id.as_ref() == Some(&region.id)
-            && !kernel.relation(&shape, &footprint, Predicate::Covers)?
+            && !super::contains_outline(&shape, &footprint, kernel)?
         {
             return Err("Keep existing child regions inside the adjusted outline".into());
         }

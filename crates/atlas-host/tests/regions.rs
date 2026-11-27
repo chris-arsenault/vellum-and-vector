@@ -26,6 +26,24 @@ fn rectangle(w: f64, s: f64, e: f64, n: f64) -> Geometry {
 fn region(shape: Geometry) -> RegionGeometry {
     serde_json::from_value(serde_json::to_value(shape).unwrap()).unwrap()
 }
+
+#[test]
+fn parent_accepts_a_district_edge_rounded_to_map_precision() {
+    use atlas_map::regions::contains_outline;
+    let kernel = NativeGeos::new(1.).unwrap();
+    let triangle = |a, b, c| Geometry::Polygon {
+        coordinates: vec![vec![a, b, c, a]],
+    };
+    let origin = Position::xy(0., 0.);
+    let east = Position::xy(12., 0.);
+    let parent = triangle(origin, east, Position::xy(12., 5.));
+    let district = |y| triangle(origin, east, Position::xy(4., y));
+    assert!(!kernel
+        .relation(&parent, &district(2.), Predicate::Covers)
+        .unwrap());
+    assert!(contains_outline(&parent, &district(2.), &kernel).unwrap());
+    assert!(!contains_outline(&parent, &district(3.), &kernel).unwrap());
+}
 fn shape(region: &RegionGeometry) -> Geometry {
     serde_json::from_value(serde_json::to_value(region).unwrap()).unwrap()
 }

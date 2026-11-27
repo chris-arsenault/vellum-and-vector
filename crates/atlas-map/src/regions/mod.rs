@@ -5,7 +5,8 @@ mod districts;
 mod geometry;
 mod state;
 pub use geometry::{
-    as_geometry, as_region, boundary_lines, parts, point, polygon, rectangle, translate,
+    as_geometry, as_region, boundary_lines, contains_outline, parts, point, polygon, rectangle,
+    translate,
 };
 
 use crate::spatial::{Overlay, Predicate, SpatialKernel, SpatialResult};

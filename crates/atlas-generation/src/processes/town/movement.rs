@@ -26,6 +26,7 @@ const BACKLAND_REACH: f64 = 20.;
 /// against its direct length and this much more.
 const SHORTCUT_LEAST: f64 = 25.;
 const SHORTCUT_SLACK: f64 = 40.;
+const SHORTCUT_GAIN: f64 = 0.4;
 /// The least spacing a new route keeps from the streets it does not join.
 const ROUTE_SPACING: f64 = 60.;
 /// The shortest route worth building, and the least length any connection is charged for.
@@ -78,8 +79,6 @@ pub fn advance(town: &mut Town, context: &mut Frontage<'_>) -> io::Result<()> {
     // Each participating resident can supply the same share of street work in an epoch.
     let new_effort = participants * 0.12 * context.exposure;
     town.access_effort += new_effort;
-    let mut work = StreetWork::default();
-    let mut surfaces = StreetWork::default();
     let opening = town.access_effort;
     let name = town.seat.name.clone();
     let trace = StreetTrace {
@@ -105,14 +104,16 @@ pub fn advance(town: &mut Town, context: &mut Frontage<'_>) -> io::Result<()> {
         mut projects,
         paths,
         recurring,
+        groups,
     } = traffic(town, context)?;
     projects.extend(backland(town));
-    projects.extend(prospects(town, context));
+    let fronts = crate::town::plots::OccupiedFronts::new(town);
+    projects.extend(prospects(town, context, &fronts));
     projects.extend(occupied_ends(town, context)?);
     projects.extend(town.template.street_proposals(town));
     projects.extend(destinations(town, context)?);
     projects.extend(purpose_routes(town, context)?);
-    projects.extend(shortcuts(town, context)?);
+    let shortcuts = shortcuts(town, context, &fronts, &mut projects)?;
     let (route_count, path_count) = (projects.len(), paths.len());
     trace.event(|| {
         serde_json::json!({
@@ -141,7 +142,11 @@ pub fn advance(town: &mut Town, context: &mut Frontage<'_>) -> io::Result<()> {
         .collect();
     // hpc-exempt: orders spatial investments, not a lattice field.
     investments.sort_by(|a, b| b.0.total_cmp(&a.0));
-    let deferred = undertake(town, context, &trace, investments, &mut work, &mut surfaces)?;
+    let Decisions {
+        work,
+        surfaces,
+        deferred,
+    } = undertake(town, context, &trace, investments, shortcuts, groups)?;
     if network_length(town) == initial_length && town.access_effort > 0. {
         seek_byway(town, context, &deferred, &trace)?;
     }
@@ -162,13 +167,14 @@ fn undertake(
     context: &mut Frontage<'_>,
     trace: &StreetTrace<'_>,
     investments: Vec<(f64, Investment)>,
-    work: &mut StreetWork,
-    surfaces: &mut StreetWork,
-) -> io::Result<Vec<Project>> {
+    mut shortcuts: Option<BoundNetwork>,
+    mut groups: Option<super::walks::passages::StreetGroups>,
+) -> io::Result<Decisions> {
+    let surveyed = town.streets().len();
+    let mut recorded = surveyed;
+    let mut work = StreetWork::default();
+    let mut surfaces = StreetWork::default();
     let mut deferred = Vec::new();
-    // Extensions and crossings have already run. Rebuild lazily only after a
-    // purchase changes the centrelines used by subsequent route proposals.
-    let mut street_lines = None;
     for (_, investment) in investments {
         if town.access_effort <= 0. && !matches!(investment, Investment::Settle(_)) {
             match investment {
@@ -178,7 +184,7 @@ fn undertake(
             }
             continue;
         }
-        let street_changed = match investment {
+        match investment {
             Investment::Settle(i) => {
                 let (site, conditions) = context.outlying[i];
                 let settled = site.settle(
@@ -191,19 +197,25 @@ fn undertake(
                 trace.event(
                     || serde_json::json!({"stage":"outlying","candidate":i,"settled":settled}),
                 );
-                false
             }
             Investment::Route(project) => {
-                let decision =
-                    invest(town, context, &project, trace, &mut street_lines).map_err(|e| {
-                        io::Error::other(format!(
-                            "{} street proposal {:?}: {e}",
-                            project.demand, project.points
-                        ))
-                    })?;
+                if project.joins_junctions
+                    && recorded > surveyed
+                    && shortcuts
+                        .as_ref()
+                        .is_some_and(|graph| shortcut_served(town, graph, &project))
+                {
+                    work.spacing += 1;
+                    continue;
+                }
+                let decision = invest(town, context, &project, trace).map_err(|e| {
+                    io::Error::other(format!(
+                        "{} street proposal {:?}: {e}",
+                        project.demand, project.points
+                    ))
+                })?;
                 deferred.push(project);
                 work.record(&decision);
-                matches!(decision, Decision::Built)
             }
             Investment::Widen(load) => {
                 let widened = town
@@ -215,25 +227,43 @@ fn undertake(
                         ))
                     })?;
                 work.widened += usize::from(widened);
-                widened
             }
             Investment::Surface(path) => {
-                let decision = surface(town, context, &path).map_err(|e| {
-                    io::Error::other(format!(
-                        "Surfacing {} course {:?}: {e}",
-                        path.class.as_str(),
-                        path.points
-                    ))
-                })?;
+                let decision =
+                    surface_walk(town, context, &path, groups.as_mut()).map_err(|e| {
+                        io::Error::other(format!(
+                            "Surfacing {} course {:?}: {e}",
+                            path.class.as_str(),
+                            path.points
+                        ))
+                    })?;
                 surfaces.record(&decision);
-                matches!(decision, Decision::Built)
             }
-        };
-        if street_changed {
-            street_lines = None;
+        }
+        if let Some(graph) = &mut shortcuts {
+            for (i, road) in town.streets()[recorded..].iter().enumerate() {
+                graph.add_public_street(recorded + i, road);
+            }
+            recorded = town.streets().len();
         }
     }
-    Ok(deferred)
+    Ok(Decisions {
+        work,
+        surfaces,
+        deferred,
+    })
+}
+struct Decisions {
+    work: StreetWork,
+    surfaces: StreetWork,
+    deferred: Vec<Project>,
+}
+fn shortcut_served(town: &Town, graph: &BoundNetwork, project: &Project) -> bool {
+    let (a, b) = (project.points[0], *project.points.last().unwrap());
+    let slack = town.scale().length(SHORTCUT_SLACK, Measure::Layout);
+    graph
+        .junction_cost(a, b)
+        .is_some_and(|cost| shortcut_gain(cost, distance(a, b), slack) <= SHORTCUT_GAIN)
 }
 #[derive(Default, serde::Serialize)]
 struct StreetWork {
@@ -273,16 +303,187 @@ fn surface(
     if town.access_effort < street_cost(minimum) {
         return Ok(Decision::Unfunded);
     }
-    let Some(street) = crate::town::network::lane(
-        &path.points,
-        form,
-        context.ground,
-        crate::town::network::stops_lane,
-        minimum,
-    ) else {
+    let course = path.alignment(context.spatial, context.ground, minimum / 2.)?;
+    let network = StreetLines::near(
+        town,
+        &course,
+        crate::town::settings::JUNCTION_TOLERANCE,
+        context.spatial,
+    )?;
+    let depth = town.plot().1;
+    let mut decision = Decision::Terrain;
+    for section in std::iter::once(course.as_slice()).chain(path.junction_sections(&course)) {
+        let mut points = section.to_vec();
+        for _ in 0..2 {
+            if let Some(mut street) = crate::town::network::lane(
+                &points,
+                form,
+                context.ground,
+                crate::town::network::stops_lane,
+                minimum,
+            ) {
+                let complete = distance(*street.points.last().unwrap(), *points.last().unwrap())
+                    <= crate::town::settings::JUNCTION_TOLERANCE;
+                let attached = !network.is_empty() && network.attach_walk(&mut street.points)?;
+                let length = street.length();
+                if serves_walk(attached, complete, length, depth) {
+                    match build(town, context, street.clone(), path.wear)? {
+                        RoadInvestment::Built(_) => return Ok(Decision::Built),
+                        RoadInvestment::TooExpensive(cost) => {
+                            decision = Decision::Unfunded;
+                            let affordable = length * town.access_effort / cost;
+                            if affordable >= depth && affordable < length {
+                                let mut points =
+                                    crate::town::geometry::cut(&street.points, affordable);
+                                let attached =
+                                    !network.is_empty() && network.attach_walk(&mut points)?;
+                                if serves_walk(attached, false, affordable, depth) {
+                                    let portion = crate::town::network::Street::new_at(
+                                        points, form.class, form.size, form.scale,
+                                    );
+                                    if matches!(
+                                        build(town, context, portion, path.wear)?,
+                                        RoadInvestment::Built(_)
+                                    ) {
+                                        return Ok(Decision::Built);
+                                    }
+                                }
+                            }
+                        }
+                        RoadInvestment::Declined(_) => {
+                            decision = Decision::Claim;
+                            if complete {
+                                break;
+                            }
+                        }
+                    }
+                } else {
+                    decision = Decision::Spacing;
+                    if complete {
+                        break;
+                    }
+                }
+            }
+            points.reverse();
+        }
+    }
+    Ok(decision)
+}
+
+fn surface_walk(
+    town: &mut Town,
+    context: &mut Frontage<'_>,
+    path: &super::walks::LaneCourse,
+    groups: Option<&mut super::walks::passages::StreetGroups>,
+) -> io::Result<Decision> {
+    let Some(ends) = path.joins else {
+        return surface(town, context, path);
+    };
+    let groups = groups.ok_or_else(|| io::Error::other("Missing surveyed street components"))?;
+    if groups.separate(ends, town, context.spatial)? {
+        surface_connection(town, context, path)
+    } else {
+        Ok(Decision::Spacing)
+    }
+}
+
+fn surface_connection(
+    town: &mut Town,
+    context: &mut Frontage<'_>,
+    path: &super::walks::LaneCourse,
+) -> io::Result<Decision> {
+    let spatial = context.spatial;
+    let from = path.points[0];
+    let to = *path.points.last().unwrap();
+    let Some(least) = connection_cost(
+        town,
+        &[from, to],
+        path.class,
+        street_cost(distance(from, to)),
+        spatial,
+    )?
+    else {
+        return Ok(Decision::Claim);
+    };
+    if least > town.access_effort {
+        return Ok(Decision::Unfunded);
+    }
+    let Some(room) = spatial
+        .buffer(&line(&path.points), town.plot().0)
+        .map_err(io::Error::other)?
+    else {
         return Ok(Decision::Terrain);
     };
-    Ok(build(town, context, street, path.wear)?.decision())
+    let widest = town.street_form(path.class).width();
+    let atlas_map::Bounds(w, s, e, n) = spatial.bounds(&room).map_err(io::Error::other)?;
+    let b = atlas_map::Bounds(w - widest, s - widest, e + widest, n + widest);
+    let mut protected: Vec<_> = context.walking_ground.worked_fields(b).collect();
+    for i in town.nearby_holdings(b, spatial)? {
+        let h = &town.holdings()[i];
+        if !h
+            .slot
+            .habitat
+            .shares_surface(crate::town::templates::Habitat::Ground)
+        {
+            continue;
+        }
+        if h.public || h.land_claim() > 2. + path.wear {
+            protected.push(&h.outline);
+        } else {
+            protected.extend(&h.buildings);
+        }
+    }
+    let cropped = protected
+        .into_iter()
+        .map(|g| spatial.clip_by_rect(g, b))
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(io::Error::other)?
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>();
+    let area = crate::town::byway::RightOfWay {
+        corridor: room,
+        obstacles: if cropped.is_empty() {
+            None
+        } else {
+            spatial.union_all(&cropped).map_err(io::Error::other)?
+        },
+    };
+    let mut answer = Decision::Terrain;
+    for class in
+        std::iter::once(path.class).chain((path.class == Class::Lane).then_some(Class::Alley))
+    {
+        let form = town.street_form(class);
+        let Some(points) = crate::town::byway::walked_connection(
+            &path.points,
+            form.width(),
+            &area,
+            context.walking_ground,
+            context.ground,
+            spatial,
+        )?
+        else {
+            continue;
+        };
+        let road = crate::town::network::Street::new_at(points, class, form.size, form.scale);
+        let result = build(town, context, road, path.wear)?;
+        answer = result.decision();
+        if matches!(result, RoadInvestment::Built(_)) {
+            break;
+        }
+    }
+    Ok(answer)
+}
+
+/// A short link can close an existing connection. An interrupted course
+/// must open usable frontage. Beyond the paved network, recurring journeys
+/// shared by households can support a public way along a whole block.
+fn serves_walk(attached: bool, complete: bool, length: f64, plot_depth: f64) -> bool {
+    if attached {
+        complete || length >= plot_depth
+    } else {
+        length >= 2. * plot_depth
+    }
 }
 
 fn purpose_routes(town: &Town, context: &Frontage<'_>) -> io::Result<Vec<Project>> {
@@ -300,6 +501,7 @@ fn purpose_routes(town: &Town, context: &Frontage<'_>) -> io::Result<Vec<Project
             {
                 projects.push(Project {
                     demand: "purpose",
+                    joins_junctions: false,
                     points: vec![town.position(from), target],
                     benefit: 1. + purpose.investment,
                     class,
@@ -533,6 +735,7 @@ fn occupied_ends(town: &Town, context: &Frontage<'_>) -> io::Result<Vec<Project>
                     .count();
                 (land > 0).then(|| Project {
                     demand: "occupied street end",
+                    joins_junctions: false,
                     class: Class::Lane,
                     points: vec![pair[1], tip],
                     benefit: land as f64 / (1. + turn.abs()),
@@ -543,7 +746,11 @@ fn occupied_ends(town: &Town, context: &Frontage<'_>) -> io::Result<Vec<Project>
     }
     Ok(projects)
 }
-fn prospects(town: &Town, context: &Frontage<'_>) -> Vec<Project> {
+fn prospects(
+    town: &Town,
+    context: &Frontage<'_>,
+    fronts: &crate::town::plots::OccupiedFronts,
+) -> Vec<Project> {
     let housed = town
         .holdings()
         .iter()
@@ -558,10 +765,11 @@ fn prospects(town: &Town, context: &Frontage<'_>) -> Vec<Project> {
         .iter()
         .filter(|c| {
             c.slot.street.is_some_and(|street| {
-                context.ground.open(
-                    &crate::town::ground::Rectangle(&c.slot.corners),
-                    FIRST_STREET + street as u32,
-                )
+                fronts.flanks_opening(&c.slot)
+                    && context.ground.open(
+                        &crate::town::ground::Rectangle(&c.slot.corners),
+                        FIRST_STREET + street as u32,
+                    )
             })
         })
         .map(|c| {
@@ -571,7 +779,7 @@ fn prospects(town: &Town, context: &Frontage<'_>) -> Vec<Project> {
                 .arms
                 .first()
                 .and_then(|arm| arm.points.windows(2).next())
-                .map_or([1., 0.], |leg| unit(sub(leg[1], leg[0])));
+                .map_or(c.slot.direction, |leg| unit(sub(leg[1], leg[0])));
             let (direction, priority) = street_bearing(
                 town.layout,
                 axis,
@@ -579,11 +787,14 @@ fn prospects(town: &Town, context: &Frontage<'_>) -> Vec<Project> {
                 c.slot.inward,
                 c.slot.depth,
             );
-            let end = add(start, scale(direction, c.slot.depth * 2.5));
+            // Open access to the rear of the occupied row. Its new frontage can
+            // support an extension once premises actually reach that street end.
+            let end = add(start, scale(direction, c.slot.depth));
             let focal = 1. / (1. + distance(start, town.seat.centre) / centre_pull);
             let demand = c.opportunities.for_activity(Activity::Household).demand;
             Project {
                 demand: "prospective frontage",
+                joins_junctions: false,
                 class: Class::Lane,
                 points: vec![start, end],
                 benefit: priority * (pressure * 3. * focal + demand / (1. + demand)),
@@ -634,6 +845,7 @@ struct Traffic {
     projects: Vec<Project>,
     paths: Vec<super::walks::LaneCourse>,
     recurring: usize,
+    groups: Option<super::walks::passages::StreetGroups>,
 }
 fn foot_doors(town: &Town, mode: AccessUse) -> Vec<Entrance> {
     if mode != AccessUse::Foot {
@@ -736,12 +948,15 @@ fn traffic(town: &mut Town, context: &Frontage<'_>) -> io::Result<Traffic> {
     }
     let loads = street_loads(town, context, &use_)?;
     town.register_traffic(loads.clone(), context.exposure);
-    let (paths, recurring) = walks.finish(town, context.exposure);
+    town.recognise_high_street();
+    let (mut paths, worn) = walks.finish(town);
+    let groups = super::walks::passages::propose(town, &worn, context.spatial, &mut paths)?;
     Ok(Traffic {
         widening: loads,
         projects: unmet,
         paths,
-        recurring,
+        recurring: worn.len(),
+        groups,
     })
 }
 fn route_journeys(
@@ -775,6 +990,7 @@ fn route_journeys(
             } else if let Some(class) = mode.street_class() {
                 unmet.push(Project {
                     demand: "unrouted journey",
+                    joins_junctions: false,
                     class,
                     points: vec![from, to],
                     benefit: load,
@@ -890,6 +1106,7 @@ fn backland(town: &Town) -> Vec<Project> {
             let end = add(rear, scale(h.slot.direction, lateral));
             Project {
                 demand: "occupied backland",
+                joins_junctions: false,
                 class: Class::Lane,
                 points: vec![start, rear, end],
                 benefit: (0.3 + h.occupation + h.crowding + h.kind.definition().prominence)
@@ -930,6 +1147,7 @@ fn destinations(town: &Town, context: &Frontage<'_>) -> io::Result<Vec<Project>>
         }
         result.push(Project {
             demand: "destination",
+            joins_junctions: false,
             class: Class::Lane,
             points: vec![[x, y], source.position],
             benefit: source.demand / (1. + source.demand)
@@ -938,16 +1156,27 @@ fn destinations(town: &Town, context: &Frontage<'_>) -> io::Result<Vec<Project>>
     }
     Ok(result)
 }
-fn shortcuts(town: &Town, context: &Frontage<'_>) -> io::Result<Vec<Project>> {
-    let ends: Vec<_> = town
+fn shortcuts(
+    town: &Town,
+    context: &Frontage<'_>,
+    fronts: &crate::town::plots::OccupiedFronts,
+    projects: &mut Vec<Project>,
+) -> io::Result<Option<BoundNetwork>> {
+    let (width, depth) = town.plot();
+    let (ends, frontage): (Vec<_>, Vec<_>) = town
         .streets()
         .iter()
-        .flat_map(|s| [s.points[0], *s.points.last().unwrap()])
-        .collect();
-    if ends.len() < 3 {
-        return Ok(vec![]);
+        .enumerate()
+        .flat_map(|(i, s)| {
+            [(s.points[0], 0.), (*s.points.last().unwrap(), s.length())]
+                .map(|(p, station)| (p, fronts.served_front(i, station, depth)))
+        })
+        .filter(|(_, occupied)| *occupied > 0.)
+        .unzip();
+    if ends.len() < 2 {
+        return Ok(None);
     }
-    let edges = context
+    let mut edges = context
         .spatial
         .delaunay_edges(
             &ends
@@ -956,6 +1185,9 @@ fn shortcuts(town: &Town, context: &Frontage<'_>) -> io::Result<Vec<Project>> {
                 .collect::<Vec<_>>(),
         )
         .map_err(io::Error::other)?;
+    if ends.len() == 2 {
+        edges = vec![[0, 1]];
+    }
     let mut access = Access::for_town(town, context.spatial)?.on_ground(context.walking_ground);
     for &(a, b, cost) in context.links {
         access.add_link(a, b, cost, context.spatial)?;
@@ -970,33 +1202,46 @@ fn shortcuts(town: &Town, context: &Frontage<'_>) -> io::Result<Vec<Project>> {
             neighbours[a].push(b);
         }
     }
-    let mut result = Vec::new();
+    let before = projects.len();
     for (a, adjacent) in neighbours.iter().enumerate().filter(|(_, v)| !v.is_empty()) {
         let routes = network.routes_to(a, adjacent.iter().copied());
         for &b in adjacent {
             let direct = distance(ends[a], ends[b]);
             let cost = routes.cost(b);
-            let gain = (cost - direct) / (direct + slack);
-            if gain > 0.4 {
-                result.push(Project {
+            if let Some(benefit) =
+                shortcut_benefit(cost, direct, slack, frontage[a].min(frontage[b]), width)
+            {
+                projects.push(Project {
                     demand: "shortcut",
+                    joins_junctions: true,
                     class: Class::Lane,
                     points: vec![ends[a], ends[b]],
-                    // A shortcut serves the premises the holdings stand for.
-                    benefit: gain
-                        * (1. + town.holdings().len() as f64 * town.scale().premises() / 100.),
+                    benefit,
                 });
             }
         }
     }
-    Ok(result)
+    Ok((projects.len() > before).then_some(network))
 }
-fn invest<'a>(
+fn shortcut_gain(cost: f64, direct: f64, slack: f64) -> f64 {
+    (cost - direct) / (direct + slack)
+}
+fn shortcut_benefit(
+    cost: f64,
+    direct: f64,
+    slack: f64,
+    served: f64,
+    plot_width: f64,
+) -> Option<f64> {
+    let gain = shortcut_gain(cost, direct, slack);
+    (gain.is_finite() && gain > SHORTCUT_GAIN && served > 0.)
+        .then_some(gain * (1. + served / plot_width))
+}
+fn invest(
     town: &mut Town,
-    context: &mut Frontage<'a>,
+    context: &mut Frontage<'_>,
     project: &Project,
     trace: &StreetTrace<'_>,
-    street_lines: &mut Option<StreetLines<'a>>,
 ) -> io::Result<Decision> {
     let from = project.points.first().copied();
     let to = project.points.last().copied();
@@ -1036,16 +1281,18 @@ fn invest<'a>(
     }
     let mut points = project.points.clone();
     if !town.streets().is_empty() {
-        let streets = match street_lines {
-            Some(streets) => streets,
-            None => street_lines.insert(StreetLines::new(town.streets(), context.spatial)?),
-        };
-        let Some(start) = streets.project(points[0])? else {
+        let Some((_, start)) = town.project_onto_road(points[0], context.spatial)? else {
             return Ok(Decision::Spacing);
         };
         points[0] = start;
         if let [a, b] = points.as_mut_slice() {
             let spacing = scale.length(ROUTE_SPACING, Measure::Layout);
+            let streets = StreetLines::near(
+                town,
+                &[*a, *b],
+                spacing * crate::town::settings::JOIN_SHARE,
+                context.spatial,
+            )?;
             let Some((end, _)) = streets.constrain(&[*a, *b], spacing)? else {
                 decision("network spacing or overlap", None, town.access_effort);
                 return Ok(Decision::Spacing);
@@ -1053,13 +1300,24 @@ fn invest<'a>(
             *b = end;
         }
     }
-    let Some(street) = crate::town::network::lane(
+    let dry = crate::town::network::lane(
         &points,
         town.street_form(project.class),
         context.ground,
         crate::town::network::stops_lane,
         minimum_route,
-    ) else {
+    );
+    let across = crossing_lane(town, context, project.class, &points, minimum_route)?;
+    let Some(street) = across
+        .filter(|route| dry.as_ref().is_none_or(|d| route.length() > d.length()))
+        .or(dry)
+        .filter(|street| {
+            !project.joins_junctions
+                || street.points.last().zip(to).is_some_and(|(&end, target)| {
+                    distance(end, target) <= crate::town::settings::JUNCTION_TOLERANCE
+                })
+        })
+    else {
         decision(
             "less than the minimum usable corridor",
             None,
@@ -1076,6 +1334,50 @@ fn invest<'a>(
     };
     decision(label, Some(cost), effort);
     Ok(purchase.decision())
+}
+
+fn crossing_lane(
+    town: &Town,
+    context: &Frontage<'_>,
+    class: Class,
+    points: &[Point],
+    minimum: f64,
+) -> io::Result<Option<crate::town::network::Street>> {
+    use crate::town::{
+        ground::WATER,
+        network::{bridge_span, lane, stops_lane},
+    };
+    if context.ground.wet_runs(points).is_empty() {
+        return Ok(None);
+    }
+    let Some(mut course) = lane(
+        points,
+        town.street_form(class),
+        context.ground,
+        |owner| owner != WATER && stops_lane(owner),
+        minimum,
+    ) else {
+        return Ok(None);
+    };
+    let span = bridge_span(town.seat.story.size(), town.scale());
+    if !crate::processes::ground::crossings::survey(
+        &mut course,
+        context.ground,
+        span,
+        context.channel_depth,
+    )? {
+        return Ok(None);
+    }
+    let cost = street_cost(course.length()) + bridge_effort(&course);
+    Ok((cost <= town.access_effort).then_some(course))
+}
+
+fn bridge_effort(street: &crate::town::network::Street) -> f64 {
+    street
+        .bridges
+        .iter()
+        .map(|(a, b)| (b - a) * street.width())
+        .sum()
 }
 enum RoadInvestment {
     Built(f64),
@@ -1097,7 +1399,7 @@ fn build(
     street: crate::town::network::Street,
     benefit: f64,
 ) -> io::Result<RoadInvestment> {
-    let ordinary = street_cost(street.length());
+    let ordinary = street_cost(street.length()) + bridge_effort(&street);
     let Some(cost) = connection_cost(
         town,
         &street.points,
@@ -1149,7 +1451,7 @@ fn connection_cost(
     spatial: &dyn crate::spatial::SpatialKernel,
 ) -> io::Result<Option<f64>> {
     use crate::town::effects::{Placement, Requirement};
-    let target = Placement::Access(if class == Class::Lane {
+    let target = Placement::Access(if matches!(class, Class::Lane | Class::Alley) {
         AccessUse::Foot
     } else {
         AccessUse::Freight
@@ -1169,4 +1471,313 @@ fn connection_cost(
 /// true metre at every fidelity, as the economy reads true floor areas.
 fn street_cost(length: f64) -> f64 {
     length * 0.5
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::processes::town::walks::LaneCourse;
+    use crate::town::{
+        ground::{Ground, WATER},
+        network::Street,
+        seat::Seat,
+        story::Story,
+    };
+
+    fn assert_built(town: &mut Town, context: &mut Frontage<'_>, course: &LaneCourse) {
+        assert!(matches!(
+            surface(town, context, course).unwrap(),
+            Decision::Built
+        ));
+    }
+    #[test]
+    fn shortcuts_need_a_real_detour_and_people_at_both_ends() {
+        assert_eq!(shortcut_benefit(f64::INFINITY, 100., 40., 12., 10.), None);
+        assert_eq!(shortcut_benefit(300., 100., 40., 0., 10.), None);
+        assert_eq!(shortcut_benefit(120., 100., 40., 12., 10.), None);
+        assert!(shortcut_benefit(300., 100., 40., 12., 10.).is_some());
+    }
+
+    fn market() -> Town {
+        Town::new(
+            Seat {
+                key: atlas_map::Id::from_name("market"),
+                name: "Market".into(),
+                centre: [0., 0.],
+                story: Story {
+                    people: 1600.,
+                    ..Default::default()
+                },
+                arms: vec![],
+                culture: None,
+            },
+            None,
+        )
+    }
+    fn frontage<'a>(
+        walking: &'a Ground,
+        ground: &'a mut Ground,
+        spatial: &'a dyn crate::spatial::SpatialKernel,
+    ) -> Frontage<'a> {
+        Frontage {
+            walking_ground: walking,
+            channel_depth: &|_| Ok(None),
+            outlying: &[],
+            links: &[],
+            sources: &[],
+            ground,
+            spatial,
+            candidates: &[],
+            conditions: &[],
+            exposure: 1.,
+        }
+    }
+    #[test]
+    fn a_shortcut_has_to_reach_the_far_street_before_the_town_pays_for_it() {
+        let spatial = atlas_gis::geometry::NativeGeos::new(0.001).unwrap();
+        let mut town = market();
+        let from = [0., 0.];
+        let to = [120., 0.];
+        let size = town.seat.story.size();
+        town.set_approaches(vec![
+            Street::new(vec![from, [0., 25.]], Class::Lane, size),
+            Street::new(vec![to, [120., 25.]], Class::Lane, size),
+        ]);
+        town.access_effort = 1000.;
+        let project = Project {
+            demand: "shortcut",
+            joins_junctions: true,
+            points: vec![from, to],
+            benefit: 8.,
+            class: Class::Lane,
+        };
+        let trace = StreetTrace {
+            name: "Market",
+            round: 1,
+            enabled: false,
+        };
+        let clear = Ground::new([-30., -30., 155., 125.], 1.);
+        let mut blocked = clear.clone();
+        for i in blocked.cells_within([64., -25., 70., 30.]) {
+            blocked.withhold(i, crate::town::ground::STEEP);
+        }
+        assert!(matches!(
+            invest(
+                &mut town,
+                &mut frontage(&clear, &mut blocked, &spatial),
+                &project,
+                &trace
+            )
+            .unwrap(),
+            Decision::Terrain
+        ));
+        assert_eq!(town.streets().len(), 2);
+        assert_eq!(town.access_effort, 1000.);
+        assert!(matches!(
+            invest(
+                &mut town,
+                &mut frontage(&clear, &mut clear.clone(), &spatial),
+                &project,
+                &trace
+            )
+            .unwrap(),
+            Decision::Built
+        ));
+        assert_eq!(town.streets().last().unwrap().points.last(), Some(&to));
+    }
+
+    #[test]
+    fn building_one_crossing_removes_the_detour_behind_a_parallel_shortcut() {
+        let spatial = atlas_gis::geometry::NativeGeos::new(0.001).unwrap();
+        let mut town = market();
+        let size = town.seat.story.size();
+        let origin = [0., 0.];
+        let first = [400., 0.];
+        let second = [400., 75.];
+        let roads = [
+            vec![origin, [0., 250.]],
+            vec![[0., 250.], [400., 250.]],
+            vec![[400., 250.], second, first],
+        ]
+        .map(|points| Street::new(points, Class::Lane, size));
+        town.set_approaches(roads.to_vec());
+        town.access_effort = 1000.;
+        let graph = Access::new(&roads, &spatial)
+            .unwrap()
+            .bind(
+                &[origin, first, second].map(Entrance::external),
+                AccessUse::Foot,
+                &spatial,
+            )
+            .unwrap();
+        let crossing = |to| Project {
+            points: vec![origin, to],
+            demand: "shortcut",
+            joins_junctions: true,
+            class: Class::Lane,
+            benefit: 8.,
+        };
+        assert!(!shortcut_served(&town, &graph, &crossing(second)));
+        let proposals = [first, second]
+            .into_iter()
+            .map(|to| (8., Investment::Route(crossing(to))))
+            .collect();
+        let land = Ground::new([-30., -30., 440., 290.], 2.);
+        let trace = StreetTrace {
+            name: "Market",
+            round: 1,
+            enabled: false,
+        };
+        let decisions = undertake(
+            &mut town,
+            &mut frontage(&land, &mut land.clone(), &spatial),
+            &trace,
+            proposals,
+            Some(graph),
+            None,
+        )
+        .unwrap();
+        assert_eq!(decisions.work.built, 1);
+        assert_eq!(town.streets().last().unwrap().points.last(), Some(&first));
+        assert_eq!(decisions.work.spacing, 1);
+    }
+
+    fn occupy_both_streets(
+        town: &mut Town,
+        ground: &mut Ground,
+        spatial: &dyn crate::spatial::SpatialKernel,
+    ) {
+        use crate::town::{
+            catalogue::development::{household, HousingSite},
+            fabric::Proposal,
+            plots::{slots, Side},
+        };
+        let size = town.seat.story.size();
+        town.set_approaches(
+            [0., 40.]
+                .map(|y| Street::new(vec![[-35., y], [35., y]], Class::Lane, size))
+                .to_vec(),
+        );
+        let house = household(
+            &HousingSite {
+                scale: town.scale(),
+                conditions: Default::default(),
+                distance_from_seat: 20.,
+                trade_demand: 0.,
+                means: 0.5,
+                form_sample: 0.1,
+                livelihood_sample: 0.5,
+            },
+            &[],
+        );
+        for (i, side) in [Side::Right, Side::Left].into_iter().enumerate() {
+            let street = &town.streets()[i];
+            ground.take_street(street, FIRST_STREET + i as u32);
+            let slot = slots(i, street, 10., 12., town.scale())
+                .into_iter()
+                .filter(|s| s.side == side)
+                .min_by(|a, b| a.front[0].abs().total_cmp(&b.front[0].abs()))
+                .unwrap();
+            let roof = slot.occupied_shape();
+            let proposal = Proposal {
+                slot,
+                kind: house,
+                means: 0.5,
+                priority: 1.,
+                cause: "Street household".into(),
+            };
+            let id = town.establish(proposal, spatial).unwrap().unwrap();
+            assert!(town.fit_building(id, roof, spatial).unwrap());
+            town.occupy(id, 1., 0.5, 1., 0.);
+        }
+    }
+
+    #[test]
+    fn occupied_streets_build_one_shared_walking_connection() {
+        use crate::processes::town::walks::{passages, Worn};
+        use crate::town::fabric::walks::path_key;
+        let spatial = atlas_gis::geometry::NativeGeos::new(0.001).unwrap();
+        let mut town = market();
+        let walking = Ground::new([-60., -30., 60., 75.], 1.);
+        let mut ground = walking.clone();
+        occupy_both_streets(&mut town, &mut ground, &spatial);
+        let mut worn = Worn::new();
+        for x in [-5., 5.] {
+            for (a, b) in [(0., 20.), (20., 40.)] {
+                worn.insert(path_key([x, a], [x, b]), (8., Class::Lane));
+            }
+        }
+        let mut paths = Vec::new();
+        let groups = passages::propose(&town, &worn, &spatial, &mut paths).unwrap();
+        assert_eq!(paths.len(), 2);
+        assert!(paths.iter().all(|p| p.joins.is_some()));
+        let investments = paths
+            .into_iter()
+            .map(|p| (p.wear, Investment::Surface(p)))
+            .collect();
+        let trace = StreetTrace {
+            name: "Market",
+            round: 1,
+            enabled: false,
+        };
+        town.access_effort = 1000.;
+        let decisions = undertake(
+            &mut town,
+            &mut frontage(&walking, &mut ground, &spatial),
+            &trace,
+            investments,
+            None,
+            groups,
+        )
+        .unwrap();
+        assert_eq!(decisions.surfaces.built, 1);
+        assert_eq!(decisions.surfaces.spacing, 1);
+        assert_eq!(town.streets().len(), 3);
+        assert_eq!(
+            town.noded_streets(&spatial)
+                .unwrap()
+                .street_groups(3)
+                .size(0),
+            3
+        );
+    }
+
+    #[test]
+    fn public_walks_open_frontage_up_to_an_obstruction_and_in_a_separate_neighbourhood() {
+        let spatial = atlas_gis::geometry::NativeGeos::new(0.001).unwrap();
+        let mut town = market();
+        town.set_approaches(vec![Street::new(
+            vec![[0., -20.], [0., 20.]],
+            Class::Main,
+            town.seat.story.size(),
+        )]);
+        town.access_effort = 1000.;
+        let mut ground = Ground::new([-30., -30., 155., 125.], 1.);
+        for i in 0..ground.count() {
+            if ground.centre(i)[0] > 109. {
+                ground.withhold(i, WATER);
+            }
+        }
+        let walking = ground.clone();
+        let mut context = frontage(&walking, &mut ground, &spatial);
+        let course = |points| LaneCourse {
+            joins: None,
+            points,
+            junctions: vec![],
+            wear: 8.,
+            class: Class::Lane,
+        };
+        let interrupted = course(vec![[112., 0.], [0., 0.]]);
+        assert_built(&mut town, &mut context, &interrupted);
+        let road = town.streets().last().unwrap();
+        assert_eq!(road.points[0], [0., 0.]);
+        assert!((90. ..109.).contains(&road.length()));
+        let block = course(vec![[5., 90.], [100., 90.]]);
+        assert_built(&mut town, &mut context, &block);
+        let doorway = course(vec![[5., 110.], [12., 110.]]);
+        assert!(matches!(
+            surface(&mut town, &mut context, &doorway).unwrap(),
+            Decision::Spacing
+        ));
+    }
 }

@@ -25,6 +25,7 @@ export class PublishedVectors {
   readonly group = new LayerGroup();
   readonly layers = new Map<string, VectorLayer>();
   private readonly features = new Map<string, Feature>();
+  private readonly records = new Map<string, MapFeature>();
   private sequence = 0;
   constructor(
     private readonly descriptor: MapDescriptor,
@@ -41,12 +42,13 @@ export class PublishedVectors {
       geography?: DrawingGeography;
       features: Map<string, DrawingFeature>;
     },
-    realScale?: RealScalePresentation
+    realScale?: RealScalePresentation,
+    partial = false
   ) {
     const sequence = ++this.sequence;
-    const scene = records.map(publishedFeature);
     this.syncLayers(styles);
-    this.syncFeatures(scene);
+    if (!partial) this.removeMissing(records);
+    for (const record of records) this.syncRecord(record);
     const appearance = publishedAppearance(this.descriptor, entities);
     await Promise.all(
       styles.map(async (style) => {
@@ -72,7 +74,15 @@ export class PublishedVectors {
   private realScaleStyle(layer: VectorLayer, style: LayerStyle, view?: RealScalePresentation) {
     if (!view || !isRealScaleLayer(style.layerId)) return false;
     const first = this.descriptor.realScale?.creatorLayers[0]?.id ?? "";
-    layer.setStyle(realScaleStyle(style, view, first, groundColours(this.descriptor)));
+    layer.setStyle(
+      realScaleStyle(
+        style,
+        view,
+        first,
+        groundColours(this.descriptor),
+        this.descriptor.realScale?.acrossFlats
+      )
+    );
     return true;
   }
   private syncLayers(styles: LayerStyle[]) {
@@ -108,20 +118,22 @@ export class PublishedVectors {
       collection.insertAt(index, layer);
     });
   }
-  private syncFeatures(scene: PublishedFeature[]) {
+  private removeMissing(scene: MapFeature[]) {
     const wanted = new Set(scene.map((feature) => feature.id));
     for (const [id, feature] of this.features) {
       if (wanted.has(id)) continue;
       const previous = feature.get("domain") as PublishedFeature;
       this.layers.get(previous.mapLayerId)?.getSource()!.removeFeature(feature);
       this.features.delete(id);
+      this.records.delete(id);
     }
-    for (const record of scene) this.syncFeature(record);
   }
-  private syncFeature(record: PublishedFeature) {
+  private syncRecord(raw: MapFeature) {
+    let feature = this.features.get(raw.id);
+    if (this.records.get(raw.id) === raw) return;
+    const record = publishedFeature(raw);
     const source = this.layers.get(record.mapLayerId)?.getSource();
     if (!source) return;
-    let feature = this.features.get(record.id);
     if (!feature) {
       feature = new Feature();
       feature.setId(record.id);
@@ -140,6 +152,7 @@ export class PublishedVectors {
       kind: record.kind,
       domain: record,
     });
+    this.records.set(raw.id, raw);
     if (!source.hasFeature(feature)) source.addFeature(feature);
   }
   close() {
@@ -150,6 +163,7 @@ export class PublishedVectors {
     }
     this.layers.clear();
     this.features.clear();
+    this.records.clear();
     this.group.getLayers().clear();
   }
 }

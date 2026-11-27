@@ -12,8 +12,9 @@ use crate::field::poi::true_sizes::{ABUTMENT_SHARE, LEAST_CROSSING};
 pub struct Way<'a> {
     pub points: &'a [[f64; 2]],
     pub widths: Option<&'a [f64]>,
-    /// Roads and streets are bridged over deep water; tracks and trails are not.
-    pub bridged: bool,
+    /// Metres along the line supported by bridge works. Captured regional roads can
+    /// realize a crossing anywhere; paths without a deck have an empty slice.
+    pub bridge_spans: Option<&'a [(f64, f64)]>,
 }
 /// A channel as drawn, with its width and mean discharge at each vertex.
 pub struct Water<'a> {
@@ -38,6 +39,39 @@ pub struct Crossing {
     /// Unit direction of the way through the crossing and its width there.
     pub bearing: [f64; 2],
     pub way_width: Option<f64>,
+}
+
+/// Survey an alignment before movement commits it. Each wet reach needs dry banks,
+/// a known channel and room for the settlement's works. Deep reaches need a deck.
+pub(crate) fn survey(
+    course: &mut crate::town::network::Street,
+    ground: &crate::town::ground::Ground,
+    span: f64,
+    channel_depth: &dyn Fn([f64; 2]) -> std::io::Result<Option<f64>>,
+) -> std::io::Result<bool> {
+    let length = course.length();
+    let reaches = ground.wet_runs(&course.points);
+    if reaches.is_empty() {
+        return Ok(false);
+    }
+    let mut bridges = Vec::new();
+    for (start, end) in reaches {
+        if start < ground.cell || end + ground.cell >= length || end - start > span {
+            return Ok(false);
+        }
+        let Some((centre, _)) = crate::town::geometry::at(&course.points, (start + end) / 2.)
+        else {
+            return Ok(false);
+        };
+        let Some(depth) = channel_depth(centre)? else {
+            return Ok(false);
+        };
+        if depth >= FORD_DEPTH {
+            bridges.push((start, end));
+        }
+    }
+    course.bridges = bridges;
+    Ok(true)
 }
 /// Where two segments meet: the point and the fraction along each.
 fn meet(a: [[f64; 2]; 2], b: [[f64; 2]; 2]) -> Option<([f64; 2], f64, f64)> {
@@ -117,10 +151,18 @@ fn decide(way: &Way<'_>, water: &Water<'_>, meeting: &Meeting) -> Option<(f64, f
     let (j, u) = (meeting.water_segment, meeting.along_water);
     let width = between(water.widths, j, u);
     let discharge = between(water.discharges, j, u);
+    if width <= 0. || discharge <= 0. {
+        return None;
+    }
     let deep = depth(discharge, width);
     let form = if deep < FORD_DEPTH {
         Form::Ford
-    } else if way.bridged {
+    } else if way.bridge_spans.is_none_or(|spans| {
+        let i = meeting.way_segment;
+        let station = crate::town::geometry::line_length(&way.points[..=i])
+            + meeting.along_way * distance(way.points[i], way.points[i + 1]);
+        spans.iter().any(|&(a, b)| (a..=b).contains(&station))
+    }) {
         Form::Bridge
     } else {
         return None;
@@ -193,13 +235,17 @@ mod tests {
         let n = points.len();
         (points, vec![width; n], vec![discharge; n])
     }
-    fn cross(water: &Channel, bridged: bool, existing: &[[f64; 2]]) -> Vec<Crossing> {
+    fn cross(
+        water: &Channel,
+        spans: Option<&[(f64, f64)]>,
+        existing: &[[f64; 2]],
+    ) -> Vec<Crossing> {
         let way = [[50.0, -30.0], [50.0, 30.0]];
         crossings(
             &[Way {
                 points: &way,
                 widths: Some(&[4.0, 4.0]),
-                bridged,
+                bridge_spans: spans,
             }],
             &[Water {
                 points: &water.0,
@@ -211,7 +257,7 @@ mod tests {
     }
     #[test]
     fn a_way_wades_shallow_water() {
-        let found = cross(&river(2.0, 6.0), false, &[]);
+        let found = cross(&river(2.0, 6.0), Some(&[]), &[]);
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].form, Form::Ford);
         assert!((found[0].at[0] - 50.0).abs() < 1e-9 && found[0].at[1].abs() < 1e-9);
@@ -221,16 +267,37 @@ mod tests {
     #[test]
     fn roads_bridge_deep_water_and_trails_do_not() {
         let deep = river(100.0, 45.0);
-        let road = cross(&deep, true, &[]);
+        let road = cross(&deep, None, &[]);
         assert_eq!(road.len(), 1);
         assert_eq!(road[0].form, Form::Bridge);
         let [a, b] = span(&road[0]);
         assert!((distance(a, b) - (45.0 + 2.0 * 4.5)).abs() < 1e-9);
-        assert!(cross(&deep, false, &[]).is_empty());
+        assert!(cross(&deep, Some(&[]), &[]).is_empty());
+        assert!(cross(&deep, Some(&[(5., 15.)]), &[]).is_empty());
+        assert_eq!(cross(&deep, Some(&[(25., 35.)]), &[]).len(), 1);
     }
     #[test]
     fn an_existing_bridge_carries_the_crossing() {
-        assert!(cross(&river(2.0, 6.0), true, &[[52.0, 3.0]]).is_empty());
-        assert_eq!(cross(&river(2.0, 6.0), true, &[[150.0, 0.0]]).len(), 1);
+        assert!(cross(&river(2.0, 6.0), None, &[[52.0, 3.0]]).is_empty());
+        assert_eq!(cross(&river(2.0, 6.0), None, &[[150.0, 0.0]]).len(), 1);
+    }
+    #[test]
+    fn local_alignment_needs_a_known_channel_and_passable_banks() {
+        use crate::town::{
+            ground::{Ground, WATER},
+            network::{Class, Street},
+            story::Size,
+        };
+        let mut ground = Ground::new([0., 0., 30., 10.], 1.);
+        for x in 12..17 {
+            ground.withhold(ground.index([f64::from(x), 5.]).unwrap(), WATER);
+        }
+        let mut way = Street::new(vec![[1., 5.], [28., 5.]], Class::Lane, Size::Town);
+        assert!(!survey(&mut way, &ground, 10., &|_| Ok(None)).unwrap());
+        assert!(!survey(&mut way, &ground, 4., &|_| Ok(Some(1.))).unwrap());
+        assert!(survey(&mut way, &ground, 10., &|_| Ok(Some(FORD_DEPTH / 2.))).unwrap());
+        assert!(way.bridges.is_empty());
+        assert!(survey(&mut way, &ground, 10., &|_| Ok(Some(FORD_DEPTH * 2.))).unwrap());
+        assert_eq!(way.bridges.len(), 1);
     }
 }

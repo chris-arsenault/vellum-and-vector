@@ -150,6 +150,7 @@ fn retain_path(route: &Approach, paths: &mut BTreeMap<[JunctionId; 2], Footpath>
             paths.entry([a, b]).or_insert(Footpath {
                 points: [a.point(), b.point()],
                 wear: 0.,
+                beaten: false,
             });
         }
     }

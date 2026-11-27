@@ -9,7 +9,7 @@ import type { LayerStyle } from "./types";
 import type { FeatureAppearance, RenderFeature } from "./renderFeature";
 import type { CartographicPresentation, FeatureTypeStyle } from "./types";
 import { typePresentation } from "./featureTypePresentation";
-import { featureStyle } from "./vectorStyles";
+import { featureStyle, matchesTextFilter } from "./vectorStyles";
 import { cartographicFeatureStyle } from "./drawnStyles";
 import type { DrawingGeography } from "./publishedAppearance";
 import type { DrawingFeature } from "./drawingGeometry";
@@ -83,15 +83,7 @@ function styledFeature<F extends RenderFeature>(
   }
   return parsed
     ? parsedOutput(parsed, feature, resolution)
-    : featureStyle(domain, effective, resolution);
-}
-function matchesTextFilter(domain: RenderFeature, base: LayerStyle) {
-  return (
-    !base.filter ||
-    JSON.stringify([domain.name, domain.attributes])
-      .toLowerCase()
-      .includes(base.filter.toLowerCase())
-  );
+    : featureStyle(domain, effective, resolution, appearance.realScale);
 }
 function footprintStyle(geometry: Geometry, color: string) {
   let shape = footprints.get(geometry);

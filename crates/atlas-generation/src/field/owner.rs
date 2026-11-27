@@ -24,7 +24,7 @@ pub struct FieldSeed {
     pub ground: GroundSeed,
     pub people: HumanSeed,
     harvest: Option<super::people::yields::Harvest>,
-    pub(crate) process_site: crate::processes::strategies::Site,
+    pub process_site: crate::processes::strategies::Site,
     pub ground_load: MaterialLoad,
     pub sea_load: MaterialLoad,
     pub tectonics: Option<crate::tectonics::state::State>,

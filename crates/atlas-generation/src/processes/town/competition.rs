@@ -52,7 +52,7 @@ pub fn advance(town: &mut Town, context: &Exposure<'_>) -> io::Result<()> {
             }
         }
         let holding = &town.holdings()[id.0 as usize];
-        let upward = holding.means * holding.condition * (1. + land.density)
+        let upward = holding.means * holding.condition * (1. + land.density + land.garden_demand)
             / (holding.storeys.iter().min().copied().unwrap_or(1) as f64 * (1. + land.flood));
         if holding.crowding * upward > 0.16 && holding.kind.definition().roles.dwelling {
             town.apply(FabricEdit::Raise { premises: id }, context.spatial)?;

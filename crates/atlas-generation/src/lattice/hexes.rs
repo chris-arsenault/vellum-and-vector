@@ -40,7 +40,7 @@ pub fn triangle_corners(lattice: &TriangularLattice, cell: usize) -> [[f64; 2]; 
     ]
     .map(|corner| world(lattice, corner))
 }
-pub(crate) fn triangle_polygon(mesh: &TriangularLattice, cell: usize) -> atlas_map::Geometry {
+pub fn triangle_polygon(mesh: &TriangularLattice, cell: usize) -> atlas_map::Geometry {
     let [a, b, c] = triangle_corners(mesh, cell);
     atlas_map::Geometry::Polygon {
         coordinates: vec![[a, b, c, a]

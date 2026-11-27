@@ -62,6 +62,7 @@ pub struct Settlement {
     streets: Vec<(Vec<Point>, Vec<f64>, bool)>,
     passages: Vec<Geometry>,
     footpaths: Vec<([Point; 2], f64)>,
+    footpath_wear: Vec<f64>,
     plots: Vec<Geometry>,
     buildings: Vec<(Geometry, BuildingFunction, Option<String>)>,
 }
@@ -71,8 +72,9 @@ pub fn capture(fabric: &Fabric, stage: Stage, site: &impl TownWriter) -> io::Res
         .iter()
         .map(|town| {
             let resolved = crate::town::addresses::assign(town, site.spatial())?;
+            let high_street = crate::publication::town::high_street(town);
             let names = (0..town.streets().len())
-                .map(|i| street_name(site, town, i))
+                .map(|i| street_name(site, town, i, high_street))
                 .collect::<io::Result<Vec<_>>>()?;
             Ok(Settlement {
                 key: town.seat.key,
@@ -108,11 +110,8 @@ pub fn capture(fabric: &Fabric, stage: Stage, site: &impl TownWriter) -> io::Res
                     .map(|s| (s.points.clone(), s.widths.clone(), s.through_route))
                     .collect(),
                 passages: town.passages().to_vec(),
-                footpaths: town
-                    .footpaths()
-                    .iter()
-                    .map(|f| (f.points, f.width()))
-                    .collect(),
+                footpaths: town.beaten_paths().map(|f| (f.points, f.width())).collect(),
+                footpath_wear: town.beaten_paths().map(|f| f.wear).collect(),
                 plots: town.holdings().iter().map(|h| h.outline.clone()).collect(),
                 buildings: town
                     .holdings()

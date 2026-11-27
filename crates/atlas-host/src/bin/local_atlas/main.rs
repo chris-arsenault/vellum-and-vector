@@ -27,6 +27,8 @@ pub struct Harness {
     checkout: PathBuf,
     /// The one atlas every worktree shares, in the main checkout.
     pub home: PathBuf,
+    /// Process status, logs and the last followed job belong to one listener.
+    runtime: PathBuf,
     pub reports: PathBuf,
 }
 impl Harness {
@@ -50,18 +52,29 @@ impl Harness {
             .unwrap_or(44138);
         // The launcher names the address it bound: loopback, or a development node's LAN.
         let host = env::var("ATLAS_LOCAL_HOST").unwrap_or_else(|_| "127.0.0.1".into());
+        let runtime = env::var_os("ATLAS_SERVER_RUNTIME")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| {
+                let listener = home.join("listeners").join(port.to_string());
+                if listener.is_dir() {
+                    listener
+                } else {
+                    home.clone()
+                }
+            });
         Ok(Self {
             server: Server::new(&host, port),
             reports: checkout.join(".artifacts/local-atlas"),
             checkout,
             home,
+            runtime,
         })
     }
     fn world_file(&self) -> PathBuf {
         self.home.join("world.json")
     }
     pub fn last_job_file(&self) -> PathBuf {
-        self.home.join("last-job.json")
+        self.runtime.join("last-job.json")
     }
     fn map_folder(&self, name: &str) -> PathBuf {
         self.reports.join("maps").join(slug(name, &['.', '-']))
@@ -184,6 +197,16 @@ fn run() -> io::Result<()> {
             named_world(&harness, options.get("name").unwrap_or_default(), &options)
         }
         (Some("world"), _) => world(&harness, options.flag("fresh")),
+        (Some("running"), None) => {
+            let jobs: Vec<GenerationStatus> = harness.generation("jobs", Value::Null)?;
+            for job in jobs
+                .iter()
+                .filter(|job| job.state == atlas_generation::GenerationState::Running)
+            {
+                println!("{} {}", job.job_id, job.step);
+            }
+            Ok(())
+        }
         (Some("real"), _) if options.get("at").is_some() => real_scale(&harness, &options),
         (Some("city"), _) if options.get("at").is_some() => real_scale(&harness, &options),
         (Some("region"), _)
@@ -200,9 +223,7 @@ fn run() -> io::Result<()> {
         (Some("census"), _) => census(&harness, &options),
         // owner-direction(2026-11-25): dynamic process experiments belong in the existing harness with no Web UI
         (Some("experiment"), _) => experiment::command(&harness, &options),
-        (Some("town-previews"), Some(job)) if options.get("name").is_some() => {
-            town_previews(&harness, job, options.get("name").unwrap_or_default())
-        }
+        (Some("town-previews"), Some(job)) => town_previews(&harness, job, options.get("name")),
         (Some("history"), Some(name)) => history(&harness, name),
         (Some("city-view-inputs"), Some(name)) => city_view_inputs(&harness, name),
         (Some("raster"), Some(name)) if options.positionals.len() > 2 => {
@@ -227,6 +248,7 @@ fn usage(harness: &Harness) -> String {
   world --name name [--width metres] [--height metres] [--quality draft|standard|fine] [--seed n]
   places [--parent world folder]
   census [--reference-width] [--full-history [--seed <integer>]]
+  census --construction-scale <factor> --source <world name> --footprint <map name>
   experiment processes | run <experiment.json> | render <results.json> [--metric <name>] [--colors linear|log]
   summary|history <map folder under {maps}>
   city-view-inputs <published City map folder>
@@ -240,9 +262,10 @@ fn usage(harness: &Harness) -> String {
   city --at Settlement --name name [--parent map folder] [--capture-only]
   real --outline [--choice n] --at x,y|Settlement --parent city map folder --name name
        [--hex 30m] opens a district of a city map as its own map
+  running
   cancel <jobId>
   resume [jobId] [--name map folder]
-  town-previews <jobId> --name <existing map folder>
+  town-previews <jobId> [--name <existing map folder>]
 Hex sizes: {sizes}",
         maps = maps.display(),
         sizes = HEX_METRES.map(|(name, _)| name).join(", ")
@@ -791,6 +814,13 @@ fn resume(harness: &Harness, job: Option<&str>, name: Option<&str>) -> io::Resul
 }
 
 fn census(harness: &Harness, options: &Options) -> io::Result<()> {
+    if options.get("construction-scale").is_some()
+        && (options.flag("full-history") || options.flag("reference-width"))
+    {
+        return Err(io::Error::other(
+            "Fixed-population construction uses the retained world's original extent",
+        ));
+    }
     let cargo = |arguments: Vec<String>| -> io::Result<()> {
         let status = Command::new("cargo")
             .args([
@@ -813,7 +843,24 @@ fn census(harness: &Harness, options: &Options) -> io::Result<()> {
     if !options.flag("full-history") {
         let mut arguments = vec!["local_census".into(), "--".into()];
         arguments.push(harness.home.display().to_string());
-        if options.flag("reference-width") {
+        if let Some(scale) = options.get("construction-scale") {
+            let path = |key| -> io::Result<String> {
+                let name = options
+                    .get(key)
+                    .ok_or_else(|| io::Error::other(format!("Choose --{key} <map name>")))?;
+                Ok(harness
+                    .existing_map(name)
+                    .join("map.json")
+                    .display()
+                    .to_string())
+            };
+            arguments.extend([
+                "--construction-scale".to_owned(),
+                scale.to_owned(),
+                path("source")?,
+                path("footprint")?,
+            ]);
+        } else if options.flag("reference-width") {
             arguments.push("--reference-width".into());
         }
         return cargo(arguments);
@@ -860,11 +907,17 @@ fn census(harness: &Harness, options: &Options) -> io::Result<()> {
         config.display().to_string(),
     ])
 }
-fn town_previews(harness: &Harness, job: &str, name: &str) -> io::Result<()> {
+fn town_previews(harness: &Harness, job: &str, name: Option<&str>) -> io::Result<()> {
+    let observed = harness.reports.join("previews").join(job);
+    let Some(name) = name else {
+        for (file, _) in town::pictures(&observed, &observed, "")? {
+            println!("{}", observed.join(file).display());
+        }
+        return Ok(());
+    };
     let output = harness.reports.join("maps").join(name);
     let listing = output.join("previews.json");
     let mut pictures: Vec<Picture> = read_json(&listing)?;
-    let observed = harness.reports.join("previews").join(job);
     for (file, label) in town::pictures(&observed, &output, "preview-")? {
         println!("{}", output.join(format!("preview-{file}")).display());
         pictures.push(Picture {

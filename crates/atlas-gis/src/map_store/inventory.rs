@@ -19,6 +19,14 @@ pub struct MapEntry {
 }
 impl MapStore {
     pub fn inventory(&self) -> io::Result<Vec<MapEntry>> {
+        let mut entries = self.map_index()?;
+        for entry in &mut entries {
+            entry.problem = self.open(&entry.reference).err().map(|e| e.to_string());
+        }
+        Ok(entries)
+    }
+    /// Catalogue rows for navigation. Opening a map and checking the inventory read its full description.
+    pub fn map_index(&self) -> io::Result<Vec<MapEntry>> {
         self.db
             .query(
                 "SELECT m.map_id,m.revision,m.name,m.profile,m.parent_map_id,m.parent_revision,m.complete,
@@ -47,7 +55,7 @@ impl MapStore {
                     complete: column(row, "complete")?.flag()?,
                     head: column(row, "head")?.flag()?,
                     saved: column(row, "saved")?.flag()?,
-                    problem: self.open(&reference).err().map(|e| e.to_string()),
+                    problem: None,
                     reference,
                 })
             })

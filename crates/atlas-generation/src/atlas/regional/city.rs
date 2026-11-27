@@ -46,6 +46,12 @@ pub(crate) fn start_people_pass(
                 let state = scope.state();
                 let mesh = state.field().mesh();
                 let [ox, oy] = mesh.origin();
+                let sites: Vec<_> = (0..mesh.len())
+                    .map(|cell| {
+                        let [x, y] = mesh.position(cell);
+                        atlas_map::Position::xy(x + ox, y + oy)
+                    })
+                    .collect();
                 let urban = &state
                     .regional
                     .as_ref()
@@ -53,6 +59,10 @@ pub(crate) fn start_people_pass(
                     .city
                     .urban;
                 input.city = Some(Rc::new(growth::Guidance {
+                    settled: state
+                        .spatial
+                        .covers_points(state.scope.settled_outline(), &sites)
+                        .map_err(io::Error::other)?,
                     census: input.parent.census.clone(),
                     weight: (0..mesh.len())
                         .map(|cell| {

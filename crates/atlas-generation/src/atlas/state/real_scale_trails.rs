@@ -133,9 +133,20 @@ impl State {
         Ok(places.into_iter().map(|(_, f, cell)| (f, cell)).collect())
     }
     /// Lays the map's trails and records them in the roads network.
-    pub fn lay_trails(&mut self) -> io::Result<()> {
-        let ways = self.way_lines()?;
-        let destinations = self.walking_places()?;
+    pub(crate) fn lay_trails(
+        &mut self,
+        strategy: &crate::atlas::dispatch::registration::ground::RouteStrategy<
+            crate::atlas::dispatch::registration::ground::WalkingPlaces,
+        >,
+    ) -> io::Result<()> {
+        let ways = strategy
+            .boundary
+            .bind(|_| self.way_lines().map(Some))?
+            .unwrap_or_default();
+        let destinations = strategy
+            .initial
+            .bind(|_| self.walking_places().map(Some))?
+            .unwrap_or_default();
         let ends = self.trail_ends(&ways, &destinations)?;
         let places = self.unreached(&ways, destinations)?;
         if places.is_empty() {

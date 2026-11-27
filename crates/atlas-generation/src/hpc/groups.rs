@@ -4,6 +4,12 @@ pub struct UnionFind {
     sizes: Vec<usize>,
 }
 impl UnionFind {
+    pub fn push_active(&mut self) -> usize {
+        let index = self.parent.len();
+        self.parent.push(index);
+        self.sizes.push(1);
+        index
+    }
     pub fn new(length: usize) -> Self {
         Self {
             parent: vec![usize::MAX; length],

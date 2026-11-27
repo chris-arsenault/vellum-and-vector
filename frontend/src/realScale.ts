@@ -2,6 +2,7 @@ import type { MapDescriptor, Position, RealScale, RegionSelection } from "@atlas
 import type { HexSize, RealScaleChoice } from "@atlas/context";
 import type { LayerStyle } from "./types";
 import { vectorFamily } from "./renderFeature";
+import { occupiedCityGround } from "./cityPresentation";
 
 /** Real-scale view choices; hex marks and shapes stay published map data (ADR 0016). */
 export interface RealScalePresentation {
@@ -51,9 +52,16 @@ export function shownSpace(map: MapDescriptor, view?: RealScalePresentation) {
 const rank = (layerId: string) => realScaleOrder.indexOf(vectorFamily(layerId));
 
 /** The first style draws on top, so real-scale kinds sort top first and show by default. */
-export function realScaleStyles(styles: LayerStyle[]): LayerStyle[] {
+export function realScaleStyles(styles: LayerStyle[], map?: MapDescriptor): LayerStyle[] {
   return styles
-    .map((style) => (rank(style.layerId) >= 0 ? { ...style, visible: true, labels: true } : style))
+    .map((style) => {
+      if (rank(style.layerId) >= 0) return { ...style, visible: true, labels: true };
+      if (vectorFamily(style.layerId) !== "landUse" || style.visible) return style;
+      const types = map?.layers.find((layer) => layer.id === style.layerId)?.catalog.featureTypes;
+      if (!types?.some(occupiedCityGround)) return style;
+      // Keep the City's land-use districts visible beneath the streets and houses.
+      return { ...style, visible: true };
+    })
     .sort((a, b) => rank(b.layerId) - rank(a.layerId));
 }
 export const isRealScaleLayer = (layerId: string) => rank(layerId) >= 0;

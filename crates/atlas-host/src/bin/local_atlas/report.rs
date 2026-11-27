@@ -59,6 +59,7 @@ enum Layer {
     CityGround,
     Plot,
     Square,
+    Footpath,
     Way,
     Wall,
     District,
@@ -83,10 +84,15 @@ struct Drawn {
     arterial_strength: Option<f64>,
     layer: Layer,
     geometry: Geometry,
+    footprint: Option<Geometry>,
+    symbol_width: f64,
     width: f64,
+    footpath_wear: Option<f64>,
     colour: &'static str,
 }
-fn drawn(feature: &MapFeature, real_scale: bool) -> Option<Drawn> {
+type Symbol = (Layer, f64, &'static str);
+
+fn course_symbol(feature: &MapFeature, real_scale: bool) -> Option<Symbol> {
     let mean_width = |fallback: f64| {
         feature
             .attributes
@@ -96,35 +102,61 @@ fn drawn(feature: &MapFeature, real_scale: bool) -> Option<Drawn> {
             .filter(|w| !w.is_empty())
             .map_or(fallback, |w| w.iter().sum::<f64>() / w.len() as f64)
     };
-    let (layer, width, colour) = match feature.kind.as_str() {
-        "park" => (Layer::Park, 0., "#a8bd90"),
-        "square" if feature.name.as_deref() == Some("Common green") => (Layer::Park, 0., "#b4c39a"),
-        "ocean" | "sea" | "lake" | "pool" | "lagoon" | "reservoir" => (Layer::Water, 0., WATER),
+    Some(match feature.kind.as_str() {
+        "river" | "stream" | "canal" if real_scale => (Layer::River, mean_width(8.), WATER),
         "river" | "stream" | "canal" => (Layer::River, 8., WATER),
-        "field" => (Layer::Field, 0., FIELD.0),
-        "yard" => (Layer::Plot, 0., PLOT.0),
-        "square" => (Layer::Square, 0., "#ece5cf"),
+        "street"
+            if feature.attributes.get("roadClass").and_then(Value::as_str)
+                == Some("mainStreet") =>
+        {
+            (Layer::Avenue, mean_width(8.), "#f4d69b")
+        }
+        "street" | "lane" if real_scale => (Layer::Way, mean_width(6.), "#e8ddc5"),
         "street" | "lane" => (Layer::Way, mean_width(6.), STREET),
         "trail" => (Layer::Way, mean_width(2.5), "#a08f6a"),
-        "footpath" => (Layer::Way, mean_width(1.5), FOOTPATH),
+        "footpath" => (Layer::Footpath, mean_width(1.5), FOOTPATH),
         "road" => (Layer::Way, 8., "#8a7350"),
+        "thoroughfare" if real_scale => (Layer::Avenue, mean_width(10.), "#f4d69b"),
         "thoroughfare" => match feature.attributes.get("class").and_then(Value::as_str) {
             Some("Avenue" | "Approach" | "Civic approach") => {
                 (Layer::Avenue, mean_width(12.), "#fff1cf")
             }
             _ => (Layer::Way, mean_width(6.), "#f4e5c9"),
         },
+        _ => return None,
+    })
+}
+
+fn urban_ground_colour(feature: &MapFeature, real_scale: bool) -> &'static str {
+    let ground_use = feature.attributes.get("groundUse").and_then(Value::as_str);
+    let (city, street) = match ground_use {
+        Some("Crowded housing") => ("#aa7557", "#d9c6b3"),
+        Some("Garden housing") => ("#b9c69b", "#dce0c6"),
+        Some("Trade frontage") => ("#c8915d", "#e1ceb3"),
+        Some("Working ground") => ("#aaa394", "#d7d2c4"),
+        Some("Civic precinct") => ("#ad9cb4", "#d9d0cc"),
+        Some("Common ground") => ("#c4d1b7", "#c4d1b7"),
+        _ => ("#debf9c", "#e3d8c5"),
+    };
+    if real_scale {
+        street
+    } else {
+        city
+    }
+}
+
+fn feature_symbol(feature: &MapFeature, real_scale: bool) -> Option<Symbol> {
+    Some(match feature.kind.as_str() {
+        "park" => (Layer::Park, 0., "#a8bd90"),
+        "square" if feature.name.as_deref() == Some("Common green") => (Layer::Park, 0., "#b4c39a"),
+        "ocean" | "sea" | "lake" | "pool" | "lagoon" | "reservoir" => (Layer::Water, 0., WATER),
+        "field" => (Layer::Field, 0., FIELD.0),
+        "yard" => (Layer::Plot, 0., PLOT.0),
+        "square" => (Layer::Square, 0., "#ece5cf"),
         "urbanGround" => (
             Layer::CityGround,
             0.,
-            match feature.attributes.get("groundUse").and_then(Value::as_str) {
-                Some("Crowded housing") => "#aa7557",
-                Some("Garden housing") => "#b9c69b",
-                Some("Trade frontage") => "#c8915d",
-                Some("Working ground") => "#aaa394",
-                Some("Civic precinct") => "#ad9cb4",
-                _ => "#debf9c",
-            },
+            urban_ground_colour(feature, real_scale),
         ),
         "cityBlock" if real_scale => (Layer::Block, 0., "#ddd7be"),
         "cityBlock" => (
@@ -155,9 +187,28 @@ fn drawn(feature: &MapFeature, real_scale: bool) -> Option<Drawn> {
                     .unwrap_or_default(),
             ),
         ),
-        _ => return None,
-    };
+        _ => return course_symbol(feature, real_scale),
+    })
+}
+
+fn drawn(feature: &MapFeature, real_scale: bool) -> Option<Drawn> {
+    let (layer, width, colour) = feature_symbol(feature, real_scale)?;
     Some(Drawn {
+        footprint: if real_scale && matches!(layer, Layer::River | Layer::Way | Layer::Avenue) {
+            feature
+                .footprint
+                .as_ref()
+                .map(atlas_map::regions::as_geometry)
+        } else {
+            None
+        },
+        symbol_width: match feature.attributes.get("roadClass").and_then(Value::as_str) {
+            Some("mainStreet") => 2.2,
+            Some("road" | "street") => 1.5,
+            Some("lane") => 0.9,
+            Some("alley") => 0.55,
+            _ => 0.7,
+        },
         arterial_strength: feature
             .attributes
             .get("arterialStrength")
@@ -174,6 +225,7 @@ fn drawn(feature: &MapFeature, real_scale: bool) -> Option<Drawn> {
                     .is_some_and(|r| r <= 1)),
         layer,
         geometry: feature.geometry.clone(),
+        footpath_wear: feature.attributes.get("wear").and_then(Value::as_f64),
         width,
         colour,
     })
@@ -186,16 +238,23 @@ fn draw(canvas: &mut Canvas, things: &[Drawn]) {
 fn draw_feature(canvas: &mut Canvas, thing: &Drawn) {
     match thing.layer {
         Layer::Park | Layer::Water => canvas.fill(&thing.geometry, thing.colour, None),
-        Layer::River | Layer::Way => {
-            canvas.outline(&thing.geometry, thing.width, 0.7, thing.colour)
-        }
+        Layer::Footpath => canvas.footpath(
+            &crate::picture::parts(&thing.geometry),
+            thing.width,
+            thing.footpath_wear,
+        ),
+        Layer::River | Layer::Way => draw_course(canvas, thing, thing.symbol_width),
         Layer::Wall => canvas.outline(&thing.geometry, thing.width, 2., thing.colour),
         Layer::District => canvas.outline(&thing.geometry, thing.width, 1.2, thing.colour),
         Layer::CityDistrict => canvas.outline(&thing.geometry, thing.width, 1.2, thing.colour),
         Layer::Avenue => {
-            let face = thing.arterial_strength.map_or(1.6, |s| 0.8 + 2.8 * s);
-            canvas.outline(&thing.geometry, thing.width + 2., face + 1.2, "#80694e");
-            canvas.outline(&thing.geometry, thing.width, face, thing.colour);
+            let face = thing
+                .arterial_strength
+                .map_or(thing.symbol_width.max(1.6), |s| 0.8 + 2.8 * s);
+            if thing.footprint.is_none() {
+                canvas.outline(&thing.geometry, thing.width + 2., face + 1.2, "#80694e");
+            }
+            draw_course(canvas, thing, face);
         }
         Layer::CityGround => canvas.fill(&thing.geometry, thing.colour, None),
         Layer::Block => canvas.fill(&thing.geometry, thing.colour, Some((PLOT.1, 0.6))),
@@ -205,6 +264,21 @@ fn draw_feature(canvas: &mut Canvas, thing: &Drawn) {
             canvas.fill(&thing.geometry, thing.colour, Some((PLOT.1, 0.6)))
         }
         Layer::Building => canvas.fill(&thing.geometry, thing.colour, Some((BUILDING_EDGE, 0.6))),
+    }
+}
+
+fn draw_course(canvas: &mut Canvas, thing: &Drawn, symbol_width: f64) {
+    if let Some(area) = &thing.footprint {
+        let road = matches!(thing.layer, Layer::Way | Layer::Avenue);
+        canvas.fill(area, thing.colour, road.then_some(("#897454", 0.6)));
+        if canvas.pixels(thing.width) < symbol_width {
+            if road {
+                canvas.outline(&thing.geometry, 0., symbol_width + 0.8, "#897454");
+            }
+            canvas.outline(&thing.geometry, 0., symbol_width, thing.colour);
+        }
+    } else {
+        canvas.outline(&thing.geometry, thing.width, symbol_width, thing.colour);
     }
 }
 

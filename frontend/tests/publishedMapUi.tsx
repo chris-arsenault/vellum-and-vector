@@ -11,6 +11,7 @@ import { usePublishedRegions, usePublishedRegionPresentation } from "../src/useP
 import { PublishedRegionsPanel } from "../src/PublishedRegionsPanel";
 import { PublishedSelectionToolbar } from "../src/PublishedSelectionToolbar";
 import { PublishedMapViews } from "../src/PublishedMapViews";
+import { CityOpen } from "../src/CityOpen";
 import type { PublishedTool } from "../src/publishedInteractions";
 import { PublishedMapCanvas } from "../src/PublishedMapCanvas";
 import { PublishedAppearance } from "../src/PublishedAppearance";
@@ -134,13 +135,23 @@ function FeatureInspection({
         hidden={() => false}
       />
       {selected && (
-        <PublishedFeatureInformation
-          map={map}
-          reader={reader}
-          feature={selected}
-          select={setSelected}
-          region={() => error("Unexpected region")}
-        />
+        <aside aria-label="Selection properties" className="right-panel selection-sidebar">
+          {map.state === "complete" && (
+            <CityOpen
+              key={selected.id}
+              map={map}
+              feature={selected}
+              open={() => error("Unexpected refinement")}
+            />
+          )}
+          <PublishedFeatureInformation
+            map={map}
+            reader={reader}
+            feature={selected}
+            select={setSelected}
+            region={() => error("Unexpected region")}
+          />
+        </aside>
       )}
     </>
   );

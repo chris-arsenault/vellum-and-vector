@@ -201,6 +201,9 @@
   position: absolute;
   inset: 0;
 }
+.map-frame:is([data-map-level="city"], [data-map-level="street"]):not(.drawn-map) {
+  background: #545958;
+}
 .map .ol-zoom {
   top: 14px;
   left: 14px;

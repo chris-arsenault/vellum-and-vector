@@ -23,12 +23,28 @@ UI and use supplied fixture maps; they never generate.
 `ATLAS_LOCAL_HOME`, `ATLAS_LOCAL_PORT` and `ATLAS_LOCAL_DATABASE_PORT` override the
 defaults.
 
+`scripts/local-atlas.sh running` lists jobs on the selected listener using the installed harness.
+Starting a rebuilt server preserves any generations still running on the old build.
+A second port can run the rebuilt native server while the first finishes.
+For example, run `ATLAS_LOCAL_HOST=127.0.0.1 ATLAS_LOCAL_PORT=44139 scripts/local-atlas.sh up --built`
+and use the same host and port for its harness commands. The listeners share the atlas
+and its saved maps. Follow a running job on the listener that started it. Each
+additional port keeps its PID, log and last followed job in `listeners/<port>/`. Running `down` on that
+port leaves the database available to other listeners.
+
 The database passwords are made locally on first start. No external credential is needed.
+
+Use `make local-sql` to inspect published maps in an interactive PostgreSQL session.
+The launcher connects through the database container's local socket as `atlas_map_reader`.
+For a single query, run `scripts/local-atlas.sh sql -c 'SELECT count(*) FROM map.heads'`.
+For a SQL file on your machine, run `make local-sql < query.sql`. Both commands work
+while the database is running, even when the atlas server is stopped.
 
 ## Use
 
 ```sh
 make local-up        # start the database, then build and (re)start the server
+scripts/local-atlas.sh up --built  # reuse the healthy server on this release binary, or start it
 make local-world     # reuse the kept world, or create it: 1,000 × 750 km Draft, seed 42
 scripts/local-atlas.sh places              # the world's settlements and positions
 scripts/local-atlas.sh census              # run human land processes on retained world layers
@@ -61,6 +77,12 @@ keeping the demographic cell spacing and aspect ratio. This is a controlled
 extent comparison. Both modes leave the kept map untouched and omit political
 events, terrain generation and town development.
 
+`scripts/local-atlas.sh census --source Density-world --footprint Vila-recursive-city --construction-scale 1`
+holds the captured households in place and runs three historical construction passes
+of a century each. The command prints residents and developed area before and after,
+weighted by each World triangle's intersection with the selected map footprint.
+Repeat with another scale to measure the effect of changing land demand.
+
 For a coupled comparison, `census --full-history` runs the kept creation recipe
 from formation through final publication in an isolated local directory. Each
 epoch prints the live headcount, the last recorded settlement sizes and the
@@ -79,10 +101,10 @@ or the effort spent building a route.
 
 The server log (`.artifacts/local-atlas/server.log`) records each generation step and
 publication stage as it starts, with the memory the server holds, and the launcher adds
-`server.memory` each time that memory grows by another GiB. When the server ends, the
-launcher writes `server.exit` with its exit status, what the status means (a SIGKILL from
-the out-of-memory killer, an abort, a segmentation fault), its peak memory and the memory
-left on the machine. A panic's words go into the job's failure message. Each server start
+`server.memory` each time that memory grows by another GiB. Before the launcher stops a
+server it records the command and PID in `server.stop-request`. The supervisor records the
+exit status, signal, peak memory and available memory in `server.exit`. A panic's words
+go into the job's failure message. Each server start
 moves the previous log to the end of `server-history.log`. A harness command following a
 job stops as soon as the server process is gone and prints the exit record.
 
@@ -111,11 +133,21 @@ A finished map is saved to the server library and reported in
 | `summary.txt`        | The map's size, and every published feature kind with its count |
 | `map.json`           | The map description                                             |
 | `steps.txt`          | Each step with its time                                         |
-| `map.png`            | The whole map: water, rivers, fields, plots, ways and buildings at their real size |
+| `map.png`            | Vector overview of selected feature kinds. Streams and roads can use schematic stroke widths, and crossing sites are omitted. |
 | `town.png`           | The same drawing framed on the town with the most occupied buildings |
 | `town-centre.png`    | That town's centre, 1.5 km across, where single roofs and street widths show |
-| `preview-*.png`      | The job's pictures of the land after each stage                 |
+| `preview-<number>-*.png` | Elevation and water at that stage, including stages named after town development |
 | `preview-town-*.png` | The same town at founding and after early, middle and mature development, in one frame and metre scale, with a close-up of its centre at the last stage |
+
+For a Street map as players see it, open the published map under **Server maps** and zoom
+to individual premises. `scripts/local-atlas.sh view <map folder>` captures this viewer as
+`viewer-overview.png` beside the report. Add `--at x,y --metres-per-pixel 1` for a
+`viewer-detail.png` centred at a position in world metres, at the nearest map zoom.
+Use `--name <landmark>` to retain several views as `viewer-<landmark>.png`.
+Use `--opening` to capture the first Street geography shown during loading as well as
+the settled map. The harness prints each elapsed time from selection.
+During a running job, `scripts/local-atlas.sh town-previews <jobId>`
+draws the retained settlement observations in the job's preview directory.
 
 The report reads the published map through the server's map service, page by page, as
 the frontend does. Buildings are coloured by function: residential, civic or economic.
@@ -165,10 +197,17 @@ settings from JSON.
 ```sh
 cargo build --release -p atlas-host --bin local_atlas
 scripts/local-atlas.sh experiment processes
+scripts/local-atlas.sh experiment history Vila
 scripts/local-atlas.sh experiment run experiment.json
 scripts/local-atlas.sh experiment render path/to/results.json --metric areaIntegral --colors log
 scripts/local-atlas.sh experiment land-use path/to/trial-1 --near 300
 ```
+
+Use `experiment history [search]` to find prior trials by city, process, control or pinned revision.
+It searches saved specifications locally and lists measurement tables newest first. Each trial's
+input specification and any district geometry or pictures are beside its measurements. Reuse
+that evidence when the inputs and process are unchanged. The active Sulion plan records
+which question a trial answered and which earlier conclusions it supersedes.
 
 Use `source.kind` to choose the inputs.
 

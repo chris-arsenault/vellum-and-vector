@@ -27,7 +27,7 @@ use serde_json::json;
 use std::io;
 
 /// A drawn channel with the widths and discharges it states at every vertex.
-struct Drawn {
+pub(crate) struct Drawn {
     feature: Feature,
     parts: Vec<Piece>,
     widths: Vec<f64>,
@@ -53,7 +53,68 @@ impl State {
     }
     /// Pools on the drawn channels, published through the place catalogue.
     pub fn publish_pools(&mut self) -> io::Result<()> {
+        for mut river in self.layer_features("rivers")? {
+            if self.size_carried_channel(&mut river)? {
+                self.records.features.put(river)?;
+            }
+        }
         self.publish_places(&mut Publication::default(), Moment::Ground)
+    }
+    /// An inherited course can have a known discharge but no located cross-sections.
+    /// Survey the drawn stations on the local bed with the water owner's real-scale relation.
+    fn size_carried_channel(&self, river: &mut Feature) -> io::Result<bool> {
+        let parts = pieces(&river.geometry);
+        let widths = vertex_values(&river.attributes, "widths", &parts);
+        let flows = vertex_values(&river.attributes, "discharges", &parts);
+        if parts.is_empty() || (widths.is_some() && flows.is_some()) {
+            return Ok(false);
+        }
+        let captured = river.attributes.get("discharge").and_then(|v| v.as_f64());
+        let field = self.field();
+        let water = field.water();
+        let mut station_widths = Vec::new();
+        let mut station_flows = Vec::new();
+        let mut station_depths = Vec::new();
+        for part in &parts {
+            for (i, &point) in part.points.iter().enumerate() {
+                let Some(cell) = self.cell_under(point) else {
+                    return Ok(false);
+                };
+                let local_width = water.channels.width.get(cell)?;
+                let local_flow = water.flow.mean.get(cell)?;
+                let at = part.offset + i;
+                let Some(flow) = flows
+                    .as_ref()
+                    .map(|v| v[at])
+                    .or((local_width > 0. && local_flow > 0.).then_some(local_flow))
+                    .or(captured)
+                else {
+                    return Ok(false);
+                };
+                let width = if let Some(values) = &widths {
+                    values[at]
+                } else {
+                    let bed = field
+                        .ground()
+                        .section(cell, crate::settlement::removal::Facet::Land)?;
+                    let family = crate::rock::ground::queries::bed_family(&bed);
+                    crate::processes::ground::channels::channel(flow, family).width
+                };
+                station_widths.push(width);
+                station_flows.push(flow);
+                station_depths.push(crate::processes::ground::channels::depth(flow, width));
+            }
+        }
+        river
+            .attributes
+            .insert("widths".into(), json!(station_widths));
+        river
+            .attributes
+            .insert("discharges".into(), json!(station_flows));
+        river
+            .attributes
+            .insert("depths".into(), json!(station_depths));
+        Ok(true)
     }
     /// Points where the map already crosses water: bridges and fords, wherever they came from.
     fn existing_crossings(&self) -> io::Result<Vec<[f64; 2]>> {
@@ -81,24 +142,45 @@ impl State {
     }
     /// Fords where ways wade shallow water and bridges where roads and streets cross deeper
     /// water, beside none already there.
-    pub fn publish_crossings(&mut self) -> io::Result<()> {
-        let ways = self.way_lines()?;
-        let channels = self.drawn_channels()?;
+    pub(crate) fn publish_crossings(
+        &mut self,
+        strategy: &crate::atlas::dispatch::registration::ground::RouteStrategy<
+            crate::atlas::dispatch::registration::ground::Channels,
+        >,
+    ) -> io::Result<()> {
+        let ways = strategy
+            .boundary
+            .bind(|_| self.way_lines().map(Some))?
+            .unwrap_or_default();
+        let channels = strategy
+            .initial
+            .bind(|_| self.drawn_channels().map(Some))?
+            .unwrap_or_default();
         let existing = self.existing_crossings()?;
         // Each piece of a line is its own way or channel; `owners` maps a piece back to its line.
         let mut way_pieces = Vec::new();
         let mut way_widths = Vec::new();
+        let mut bridge_spans = Vec::new();
         for (index, (feature, parts)) in ways.iter().enumerate() {
             let widths = vertex_values(&feature.attributes, "widths", parts);
+            let spans: Option<Vec<(f64, f64)>> = if feature.kind == "road" {
+                None
+            } else {
+                Some(
+                    feature
+                        .attributes
+                        .get("bridgeSpans")
+                        .map(|value| serde_json::from_value(value.clone()))
+                        .transpose()?
+                        .unwrap_or_default(),
+                )
+            };
+            bridge_spans.push(spans);
             for piece in parts {
                 let span = widths
                     .as_ref()
                     .map(|w| w[piece.offset..piece.offset + piece.points.len()].to_vec());
-                way_pieces.push((
-                    index,
-                    piece,
-                    matches!(feature.kind.as_str(), "road" | "street"),
-                ));
+                way_pieces.push((index, piece));
                 way_widths.push(span);
             }
         }
@@ -112,10 +194,10 @@ impl State {
             &way_pieces
                 .iter()
                 .zip(&way_widths)
-                .map(|((_, piece, bridged), widths)| Way {
+                .map(|((index, piece), widths)| Way {
                     points: &piece.points,
                     widths: widths.as_deref(),
-                    bridged: *bridged,
+                    bridge_spans: bridge_spans[*index].as_deref(),
                 })
                 .collect::<Vec<_>>(),
             &water_pieces

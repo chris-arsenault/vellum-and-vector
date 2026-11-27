@@ -28,6 +28,30 @@ fn feature(
 }
 
 #[test]
+fn clipped_channel_keeps_width_and_flow_at_the_new_stations() {
+    let mut river = feature(
+        "rivers",
+        "river",
+        json!({"type":"LineString","coordinates":[[0.,0.],[10.,0.],[20.,0.]]}),
+        json!({"widths":[2.,4.,8.],"discharges":[1.,3.,7.],"depths":[1.,2.],"discharge":5.}),
+    );
+    let clipped =
+        serde_json::from_value(json!({"type":"LineString","coordinates":[[5.,0.],[15.,0.]]}))
+            .unwrap();
+    atlas_generation::features::line_profile::clip_profiles(
+        &mut river.attributes,
+        &river.geometry,
+        &clipped,
+        &NativeGeos::new(1e-6).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(river.attributes["widths"], json!([3., 6.]));
+    assert_eq!(river.attributes["discharges"], json!([2., 5.]));
+    assert!(!river.attributes.contains_key("depths"));
+    assert_eq!(river.attributes["discharge"], json!(5.));
+}
+
+#[test]
 fn a_drawn_river_is_water_across_its_full_width_and_a_pool_by_its_outline() {
     let spatial = NativeGeos::new(1e-9).unwrap();
     let river = feature(

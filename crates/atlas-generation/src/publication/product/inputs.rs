@@ -142,18 +142,35 @@ pub fn clip_records(
     let Some(outline) = outline else {
         return Ok(features);
     };
-    let shapes: Vec<_> = features.iter().map(|f| f.geometry.clone()).collect();
-    let covered = spatial
-        .relations(outline, &shapes, crate::spatial::Predicate::Covers)
-        .map_err(io::Error::other)?;
+    let covered = {
+        let shapes: Vec<_> = features.iter().map(|f| f.geometry.clone()).collect();
+        spatial
+            .relations(outline, &shapes, crate::spatial::Predicate::Covers)
+            .map_err(io::Error::other)?
+    };
     let mut kept = Vec::with_capacity(features.len());
     for (mut feature, covered) in features.drain(..).zip(covered) {
         if !covered {
             let clipped = match &feature.geometry {
                 Geometry::Point { .. } | Geometry::MultiPoint { .. } => None,
-                Geometry::LineString { .. } | Geometry::MultiLineString { .. } => spatial
-                    .clip_trace(&feature.geometry, outline)
-                    .map_err(io::Error::other)?,
+                Geometry::LineString { .. } | Geometry::MultiLineString { .. } => {
+                    let trace = spatial
+                        .clip_trace(&feature.geometry, outline)
+                        .map_err(io::Error::other)?;
+                    if let Some(trace) = &trace {
+                        let mut profiles = std::mem::take(&mut feature.attributes)
+                            .into_iter()
+                            .collect();
+                        crate::features::line_profile::clip_profiles(
+                            &mut profiles,
+                            &feature.geometry,
+                            trace,
+                            spatial,
+                        )?;
+                        feature.attributes = profiles.into_iter().collect();
+                    }
+                    trace
+                }
                 _ => spatial
                     .overlay(&feature.geometry, outline, Overlay::Intersection)
                     .map_err(io::Error::other)?
@@ -165,6 +182,32 @@ pub fn clip_records(
             feature.geometry = clipped;
         }
         kept.push(feature);
+    }
+    // A carriageway or riverbank can cross the map edge with every centreline
+    // vertex inside it. Check these polygons independently, in one spatial batch.
+    let footprints: Vec<_> = kept
+        .iter()
+        .filter_map(|f| f.footprint.as_ref())
+        .map(atlas_map::regions::as_geometry)
+        .collect();
+    let covered = spatial
+        .relations(outline, &footprints, crate::spatial::Predicate::Covers)
+        .map_err(io::Error::other)?;
+    for ((feature, footprint), inside) in kept
+        .iter_mut()
+        .filter(|f| f.footprint.is_some())
+        .zip(footprints)
+        .zip(covered)
+    {
+        if !inside {
+            feature.footprint = spatial
+                .overlay(&footprint, outline, Overlay::Intersection)
+                .map_err(io::Error::other)?
+                .and_then(atlas_map::regions::polygon)
+                .map(atlas_map::regions::as_region)
+                .transpose()
+                .map_err(io::Error::other)?;
+        }
     }
     Ok(kept)
 }
@@ -203,15 +246,17 @@ mod tests {
         }
     }
 
-    #[test]
-    fn records_in_the_context_band_are_cut_or_left_out_and_fields_keep_to_the_outline() {
-        let spatial = atlas_gis::geometry::NativeGeos::new(1e-6).unwrap();
-        let ring = |points: &[(f64, f64)]| Geometry::Polygon {
+    fn ring(points: &[(f64, f64)]) -> Geometry {
+        Geometry::Polygon {
             coordinates: vec![points.iter().map(|&(x, y)| Position::xy(x, y)).collect()],
-        };
+        }
+    }
+    #[test]
+    fn records_in_the_context_band_are_cut_or_left_out() {
+        let spatial = atlas_gis::geometry::NativeGeos::new(1e-6).unwrap();
         // A triangle of a coast; its context band reaches beyond it.
         let outline = ring(&[(0., 0.), (10., 0.), (0., 10.), (0., 0.)]);
-        let features = vec![
+        let mut features = vec![
             feature(
                 "inside",
                 Geometry::Point {
@@ -235,6 +280,20 @@ mod tests {
                 ring(&[(1., 1.), (9., 1.), (9., 9.), (1., 9.), (1., 1.)]),
             ),
         ];
+        // The mapped area can extend beyond the centre point or the clipped trace.
+        let banks = atlas_map::regions::as_region(ring(&[
+            (0., 0.),
+            (10., 0.),
+            (10., 10.),
+            (0., 10.),
+            (0., 0.),
+        ]))
+        .unwrap();
+        features[0].footprint = Some(banks.clone());
+        features[2].footprint = Some(banks);
+        features[2]
+            .attributes
+            .insert("widths".into(), serde_json::json!([2., 10.]));
         let kept = clip_records(features.clone(), Some(&outline), &spatial).unwrap();
         let names: Vec<_> = kept.iter().map(|f| f.name.clone().unwrap()).collect();
         assert_eq!(names, ["inside", "river", "square"]);
@@ -250,9 +309,21 @@ mod tests {
         // The river ends where the outline does, at the hypotenuse.
         let Bounds(_, _, east, north) = spatial.bounds(&kept[1].geometry).unwrap();
         assert!((east - 5.).abs() < 1e-6 && (north - 5.).abs() < 1e-6);
+        assert_eq!(kept[1].attributes["widths"], serde_json::json!([2., 6.]));
+        for feature in [&kept[0], &kept[1]] {
+            let area = atlas_map::regions::as_geometry(feature.footprint.as_ref().unwrap());
+            assert!(spatial
+                .relation(&outline, &area, crate::spatial::Predicate::Covers)
+                .unwrap());
+            assert!((spatial.area(&area).unwrap() - 50.).abs() < 1e-6);
+        }
         // A map without a captured extent publishes everything it holds.
         assert_eq!(clip_records(features, None, &spatial).unwrap().len(), 4);
-
+    }
+    #[test]
+    fn fields_keep_to_the_outline() {
+        let spatial = atlas_gis::geometry::NativeGeos::new(1e-6).unwrap();
+        let outline = ring(&[(0., 0.), (10., 0.), (0., 10.), (0., 0.)]);
         let field = ring(&[(-2., -2.), (12., -2.), (12., 12.), (-2., 12.), (-2., -2.)]);
         let limited = within(field, Some(&outline), &spatial).unwrap().unwrap();
         assert!((spatial.area(&limited).unwrap() - 50.).abs() < 1e-6);

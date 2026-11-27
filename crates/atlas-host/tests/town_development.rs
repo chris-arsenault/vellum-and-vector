@@ -865,6 +865,7 @@ fn a_newly_built_door_can_reach_a_named_street_around_an_exact_roof() {
         vec![Footpath {
             points: [entrance, mouth],
             wear: 4.,
+            beaten: true,
         }],
         vec![Some(Approach {
             points: vec![entrance, mouth],
@@ -1201,7 +1202,13 @@ fn a_shared_hall_publishes_its_two_uses_ward_and_street_to_gis() {
         .map(|p| Footpath {
             points: [p[0], p[1]],
             wear: 1.,
+            beaten: true,
         })
+        .chain([Footpath {
+            points: [[50., 0.], [50., -25.]],
+            wear: 0.,
+            beaten: false,
+        }])
         .collect();
     let mut approaches = vec![None; t.holdings().len()];
     approaches[distant.0 as usize] = Some(Approach {

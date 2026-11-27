@@ -19,10 +19,11 @@ pub struct CivicConditions {
     pub audience: f64,
     pub waste: f64,
 }
-pub(crate) fn collective_need(kind: Kind, people: f64, centre: Point, waste: f64) -> bool {
+pub(crate) fn collective_need(kind: Kind, people: f64) -> Option<impl Fn(Point, f64) -> bool> {
     let place = kind.definition();
-    place.roles.civic_need.is_some_and(|requests| {
-        let salt = place.label.bytes().map(i32::from).sum();
+    let requests = place.roles.civic_need?;
+    let salt = place.label.bytes().map(i32::from).sum();
+    Some(move |centre: Point, waste| {
         let audience = people * crate::noise::hash_unit(salt, centre[0], centre[1]);
         requests(&CivicConditions { audience, waste })
     })

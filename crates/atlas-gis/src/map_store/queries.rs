@@ -17,6 +17,7 @@ pub struct FeatureQuery {
     pub geometry: Option<Geometry>,
     pub feature_ids: Option<Vec<Id>>,
     pub layer_ids: Option<Vec<String>>,
+    pub type_ids: Option<Vec<String>>,
     pub text: Option<String>,
     pub cursor: Option<Id>,
     /// Bounds meet a feature's footprint as well as its geometry, as hex marks do.
@@ -124,11 +125,12 @@ impl MapStore {
         let mut clauses = vec![format!(
             "f.map_id=? AND f.revision=? AND f.space_id=? AND f.id>? AND {within}"
         )];
-        if let Some(ids) = &query.layer_ids {
+        for (column, ids) in [("layer_id", &query.layer_ids), ("type_id", &query.type_ids)] {
+            let Some(ids) = ids else { continue };
             if ids.is_empty() {
                 return Ok(Vec::new());
             }
-            clauses.push(format!("f.layer_id IN ({})", placeholders(ids.len())));
+            clauses.push(format!("f.{column} IN ({})", placeholders(ids.len())));
             values.extend(ids.iter().cloned().map(Value::Text));
         }
         if let Some(ids) = &query.feature_ids {

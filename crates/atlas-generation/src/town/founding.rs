@@ -16,6 +16,15 @@ use super::{
 };
 use crate::spatial::SpatialKernel;
 use std::io;
+mod district;
+pub(crate) use district::occupy_district;
+
+#[derive(Clone)]
+pub(crate) struct TractAccess {
+    pub origin: Point,
+    /// The existing streets serving this tract before its interior blocks are opened.
+    pub streets: Vec<usize>,
+}
 
 /// The least radius an enclosure's gate is measured against. Street metres, resolved by
 /// `Measure::Layout`.
@@ -42,6 +51,7 @@ pub fn establish(
     let frontage = scale.length(FOUNDING_FRONTAGE, Measure::Plot);
     let reach = reach(scale, size);
     seed_roads(town, ground, depth);
+    let local_street = seed_local_street(town, ground, reach);
     use super::templates::FounderUse;
     let street_sites = town
         .streets()
@@ -58,7 +68,11 @@ pub fn establish(
         plots.extend(
             street_sites
                 .iter()
-                .filter(|s| distance(anchor, s.front) <= reach)
+                .filter(|s| {
+                    distance(anchor, s.front) <= reach
+                        && town.template.habitat(s.front, ground.is_water(s.front))
+                            == founder.habitat
+                })
                 .cloned(),
         );
         let score = |s: &Slot| {
@@ -66,7 +80,11 @@ pub fn establish(
                 / (1. + distance(anchor, s.front) / depth)
         };
         // hpc-exempt: rank the land choices of one founding occupation.
-        plots.sort_by(|a, b| score(b).total_cmp(&score(a)));
+        plots.sort_by(|a, b| {
+            (local_street && b.street.is_some())
+                .cmp(&(local_street && a.street.is_some()))
+                .then_with(|| score(b).total_cmp(&score(a)))
+        });
         let mut occupied = false;
         for mut plot in plots {
             let Some(local) = conditions(plot.front)? else {
@@ -128,6 +146,102 @@ fn seed_roads(town: &mut Town, ground: &Ground, depth: f64) {
             town.seed_approach(way, street);
         }
     }
+}
+
+/// A town can have a public street serving its founders even when no regional
+/// route crosses it. Survey the ground at their place of trade, work or assembly.
+fn seed_local_street(town: &mut Town, ground: &Ground, reach: f64) -> bool {
+    use super::templates::{FounderUse, Habitat};
+    if !town.streets().is_empty()
+        || town.seat.story.size() < atlas_map::town::Size::Town
+        || town.scale().fidelity() != super::scale::Fidelity::Street
+    {
+        return false;
+    }
+    let mut streets = Vec::new();
+    for habitat in [Habitat::Ground, Habitat::Lower, Habitat::Upper] {
+        let founders = town
+            .template
+            .kernel()
+            .iter()
+            .filter(|f| f.habitat == habitat)
+            .filter_map(|f| {
+                let centre = town.template.site.founding_point(f.anchor, reach)?;
+                Some((matches!(f.use_, FounderUse::Household), centre))
+            });
+        let Some((_, centre)) = founders.min_by(|(a, p), (b, q)| {
+            a.cmp(b).then_with(|| {
+                distance(*p, town.seat.centre).total_cmp(&distance(*q, town.seat.centre))
+            })
+        }) else {
+            continue;
+        };
+        let preferred = founding_bearing(town, ground, centre);
+        if let Some(street) = survey_public_street(town, ground, centre, reach, preferred) {
+            streets.push(street);
+        }
+    }
+    let founded = !streets.is_empty();
+    town.set_approaches(streets);
+    founded
+}
+
+fn founding_bearing(town: &Town, ground: &Ground, centre: Point) -> f64 {
+    use super::geometry::{angle, sub};
+    town.template
+        .align(centre)
+        .map(angle)
+        .or_else(|| {
+            (distance(centre, town.seat.centre) > ground.cell)
+                .then(|| angle(sub(town.seat.centre, centre)))
+        })
+        .unwrap_or_else(|| {
+            crate::noise::hash_unit(1301, centre[0], centre[1]) * std::f64::consts::PI
+        })
+}
+
+pub(crate) fn survey_public_street(
+    town: &Town,
+    ground: &Ground,
+    centre: Point,
+    reach: f64,
+    preferred: f64,
+) -> Option<super::network::Street> {
+    use super::{
+        geometry::{add, heading, scale},
+        network::{lane, stops_lane, Class, Street},
+    };
+    let form = town.street_form(Class::Main);
+    let mut best: Option<Street> = None;
+    // Try the preferred bearing first. Where a hillside or the shore interrupts it,
+    // choose the continuous route that serves the most frontage near the founders.
+    for i in 0..8 {
+        let direction = heading(preferred + std::f64::consts::PI * f64::from(i) / 8.);
+        let leg = |length| {
+            lane(
+                &[centre, add(centre, scale(direction, length))],
+                form,
+                ground,
+                stops_lane,
+                form.width(),
+            )
+        };
+        let mut points = leg(-reach)
+            .map(|s| s.points.into_iter().rev().collect::<Vec<_>>())
+            .unwrap_or_else(|| vec![centre]);
+        if let Some(other) = leg(reach) {
+            points.extend(other.points.into_iter().skip(1));
+        }
+        let length = line_length(&points);
+        if length >= town.plot().1
+            && best
+                .as_ref()
+                .is_none_or(|r| length > r.length() + ground.cell)
+        {
+            best = Some(Street::new_at(points, Class::Main, form.size, form.scale));
+        }
+    }
+    best
 }
 
 /// Trace a defensible precinct around its actual ground. The route from
@@ -289,9 +403,25 @@ fn placement(
     scale: TownScale,
 ) -> Option<FabricEdit> {
     let def = kind.definition();
+    sized_placement(
+        slot,
+        kind,
+        local,
+        ground,
+        scale,
+        (scale.range(def.frontage).low, scale.range(def.depth).low),
+    )
+}
+fn sized_placement(
+    slot: &Slot,
+    kind: super::catalogue::Kind,
+    local: Conditions,
+    ground: &Ground,
+    scale: TownScale,
+    size: (f64, f64),
+) -> Option<FabricEdit> {
     let mut slot = slot.clone();
-    slot.depth = scale.range(def.depth).low;
-    slot.frontage = scale.range(def.frontage).low;
+    (slot.frontage, slot.depth) = size;
     slot.corners = rectangle(
         slot.front,
         slot.direction,
@@ -567,22 +697,64 @@ mod tests {
         town
     }
 
+    fn assert_catalogue_plots(town: &Town, factor: f64) {
+        assert!(!town.holdings().is_empty());
+        for h in town.holdings() {
+            let definition = h.kind.definition();
+            assert_eq!(h.slot.depth, definition.depth.low * factor);
+            assert_eq!(h.slot.frontage, definition.frontage.low * factor);
+        }
+    }
+    #[test]
+    fn the_two_dry_landings_each_survey_a_street_clear_of_the_cliff_between_them() {
+        use super::super::{ground::STEEP, templates::Template};
+        let mut town = Town::new(
+            Seat {
+                key: atlas_map::Id::from_name("two shelves"),
+                name: "Two shelves".into(),
+                centre: [0., 0.],
+                story: Story {
+                    people: 5000.,
+                    ..Default::default()
+                },
+                arms: vec![],
+                culture: None,
+            },
+            None,
+        );
+        town.template.selected = Template::Landings;
+        town.template.site.lower = Some([-30., 0.]);
+        town.template.site.upper = Some([30., 0.]);
+        let mut ground = Ground::new([-120., -120., 120., 120.], 1.);
+        for i in 0..ground.count() {
+            if ground.centre(i)[0].abs() < 5. {
+                ground.withhold(i, STEEP);
+            }
+        }
+        assert!(seed_local_street(&mut town, &ground, 60.));
+        assert_eq!(town.streets().len(), 2);
+        let lower = &town.streets()[0];
+        let upper = &town.streets()[1];
+        assert!(lower.points.iter().all(|p| p[0] < -5. - lower.width() / 2.));
+        assert!(upper.points.iter().all(|p| p[0] > 5. + upper.width() / 2.));
+    }
+
     #[test]
     fn a_founding_lays_street_plots_at_street_fidelity_and_blocks_at_city_fidelity() {
         let street = founded(Fidelity::Street);
         let city = founded(Fidelity::City);
+        assert_eq!(street.streets().len(), 1);
+        let main = &street.streets()[0];
+        assert_eq!(main.class, super::super::network::Class::Main);
+        assert!(!main.through_route);
+        assert!(street.holdings().iter().all(|h| h.slot.street == Some(0)));
+        assert!(city.streets().is_empty());
         let block = city.scale().length(1., Measure::Plot);
         assert!(block > 1.);
         // At street fidelity each founding premises takes its kind's least catalogue plot, as
         // it always has; at city fidelity the same kind takes a block that many times larger.
-        for (town, factor) in [(&street, 1.), (&city, block)] {
-            assert!(!town.holdings().is_empty());
-            for h in town.holdings() {
-                let definition = h.kind.definition();
-                assert_eq!(h.slot.depth, definition.depth.low * factor);
-                assert_eq!(h.slot.frontage, definition.frontage.low * factor);
-            }
-        }
+        assert_catalogue_plots(&street, 1.);
+        assert_catalogue_plots(&city, block);
         let deepest = |town: &Town| {
             town.holdings()
                 .iter()

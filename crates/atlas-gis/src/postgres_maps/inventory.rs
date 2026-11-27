@@ -5,6 +5,14 @@ use std::io;
 
 impl PostgresMaps {
     pub fn inventory(&self) -> io::Result<Vec<MapEntry>> {
+        let mut entries = self.map_index()?;
+        for entry in &mut entries {
+            entry.problem = self.open(&entry.reference).err().map(|e| e.to_string());
+        }
+        Ok(entries)
+    }
+    /// Catalogue rows for navigation. Opening a map and checking the inventory read its full description.
+    pub fn map_index(&self) -> io::Result<Vec<MapEntry>> {
         self.query(
             "SELECT m.map_id,m.revision,m.name,m.profile,m.parent_map_id,m.parent_revision,m.complete,
              EXISTS(SELECT 1 FROM map.heads h WHERE h.map_id=m.map_id AND h.revision=m.revision) AS head,
@@ -31,7 +39,6 @@ impl PostgresMaps {
                 }),
                 _ => None,
             };
-            let problem = self.open(&reference).err().map(|e| e.to_string());
             Ok(MapEntry {
                 name: row.try_get("name").map_err(io::Error::other)?,
                 profile: row.try_get("profile").map_err(io::Error::other)?,
@@ -39,7 +46,7 @@ impl PostgresMaps {
                 complete: row.try_get("complete").map_err(io::Error::other)?,
                 head: row.try_get("head").map_err(io::Error::other)?,
                 saved: row.try_get("saved").map_err(io::Error::other)?,
-                problem,
+                problem: None,
                 reference,
             })
         })

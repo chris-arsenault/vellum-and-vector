@@ -32,7 +32,12 @@ pub struct HouseholdTransfers {
 }
 pub struct LandPlacement {
     pub kind: LayerId,
-    pub movement: Placement,
+    pub movement: LandMovement,
+}
+pub enum LandMovement {
+    Local(Placement),
+    /// Portions of existing developed ground in square kilometres, from donor to recipient.
+    Surveyed(Vec<(usize, usize, f64)>),
 }
 pub struct Convert {
     pub from: LayerId,

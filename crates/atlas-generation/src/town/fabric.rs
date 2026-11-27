@@ -7,7 +7,7 @@ use super::{
 };
 use crate::town::catalogue::PlaceRules;
 use atlas_map::{
-    spatial::{BoundsIndex, Overlay, SpatialKernel},
+    spatial::{AreaMask, BoundsIndex, Overlay, SpatialKernel},
     Bounds, Geometry, Position,
 };
 use serde::{Deserialize, Serialize};
@@ -132,6 +132,8 @@ pub struct Town {
     #[serde(default)]
     pub fidelity: super::scale::Fidelity,
     pub template: super::templates::Selection,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) district: Option<DistrictSite>,
     pub founding_sites: Vec<(super::templates::AnchorRole, HoldingId)>,
     pub(crate) defences: Vec<Vec<Point>>,
     pub works: super::major_works::MajorWorks,
@@ -148,10 +150,62 @@ pub struct Town {
     pub access_effort: f64,
     purposes: Vec<Purpose>,
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub(crate) struct DistrictSite {
+    pub outline: Geometry,
+    pub reserves: Vec<Geometry>,
+    pub streets: Vec<(atlas_map::Id, String)>,
+    pub program: Option<super::templates::district::InheritedProgram>,
+    pub tracts: Vec<DistrictTract>,
+    pub density_per_km2: Option<f64>,
+    pub old_walls: Option<Geometry>,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub(crate) struct DistrictTract {
+    pub area: Geometry,
+    #[serde(default)]
+    pub civic: bool,
+    pub mix: super::templates::district::UseMix,
+    pub built_share: Option<f64>,
+    #[serde(default)]
+    pub developed_m2: f64,
+    pub density_per_km2: Option<f64>,
+}
+impl DistrictTract {
+    pub(crate) fn origin(&self, centre: Point, spatial: &dyn SpatialKernel) -> io::Result<Point> {
+        let position = Position::xy(centre[0], centre[1]);
+        if spatial
+            .covers_points(&self.area, &[position])
+            .map_err(io::Error::other)?[0]
+        {
+            return Ok(centre);
+        }
+        let [x, y, _] = spatial
+            .interior_position(&self.area)
+            .map_err(io::Error::other)?
+            .coordinates();
+        Ok([x, y])
+    }
+    pub(crate) fn use_mix(
+        &self,
+        district_density: Option<f64>,
+    ) -> super::templates::district::UseMix {
+        match (self.density_per_km2, district_density) {
+            (Some(local), Some(mean)) if local + mean > 0. => {
+                self.mix.at_residential_demand(2. * local / (local + mean))
+            }
+            _ => self.mix,
+        }
+    }
+}
 #[derive(Debug, Default, Clone)]
 struct FittingIndex {
     holdings: BoundsIndex,
     roads: BoundsIndex,
+    reserves: BoundsIndex,
+    district: Option<std::rc::Rc<dyn AreaMask>>,
+    inherited_corridors: Vec<Option<Geometry>>,
 }
 fn road_bounds(road: &Street, spatial: &dyn SpatialKernel) -> io::Result<Bounds> {
     let Bounds(w, s, e, n) = spatial
@@ -324,6 +378,45 @@ pub fn polygon(points: &[Point]) -> Geometry {
     }
 }
 impl Town {
+    fn district_mask(
+        &self,
+        district: &DistrictSite,
+        spatial: &dyn SpatialKernel,
+    ) -> io::Result<std::rc::Rc<dyn AreaMask>> {
+        let mut fitting = self.fitting.borrow_mut();
+        if let Some(area) = &fitting.district {
+            return Ok(area.clone());
+        }
+        let area = spatial
+            .prepare_area(&district.outline)
+            .map_err(io::Error::other)?;
+        fitting.district = Some(area.clone());
+        Ok(area)
+    }
+
+    fn road_corridor(
+        &self,
+        id: usize,
+        spatial: &dyn SpatialKernel,
+    ) -> io::Result<Option<Geometry>> {
+        let street = &self.streets[id];
+        let inherited = self
+            .district
+            .as_ref()
+            .map_or(0, |district| district.streets.len());
+        if id >= inherited {
+            return street.corridor(0., spatial).map_err(io::Error::other);
+        }
+        // The captured avenues retain their original width profiles and courses.
+        let mut fitting = self.fitting.borrow_mut();
+        fitting.inherited_corridors.resize_with(inherited, || None);
+        if fitting.inherited_corridors[id].is_none() {
+            fitting.inherited_corridors[id] =
+                street.corridor(0., spatial).map_err(io::Error::other)?;
+        }
+        Ok(fitting.inherited_corridors[id].clone())
+    }
+
     pub(crate) fn nearby_holdings(
         &self,
         bounds: Bounds,
@@ -337,16 +430,78 @@ impl Town {
         }
         Ok(fitting.holdings.query(bounds))
     }
+    fn indexed_roads(
+        &self,
+        spatial: &dyn SpatialKernel,
+    ) -> io::Result<std::cell::Ref<'_, BoundsIndex>> {
+        let mut fitting = self.fitting.borrow_mut();
+        for road in &self.streets[fitting.roads.len()..] {
+            fitting.roads.push(road_bounds(road, spatial)?);
+        }
+        drop(fitting);
+        Ok(std::cell::Ref::map(self.fitting.borrow(), |f| &f.roads))
+    }
+
     pub(crate) fn nearby_roads(
         &self,
         bounds: Bounds,
         spatial: &dyn SpatialKernel,
     ) -> io::Result<Vec<usize>> {
-        let mut fitting = self.fitting.borrow_mut();
-        for road in &self.streets[fitting.roads.len()..] {
-            fitting.roads.push(road_bounds(road, spatial)?);
+        Ok(self.indexed_roads(spatial)?.query(bounds))
+    }
+
+    /// Resolve the closest centreline on the current network. Its envelope can reach a
+    /// candidate long before its actual course does, especially on a diagonal avenue.
+    pub(crate) fn project_onto_road(
+        &self,
+        at: Point,
+        spatial: &dyn SpatialKernel,
+    ) -> io::Result<Option<(usize, Point)>> {
+        let index = self.indexed_roads(spatial)?;
+        if index.is_empty() {
+            return Ok(None);
         }
-        Ok(fitting.roads.query(bounds))
+        let p = atlas_map::regions::point(Position::xy(at[0], at[1]));
+        let Bounds(x, y, _, _) = spatial.bounds(&p).map_err(io::Error::other)?;
+        let mut best = None;
+        let mut best_squared = f64::INFINITY;
+        for (id, lower_bound) in index.nearest_envelopes([x, y]) {
+            if lower_bound > best_squared {
+                break;
+            }
+            let course = super::edits::line(&self.streets[id].points);
+            let [on_road, _] = spatial
+                .nearest_points(&course, &p)
+                .map_err(io::Error::other)?;
+            let [rx, ry, _] = on_road.coordinates();
+            let squared = (rx - x).powi(2) + (ry - y).powi(2);
+            if squared < best_squared
+                || (squared == best_squared && best.is_some_and(|(other, _)| id < other))
+            {
+                best_squared = squared;
+                best = Some((id, [rx, ry]));
+            }
+        }
+        Ok(best)
+    }
+    fn nearby_reserves(
+        &self,
+        district: &DistrictSite,
+        bounds: Bounds,
+        spatial: &dyn SpatialKernel,
+    ) -> io::Result<Vec<Geometry>> {
+        let mut fitting = self.fitting.borrow_mut();
+        for shape in &district.reserves[fitting.reserves.len()..] {
+            fitting
+                .reserves
+                .push(spatial.bounds(shape).map_err(io::Error::other)?);
+        }
+        Ok(fitting
+            .reserves
+            .query(bounds)
+            .into_iter()
+            .map(|i| district.reserves[i].clone())
+            .collect())
     }
     fn surface_holdings(
         &self,
@@ -390,6 +545,11 @@ impl Town {
     pub fn footpaths(&self) -> &[super::access::Footpath] {
         &self.footpaths
     }
+    /// Door connections can serve routing as soon as they are found. A track appears
+    /// on the ground when different travellers share it or a journey returns to it.
+    pub fn beaten_paths(&self) -> impl Iterator<Item = &super::access::Footpath> {
+        self.footpaths.iter().filter(|path| path.beaten)
+    }
     pub fn approach(&self, id: HoldingId) -> Option<&super::access::Approach> {
         self.approaches.get(id.0 as usize)?.as_ref()
     }
@@ -425,6 +585,7 @@ impl Town {
     }
     pub fn set_approaches(&mut self, streets: Vec<Street>) {
         self.fitting.get_mut().roads = BoundsIndex::default();
+        self.fitting.get_mut().inherited_corridors.clear();
         self.wear.resize(streets.len(), 0.);
         self.streets = streets;
     }
@@ -592,6 +753,7 @@ impl Town {
             fitting: Default::default(),
             noded: Default::default(),
             template: super::templates::Selection::commons(seat.centre),
+            district: None,
             founding_sites: Vec::new(),
             defences: Vec::new(),
             works: Default::default(),
@@ -655,6 +817,26 @@ impl Town {
             }
         }
         let mut outline = proposal.slot.occupied_shape();
+        if let Some(district) = &self.district {
+            let Some(land) = self
+                .district_mask(district, spatial)?
+                .intersection(&outline)
+                .map_err(io::Error::other)?
+                .and_then(atlas_map::regions::polygon)
+            else {
+                return Ok(None);
+            };
+            let bounds = spatial.bounds(&land).map_err(io::Error::other)?;
+            let Some(free) = fit_around(
+                land,
+                self.nearby_reserves(district, bounds, spatial)?,
+                spatial,
+            )?
+            else {
+                return Ok(None);
+            };
+            outline = free;
+        }
         let bounds = spatial.bounds(&outline).map_err(io::Error::other)?;
         let existing: Vec<_> = self
             .nearby_holdings(bounds, spatial)?
@@ -688,7 +870,7 @@ impl Town {
                 .distance(&outline, &super::edits::line(&street.points))
                 .map_err(io::Error::other)?;
             if gap <= street.width() / 2. {
-                roads.extend(street.corridor(0., spatial).map_err(io::Error::other)?);
+                roads.extend(self.road_corridor(i, spatial)?);
             }
         }
         let Some(free) = fit_around(outline, roads, spatial)? else {
@@ -892,21 +1074,26 @@ fn entrance_part(
     front: Point,
     spatial: &dyn SpatialKernel,
 ) -> io::Result<Option<Geometry>> {
-    let parts = polygons(shape);
-    let index = spatial.index(&parts).map_err(io::Error::other)?;
+    let mut parts = polygons(shape);
     let p = Position::xy(front[0], front[1]);
-    let Some(i) = index.nearest(p).map_err(io::Error::other)? else {
-        return Ok(None);
+    let nearest = match parts.as_slice() {
+        [] => None,
+        [only] => Some((
+            0,
+            spatial
+                .distance(&atlas_map::regions::point(p), only)
+                .map_err(io::Error::other)?,
+        )),
+        _ => spatial
+            .index(&parts)
+            .map_err(io::Error::other)?
+            .nearest_with_distance(p)
+            .map_err(io::Error::other)?,
     };
     // Two millimetres accommodates the real-scale geometry precision at a shared frontage.
-    if spatial
-        .distance(&Geometry::Point { coordinates: p }, &parts[i])
-        .map_err(io::Error::other)?
-        > 0.002
-    {
-        return Ok(None);
-    }
-    Ok(Some(parts[i].clone()))
+    Ok(nearest
+        .filter(|(_, distance)| *distance <= 0.002)
+        .map(|(i, _)| parts.swap_remove(i)))
 }
 fn assign_buildings(
     buildings: &[Geometry],
@@ -933,4 +1120,48 @@ fn assign_buildings(
         assigned[owner].push(index);
     }
     Ok(Some(assigned))
+}
+
+#[cfg(test)]
+mod fitting_tests {
+    use super::*;
+    use crate::town::network::{Arm, Class};
+
+    #[test]
+    fn projection_uses_the_actual_course_and_sees_new_roads() {
+        let spatial = atlas_gis::geometry::NativeGeos::new(0.001).unwrap();
+        let mut town = Town::new(
+            Seat {
+                key: atlas_map::Id::from_name("crossing"),
+                name: "Crossing".into(),
+                centre: [0., 0.],
+                story: Default::default(),
+                arms: vec![],
+                culture: None,
+            },
+            None,
+        );
+        let at = [0., 100.];
+        assert!(town.project_onto_road(at, &spatial).unwrap().is_none());
+        let size = town.seat.story.size();
+        let diagonal = Street::new(vec![[0., 0.], [100., 100.]], Class::Main, size);
+        town.set_approaches(vec![diagonal]);
+        assert_eq!(
+            town.project_onto_road(at, &spatial).unwrap(),
+            Some((0, [50., 50.]))
+        );
+        let points = vec![[-20., 90.], [20., 90.]];
+        let road = Street::new(points.clone(), Class::Lane, size);
+        town.seed_approach(
+            Arm {
+                points,
+                destination: None,
+            },
+            road,
+        );
+        assert_eq!(
+            town.project_onto_road(at, &spatial).unwrap(),
+            Some((1, [0., 90.]))
+        );
+    }
 }

@@ -14,12 +14,16 @@ database_port="${ATLAS_LOCAL_DATABASE_PORT:-54338}"
 # On a Sulion development node only ports 26000-26010 on the node's LAN address reach a
 # browser on the LAN; elsewhere the atlas stays on loopback.
 if [[ -n "${SULION_PTY_ID:-}" ]]; then
-  lan_address="$(ip -4 -brief addr show scope global 2>/dev/null | awk '{ sub(/\/.*/, "", $3) } $3 ~ /^192\.168\./ { print $3; exit }')"
+  lan_address="$(ip -4 -brief addr show scope global 2>/dev/null | awk '{ sub(/\/.*/, "", $3) } !address && $3 ~ /^192\.168\./ { address=$3 } END { print address }')"
 fi
 host="${ATLAS_LOCAL_HOST:-${lan_address:-127.0.0.1}}"
-port="${ATLAS_LOCAL_PORT:-$([[ -n "${lan_address:-}" ]] && echo 26010 || echo 44138)}"
+default_port=$([[ -n "${lan_address:-}" ]] && echo 26010 || echo 44138)
+port="${ATLAS_LOCAL_PORT:-$default_port}"
+[[ "$port" =~ ^[1-9][0-9]{0,4}$ && "$port" -le 65535 ]] || { echo "Invalid atlas port: $port" >&2; exit 2; }
+runtime=$home
+if [[ "$port" != "$default_port" ]]; then runtime="$home/listeners/$port"; fi
 # The harness reaches the server at the same address.
-export ATLAS_LOCAL_HOST="$host" ATLAS_LOCAL_PORT="$port"
+export ATLAS_LOCAL_HOST="$host" ATLAS_LOCAL_PORT="$port" ATLAS_SERVER_RUNTIME="$runtime"
 
 # Passwords for the loopback-only database are made once and kept beside the world.
 credentials() {
@@ -64,27 +68,42 @@ database_up() {
 }
 
 server_down() {
-  if [[ -f "$home/server.pid" ]]; then
+  local runtime="${2:-$runtime}"
+  if [[ -f "$runtime/server.pid" ]]; then
     local pid
-    pid="$(cat "$home/server.pid")"
-    kill "$pid" 2>/dev/null || true
-    # Wait for it to exit, so its port is free for the next server.
-    for _ in $(seq 30); do
-      kill -0 "$pid" 2>/dev/null || break
-      sleep 1
-    done
-    rm -f "$home/server.pid"
+    pid="$(cat "$runtime/server.pid")"
+    if [[ "$(cat "/proc/$pid/comm" 2>/dev/null)" == atlas_server ]]; then
+      echo "{\"event\":\"server.stop-request\",\"at\":\"$(date -u +%FT%TZ)\",\"pid\":$pid,\"command\":\"$1\"}" >>"$runtime/server.log"
+      kill "$pid" 2>/dev/null || true
+      # Wait for it to exit, so its port is free for the next server.
+      for _ in $(seq 30); do
+        kill -0 "$pid" 2>/dev/null || break
+        sleep 1
+      done
+    fi
+    rm -f "$runtime/server.pid"
   fi
   # The supervisor writes the exit record after the server ends; the next log starts after it.
-  if [[ -f "$home/supervisor.pid" ]]; then
+  if [[ -f "$runtime/supervisor.pid" ]]; then
     local supervisor
-    supervisor="$(cat "$home/supervisor.pid")"
+    supervisor="$(cat "$runtime/supervisor.pid")"
     for _ in $(seq 10); do
       kill -0 "$supervisor" 2>/dev/null || break
       sleep 1
     done
-    rm -f "$home/supervisor.pid"
+    rm -f "$runtime/supervisor.pid"
   fi
+}
+
+other_server_running() {
+  local file pid
+  for file in "$home/server.pid" "$home"/listeners/*/server.pid; do
+    if [[ -f "$file" ]] && read -r pid < "$file" &&
+        [[ "$(cat "/proc/$pid/comm" 2>/dev/null)" == atlas_server ]]; then
+      return 0
+    fi
+  done
+  return 1
 }
 
 # Kibibytes of one /proc status or meminfo field, or 0.
@@ -97,7 +116,7 @@ ending() {
   local status=$1
   case "$status" in
     0) echo "exited cleanly" ;;
-    143) echo "stopped by SIGTERM (local-down or local-up)" ;;
+    143) echo "stopped by SIGTERM" ;;
     137) echo "killed by SIGKILL: the out-of-memory killer or a kill -9 from outside" ;;
     134) echo "aborted (SIGABRT): a failed allocation or an aborting panic; see the lines above" ;;
     139) echo "crashed with a segmentation fault (SIGSEGV), often a stack overflow" ;;
@@ -110,8 +129,8 @@ ending() {
 supervise() {
   "$@" &
   local child=$! peak=0 step=0 rss hwm status
-  echo "$child" >"$home/server.pid"
-  echo "$$" >"$home/supervisor.pid"
+  echo "$child" >"$runtime/server.pid"
+  echo "$$" >"$runtime/supervisor.pid"
   trap 'kill "$child" 2>/dev/null' TERM
   while kill -0 "$child" 2>/dev/null; do
     rss=$(kib "/proc/$child/status" VmRSS)
@@ -129,14 +148,40 @@ supervise() {
 }
 
 server_up() {
-  command -v cmake >/dev/null || { echo "Put CMake on PATH to build the native server" >&2; exit 1; }
-  (cd "$root" && cargo build --release -p atlas-host --bin atlas_server --bin local_atlas)
-  server_down
+  if [[ "${1:-}" == --built ]]; then
+    if [[ ! -x "$root/target/release/atlas_server" || ! -x "$root/target/release/local_atlas" ]]; then
+      echo "Run make local-up to build the native server and harness first." >&2
+      return 1
+    fi
+  else
+    command -v cmake >/dev/null || { echo "Put CMake on PATH to build the native server" >&2; exit 1; }
+    (cd "$root" && cargo build --release -p atlas-host --bin atlas_server --bin local_atlas)
+  fi
+  local pid running
+  if [[ -s "$runtime/server.pid" ]] && read -r pid < "$runtime/server.pid" &&
+      [[ "$(cat "/proc/$pid/comm" 2>/dev/null)" == atlas_server ]]; then
+    running="$("$root/target/release/local_atlas" running)" || {
+      echo "Cannot read running jobs on port $port. The server is still running." >&2
+      return 1
+    }
+    if [[ "/proc/$pid/exe" -ef "$root/target/release/atlas_server" ]] &&
+        [[ "${1:-}" == --built || -n "$running" ]]; then
+      echo "Local atlas at http://$host:$port/"
+      return
+    fi
+    if [[ -n "$running" ]]; then
+      printf 'Port %s is finishing these jobs on its current build:\n%s\n' "$port" "$running" >&2
+      echo "Use another ATLAS_LOCAL_PORT to run the new build alongside them." >&2
+      return 1
+    fi
+  fi
+  server_down up
   local url="postgresql://%s:%s@127.0.0.1:$database_port/%s"
-  mkdir -p "$home/map-assets" "$home/generation-resources" "$home/scratch"
+  mkdir -p "$home/map-assets" "$home/generation-resources" "$home/scratch" "$runtime"
   # Earlier servers' logs are kept: the last run's final lines are the evidence of a crash.
-  [[ -f "$home/server.log" ]] && cat "$home/server.log" >>"$home/server-history.log"
-  echo "{\"event\":\"server.start\",\"at\":\"$(date -u +%FT%TZ)\"}" >"$home/server.log"
+  [[ -f "$runtime/server.log" ]] && cat "$runtime/server.log" >>"$runtime/server-history.log"
+  echo "{\"event\":\"server.start\",\"at\":\"$(date -u +%FT%TZ)\"}" >"$runtime/server.log"
+  # The command runner reaps its process group on exit. Give the supervisor its own session.
   # shellcheck disable=SC2059
   ATLAS_BIND="$host:$port" \
     ATLAS_MAP_DATABASE_URL="$(printf "$url" atlas_maps "$ATLAS_LOCAL_MAP_PASSWORD" vellum_maps)" \
@@ -147,18 +192,18 @@ server_up() {
     ATLAS_GENERATION_SCRATCH="$home/scratch" \
     ATLAS_FRONTEND="$root/frontend/dist" \
     RUST_BACKTRACE=1 \
-    nohup bash -c "$(declare -f kib ending supervise); home='$home'; supervise '$root/target/release/atlas_server'" \
-    >>"$home/server.log" 2>&1 &
+    setsid bash -c "$(declare -f kib ending supervise)"$'\nruntime=$ATLAS_SERVER_RUNTIME; supervise "$@"' \
+    atlas-supervisor "$root/target/release/atlas_server" </dev/null >>"$runtime/server.log" 2>&1 &
   for _ in $(seq 10); do
-    [[ -s "$home/server.pid" ]] && break
+    [[ -s "$runtime/server.pid" ]] && break
     sleep 0.2
   done
   for _ in $(seq 60); do
     curl -s -o /dev/null "http://$host:$port/" && { echo "Local atlas at http://$host:$port/"; return; }
-    kill -0 "$(cat "$home/server.pid")" 2>/dev/null || break
+    kill -0 "$(cat "$runtime/server.pid")" 2>/dev/null || break
     sleep 1
   done
-  echo "The server did not start; see $home/server.log" >&2
+  echo "The server did not start; see $runtime/server.log" >&2
   exit 1
 }
 
@@ -166,16 +211,26 @@ server_up() {
 # The host keeps perf_event_paranoid restrictive, so perf runs in a container with
 # CAP_PERFMON in the host PID namespace. CALL_GRAPH=dwarf records unwound stacks.
 profile() {
-  local seconds="${1:-30}" out
+  local seconds="${1:-30}" out selected_pid
+  if [[ ! -s "$runtime/server.pid" ]] || ! read -r selected_pid < "$runtime/server.pid"; then
+    echo "No running atlas on port $port" >&2
+    return 1
+  fi
   out="$home/profiles/$(date -u +%Y%m%dT%H%M%SZ)"
   mkdir -p "$out"
   docker build -q -t vellum-profile:local "$root/scripts/profile" >/dev/null
   local graph=(-g)
   [[ "${CALL_GRAPH:-}" == dwarf ]] && graph=(--call-graph dwarf,16384)
-  docker run --rm --pid=host --cap-add PERFMON --cap-add SYS_PTRACE \
+  docker run --rm --pid=host --cap-add PERFMON --cap-add SYS_PTRACE -e ATLAS_PROFILE_PID="$selected_pid" \
+    -e ATLAS_PROFILE_NAMESPACE="$(readlink /proc/self/ns/pid)" \
     -v "$root:$root:ro" -v "$out:/out" vellum-profile:local sh -c '
       pid=$(for p in /proc/[0-9]*; do
-        [ "$(cat "$p/comm" 2>/dev/null)" = atlas_server ] && echo "${p#/proc/}"
+        [ "$(cat "$p/comm" 2>/dev/null)" = atlas_server ] || continue
+        [ "$(readlink "$p/ns/pid" 2>/dev/null)" = "$ATLAS_PROFILE_NAMESPACE" ] || continue
+        if sed -n "/^NSpid:/s/.*[[:space:]]//p" "$p/status" | grep -qx "$ATLAS_PROFILE_PID"; then
+          echo "${p#/proc/}"
+          break
+        fi
       done | head -1)
       [ -n "$pid" ] || { echo "No running atlas_server" >&2; exit 1; }
       perf record -F 199 "$@" -p "$pid" -o /out/perf.data -- sleep "$0" >/dev/null 2>&1
@@ -187,8 +242,21 @@ profile() {
 }
 
 case "${1:-}" in
-  --built)
+  view)
     shift
+    reports="$root/.artifacts/local-atlas/maps"
+    if [[ ! -f "$reports/${1:-}/map.json" ]]; then reports="$home/maps"; fi
+    exec node "$root/scripts/local-atlas-view.mjs" "$reports" "http://$host:$port" "$@"
+    ;;
+  sql)
+    # owner-direction(2026-11-26): use the local atlas harness to query the map database without credentials or hand-written Docker commands
+    shift
+    terminal=(-i)
+    if [[ -t 0 && -t 1 ]]; then terminal+=(-t); fi
+    exec docker exec "${terminal[@]}" "$database" psql -X -w -v ON_ERROR_STOP=1 -U atlas_map_reader -d vellum_maps "$@"
+    ;;
+  running | --built)
+    if [[ "$1" == --built ]]; then shift; fi
     if [[ ! -x "$root/target/release/local_atlas" ]]; then
       echo "Run make local-up to build the server and its matching local atlas harness." >&2
       exit 1
@@ -201,21 +269,23 @@ case "${1:-}" in
   up)
     credentials
     database_up
-    server_up
+    server_up "${2:-}"
     ;;
   down)
-    server_down
-    docker stop "$database" >/dev/null 2>&1 || true
+    server_down down
+    if ! other_server_running; then docker stop "$database" >/dev/null 2>&1 || true; fi
     ;;
   # Removes the kept world: the database volume and every stored file.
   reset)
-    server_down
+    for listener in "$home" "$home"/listeners/*; do
+      [[ ! -d "$listener" ]] || server_down reset "$listener"
+    done
     docker rm -f "$database" >/dev/null 2>&1 || true
     docker volume rm "$volume" >/dev/null 2>&1 || true
     rm -rf "$home"
     ;;
   "" | -h | --help)
-    echo "Usage: $0 up|down|reset|profile [seconds], or a harness command:" >&2
+    echo "Usage: $0 up|down|reset|profile [seconds]|sql [psql options], or a harness command:" >&2
     cd "$root" && cargo run --quiet --release -p atlas-host --bin local_atlas
     ;;
   experiment)

@@ -17,6 +17,13 @@ import { realScaleDirections, type OwnerDirection } from "./ownerDirections.real
  */
 const directions: readonly OwnerDirection[] = [
   {
+    direction:
+      "the district catalog is the design authority and Street responses reflect City behavior",
+    given: "2026-11-26",
+    marks: ["crates/atlas-generation/src/town/templates/district.rs"],
+    test: "crates/atlas-generation/src/town/templates/district.rs",
+  },
+  {
     direction: "raise an existing building on placement",
     given: "2026-11-19",
     marks: ["crates/atlas-generation/src/town/fabric/projects.rs"],
@@ -688,6 +695,31 @@ const directions: readonly OwnerDirection[] = [
     test: "crates/atlas-generation/src/field/people/gather/catchments.rs",
   },
   {
+    given: "2026-11-27",
+    direction: "the land occupied by a city must fit its population and the land its people use",
+    marks: ["crates/atlas-generation/src/field/people/gather/settlements.rs"],
+    test: "crates/atlas-generation/src/field/people/gather/settlements.rs",
+  },
+  {
+    given: "2026-11-27",
+    direction: "built ground is built up by processes and is not calculated after the fact",
+    marks: ["crates/atlas-generation/src/field/people/land.rs"],
+    test: "crates/atlas-generation/src/field/people/gather/settlements.rs",
+  },
+  {
+    given: "2026-11-27",
+    direction: "city districts should have near 100 percent urban coverage",
+    marks: ["crates/atlas-generation/src/field/people/gather/settlements.rs"],
+    test: "crates/atlas-generation/src/field/people/gather/settlements.rs",
+  },
+  {
+    given: "2026-11-27",
+    direction:
+      "change the amount of people, decrease the size of the city, or change how much land each person builds",
+    marks: ["crates/atlas-generation/src/field/people/land.rs"],
+    test: "crates/atlas-generation/src/field/people/land.rs",
+  },
+  {
     given: "2026-11-25",
     direction: "household refinement smooths parent cell edges through local placement",
     marks: ["crates/atlas-generation/src/field/people/gather/placement.rs"],
@@ -709,6 +741,13 @@ const directions: readonly OwnerDirection[] = [
     direction: "tune how far a district centre serves, leaving the district count to the city",
     given: "2026-11-24",
     marks: ["crates/atlas-generation/src/processes/town/urban/programs.rs"],
+    test: "crates/atlas-generation/src/processes/town/urban/programs.rs",
+  },
+  {
+    direction:
+      "aim for 6–10 coherent districts near 90% developed in a city of about 200,000 by tuning the procedure",
+    given: "2026-11-27",
+    marks: ["crates/atlas-generation/src/processes/town/urban/character.rs"],
     test: "crates/atlas-generation/src/processes/town/urban/programs.rs",
   },
   {
@@ -758,6 +797,12 @@ const directions: readonly OwnerDirection[] = [
     given: "2026-11-25",
     marks: ["crates/atlas-host/src/bin/local_atlas/experiment/native.rs"],
     test: "crates/atlas-host/src/bin/local_atlas/experiment/native.rs",
+  },
+  {
+    direction:
+      "use the local atlas harness to query the map database without credentials or hand-written Docker commands",
+    given: "2026-11-26",
+    marks: ["scripts/local-atlas.sh"],
   },
   {
     direction: "traits affect the whole district, even when they have a single point of origin",

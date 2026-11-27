@@ -1,5 +1,10 @@
 import { expect, it } from "vitest";
-import { roofColour } from "./realScaleStyles";
+import { realScaleStyle, roofColour } from "./realScaleStyles";
+import { cityRoadStyle } from "./cityGroundStyle";
+import { footpathColour, footpathStroke } from "./roadStyles";
+import Feature from "ol/Feature.js";
+import type { StyleFunction } from "ol/style/Style.js";
+import type { PublishedFeature } from "./publishedAppearance";
 import type { LayerStyle } from "./types";
 import type { MapDescriptor, MapSpace } from "@atlas/map";
 import {
@@ -28,6 +33,99 @@ it("draws a distinct roof colour for each published building function", () => {
     "#bc883a",
   ]);
   expect(roofColour(undefined)).toBeUndefined();
+});
+it("draws surveyed paths at their physical width and distinguishes traffic at every scale", () => {
+  const light = footpathColour(0.25, 0.7),
+    worn = footpathColour(25, 0.7);
+  expect(light[3]).toBeLessThan(worn[3] / 2);
+  expect(footpathStroke(0.7, 5, light).getWidth()).toBeCloseTo(0.14);
+  expect(footpathStroke(0.7, 0.5, worn).getWidth()).toBeCloseTo(1.4);
+  const narrow = footpathColour(0.25, 0.35);
+  expect(0.35 * narrow[3]).toBeCloseTo(0.7 * light[3]);
+  const domain = {
+    kind: "footpath",
+    layerId: "roads",
+    geometry: {
+      type: "LineString",
+      coordinates: [
+        [0, 0],
+        [20, 0],
+      ],
+    },
+    footprint: {
+      type: "Polygon",
+      coordinates: [
+        [
+          [0, -0.35],
+          [20, -0.35],
+          [20, 0.35],
+          [0, 0.35],
+          [0, -0.35],
+        ],
+      ],
+    },
+    attributes: { wear: 0.25, widths: [0.7, 0.7] },
+  };
+  const paint = realScaleStyle(style("roads"), defaultRealScalePresentation(), "") as StyleFunction;
+  const styles = paint(new Feature({ domain }), 5);
+  if (!Array.isArray(styles)) throw new Error("Expected the published path footprint");
+  expect(styles).toHaveLength(1);
+  expect(styles[0].getFill()?.getColor()).toEqual(light);
+  expect(styles[0].getStroke()).toBeNull();
+});
+
+it("keeps the City's arterial visible above local lanes at overview and uses its surveyed carriageway at detail", () => {
+  const avenue = {
+    kind: "thoroughfare",
+    name: "Market Road",
+    layerId: "roads",
+    geometry: {
+      type: "LineString",
+      coordinates: [
+        [0, 0],
+        [50, 0],
+      ],
+    },
+    footprint: {
+      type: "Polygon",
+      coordinates: [
+        [
+          [0, -3],
+          [50, -3],
+          [50, 3],
+          [0, 3],
+          [0, -3],
+        ],
+      ],
+    },
+    attributes: { arterialStrength: 0.8, widths: [6, 6] },
+  } as unknown as PublishedFeature;
+  const styling = realScaleStyle(
+    style("roads"),
+    defaultRealScalePresentation(),
+    ""
+  ) as StyleFunction;
+  const paint = (domain: PublishedFeature, resolution: number) => {
+    const styles = styling(new Feature({ domain }), resolution);
+    if (!Array.isArray(styles)) throw new Error("Expected ground styles");
+    return styles;
+  };
+  const stroke = (f: PublishedFeature) => paint(f, 15).at(-1)?.getStroke()?.getWidth();
+  expect(stroke(avenue)).toBe(cityRoadStyle(avenue, 15, "#555")?.getStroke()?.getWidth());
+  expect(
+    stroke({ ...avenue, kind: "street", attributes: { roadClass: "lane", widths: [3, 3] } })
+  ).toBeLessThan(stroke(avenue)!);
+  expect(paint(avenue, 0.5)[0].getFill()).toBeTruthy();
+  expect(paint(avenue, 0.5).at(-1)?.getStroke()).toBeNull();
+  const tree: PublishedFeature = {
+    ...avenue,
+    kind: "tree",
+    layerId: "objects",
+    footprint: null,
+    geometry: { type: "Point" as const, coordinates: [10, 10] },
+  };
+  expect(paint(tree, 15)).toHaveLength(0);
+  expect(paint(tree, 0.5)[0].getImage()).toBeTruthy();
 });
 
 it("draws real-scale kinds top first, from hexes down to water, and shows them", () => {

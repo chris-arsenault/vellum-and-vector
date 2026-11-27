@@ -101,6 +101,11 @@ async function checkControls(page: import("./uiTest").Page) {
   await expect(controls.getByLabel("Value scale")).toHaveValue("log");
   await controls.getByRole("button", { name: "Remove Temperature", exact: true }).click();
   await expect(pixels).toContainText('"id":"terrain"');
+  await expect(controls.getByRole("application", { name: "World map canvas" })).toHaveAttribute(
+    "aria-busy",
+    "false"
+  );
+  await expect(page.locator("body > output")).not.toHaveAttribute("data-entities-read", "true");
   await controls
     .getByRole("application", { name: "World map canvas" })
     .click({ position: { x: 256, y: 256 } });
@@ -111,6 +116,7 @@ async function checkControls(page: import("./uiTest").Page) {
   ).toContainText("12 m");
   await checkElevation(page);
   await checkSheet(page);
+  await expect(page.locator("body > output")).toHaveAttribute("data-entities-read", "true");
   await checkRegistry(page);
   await checkNavigation(page);
   await expect(controls.getByRole("alert")).toHaveCount(0);
