@@ -56,7 +56,36 @@ pub struct SiteEvidence {
     pub medium: [f64; 7],
     pub practice: [f64; 7],
 }
+/// A settlement's own draw for the craft it practises everywhere: a roll on its identity
+/// and the map's seed, apart from its template's and its civic order's.
+pub fn craft_roll(settlement: &[u8], seed: i32) -> f64 {
+    crate::field::poi::true_sizes::roll_bytes(settlement, (seed as u64).wrapping_add(0xc2af_7001))
+}
+/// The share of the draw that goes to practising no craft everywhere, beside each
+/// craft's own weight: its medium's presence and twice its practised share.
+const NO_CITY_CRAFT: f64 = 0.5;
 impl SiteEvidence {
+    /// The craft a settlement on this site practises everywhere, by craft code, or none.
+    /// A craft's weight is its medium's presence and twice the share already practising
+    /// it; a site with neither never draws it.
+    pub fn city_craft(&self, draw: f64) -> Option<i32> {
+        let crafts = crate::field::people::crafts::CRAFTS;
+        let weights: Vec<f64> = (0..crafts.len())
+            .map(|i| self.medium[i].max(0.) + 2. * self.practice[i].max(0.))
+            .collect();
+        let total = NO_CITY_CRAFT + weights.iter().sum::<f64>();
+        let mut ticket = draw.clamp(0., 1.) * total - NO_CITY_CRAFT;
+        if ticket < 0. {
+            return None;
+        }
+        for (craft, weight) in crafts.iter().zip(weights) {
+            if ticket < weight {
+                return Some(craft.code);
+            }
+            ticket -= weight;
+        }
+        None
+    }
     pub fn point(&self, role: AnchorRole) -> Option<Point> {
         match role {
             AnchorRole::Centre => Some(self.centre),
@@ -179,6 +208,12 @@ pub struct Selection {
     /// before orders were drawn has none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub civic: Option<civic::Civic>,
+    /// The crafts the settlement practises everywhere, by craft code: its trait as a
+    /// whole place, drawn beside the template and the civic order. Every site of the
+    /// settlement reads these crafts as present, so their premises and what they supply
+    /// can take hold on any street.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub crafts: Vec<i32>,
 }
 impl Selection {
     pub fn commons(centre: Point) -> Self {
@@ -191,6 +226,7 @@ impl Selection {
             ranked: vec![Template::Commons.candidate(&site)],
             site,
             civic: None,
+            crafts: Vec::new(),
         }
     }
     // owner-direction(2026-11-19): rank settlement templates from initial conditions and choose randomly with greater weight toward the top.
@@ -206,11 +242,22 @@ impl Selection {
             ranked,
             site,
             civic: None,
+            crafts: Vec::new(),
         };
         selection.selected = selection
             .draw_remaining(draw, &[])
             .expect("the road commons always has a viable kernel");
         selection
+    }
+    /// Draws the craft the settlement practises everywhere, if any, on a draw of its own:
+    /// likelier the stronger its medium lies and the more it is already practised at the
+    /// site, and often none. The creator may ask for one.
+    pub fn with_craft(mut self, asked: Option<i32>, draw: f64) -> Self {
+        self.crafts = asked
+            .or_else(|| self.site.city_craft(draw))
+            .into_iter()
+            .collect();
+        self
     }
     /// Draws the settlement's civic order from the same site evidence, on a draw of its
     /// own, unless the creator asks for one.
@@ -242,6 +289,37 @@ impl Selection {
 mod tests {
     use super::*;
     use crate::town::catalogue::Activity;
+
+    #[test]
+    fn a_settlement_draws_the_craft_it_practises_everywhere_from_its_own_media() {
+        use crate::field::people::crafts::{PracticeReads, CRAFTS};
+        let (fire, veil) = (CRAFTS[0].code, CRAFTS[6].code);
+        let draws = |site: &SiteEvidence| -> Vec<Option<i32>> {
+            (0..100)
+                .map(|step| site.city_craft((f64::from(step) + 0.5) / 100.))
+                .collect()
+        };
+        // A site with no medium and no practice practises nothing everywhere.
+        assert!(draws(&SiteEvidence::default()).iter().all(Option::is_none));
+        // A site on a stable tear, with some hearth-keepers, is most often a city of
+        // doors, sometimes a city of fire and sometimes neither.
+        let mut site = SiteEvidence::default();
+        site.medium[6] = 1.;
+        site.practice[0] = 0.2;
+        let drawn = draws(&site);
+        let count = |craft: Option<i32>| drawn.iter().filter(|d| **d == craft).count();
+        assert!(count(Some(veil)) > count(Some(fire)) && count(Some(fire)) > 0);
+        assert!(count(None) > 0 && count(Some(veil)) + count(Some(fire)) + count(None) == 100);
+        // The creator may ask for one, whatever the site holds.
+        let asked = Selection::choose(SiteEvidence::default(), 0.).with_craft(Some(fire), 0.9);
+        assert_eq!(asked.crafts, vec![fire]);
+        // Every site of a settlement reads its crafts as present, and no other craft more.
+        let reads = PracticeReads::from([0., 0.1, 0., 0., 0., 0., 0.9]);
+        let city = reads.with_city_crafts(&[fire, veil], 0.6);
+        assert_eq!(city.available(fire), 0.6);
+        assert_eq!(city.available(veil), 0.9);
+        assert_eq!(city.available(CRAFTS[1].code), 0.1);
+    }
 
     #[test]
     fn ineligible_kernels_never_enter_the_draw() {

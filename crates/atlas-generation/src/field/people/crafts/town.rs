@@ -45,6 +45,17 @@ impl PracticeReads {
         self
     }
 
+    /// The readings of a site in a city that practises `crafts` everywhere: each of those
+    /// crafts is present at least at `presence`, wherever its medium lies.
+    pub(crate) fn with_city_crafts(mut self, crafts: &[i32], presence: f64) -> Self {
+        for (read, craft) in self.0.iter_mut().zip(CRAFTS) {
+            if crafts.contains(&craft.code) {
+                *read = read.max(presence);
+            }
+        }
+        self
+    }
+
     pub(crate) fn with_cut_roots(mut self) -> Self {
         let index = (CRAFTS[3].code - 1) as usize;
         self.0[index] = 0.;

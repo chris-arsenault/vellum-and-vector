@@ -82,9 +82,10 @@ pub(crate) fn start_people_pass(
 pub(crate) fn inherit_policy(
     state: &mut State,
     seed: i32,
-    (requested, civic): (
+    (requested, civic, craft): (
         Option<crate::town::templates::Template>,
         Option<crate::town::templates::civic::Civic>,
+        Option<i32>,
     ),
 ) -> Result<(), ExecutionError> {
     use crate::town::templates::Template;
@@ -105,6 +106,7 @@ pub(crate) fn inherit_policy(
         let mut saved: crate::town::templates::Selection =
             serde_json::from_value(policy.clone()).map_err(io::Error::other)?;
         saved.civic = civic.or(saved.civic);
+        saved.crafts = craft.map_or(saved.crafts, |asked| vec![asked]);
         state.regional.as_mut().unwrap().city.template = Some(saved);
         return Ok(());
     }
@@ -120,6 +122,7 @@ pub(crate) fn inherit_policy(
         }
     }
     selection.civic = civic.or(selection.civic);
+    selection.crafts = craft.map_or(selection.crafts, |asked| vec![asked]);
     state.regional.as_mut().unwrap().city.template = Some(selection);
     Ok(())
 }
@@ -577,7 +580,10 @@ fn template(
     // The order is drawn on a roll of the settlement's own, apart from the template's.
     let own = state.scope.city.as_ref().unwrap().settlement.to_bytes();
     let civic = crate::town::templates::civic::Civic::roll(&own, seed);
-    let selection = Selection::choose(site, draw(seed, 0, 1)).with_civic(None, civic);
+    let craft = crate::town::templates::craft_roll(&own, seed);
+    let selection = Selection::choose(site, draw(seed, 0, 1))
+        .with_civic(None, civic)
+        .with_craft(None, craft);
     if let Some(regional) = state.regional.as_mut() {
         regional.city.template = Some(selection.clone());
     }

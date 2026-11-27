@@ -738,6 +738,7 @@ fn real_scale(harness: &Harness, options: &Options) -> io::Result<()> {
         ("template", "template"),
         ("major-work", "majorWork"),
         ("civic", "civicOrder"),
+        ("city-craft", "cityCraft"),
     ] {
         if let Some(value) = options.get(flag) {
             developed["recipe"]["features"]["built.layout"]["configuration"][choice] = json!(value);

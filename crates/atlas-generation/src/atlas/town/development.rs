@@ -61,6 +61,9 @@ pub(crate) const STREET_FOUNDING: Founding = Strategy {
 /// The passing trade along a stretch of street this long makes one unit of exchange signal.
 /// Street metres, resolved by `Measure::Layout`.
 const TRADE_STRETCH: f64 = 100.;
+/// The least share a craft is practised at every site of a settlement that practises it
+/// everywhere. A starting value, to be tuned with the rest once the processes are written.
+const CITY_CRAFT_PRESENCE: f64 = 0.6;
 
 /// What a town's frontage is travelled over: the walking ground, the kernel, the kept links,
 /// and the town's scale, which travel costs are read at.
@@ -566,9 +569,16 @@ fn settle(
                 .context
                 .survey(state, &candidate, survey.seat, ground, scale)?;
         let mut selection = saved_policy.clone().unwrap_or_else(|| {
-            let civic_draw = Civic::roll(&seat.key.to_bytes(), settings.seed);
-            crate::town::templates::Selection::choose(site, draw).with_civic(None, civic_draw)
+            let own = seat.key.to_bytes();
+            let civic_draw = Civic::roll(&own, settings.seed);
+            let craft_draw = crate::town::templates::craft_roll(&own, settings.seed);
+            crate::town::templates::Selection::choose(site, draw)
+                .with_civic(None, civic_draw)
+                .with_craft(None, craft_draw)
         });
+        if let Some(asked) = settings.craft {
+            selection.crafts = vec![asked];
+        }
         // A town made again keeps the order its record names, as it keeps its template.
         let recorded = attributes
             .and_then(|attrs| attrs.get("civicOrder"))
@@ -834,14 +844,22 @@ impl Operations {
         let samples = Query::new(
             "town.site-conditions.composed",
             vec![base.dependency(), extra.dependency()],
-            move |_, reader| {
+            move |state: &State, reader| {
                 let base = reader.get(&base_read)?;
                 let extra = reader.get(&extra)?;
                 let values = base
                     .0
                     .iter()
                     .zip(&extra.0)
-                    .map(|(a, b)| {
+                    .enumerate()
+                    .map(|(town, (a, b))| {
+                        // The crafts the town's settlement practises everywhere are
+                        // present at every one of its sites.
+                        let crafts = state
+                            .town
+                            .towns
+                            .get(town)
+                            .map_or(&[][..], |town| town.template.crafts.as_slice());
                         a.iter()
                             .zip(b)
                             .map(|(a, b)| Conditions {
@@ -856,7 +874,8 @@ impl Operations {
                                 effects: b.effects,
                                 practices: a
                                     .practices
-                                    .with_local_consecration(b.effects.consecration),
+                                    .with_local_consecration(b.effects.consecration)
+                                    .with_city_crafts(crafts, CITY_CRAFT_PRESENCE),
                                 density: a.density + b.density,
                                 clearance: a.clearance + b.clearance,
                                 protection: a.protection + b.protection,
@@ -920,6 +939,9 @@ impl Operations {
                     SettlementStart::District(district) => {
                         let mut town = street_context::inherit(state, &district, &neighbours)?;
                         town.template.civic = settings.civic.or(town.template.civic);
+                        if let Some(asked) = settings.craft {
+                            town.template.crafts = vec![asked];
+                        }
                         town.ordered(settings.order, settings.seed);
                         let mut ground = site::terrain(state, site::bounds(state)?)?;
                         if let Some(site) = &town.district {

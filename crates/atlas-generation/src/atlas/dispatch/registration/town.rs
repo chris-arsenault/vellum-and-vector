@@ -45,6 +45,11 @@ fn settings(input: &Input) -> ExecutionResult<Settings> {
             .get(town::CIVIC_ORDER)
             .and_then(serde_json::Value::as_str)
             .and_then(Civic::from_name),
+        craft: input
+            .parameters
+            .get(town::CITY_CRAFT)
+            .and_then(serde_json::Value::as_str)
+            .and_then(town::craft_named),
     })
 }
 fn initialization() -> io::Result<Specification> {
@@ -53,7 +58,8 @@ fn initialization() -> io::Result<Specification> {
     spec.parameters.extend(serde_json::from_value::<crate::parameters::Definitions>(serde_json::json!({
         (town::TEMPLATE): {"type":"enum","required":false,"choices":Template::ALL.map(Template::name)},
         (town::MAJOR_WORK): {"type":"enum","required":false,"choices":WorkFamily::ALL.iter().map(|family| family.key()).collect::<Vec<_>>()},
-        (town::CIVIC_ORDER): {"type":"enum","required":false,"choices":Civic::ALL.map(Civic::name)}
+        (town::CIVIC_ORDER): {"type":"enum","required":false,"choices":Civic::ALL.map(Civic::name)},
+        (town::CITY_CRAFT): {"type":"enum","required":false,"choices":crate::field::people::crafts::CRAFTS.map(|craft| craft.system)}
     }))?);
     Ok(spec.numeric(crate::town::order::CONTROLS))
 }
@@ -94,7 +100,7 @@ pub fn register(
                 crate::atlas::regional::city::inherit_policy(
                     scope.state_mut(),
                     input.seed,
-                    (input.template, input.civic),
+                    (input.template, input.civic, input.craft),
                 )?;
             } else if *policy == Some("street-founding-policy") {
                 if *districts {

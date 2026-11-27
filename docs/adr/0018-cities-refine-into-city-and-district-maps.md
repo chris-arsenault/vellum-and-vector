@@ -164,7 +164,19 @@ wealth and decisions are spread: a princely seat, an autocracy, a slave-holding 
 council of elders, a freehold, a democracy or a merchant council. Both are drawn from the
 same site evidence, each on a draw of its own, so any template can meet any order. A
 record that says households are free rules out holding them. The order is saved with the
-policy: a City publishes it and each district's street map inherits it. An order speaks
+policy: a City publishes it and each district's street map inherits it.
+
+A third choice is drawn the same way: the craft the settlement practises everywhere, if
+any. Its weight is its medium's presence at the site and the share already practising it,
+and often none is drawn. Every site of such a settlement reads that craft as present, so
+its premises and what they supply can take hold on any street where custom supports
+them, in place of the few plots where the medium itself is strong. A city on a stable
+tear can become a city of doors and one on quickened ground a city of hearths, and the
+rounds decide how far.
+
+At City scale the civic order weighs which resident characters the districts take and
+how far apart districts live in how tightly they dwell. It never weighs a district's
+economic role or its traits. An order speaks
 only through the town's order record and adds nothing to what a district's economy and
 residents ask for, so it varies a town along lines the district choices do not.
 

@@ -118,7 +118,8 @@ Settlement names are resolved on that parent, so subsequent selections follow it
 For a controlled settlement comparison, `real --template surveyors-ring` selects that
 template from the site's eligible alternatives. `--major-work library` starts a commission
 whose site, design and construction follow the usual major-work rules. `--civic autocracy`
-gives the map's settlements that civic order in place of the one their sites would draw.
+gives the map's settlements that civic order in place of the one their sites would draw,
+and `--city-craft veil` (a magic system's name) has them practise that craft everywhere.
 `--set
 feature.key=number` changes numeric feature settings for that map alone, several separated
 by commas, such as `city --set built.layout.districtCatchmentScale=1.8`; a child otherwise

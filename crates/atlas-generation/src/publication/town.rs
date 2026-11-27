@@ -168,6 +168,16 @@ fn publish_settlement(state: &mut impl TownWriter, town: &Town) -> io::Result<()
             .attributes
             .insert("civicOrder".into(), json!(civic.name()));
     }
+    let crafts: Vec<_> = crate::field::people::crafts::CRAFTS
+        .iter()
+        .filter(|craft| town.template.crafts.contains(&craft.code))
+        .map(|craft| craft.system)
+        .collect();
+    if !crafts.is_empty() {
+        settlement
+            .attributes
+            .insert("cityCrafts".into(), json!(crafts));
+    }
     settlement.attributes.insert(
         "settlementTemplate".into(),
         json!(town.template.selected.name()),

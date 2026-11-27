@@ -20,11 +20,22 @@ pub struct Settings {
     pub order: crate::town::order::Order,
     /// A civic order the creator asks for, or none to let each settlement's site draw one.
     pub civic: Option<crate::town::templates::civic::Civic>,
+    /// A craft, by code, the creator asks the settlements to practise everywhere, or none
+    /// to let each site draw.
+    pub craft: Option<i32>,
 }
 
 pub(super) const TEMPLATE: &str = "template";
 pub(super) const MAJOR_WORK: &str = "majorWork";
 pub(super) const CIVIC_ORDER: &str = "civicOrder";
+pub(super) const CITY_CRAFT: &str = "cityCraft";
+/// The craft a magic system's name stands for, by craft code.
+pub(super) fn craft_named(system: &str) -> Option<i32> {
+    crate::field::people::crafts::CRAFTS
+        .iter()
+        .find(|craft| craft.system == system)
+        .map(|craft| craft.code)
+}
 
 pub(super) fn validate_choices(choices: &crate::parameters::Values) -> std::io::Result<()> {
     use crate::town::{
@@ -36,6 +47,7 @@ pub(super) fn validate_choices(choices: &crate::parameters::Values) -> std::io::
             TEMPLATE => Template::from_name(value).is_some(),
             MAJOR_WORK => WorkFamily::from_key(value).is_some(),
             CIVIC_ORDER => Civic::from_name(value).is_some(),
+            CITY_CRAFT => craft_named(value).is_some(),
             _ => false,
         });
         if !valid {
