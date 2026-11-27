@@ -22,10 +22,11 @@ const fn control(name: &'static str, default: f64, maximum: Option<f64>) -> Nume
 const REPEAT: NumericParameter = control("districtRepeatFactor", 0.8, Some(1.));
 const ORDINARY: NumericParameter = control("ordinaryTraitWeight", 2., None);
 // owner-direction(2026-11-27): aim for 6–10 coherent districts near 90% developed in a city of about 200,000 by tuning the procedure
+// owner-direction(2026-11-27): a city should generally have about 5 to 12 districts, since that is how many is useful for a player
 const CATCHMENT: NumericParameter = NumericParameter {
     unit: "relative reach",
     minimum: Some(0.1),
-    ..control("districtCatchmentScale", 1.8, None)
+    ..control("districtCatchmentScale", 2.2, None)
 };
 const GEOGRAPHY: NumericParameter = NumericParameter {
     minimum: Some(0.),

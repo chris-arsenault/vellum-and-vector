@@ -761,6 +761,13 @@ const directions: readonly OwnerDirection[] = [
     test: "crates/atlas-generation/src/processes/town/urban/programs.rs",
   },
   {
+    direction:
+      "a city should generally have about 5 to 12 districts, since that is how many is useful for a player",
+    given: "2026-11-27",
+    marks: ["crates/atlas-generation/src/processes/town/urban/character.rs"],
+    test: "crates/atlas-generation/src/processes/town/urban/programs.rs",
+  },
+  {
     direction: "City processes interact across rounds by reading and writing shared numeric fields",
     given: "2026-11-24",
     marks: ["crates/atlas-generation/src/processes/town/urban/fields.rs"],
