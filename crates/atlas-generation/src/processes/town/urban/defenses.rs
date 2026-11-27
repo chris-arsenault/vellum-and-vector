@@ -135,7 +135,14 @@ pub(super) fn invest(state: &State, u: &Urban) -> io::Result<Vec<Wall>> {
             .get("contestedBy")
             .is_some_and(|v| !v.is_null())
     });
-    let sponsor = p.site.guarded || p.enclosed_seat().is_some() || p.site.seat || contested;
+    // A site that is guarded, contested or a realm's seat sponsors walls, and so does a
+    // civic order that defends itself.
+    let civic = p.civic;
+    let sponsor = p.site.guarded
+        || p.enclosed_seat().is_some()
+        || p.site.seat
+        || contested
+        || civic.is_some_and(crate::town::templates::civic::Civic::defends);
     if !sponsor {
         return Ok(walls);
     }
@@ -167,7 +174,8 @@ pub(super) fn invest(state: &State, u: &Urban) -> io::Result<Vec<Wall>> {
         capital / (crate::human::catalogue::FULL_STANDING_PER_BUILT_KM2 * 8. / 1e6) * 0.15;
     let spent: f64 = walls.iter().map(Wall::funded).sum();
     let budget = (capacity - spent).max(0.).min(supporters * 0.12);
-    choose_enclosure(state, u, &mut walls, &occupied, budget)?;
+    let citadel = civic.map_or(1., crate::town::templates::civic::Civic::citadel);
+    choose_enclosure(state, u, &mut walls, &occupied, (budget, citadel))?;
     fund_sections(u, r, &mut walls, mesh, supporters, budget);
     Ok(walls)
 }
@@ -251,12 +259,36 @@ fn assess_disuse(
     }
 }
 
+/// The share of a circuit that must stand before its sponsor stops reconsidering its line.
+const WELL_BEGUN: f64 = 0.2;
+/// The line a sponsor may still redraw this round: its newest circuit, if that is
+/// unfinished and not yet well begun. The city gathers and shifts between rounds, and a
+/// line drawn before it gathered should not bind it.
+fn redrawn(walls: &mut Vec<Wall>) -> Option<Wall> {
+    let unsettled = walls.last().is_some_and(|wall| {
+        wall.sections.iter().any(|s| s.built < s.cost) && wall.standing_share() < WELL_BEGUN
+    });
+    if unsettled {
+        walls.pop()
+    } else {
+        None
+    }
+}
+/// The shares of occupied ground whose pressure contours a sponsor considers as rings.
+/// A citadel above one draws every ring in round more crowded ground.
+fn ring_shares(citadel: f64) -> [f64; 3] {
+    let usual = [0.32, 0.56, 0.76];
+    if citadel <= 1. {
+        return usual;
+    }
+    usual.map(|share| 1. - (1. - share) / citadel)
+}
 fn choose_enclosure(
     state: &State,
     u: &Urban,
     walls: &mut Vec<Wall>,
     occupied: &[f64],
-    budget: f64,
+    (budget, citadel): (f64, f64),
 ) -> io::Result<()> {
     let mesh = state.field().mesh();
     let area = state
@@ -264,6 +296,7 @@ fn choose_enclosure(
         .area(state.scope.settled_outline())
         .map_err(io::Error::other)?;
     let positions: Vec<_> = (0..mesh.len()).map(|c| pos(position(mesh, c))).collect();
+    let earlier = redrawn(walls);
     if budget > 0.
         && walls
             .iter()
@@ -285,7 +318,7 @@ fn choose_enclosure(
         )
         .map_err(io::Error::other)?;
         let mut best = None;
-        for fraction in [0.32, 0.56, 0.76] {
+        for fraction in ring_shares(citadel) {
             if values.is_empty() {
                 break;
             }
@@ -301,9 +334,65 @@ fn choose_enclosure(
                 }
             }
         }
-        if let Some((_, wall)) = best {
+        // The line this round's city calls for replaces one barely begun; with no better
+        // line to draw, the earlier one stands.
+        if let Some(wall) = best.map(|(_, wall)| wall).or(earlier) {
             walls.push(wall);
         }
+    } else if let Some(wall) = earlier {
+        walls.push(wall);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn circuit(built: [f64; 4]) -> Wall {
+        Wall {
+            inside: vec![0],
+            sections: built
+                .map(|built| Section {
+                    ends: [[0., 0.], [100., 0.]],
+                    cell: 0,
+                    cost: 100.,
+                    built,
+                    disused: 0.,
+                    repaired: 0.,
+                })
+                .to_vec(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn a_sponsor_redraws_a_line_barely_begun_and_keeps_one_well_begun() {
+        // A finished old wall and a new line with a tenth of its work done: the new line
+        // may be redrawn, the old wall stays.
+        let mut walls = vec![circuit([100.; 4]), circuit([40., 0., 0., 0.])];
+        assert!(redrawn(&mut walls).is_some());
+        assert_eq!(walls.len(), 1);
+        // A line a third built binds its sponsor.
+        let mut walls = vec![circuit([100., 35., 0., 0.])];
+        assert!(redrawn(&mut walls).is_none());
+        assert_eq!(walls.len(), 1);
+        // A finished wall is never redrawn, and a city with none has none to redraw.
+        assert!(redrawn(&mut vec![circuit([100.; 4])]).is_none());
+        assert!(redrawn(&mut Vec::new()).is_none());
+    }
+
+    #[test]
+    fn a_citadel_draws_its_rings_round_more_crowded_ground() {
+        assert_eq!(ring_shares(1.), [0.32, 0.56, 0.76]);
+        // Twice the citadel halves the ground left outside each ring's level.
+        let tight = ring_shares(2.);
+        assert!((tight[0] - 0.66).abs() < 1e-12 && (tight[2] - 0.88).abs() < 1e-12);
+        assert!(tight
+            .iter()
+            .zip(ring_shares(1.))
+            .all(|(tight, usual)| *tight > usual));
+        // An order that builds no citadel leaves the rings as they were.
+        assert_eq!(ring_shares(0.5), ring_shares(1.));
+    }
 }

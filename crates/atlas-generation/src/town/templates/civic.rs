@@ -231,6 +231,25 @@ impl Civic {
             Self::Freehold => 0.5,
         }
     }
+    /// Whether the order itself sponsors walls, beside a site that is guarded, contested
+    /// or a realm's seat.
+    pub fn defends(self) -> bool {
+        matches!(
+            self,
+            Self::PrincelySeat | Self::Autocracy | Self::SlaveHolding
+        )
+    }
+    /// How tight a core the order's walls enclose: at one the rings a city would
+    /// consider anyway, above one rings drawn in round the most crowded ground, leaving
+    /// the town outside.
+    pub fn citadel(self) -> f64 {
+        match self {
+            Self::PrincelySeat => 2.,
+            Self::SlaveHolding => 1.6,
+            Self::Autocracy => 1.3,
+            _ => 1.,
+        }
+    }
     /// Writes the order's hand onto a town's order.
     pub fn write(self, order: &mut Order) {
         let hand = self.hand();
