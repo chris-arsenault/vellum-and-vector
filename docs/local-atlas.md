@@ -117,8 +117,11 @@ Settlement names are resolved on that parent, so subsequent selections follow it
 `--name` sets the result folder; choose a new name for each run to preserve earlier results.
 For a controlled settlement comparison, `real --template surveyors-ring` selects that
 template from the site's eligible alternatives. `--major-work library` starts a commission
-whose site, design and construction follow the usual major-work rules. Use the same parent,
-settlement and hex settings for each comparison.
+whose site, design and construction follow the usual major-work rules. `--set
+feature.key=number` changes one numeric feature setting for that map alone, such as
+`city --set built.layout.districtCatchmentScale=1.8`; a child otherwise generates with the
+settings its world was made with. Use the same parent, settlement and hex settings for each
+comparison.
 A finished map is saved to the server library and reported in
 `.artifacts/local-atlas/maps/<name>/`:
 

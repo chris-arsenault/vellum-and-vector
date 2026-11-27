@@ -726,6 +726,10 @@ fn real_scale(harness: &Harness, options: &Options) -> io::Result<()> {
             developed["recipe"]["features"]["built.layout"]["configuration"][choice] = json!(value);
         }
     }
+    if let Some(setting) = options.get("set") {
+        let (feature, key, value) = feature_setting(setting)?;
+        developed["recipe"]["features"][feature]["settings"][key] = json!(value);
+    }
     let regeneration = json!({"reference": captured, "configuration": developed});
     let review: Value = harness.generation(
         "review",
@@ -740,6 +744,18 @@ fn real_scale(harness: &Harness, options: &Options) -> io::Result<()> {
         finish(harness, &result, &name, &job)?;
     }
     Ok(())
+}
+/// A feature setting given as `feature.key=number`, such as
+/// `built.layout.districtCatchmentScale=1.8`. The feature id may itself contain dots.
+fn feature_setting(setting: &str) -> io::Result<(&str, &str, f64)> {
+    let malformed = || io::Error::other(format!("--set needs feature.key=number, got {setting}"));
+    let (name, value) = setting.split_once('=').ok_or_else(malformed)?;
+    let (feature, key) = name.rsplit_once('.').ok_or_else(malformed)?;
+    let value: f64 = value.parse().map_err(|_| malformed())?;
+    if feature.is_empty() || key.is_empty() || !value.is_finite() {
+        return Err(malformed());
+    }
+    Ok((feature, key, value))
 }
 fn refuse_errors(review: &Value) -> io::Result<()> {
     let errors: Vec<_> = review["diagnostics"]
@@ -974,6 +990,20 @@ mod tests {
             "Initial-regional-detail-round-1"
         );
         assert_eq!(slug("a--b.c", &[]), "a-b-c");
+    }
+    #[test]
+    fn a_feature_setting_names_the_feature_its_key_and_a_number() {
+        assert_eq!(
+            feature_setting("built.layout.districtCatchmentScale=1.8").unwrap(),
+            ("built.layout", "districtCatchmentScale", 1.8)
+        );
+        for malformed in [
+            "districtCatchmentScale=1.8",
+            "built.layout.scale",
+            "a.b=wide",
+        ] {
+            assert!(feature_setting(malformed).is_err());
+        }
     }
     #[test]
     fn options_take_values_and_flags() {
