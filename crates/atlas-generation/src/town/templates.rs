@@ -315,10 +315,16 @@ mod tests {
         assert_eq!(asked.crafts, vec![fire]);
         // Every site of a settlement reads its crafts as present, and no other craft more.
         let reads = PracticeReads::from([0., 0.1, 0., 0., 0., 0., 0.9]);
-        let city = reads.with_city_crafts(&[fire, veil], 0.6);
+        let city = reads.with_city_crafts(&[fire, veil], 0.6, false);
         assert_eq!(city.available(fire), 0.6);
         assert_eq!(city.available(veil), 0.9);
         assert_eq!(city.available(CRAFTS[1].code), 0.1);
+        // A city of tenders still needs living roots: where they are severed, tending is
+        // absent however widely the city practises it, and its other craft is not.
+        let tending = CRAFTS[3].code;
+        let severed = PracticeReads::from([0.; 7]).with_city_crafts(&[tending, fire], 0.6, true);
+        assert_eq!(severed.available(tending), 0.);
+        assert_eq!(severed.available(fire), 0.6);
     }
 
     #[test]

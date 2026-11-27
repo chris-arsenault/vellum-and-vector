@@ -176,7 +176,9 @@ pub(super) fn invest(state: &State, u: &Urban) -> io::Result<Vec<Wall>> {
     let budget = (capacity - spent).max(0.).min(supporters * 0.12);
     let citadel = civic.map_or(1., crate::town::templates::civic::Civic::citadel);
     choose_enclosure(state, u, &mut walls, &occupied, (budget, citadel))?;
-    fund_sections(u, r, &mut walls, mesh, supporters, budget);
+    // A wall is outgrown when it holds too small a share of the city's people. A citadel
+    // is meant to hold fewer, so the people it is measured against are fewer by as much.
+    fund_sections(u, r, &mut walls, mesh, supporters / citadel, budget);
     Ok(walls)
 }
 
@@ -259,19 +261,34 @@ fn assess_disuse(
     }
 }
 
-/// The share of a circuit that must stand before its sponsor stops reconsidering its line.
+/// The share of a circuit's work that must be done before its sponsor stops reconsidering
+/// its line.
 const WELL_BEGUN: f64 = 0.2;
-/// The line a sponsor may still redraw this round: its newest circuit, if that is
+/// The line a sponsor may still redraw this round: its newest circuit, if that is in use,
 /// unfinished and not yet well begun. The city gathers and shifts between rounds, and a
-/// line drawn before it gathered should not bind it.
+/// line drawn before it gathered should not bind it. A wall the city has outgrown is
+/// history and is never redrawn.
 fn redrawn(walls: &mut Vec<Wall>) -> Option<Wall> {
     let unsettled = walls.last().is_some_and(|wall| {
-        wall.sections.iter().any(|s| s.built < s.cost) && wall.standing_share() < WELL_BEGUN
+        let whole: f64 = wall.sections.iter().map(|s| s.cost).sum();
+        !wall.outgrown
+            && wall.sections.iter().any(|s| s.built < s.cost)
+            && wall.funded() < WELL_BEGUN * whole
     });
     if unsettled {
         walls.pop()
     } else {
         None
+    }
+}
+/// Moves the work done on a line its sponsor has redrawn onto the new line, section by
+/// section, so redrawing loses no work and the work stays charged to the sponsor.
+fn carry_work(from: &Wall, onto: &mut Wall) {
+    let mut work = from.funded();
+    for section in &mut onto.sections {
+        let done = work.min((section.cost - section.built).max(0.));
+        section.built += done;
+        work -= done;
     }
 }
 /// The shares of occupied ground whose pressure contours a sponsor considers as rings.
@@ -334,10 +351,15 @@ fn choose_enclosure(
                 }
             }
         }
-        // The line this round's city calls for replaces one barely begun; with no better
-        // line to draw, the earlier one stands.
-        if let Some(wall) = best.map(|(_, wall)| wall).or(earlier) {
-            walls.push(wall);
+        // The line this round's city calls for replaces one barely begun and takes over
+        // the work done on it; with no line to draw this round, the earlier one stands.
+        match (best, earlier) {
+            (Some((_, mut wall)), Some(earlier)) => {
+                carry_work(&earlier, &mut wall);
+                walls.push(wall);
+            }
+            (Some((_, wall)), None) | (None, Some(wall)) => walls.push(wall),
+            (None, None) => {}
         }
     } else if let Some(wall) = earlier {
         walls.push(wall);
@@ -380,6 +402,32 @@ mod tests {
         // A finished wall is never redrawn, and a city with none has none to redraw.
         assert!(redrawn(&mut vec![circuit([100.; 4])]).is_none());
         assert!(redrawn(&mut Vec::new()).is_none());
+        // A wall the city has outgrown is history, however little of it was built.
+        let mut old = circuit([40., 0., 0., 0.]);
+        old.outgrown = true;
+        assert!(redrawn(&mut vec![old]).is_none());
+    }
+
+    #[test]
+    fn a_redrawn_line_takes_over_the_work_done_on_the_earlier_one() {
+        // Each round a sponsor can fund fifteen parts in a hundred of a line. Redrawing
+        // the line every round still builds it, and nothing done is lost or refunded.
+        let mut line = circuit([0.; 4]);
+        for round in 1..=3 {
+            let mut walls = vec![line];
+            let earlier = redrawn(&mut walls);
+            let mut next = circuit([0.; 4]);
+            if let Some(earlier) = &earlier {
+                carry_work(earlier, &mut next);
+            }
+            line = earlier.map_or_else(|| walls.pop().unwrap(), |_| next);
+            // This round's funds.
+            let section = line.sections.iter_mut().find(|s| s.built < s.cost).unwrap();
+            section.built += 60.;
+            assert_eq!(line.funded(), 60. * f64::from(round));
+        }
+        // After the second round a fifth stood, so the third round kept that line.
+        assert!(redrawn(&mut vec![line]).is_none());
     }
 
     #[test]

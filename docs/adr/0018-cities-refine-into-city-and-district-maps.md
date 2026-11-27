@@ -168,17 +168,25 @@ policy: a City publishes it and each district's street map inherits it.
 
 A third choice is drawn the same way: the craft the settlement practises everywhere, if
 any. Its weight is its medium's presence at the site and the share already practising it,
-and often none is drawn. Every site of such a settlement reads that craft as present, so
-its premises and what they supply can take hold on any street where custom supports
-them, in place of the few plots where the medium itself is strong. A city on a stable
-tear can become a city of doors and one on quickened ground a city of hearths, and the
-rounds decide how far.
+and often none is drawn. Every site the rounds consider in such a settlement reads that
+craft as a little present, and more by the learning that reaches it from those who
+already practise and teach nearby, so its premises can take hold on any street where
+custom supports them and gather into quarters as the rounds go on. Tending still needs
+living roots. A city on a stable tear can become a city of doors and one on quickened
+ground a city of hearths, and the rounds decide how far.
 
 At City scale the civic order weighs which resident characters the districts take and
-how far apart districts live in how tightly they dwell. It never weighs a district's
-economic role or its traits. An order speaks
-only through the town's order record and adds nothing to what a district's economy and
-residents ask for, so it varies a town along lines the district choices do not.
+how far apart districts live in how tightly they dwell. An order that defends itself
+sponsors walls and draws its rings round more crowded ground. It never weighs a
+district's economic role or its traits.
+
+A wall's sponsor reconsiders its line each round until a fifth of the work is done, and
+a redrawn line takes over the work done on the earlier one. The city gathers and shifts
+between rounds, so a line drawn before it gathered does not bind it.
+
+On a street map a civic order speaks only through the town's order record and adds
+nothing to what a district's economy and residents ask for, so it varies a town along
+lines the district choices do not.
 
 During Street development, local conditions inform demand, operating premises
 compete for reachable customers and services, and funded common works can claim

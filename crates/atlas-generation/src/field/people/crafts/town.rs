@@ -46,10 +46,12 @@ impl PracticeReads {
     }
 
     /// The readings of a site in a city that practises `crafts` everywhere: each of those
-    /// crafts is present at least at `presence`, wherever its medium lies.
-    pub(crate) fn with_city_crafts(mut self, crafts: &[i32], presence: f64) -> Self {
+    /// crafts is present at least at `presence`, wherever its medium lies. Tending still
+    /// needs its roots: on rooted ground whose roots are `severed` it stays absent.
+    pub(crate) fn with_city_crafts(mut self, crafts: &[i32], presence: f64, severed: bool) -> Self {
+        let tending = CRAFTS[3].code;
         for (read, craft) in self.0.iter_mut().zip(CRAFTS) {
-            if crafts.contains(&craft.code) {
+            if crafts.contains(&craft.code) && !(severed && craft.code == tending) {
                 *read = read.max(presence);
             }
         }

@@ -61,9 +61,18 @@ pub(crate) const STREET_FOUNDING: Founding = Strategy {
 /// The passing trade along a stretch of street this long makes one unit of exchange signal.
 /// Street metres, resolved by `Measure::Layout`.
 const TRADE_STRETCH: f64 = 100.;
-/// The least share a craft is practised at every site of a settlement that practises it
-/// everywhere. A starting value, to be tuned with the rest once the processes are written.
-const CITY_CRAFT_PRESENCE: f64 = 0.6;
+/// The share a craft is practised at a site of a settlement that practises it everywhere,
+/// before anyone near teaches it. A starting value, to be tuned with the rest once the
+/// processes are written.
+const CITY_CRAFT_PRESENCE: f64 = 0.3;
+/// The craft that needs living roots, by craft code.
+const TENDING: i32 = crate::field::people::crafts::CRAFTS[3].code;
+/// How present a city's craft is at a site: a little everywhere, and more by the learning
+/// that reaches the site from those who already practise and teach near it, so the craft
+/// gathers into quarters as the rounds go on.
+fn city_craft_presence(learning: f64) -> f64 {
+    (CITY_CRAFT_PRESENCE * (1. + learning.max(0.))).min(1.)
+}
 
 /// What a town's frontage is travelled over: the walking ground, the kernel, the kept links,
 /// and the town's scale, which travel costs are read at.
@@ -568,7 +577,7 @@ fn settle(
             survey
                 .context
                 .survey(state, &candidate, survey.seat, ground, scale)?;
-        let mut selection = saved_policy.clone().unwrap_or_else(|| {
+        let selection = saved_policy.clone().unwrap_or_else(|| {
             let own = seat.key.to_bytes();
             let civic_draw = Civic::roll(&own, settings.seed);
             let craft_draw = crate::town::templates::craft_roll(&own, settings.seed);
@@ -576,19 +585,7 @@ fn settle(
                 .with_civic(None, civic_draw)
                 .with_craft(None, craft_draw)
         });
-        if let Some(asked) = settings.craft {
-            selection.crafts = vec![asked];
-        }
-        // A town made again keeps the order its record names, as it keeps its template.
-        let recorded = attributes
-            .and_then(|attrs| attrs.get("civicOrder"))
-            .and_then(|value| value.as_str())
-            .and_then(Civic::from_name);
-        selection.civic = settings
-            .civic
-            .or(saved_policy.as_ref().and_then(|policy| policy.civic))
-            .or(recorded)
-            .or(selection.civic);
+        let selection = kept_policy(selection, saved_policy.is_some(), attributes, settings);
         if saved.is_none()
             && required.is_some_and(|requested| {
                 !selection
@@ -607,6 +604,13 @@ fn settle(
             town.template = selection.clone();
             town.template.selected = template;
             town.ordered(settings.order, settings.seed);
+            // A town made again keeps the trades its record names as its own.
+            if let Some(own) = attributes
+                .and_then(|attrs| attrs.get("signatureTrades"))
+                .and_then(|value| serde_json::from_value(value.clone()).ok())
+            {
+                town.signature = own;
+            }
             if crate::town::founding::establish(&mut town, ground, state.spatial.as_ref(), local)? {
                 town.template
                     .ranked
@@ -634,6 +638,38 @@ fn settle(
     Ok(None)
 }
 /// A settlement that must found and found nowhere.
+/// A settlement's policy as it stands for this making: what the creator asks for first,
+/// then what the settlement's record names, then what was drawn. A town made again keeps
+/// the civic order and the craft its record names, as it keeps its template. A policy
+/// `saved` whole with the record already holds them.
+fn kept_policy(
+    mut selection: crate::town::templates::Selection,
+    saved: bool,
+    attributes: Option<&serde_json::Map<String, serde_json::Value>>,
+    settings: &Settings,
+) -> crate::town::templates::Selection {
+    let named = |name: &str| attributes.and_then(|attrs| attrs.get(name));
+    let recorded_crafts = named("cityCrafts")
+        .and_then(|value| value.as_array())
+        .filter(|_| !saved)
+        .map(|systems| {
+            systems
+                .iter()
+                .filter_map(|system| super::craft_named(system.as_str()?))
+                .collect()
+        });
+    selection.crafts = settings
+        .craft
+        .map(|asked| vec![asked])
+        .or(recorded_crafts)
+        .unwrap_or(selection.crafts);
+    let recorded_civic = named("civicOrder")
+        .and_then(|value| value.as_str())
+        .and_then(Civic::from_name)
+        .filter(|_| !saved);
+    selection.civic = settings.civic.or(recorded_civic).or(selection.civic);
+    selection
+}
 fn no_site(name: &str, settings: &Settings) -> io::Error {
     let template = settings.template.map_or("", |template| template.name());
     io::Error::other(if template.is_empty() {
@@ -875,7 +911,11 @@ impl Operations {
                                 practices: a
                                     .practices
                                     .with_local_consecration(b.effects.consecration)
-                                    .with_city_crafts(crafts, CITY_CRAFT_PRESENCE),
+                                    .with_city_crafts(
+                                        crafts,
+                                        city_craft_presence(b.effects.learning),
+                                        a.rooted && a.practices.available(TENDING) <= 0.,
+                                    ),
                                 density: a.density + b.density,
                                 clearance: a.clearance + b.clearance,
                                 protection: a.protection + b.protection,
@@ -1344,6 +1384,46 @@ impl Operations {
 #[cfg(test)]
 mod frontage_tests {
     use super::*;
+
+    #[test]
+    fn a_town_made_again_keeps_the_civic_order_and_craft_its_record_names() {
+        use crate::field::people::crafts::CRAFTS;
+        use crate::town::templates::{Selection, SiteEvidence};
+        let drawn = || {
+            Selection::choose(SiteEvidence::default(), 0.)
+                .with_civic(Some(Civic::Freehold), 0.)
+                .with_craft(Some(CRAFTS[0].code), 0.)
+        };
+        let record: serde_json::Map<String, serde_json::Value> = serde_json::from_value(
+            serde_json::json!({"civicOrder": "autocracy", "cityCrafts": ["veil"]}),
+        )
+        .unwrap();
+        let mut settings = Settings {
+            layout: None,
+            seed: 1,
+            template: None,
+            major_work: None,
+            order: Default::default(),
+            civic: None,
+            craft: None,
+        };
+        // What the record names stands over what this making drew.
+        let kept = kept_policy(drawn(), false, Some(&record), &settings);
+        assert_eq!(kept.civic, Some(Civic::Autocracy));
+        assert_eq!(kept.crafts, vec![CRAFTS[6].code]);
+        // What the creator asks for stands over the record.
+        settings.civic = Some(Civic::Democracy);
+        settings.craft = Some(CRAFTS[4].code);
+        let asked = kept_policy(drawn(), false, Some(&record), &settings);
+        assert_eq!(asked.civic, Some(Civic::Democracy));
+        assert_eq!(asked.crafts, vec![CRAFTS[4].code]);
+        // A town with no record keeps what it drew.
+        settings.civic = None;
+        settings.craft = None;
+        let fresh = kept_policy(drawn(), false, None, &settings);
+        assert_eq!(fresh.civic, Some(Civic::Freehold));
+        assert_eq!(fresh.crafts, vec![CRAFTS[0].code]);
+    }
     use crate::town::{
         fabric::{DistrictSite, DistrictTract},
         network::{Class, Street},

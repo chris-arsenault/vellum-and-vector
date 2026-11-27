@@ -1,8 +1,10 @@
 //! How a town is ordered. The causes that vary a town write these terms, and the rules
-//! that build it (street laying, crossings, plot survey) read them where they would
-//! otherwise hold a number of their own. Two causes write today: the map's settings, and
-//! the settlement's civic order over them. Each term is a declared setting whose default
-//! is the value every town had before any cause wrote it.
+//! that build it (street laying, crossings, plot survey, household means, business bids)
+//! read them, each as one part of a rule inside the rounds. Two causes write today: the
+//! map's settings, and the settlement's civic order over them. Each term is a declared
+//! setting. Most start at the value every town had before the term existed; the
+//! template's character, the clustering of trades and a town's signature trades start
+//! above it, so those loops act in every town.
 //!
 //! Lengths are street metres, resolved through the town's scale where they are read.
 use crate::parameters::NumericParameter;
@@ -344,7 +346,7 @@ mod tests {
     }
 
     #[test]
-    fn an_orders_trade_and_street_terms_leave_the_usual_town_as_it_was_where_they_are_one() {
+    fn an_orders_trade_and_street_terms_change_nothing_at_one_and_with_no_clustering() {
         let plain = Order {
             character: 1.,
             clustering: 0.,

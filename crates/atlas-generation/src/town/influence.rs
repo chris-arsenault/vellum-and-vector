@@ -628,7 +628,7 @@ mod tests {
             site.for_activity(Activity::Production).demand
                 / site.for_activity(Activity::Trade).demand
         };
-        // A town that shows its character no more than usual adds the district's little.
+        // Where a town's character counts for one, the district's little is only added.
         assert!((site(2., 0.) - 26. / 24.).abs() < 1e-12);
         // One that shows it makes the workshop district's sites worth several times as
         // much to a maker as to a trader, and leaves the other district's sites alone.

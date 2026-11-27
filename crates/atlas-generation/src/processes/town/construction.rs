@@ -99,15 +99,16 @@ pub fn advance(town: &mut Town, context: &mut Frontage<'_>) -> io::Result<()> {
         / context.candidates.len().max(1) as f64;
     let supplied = supply(town.holdings().iter());
     // What each street already holds of each family, so like can draw like.
-    let on_streets = (0..town.streets().len())
-        .map(|street| {
-            supply(
-                town.holdings()
-                    .iter()
-                    .filter(|h| h.slot.street == Some(street)),
-            )
-        })
-        .collect();
+    let mut on_streets = vec![[0.; PLACES.len()]; town.streets().len()];
+    for holding in town.holdings() {
+        let street = holding.slot.street.and_then(|s| on_streets.get_mut(s));
+        if let Some(street) = street {
+            let own = supply(std::iter::once(holding));
+            for (held, more) in street.iter_mut().zip(own) {
+                *held += more;
+            }
+        }
+    }
     let demand = Demand {
         space: space.need(town.seat.story.people),
         families: supplied,

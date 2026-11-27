@@ -178,6 +178,9 @@ fn publish_settlement(state: &mut impl TownWriter, town: &Town) -> io::Result<()
             .attributes
             .insert("cityCrafts".into(), json!(crafts));
     }
+    settlement
+        .attributes
+        .insert("signatureTrades".into(), json!(town.signature));
     settlement.attributes.insert(
         "settlementTemplate".into(),
         json!(town.template.selected.name()),

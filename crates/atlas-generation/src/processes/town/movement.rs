@@ -792,11 +792,19 @@ fn prospects(
         })
         .map(|c| {
             let start = c.slot.front;
+            // The town's own bearing: the way its first approach comes in, or, where no
+            // approach enters, the way its oldest street runs.
             let axis = town
                 .seat
                 .arms
                 .first()
-                .and_then(|arm| arm.points.windows(2).next())
+                .map(|arm| arm.points.as_slice())
+                .or_else(|| {
+                    town.streets()
+                        .first()
+                        .map(|street| street.points.as_slice())
+                })
+                .and_then(|points| points.windows(2).next())
                 .map_or(c.slot.direction, |leg| unit(sub(leg[1], leg[0])));
             let order = town.order;
             let (direction, priority) = street_bearing(
