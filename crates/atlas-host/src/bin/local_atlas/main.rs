@@ -248,7 +248,6 @@ fn usage(harness: &Harness) -> String {
   world --name name [--width metres] [--height metres] [--quality draft|standard|fine] [--seed n]
   places [--parent world folder]
   census [--reference-width] [--full-history [--seed <integer>]]
-  census --construction-scale <factor> --source <world name> --footprint <map name>
   experiment processes | run <experiment.json> | render <results.json> [--metric <name>] [--colors linear|log]
   summary|history <map folder under {maps}>
   city-view-inputs <published City map folder>
@@ -814,13 +813,6 @@ fn resume(harness: &Harness, job: Option<&str>, name: Option<&str>) -> io::Resul
 }
 
 fn census(harness: &Harness, options: &Options) -> io::Result<()> {
-    if options.get("construction-scale").is_some()
-        && (options.flag("full-history") || options.flag("reference-width"))
-    {
-        return Err(io::Error::other(
-            "Fixed-population construction uses the retained world's original extent",
-        ));
-    }
     let cargo = |arguments: Vec<String>| -> io::Result<()> {
         let status = Command::new("cargo")
             .args([
@@ -843,24 +835,7 @@ fn census(harness: &Harness, options: &Options) -> io::Result<()> {
     if !options.flag("full-history") {
         let mut arguments = vec!["local_census".into(), "--".into()];
         arguments.push(harness.home.display().to_string());
-        if let Some(scale) = options.get("construction-scale") {
-            let path = |key| -> io::Result<String> {
-                let name = options
-                    .get(key)
-                    .ok_or_else(|| io::Error::other(format!("Choose --{key} <map name>")))?;
-                Ok(harness
-                    .existing_map(name)
-                    .join("map.json")
-                    .display()
-                    .to_string())
-            };
-            arguments.extend([
-                "--construction-scale".to_owned(),
-                scale.to_owned(),
-                path("source")?,
-                path("footprint")?,
-            ]);
-        } else if options.flag("reference-width") {
+        if options.flag("reference-width") {
             arguments.push("--reference-width".into());
         }
         return cargo(arguments);

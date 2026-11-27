@@ -1,7 +1,4 @@
-//! Human history and fixed-population construction comparisons on a retained local world.
-#[path = "local_census/construction.rs"]
-mod construction;
-
+//! Population-only workload for the local atlas harness, on its retained world.
 use atlas_generation::{
     answers::QuestionBook,
     atlas::context::{Epoch, HumanEra},
@@ -96,16 +93,8 @@ fn captured(root: &Path, reference: &MapRef, cache: SharedCache) -> io::Result<I
     })
 }
 
-fn run(
-    home: &Path,
-    reference_width: bool,
-    experiment: Option<construction::Case>,
-) -> ExecutionResult<()> {
-    let map_file = experiment
-        .as_ref()
-        .map(|case| case.source.clone())
-        .unwrap_or_else(|| home.join("world.json"));
-    let reference = serde_json::from_slice::<Kept>(&fs::read(map_file)?)
+fn run(home: &Path, reference_width: bool) -> ExecutionResult<()> {
+    let reference = serde_json::from_slice::<Kept>(&fs::read(home.join("world.json"))?)
         .map_err(io::Error::other)?
         .reference;
     let root = home.join("generation-resources");
@@ -211,9 +200,6 @@ fn run(
         Rc::new(Field::human_operations()),
         rivers.clone(),
     );
-    if let Some(case) = experiment {
-        return case.run(&mut executor, &operations.pass.harden, &spatial);
-    }
     let census = |executor: &Executor<Field>, label: &str| -> ExecutionResult<()> {
         let field = executor.state();
         let travel = travel::Travel::new(
@@ -312,15 +298,8 @@ fn main() -> Result<(), ExecutionError> {
     let home = std::env::args_os()
         .nth(1)
         .ok_or_else(|| io::Error::other("Expected local atlas directory"))?;
-    let mode = std::env::args().nth(2);
-    let experiment = if mode.as_deref() == Some("--construction-scale") {
-        Some(construction::Case::parse(std::env::args().skip(3))?)
-    } else {
-        None
-    };
     run(
         Path::new(&home),
-        mode.as_deref() == Some("--reference-width"),
-        experiment,
+        std::env::args_os().nth(2).as_deref() == Some("--reference-width".as_ref()),
     )
 }

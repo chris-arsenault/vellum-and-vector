@@ -77,12 +77,6 @@ keeping the demographic cell spacing and aspect ratio. This is a controlled
 extent comparison. Both modes leave the kept map untouched and omit political
 events, terrain generation and town development.
 
-`scripts/local-atlas.sh census --source Density-world --footprint Vila-recursive-city --construction-scale 1`
-holds the captured households in place and runs three historical construction passes
-of a century each. The command prints residents and developed area before and after,
-weighted by each World triangle's intersection with the selected map footprint.
-Repeat with another scale to measure the effect of changing land demand.
-
 For a coupled comparison, `census --full-history` runs the kept creation recipe
 from formation through final publication in an isolated local directory. Each
 epoch prints the live headcount, the last recorded settlement sizes and the

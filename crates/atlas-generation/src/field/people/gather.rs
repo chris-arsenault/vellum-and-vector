@@ -106,7 +106,6 @@ mod placement;
 mod settlements;
 use placement::place;
 pub(super) use placement::{distribute, placement};
-pub(super) use settlements::{city_lots, developed_land};
 
 struct Leaving {
     targets: Band<i32>,

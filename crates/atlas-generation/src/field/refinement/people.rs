@@ -36,19 +36,6 @@ pub(crate) struct SettlementCensus {
     pub townspeople: f64,
     pub surveyed_km2: f64,
     pub rural_people: f64,
-    pub built_km2: f64,
-}
-impl SettlementCensus {
-    pub(crate) const DEFAULT_BUILT_KM2_PER_RESIDENT: f64 = 150. / 1_000_000.;
-    pub(crate) fn built_km2_per_resident(self) -> f64 {
-        let residents = self.townspeople + self.rural_people;
-        if self.built_km2 > 0. && residents > 0. {
-            // The survey counts built ground throughout the settlement and its rural zone.
-            self.built_km2 / residents
-        } else {
-            Self::DEFAULT_BUILT_KM2_PER_RESIDENT
-        }
-    }
 }
 
 #[derive(Clone, Copy)]
@@ -92,7 +79,6 @@ pub(crate) fn markets(
                 townspeople: census,
                 surveyed_km2: measured("representedAreaKm2")?,
                 rural_people: measured("ruralPopulation")?,
-                built_km2: measured("builtKm2")?,
             });
         }
     }

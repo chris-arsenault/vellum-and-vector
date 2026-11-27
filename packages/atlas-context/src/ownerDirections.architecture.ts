@@ -696,26 +696,27 @@ const directions: readonly OwnerDirection[] = [
   },
   {
     given: "2026-11-27",
-    direction: "the land occupied by a city must fit its population and the land its people use",
-    marks: ["crates/atlas-generation/src/field/people/gather/settlements.rs"],
-    test: "crates/atlas-generation/src/field/people/gather/settlements.rs",
-  },
-  {
-    given: "2026-11-27",
-    direction: "built ground is built up by processes and is not calculated after the fact",
+    direction:
+      "physically and socially motivated processes create built ground as a numeric field, the way ice coverage, rivers and population migration are created, with no simple formula equating people to built ground",
     marks: ["crates/atlas-generation/src/field/people/land.rs"],
-    test: "crates/atlas-generation/src/field/people/gather/settlements.rs",
+    test: "crates/atlas-generation/src/field/people/land.rs",
   },
   {
     given: "2026-11-27",
-    direction: "city districts should have near 100 percent urban coverage",
-    marks: ["crates/atlas-generation/src/field/people/gather/settlements.rs"],
-    test: "crates/atlas-generation/src/field/people/gather/settlements.rs",
+    direction: "the processes are tunable so towns, cities and districts come out right",
+    marks: ["crates/atlas-generation/src/field/people/land.rs"],
+    test: "crates/atlas-generation/src/field/people/land.rs",
   },
   {
     given: "2026-11-27",
     direction:
-      "change the amount of people, decrease the size of the city, or change how much land each person builds",
+      "tenement density of people is much higher, near-wall density higher and noble estate density lower because the processes work together",
+    marks: ["crates/atlas-generation/src/field/people/land.rs"],
+    test: "crates/atlas-generation/src/field/people/land.rs",
+  },
+  {
+    given: "2026-11-27",
+    direction: "city districts should have near 100 percent urban coverage",
     marks: ["crates/atlas-generation/src/field/people/land.rs"],
     test: "crates/atlas-generation/src/field/people/land.rs",
   },

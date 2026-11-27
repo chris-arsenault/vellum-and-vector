@@ -49,7 +49,7 @@ pub(in crate::field::people) fn distribute(
             &owner.place_land,
             &operations::LandPlacement {
                 kind,
-                movement: operations::LandMovement::Local(placement),
+                movement: placement,
             },
         );
     }

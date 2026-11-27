@@ -59,29 +59,21 @@ impl HumanLayers {
         if !catalogue::facts(action.kind).area {
             return Err(io::Error::other("Land placement requires an area layer"));
         }
-        use super::operations::LandMovement;
         let stock = self.bands.layers[action.kind as usize].snapshot()?;
-        let local;
-        let flows = match &action.movement {
-            LandMovement::Local(movement) => {
-                local = self.local_land_transfers(movement, &stock)?;
-                &local
-            }
-            LandMovement::Surveyed(flows) => flows,
-        };
+        let flows = self.local_land_transfers(&action.movement, &stock)?;
         if flows.is_empty() {
             return Ok(());
         }
         let mut arrivals = coverage.scratch(self.mesh.len(), 0.0);
         let mut departures = coverage.scratch(self.mesh.len(), 0.0);
-        for &(from, to, area) in flows {
+        for &(from, to, area) in &flows {
             departures.set(from, departures.get(from)? + area / self.km2(from))?;
             arrivals.set(to, arrivals.get(to)? + area / self.km2(to))?;
         }
         let displaced = self.displaced_share(coverage, &arrivals)?;
         let farm = self.bands.layers[LayerId::Farmland as usize].snapshot()?;
         let herd = self.bands.layers[LayerId::Pasture as usize].snapshot()?;
-        for &(from, to, area) in flows {
+        for &(from, to, area) in &flows {
             let crop = if action.kind == LayerId::Farmland {
                 0.0
             } else {
