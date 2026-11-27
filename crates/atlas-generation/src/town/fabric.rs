@@ -172,6 +172,29 @@ pub(crate) struct DistrictTract {
     pub developed_m2: f64,
     pub density_per_km2: Option<f64>,
 }
+impl DistrictSite {
+    /// How many times a street household's plot, on each side, a household's plot is in
+    /// this district: the root of the built ground its residents have beside a street
+    /// household's, taken over all its inhabited tracts. One where they have no more, as
+    /// crowded households share ordinary plots and build upward.
+    pub(crate) fn plot_scale(&self) -> f64 {
+        let (mut ground, mut people) = (0., 0.);
+        for tract in &self.tracts {
+            if let (Some(built), Some(density)) = (tract.built_share, tract.density_per_km2) {
+                if built > 0. && density > 0. && tract.developed_m2 > 0. {
+                    ground += tract.developed_m2;
+                    people += density * tract.developed_m2 / built / 1e6;
+                }
+            }
+        }
+        if people <= 0. {
+            return 1.;
+        }
+        (ground / people / super::influence::Conditions::STREET_HOUSEHOLD_GROUND)
+            .max(1.)
+            .sqrt()
+    }
+}
 impl DistrictTract {
     pub(crate) fn origin(&self, centre: Point, spatial: &dyn SpatialKernel) -> io::Result<Point> {
         let position = Position::xy(centre[0], centre[1]);
@@ -186,6 +209,13 @@ impl DistrictTract {
             .map_err(io::Error::other)?
             .coordinates();
         Ok([x, y])
+    }
+    /// The built ground a resident of this tract has beside a one-storey street
+    /// household's: the City's built share of the tract over the people it records there.
+    pub(crate) fn spaciousness(&self) -> Option<f64> {
+        let (built, people) = (self.built_share?, self.density_per_km2?);
+        (built > 0. && people > 0.)
+            .then(|| built * 1e6 / people / super::influence::Conditions::STREET_HOUSEHOLD_GROUND)
     }
     pub(crate) fn use_mix(
         &self,

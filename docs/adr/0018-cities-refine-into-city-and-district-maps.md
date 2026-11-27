@@ -128,6 +128,13 @@ town can establish a public street at a founding workplace or meeting place even
 when no regional road reaches it. Later traffic can turn a well-used walking route
 into a street in either kind of settlement.
 
+The City's finding of how tightly households live comes with each tract: the built ground
+a resident has there beside a one-storey street household's. Where residents have more,
+that share of new households takes crofts, courtyard houses and compounds by their means,
+and the district offers them larger plots. Where they have less, that share takes places
+in lodging courts, and a crowded household builds upward more readily before it builds
+over its garden. A standalone town has no City to say and chooses as it always has.
+
 During Street development, local conditions inform demand, operating premises
 compete for reachable customers and services, and funded common works can claim
 ground. Accessible clearance already affects nuisance at premises. The separate

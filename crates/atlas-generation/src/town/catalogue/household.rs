@@ -21,7 +21,51 @@ fn household_business(conditions: Conditions) -> Kind {
         Kind(Identity::Provision)
     }
 }
+/// The form a household takes. Where the City found how much built ground a resident of
+/// the tract has beside a street household's, the share of households that live spaciously
+/// is the share of that ground beyond what street households would take, and the share
+/// that crowds is the share of it they lack. The rest, and every household of a standalone
+/// town, choose as a street household does.
 fn residential_form(
+    local: crate::town::influence::Conditions,
+    activity: f64,
+    means: f64,
+    sample: f64,
+) -> Residence {
+    let room = local.spaciousness.filter(|room| *room > 0.).unwrap_or(1.);
+    let apart = if room > 1. { 1. - 1. / room } else { 1. - room };
+    if sample >= apart {
+        // Households in sample order past that share are the tract's street households.
+        let rest = (sample - apart) / (1. - apart);
+        return street_household_form(local, activity, means, rest);
+    }
+    if room > 1. {
+        spacious_form(means)
+    } else {
+        crowded_form(local)
+    }
+}
+/// A household with ground to spare: a compound for the rich, a courtyard house for the
+/// comfortable, a croft for the rest.
+fn spacious_form(means: f64) -> Residence {
+    if means > 0.72 {
+        Residence::Compound
+    } else if means > 0.55 {
+        Residence::Courtyard
+    } else {
+        Residence::Croft
+    }
+}
+/// A household short of ground: a place in a lodging court, or an incremental house where
+/// nuisance and waste keep better building away.
+fn crowded_form(local: crate::town::influence::Conditions) -> Residence {
+    if local.nuisance + local.waste > 0.45 {
+        Residence::Incremental
+    } else {
+        Residence::Court
+    }
+}
+fn street_household_form(
     local: crate::town::influence::Conditions,
     activity: f64,
     means: f64,
@@ -169,6 +213,41 @@ pub(super) fn residence(variant: Residence) -> Definition {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn households_take_the_form_that_fits_the_ground_the_city_found_they_have() {
+        let at = |room: Option<f64>| crate::town::influence::Conditions {
+            spaciousness: room,
+            ..Default::default()
+        };
+        let forms = |room: Option<f64>, means: f64| -> Vec<Residence> {
+            (0..100)
+                .map(|i| residential_form(at(room), 2., means, (f64::from(i) + 0.5) / 100.))
+                .collect()
+        };
+        let share = |forms: &[Residence], wanted: &[Residence]| {
+            forms.iter().filter(|form| wanted.contains(form)).count()
+        };
+        // A town with no City to speak for it chooses as it always has, and so does a
+        // tract whose residents have a street household's ground.
+        assert_eq!(forms(None, 0.4), forms(Some(1.), 0.4));
+        // With four times a street household's ground, three households in four live
+        // spaciously: crofts for ordinary means, compounds for the rich.
+        let estates = forms(Some(4.), 0.4);
+        assert_eq!(
+            share(&estates, &[Residence::Croft]),
+            75 + share(&forms(None, 0.4)[..25], &[Residence::Croft])
+        );
+        assert!(share(&forms(Some(4.), 0.9), &[Residence::Compound]) >= 75);
+        // With two fifths of it, three in five crowd into lodging courts.
+        let tenements = forms(Some(0.4), 0.4);
+        assert!(share(&tenements, &[Residence::Court]) >= 60);
+        // The households past those shares are the same street households as anywhere.
+        assert_eq!(
+            residential_form(at(Some(4.)), 2., 0.4, 0.75 + 0.25 * 0.4),
+            residential_form(at(None), 2., 0.4, 0.4)
+        );
+    }
+
     #[test]
     fn occupied_frontage_pressure_changes_the_residential_form() {
         let sparse = crate::town::influence::Conditions::default();

@@ -52,8 +52,8 @@ pub fn advance(town: &mut Town, context: &Exposure<'_>) -> io::Result<()> {
             }
         }
         let holding = &town.holdings()[id.0 as usize];
-        let upward = holding.means * holding.condition * (1. + land.density + land.garden_demand)
-            / (holding.storeys.iter().min().copied().unwrap_or(1) as f64 * (1. + land.flood));
+        let storeys = holding.storeys.iter().min().copied().unwrap_or(1);
+        let upward = upward(holding.means * holding.condition, storeys, &land);
         if holding.crowding * upward > 0.16 && holding.kind.definition().roles.dwelling {
             town.apply(FabricEdit::Raise { premises: id }, context.spatial)?;
         } else {
@@ -61,6 +61,14 @@ pub fn advance(town: &mut Town, context: &Exposure<'_>) -> io::Result<()> {
         }
     }
     Ok(())
+}
+/// How ready a crowded household is to build upward and not over its garden: more with its
+/// `means` and a sound building, among built ground and where gardens are wanted, and where
+/// the City found ground dearer than under a street household. Each storey it already has
+/// and ground that floods make it less so.
+fn upward(means: f64, storeys: u32, land: &crate::town::influence::Conditions) -> f64 {
+    means * (1. + land.density + land.garden_demand) * land.dearness()
+        / (f64::from(storeys.max(1)) * (1. + land.flood))
 }
 fn subdivide(town: &mut Town, id: HoldingId, context: &Exposure<'_>) -> io::Result<()> {
     let original = town.holdings()[id.0 as usize].clone();
@@ -156,4 +164,31 @@ fn partition(
         return Ok(None);
     }
     Ok(Some((front, rear, passage)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::upward;
+    use crate::town::influence::Conditions;
+
+    #[test]
+    fn households_on_dear_ground_build_higher_before_they_build_over_their_gardens() {
+        let town = Conditions::default();
+        let tenements = Conditions {
+            spaciousness: Some(0.4),
+            ..town
+        };
+        let estates = Conditions {
+            spaciousness: Some(4.),
+            ..town
+        };
+        // A standalone town and a spacious tract build up as readily as each other; a
+        // tract with two fifths of a street household's ground, two and a half times so.
+        assert_eq!(upward(0.5, 1, &estates), upward(0.5, 1, &town));
+        assert!((upward(0.5, 1, &tenements) - 2.5 * upward(0.5, 1, &town)).abs() < 1e-12);
+        // Each storey already built makes the next harder, so dear ground reaches a
+        // third storey where a town stops at its second.
+        assert!(upward(0.5, 2, &tenements) > upward(0.5, 1, &town));
+        assert!(upward(0.5, 2, &town) < upward(0.5, 1, &town));
+    }
 }

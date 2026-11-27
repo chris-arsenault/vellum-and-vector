@@ -368,10 +368,14 @@ pub(crate) fn respond(
         local.housing_demand = demands.housing;
         local.common_demand = demands.commons;
         local.garden_demand = demands.gardens;
+        local.spaciousness = tract.and_then(DistrictTract::spaciousness);
     }
     let mut accepted = Vec::with_capacity(candidates.len());
     for ((mut candidate, owned), &tract) in candidates.drain(..).zip(owned).zip(candidate_tracts) {
         if owned {
+            // How tightly the City found households living in this tract shapes the form a
+            // new household takes and how readily its neighbours build upward.
+            candidate.conditions.spaciousness = tract.and_then(DistrictTract::spaciousness);
             let demand = demand_at(&candidate.slot, candidate.conditions, tract)?;
             candidate
                 .opportunities

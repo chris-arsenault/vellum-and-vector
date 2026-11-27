@@ -76,6 +76,23 @@ pub struct Conditions {
     pub building: f64,
     pub travel: f64,
     pub effects: super::effects::Received,
+    /// The built ground a resident has here beside a one-storey street household's, as the
+    /// City found for this tract: above one where households live spaciously, below one
+    /// where they crowd. A standalone town has no City to say.
+    #[serde(default)]
+    pub spaciousness: Option<f64>,
+}
+impl Conditions {
+    /// The built ground a resident of a one-storey street household has: its plot and its
+    /// share of the street over the people its floor houses, in square metres.
+    pub const STREET_HOUSEHOLD_GROUND: f64 = 50.;
+    /// How much dearer ground is here than under a street household: more than one where
+    /// the City found households crowding, one everywhere else.
+    pub fn dearness(&self) -> f64 {
+        self.spaciousness
+            .filter(|room| *room > 0. && *room < 1.)
+            .map_or(1., |room| 1. / room)
+    }
 }
 pub struct SiteConditions(pub Vec<Vec<Conditions>>);
 impl QueryValue for SiteConditions {}

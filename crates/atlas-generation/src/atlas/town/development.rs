@@ -1005,8 +1005,15 @@ impl Operations {
                                     return Ok(vec![]);
                                 }
                                 let scale = town.scale();
-                                let frontage = scale.length(CANDIDATE_FRONTAGE, Measure::Plot);
-                                let depth = scale.length(CANDIDATE_DEPTH, Measure::Plot);
+                                // Where the City found a district's households with ground
+                                // to spare, the plots offered to them are that much larger.
+                                let roomy = town
+                                    .district
+                                    .as_ref()
+                                    .map_or(1., crate::town::fabric::DistrictSite::plot_scale);
+                                let frontage =
+                                    roomy * scale.length(CANDIDATE_FRONTAGE, Measure::Plot);
+                                let depth = roomy * scale.length(CANDIDATE_DEPTH, Measure::Plot);
                                 let sites = town
                                     .streets()
                                     .iter()
@@ -1016,7 +1023,7 @@ impl Operations {
                                     })
                                     .chain(crate::town::land_sites::around(
                                         open_land_origins(town),
-                                        scale.length(CANDIDATE_REACH, Measure::Layout),
+                                        roomy * scale.length(CANDIDATE_REACH, Measure::Layout),
                                         frontage,
                                         depth,
                                         town.round,
@@ -1423,6 +1430,39 @@ mod frontage_tests {
             .iter()
             .any(|p| (550.0..700.0).contains(&p.front[0])));
         assert!(available.iter().all(|p| p.front[0] < 800.));
+    }
+
+    #[test]
+    fn a_spacious_district_offers_larger_plots_and_a_crowded_one_ordinary_plots() {
+        let district = |built: f64, people: f64| DistrictSite {
+            outline: rectangle(Bounds(0., 0., 300., 300.)),
+            reserves: vec![],
+            streets: vec![],
+            program: None,
+            tracts: vec![DistrictTract {
+                civic: false,
+                area: rectangle(Bounds(0., 0., 300., 300.)),
+                mix: Default::default(),
+                built_share: Some(built),
+                developed_m2: built * 90_000.,
+                density_per_km2: Some(people),
+            }],
+            density_per_km2: Some(people),
+            old_walls: None,
+        };
+        // Estates, 95% built at 5,000 people per square kilometre: each resident has 190
+        // square metres, 3.8 times a street household's, so plots are 1.95 times as wide
+        // and as deep.
+        let estates = district(0.95, 5_000.);
+        assert!((estates.tracts[0].spaciousness().unwrap() - 3.8).abs() < 1e-9);
+        assert!((estates.plot_scale() - 3.8f64.sqrt()).abs() < 1e-9);
+        // Tenements at 40,000 share ordinary plots and build upward.
+        let tenements = district(0.9, 40_000.);
+        assert!((tenements.tracts[0].spaciousness().unwrap() - 0.45).abs() < 1e-9);
+        assert_eq!(tenements.plot_scale(), 1.);
+        // A tract the City records no people on says nothing.
+        assert_eq!(district(0.9, 0.).tracts[0].spaciousness(), None);
+        assert_eq!(district(0.9, 0.).plot_scale(), 1.);
     }
 
     #[test]

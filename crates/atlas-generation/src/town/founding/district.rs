@@ -40,9 +40,11 @@ pub(crate) fn occupy_district(
             continue;
         };
         let built = tract.built_share.unwrap_or(0.);
+        let spaciousness = tract.spaciousness();
         let local_conditions = |p| {
             Ok(conditions(p)?.map(|c| Conditions {
                 density: built,
+                spaciousness,
                 ..c
             }))
         };
