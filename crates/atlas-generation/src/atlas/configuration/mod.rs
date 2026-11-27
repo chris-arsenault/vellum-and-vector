@@ -314,6 +314,8 @@ mod tests {
         // A shortcut cannot save more than the whole walk.
         assert!(declared_settings(built, &chosen("shortcutSaving", 1.5)).is_err());
         assert!(declared_settings(built, &chosen("streetSpacing", -1.)).is_err());
+        // A plot of no width would never let the survey step along a street.
+        assert!(declared_settings(built, &chosen("plotFrontage", 0.)).is_err());
         // A name no process declares is not the feature's.
         assert!(declared_settings(built, &chosen("unheardOf", 1.))
             .expect("ignored here")

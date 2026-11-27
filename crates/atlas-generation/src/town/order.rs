@@ -1,8 +1,8 @@
-//! How a town is ordered. The causes that vary a town (its template, its city's civic
-//! order, its district, its land) write these terms, and the rules that build it (street
-//! laying, construction, land competition) read them where they would otherwise hold a
-//! number of their own. Each term is a declared setting whose default is the value every
-//! town had before any cause wrote it.
+//! How a town is ordered. The causes that vary a town write these terms, and the rules
+//! that build it (street laying, crossings, plot survey) read them where they would
+//! otherwise hold a number of their own. Two causes write today: the map's settings, and
+//! the settlement's civic order over them. Each term is a declared setting whose default
+//! is the value every town had before any cause wrote it.
 //!
 //! Lengths are street metres, resolved through the town's scale where they are read.
 use crate::parameters::NumericParameter;
@@ -10,27 +10,33 @@ use crate::processes::strategies::MapType;
 use serde::{Deserialize, Serialize};
 use std::io;
 
-const fn term(name: &'static str, unit: &'static str, default: f64) -> NumericParameter {
+/// A term with its default and the least value a map may give it. A plot or a spacing of
+/// no size would never let a survey step forward, so lengths have a least size.
+const fn term(
+    name: &'static str,
+    unit: &'static str,
+    [default, least]: [f64; 2],
+) -> NumericParameter {
     NumericParameter {
         name,
         unit,
         default,
-        minimum: Some(0.),
+        minimum: Some(least),
         maximum: None,
         strategy: None,
         map_types: &[MapType::Street],
     }
 }
-const STREET_SPACING: NumericParameter = term("streetSpacing", "street metres", 60.);
-const BACK_LANE: NumericParameter = term("backLaneReach", "street metres", 20.);
-const CROSSING_SPACING: NumericParameter = term("crossingSpacing", "plot depths", 5.);
+const STREET_SPACING: NumericParameter = term("streetSpacing", "street metres", [60., 5.]);
+const BACK_LANE: NumericParameter = term("backLaneReach", "street metres", [20., 1.]);
+const CROSSING_SPACING: NumericParameter = term("crossingSpacing", "plot depths", [5., 1.]);
 const SHORTCUT_SAVING: NumericParameter = NumericParameter {
     maximum: Some(1.),
-    ..term("shortcutSaving", "share of the walk", 0.4)
+    ..term("shortcutSaving", "share of the walk", [0.4, 0.])
 };
-const STREET_WORK: NumericParameter = term("streetWorkShare", "effort per resident", 0.12);
-const PLOT_FRONTAGE: NumericParameter = term("plotFrontage", "street metres", 9.);
-const PLOT_DEPTH: NumericParameter = term("plotDepth", "street metres", 25.);
+const STREET_WORK: NumericParameter = term("streetWorkShare", "effort per resident", [0.12, 0.]);
+const PLOT_FRONTAGE: NumericParameter = term("plotFrontage", "street metres", [9., 2.]);
+const PLOT_DEPTH: NumericParameter = term("plotDepth", "street metres", [25., 4.]);
 pub const CONTROLS: &[NumericParameter] = &[
     STREET_SPACING,
     BACK_LANE,

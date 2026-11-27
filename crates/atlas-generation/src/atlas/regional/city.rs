@@ -574,7 +574,10 @@ fn template(
         site.old = story.old();
         site.planned = story.planned();
     }
-    let selection = Selection::choose(site, draw(seed, 0, 1)).with_civic(None, draw(seed, 0, 2));
+    // The order is drawn on a roll of the settlement's own, apart from the template's.
+    let own = state.scope.city.as_ref().unwrap().settlement.to_bytes();
+    let civic = crate::town::templates::civic::Civic::roll(&own, seed);
+    let selection = Selection::choose(site, draw(seed, 0, 1)).with_civic(None, civic);
     if let Some(regional) = state.regional.as_mut() {
         regional.city.template = Some(selection.clone());
     }
@@ -791,6 +794,23 @@ fn practices(field: &Field, cell: usize, evidence: &mut SiteEvidence) -> io::Res
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn a_citys_civic_roll_owes_nothing_to_its_template_draw() {
+        use crate::town::templates::civic::Civic;
+        // Among the seeds whose template draw lands in one narrow band, the civic roll
+        // still ranges over the whole of its own.
+        let rolls: Vec<f64> = (0..4_000)
+            .filter(|seed| draw(*seed, 0, 1) < 0.2)
+            .map(|seed| Civic::roll(b"one settlement", seed))
+            .collect();
+        assert!(rolls.len() > 400);
+        for band in 0..5 {
+            let (low, high) = (f64::from(band) / 5., f64::from(band + 1) / 5.);
+            let share = rolls.iter().filter(|r| (low..high).contains(*r)).count() as f64
+                / rolls.len() as f64;
+            assert!((0.12..0.28).contains(&share), "band {band}: {share}");
+        }
+    }
     #[test]
     fn city_guidance_uses_the_captured_settlement() {
         let capture = CITY_ORIGIN

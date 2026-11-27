@@ -62,8 +62,9 @@ pub struct Feature {
     pub requires: &'static [&'static str],
     pub absent: &'static [&'static str],
     pub parameters: &'static [&'static str],
-    /// The settings the feature's processes declare, which a map may set for itself. A map
+    /// Settings a process of the feature declares that a map may set for itself. A map
     /// that sets none keeps none, so a process's default stays the process's to change.
+    /// A feature lists the ones it opens; a declared setting it does not list is refused.
     pub controls: &'static [crate::parameters::NumericParameter],
     pub processes: Vec<String>,
     pub native: Vec<&'static str>,

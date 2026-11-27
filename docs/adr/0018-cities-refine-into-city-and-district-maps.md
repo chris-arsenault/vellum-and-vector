@@ -138,10 +138,11 @@ over its garden. A standalone town has no City to say and chooses as it always h
 Every town on a street map carries a record of how it is ordered: the spacing its streets
 keep, how far a back lane runs, where a main street's crossings fall, the saving that
 earns a shortcut, the street work its residents give and the size of the plots it offers.
-The causes that vary a town (its template, its city's civic order, its district, its
-land) and the rules that build it meet in this record. A cause writes a term; a rule
-reads it where it would otherwise hold a number of its own. Each term is a declared
-setting of the map, so one map can be made with different terms and compared.
+The causes that vary a town and the rules that build it meet in this record. A cause
+writes a term; a rule reads it where it would otherwise hold a number of its own. The
+map's settings write first and the settlement's civic order writes over them. Each term
+is a declared setting of the map, so one map can be made with different terms and
+compared.
 
 A settlement's policy is drawn on independent choices. Its founding template says who
 first lives there and on what ground. Its civic order says who holds it and how its

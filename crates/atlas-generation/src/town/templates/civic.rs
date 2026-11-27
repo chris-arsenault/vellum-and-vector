@@ -50,7 +50,15 @@ const fn hand(streets: [f64; 4], street_work: f64, plot: [f64; 2]) -> Hand {
     }
 }
 
+/// Sets a settlement's draw of a civic order apart from its draw of a template.
+const DRAW: u64 = 0x51c1_c0de;
+
 impl Civic {
+    /// A settlement's own draw for its civic order: a roll on its identity and the map's
+    /// seed that shares nothing with the roll its template was drawn on.
+    pub fn roll(settlement: &[u8], seed: i32) -> f64 {
+        crate::field::poi::true_sizes::roll_bytes(settlement, (seed as u64).wrapping_add(DRAW))
+    }
     pub const ALL: [Self; 7] = [
         Self::PrincelySeat,
         Self::Autocracy,

@@ -2,6 +2,7 @@
 use super::{site, Settings};
 use crate::features::Feature;
 use crate::processes::strategies::{Absent, Condition, EffectTime, Source, Strategy};
+use crate::town::templates::civic::Civic;
 use crate::{
     atlas::{physical::Physical, state::State},
     execution::{Command, CommandKind, Projection, Query},
@@ -60,8 +61,6 @@ pub(crate) const STREET_FOUNDING: Founding = Strategy {
 /// The passing trade along a stretch of street this long makes one unit of exchange signal.
 /// Street metres, resolved by `Measure::Layout`.
 const TRADE_STRETCH: f64 = 100.;
-/// Sets a settlement's draw of a civic order apart from its draw of a template.
-const CIVIC_DRAW: u64 = 0x51c1_c0de;
 
 /// What a town's frontage is travelled over: the walking ground, the kernel, the kept links,
 /// and the town's scale, which travel costs are read at.
@@ -567,13 +566,19 @@ fn settle(
                 .context
                 .survey(state, &candidate, survey.seat, ground, scale)?;
         let mut selection = saved_policy.clone().unwrap_or_else(|| {
-            let civic_draw = crate::field::poi::true_sizes::roll_bytes(
-                &seat.key.to_bytes(),
-                (settings.seed as u64).wrapping_add(CIVIC_DRAW),
-            );
+            let civic_draw = Civic::roll(&seat.key.to_bytes(), settings.seed);
             crate::town::templates::Selection::choose(site, draw).with_civic(None, civic_draw)
         });
-        selection.civic = settings.civic.or(selection.civic);
+        // A town made again keeps the order its record names, as it keeps its template.
+        let recorded = attributes
+            .and_then(|attrs| attrs.get("civicOrder"))
+            .and_then(|value| value.as_str())
+            .and_then(Civic::from_name);
+        selection.civic = settings
+            .civic
+            .or(saved_policy.as_ref().and_then(|policy| policy.civic))
+            .or(recorded)
+            .or(selection.civic);
         if saved.is_none()
             && required.is_some_and(|requested| {
                 !selection
