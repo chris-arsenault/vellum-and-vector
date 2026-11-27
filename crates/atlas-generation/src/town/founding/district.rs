@@ -2,9 +2,9 @@ use super::*;
 use crate::town::templates::district::{Demands, DistrictLand};
 use atlas_map::{regions::point, Position};
 
-/// Resolve the City's already occupied ground into premises before the first
-/// construction and traffic decisions. Each tract starts at the same place
-/// chosen by its street survey. A tract without an avenue can have an inhabited core.
+/// Found each tract the City records as inhabited with a kernel of premises, as a town is
+/// founded, at the place its street survey chose. The development rounds raise the rest of
+/// the district from these kernels. A tract without an avenue starts round its own site.
 pub(crate) fn occupy_district(
     town: &mut Town,
     origins: Vec<Option<TractAccess>>,
@@ -33,6 +33,8 @@ pub(crate) fn occupy_district(
     let tracts = district.tracts.clone();
     let program = district.program.clone();
     let district_density = district.density_per_km2;
+    // A tract's kernel is as many premises as its template founds a town with.
+    let kernel = town.template.kernel().len().max(1);
     for (tract, origin) in tracts.into_iter().zip(origins) {
         let Some(TractAccess { origin, streets }) = origin else {
             continue;
@@ -61,7 +63,9 @@ pub(crate) fn occupy_district(
         if developed <= 0. {
             continue;
         }
-        let target = (developed / (frontage * depth)).ceil() as usize;
+        // No more than the ground the City records as developed has room for.
+        let room = (developed / (frontage * depth)).ceil() as usize;
+        let target = kernel.min(room);
         let order = |sites: &mut Vec<Slot>| {
             // hpc-exempt: geometric parcels ranked within one City tract.
             let first_row = |s: &Slot| {

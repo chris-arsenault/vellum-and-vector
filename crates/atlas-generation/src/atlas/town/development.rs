@@ -388,15 +388,15 @@ fn inhabited_frontage(
     Ok(available)
 }
 
-/// District blocks offer their own frontage. In a direct town, an occupied street
-/// also opens land behind it. A new independent house can use that land without
-/// itself surveying another belt of plots before a street reaches it.
+/// An occupied street opens the land behind it, in a town and in a City district alike. A
+/// new independent house can use that land without itself surveying another belt of plots
+/// before a street reaches it.
 fn open_land_origins(town: &Town) -> impl Iterator<Item = Point> + '_ {
     let origins = town.holdings().iter().filter(|h| {
         if !h.standing() || h.occupation <= 0. {
             return false;
         }
-        if town.district.is_none() && h.slot.street.is_some() {
+        if h.slot.street.is_some() {
             return true;
         }
         let independent_founding =
@@ -1426,7 +1426,7 @@ mod frontage_tests {
     }
 
     #[test]
-    fn inhabited_district_land_behind_an_avenue_opens_connected_blocks_of_homes() {
+    fn inhabited_district_land_behind_an_avenue_starts_with_a_way_in_and_a_kernel() {
         use crate::spatial::{Predicate, SpatialKernel};
         use crate::town::{founding::occupy_district, ground::Ground, growth::line};
         let spatial = atlas_gis::geometry::NativeGeos::new(0.001).unwrap();
@@ -1469,7 +1469,8 @@ mod frontage_tests {
         let origins =
             processes::urban::neighbourhood::streets(&mut town, &ground, &spatial).unwrap();
         let roads: Vec<_> = town.streets().iter().map(|s| line(&s.points)).collect();
-        assert!(roads.len() > 4, "a feeder needs cross streets");
+        // Founding opens at most a way in from the avenue; the rounds open the rest.
+        assert!(roads.len() <= 2, "founding lays no block streets");
         let mut reached = vec![false; roads.len()];
         reached[0] = true;
         let mut pending = vec![0];
@@ -1487,7 +1488,7 @@ mod frontage_tests {
         }
         assert!(
             reached.iter().all(|r| *r),
-            "every block must connect to the avenue"
+            "the way in must connect to the avenue"
         );
         occupy_district(&mut town, origins, &ground, &spatial, |_| {
             Ok(Some(Conditions::default()))
@@ -1498,17 +1499,15 @@ mod frontage_tests {
             .iter()
             .filter(|h| h.occupation > 0. && h.slot.street.is_some())
             .collect();
+        // The tract starts with a kernel, far short of the hundred and more premises its
+        // developed ground has room for.
         assert!(
-            occupied.len() > 20,
-            "the district needs inhabited rows before its first traffic pass"
+            !occupied.is_empty() && occupied.len() < 20,
+            "the tract starts with a founding kernel on its street"
         );
-        assert!(occupied.iter().any(|h| h.slot.front[0] > 140.));
-        let house = occupied
-            .iter()
-            .find(|h| h.kind.definition().activity == crate::town::catalogue::Activity::Household)
-            .expect("the block has a home on its street");
-        let front = house.slot.front;
-        assert!(!open_land_origins(&town).any(|p| p == front));
+        // An occupied street opens the land behind it, in a district as in a town.
+        let front = occupied[0].slot.front;
+        assert!(open_land_origins(&town).any(|p| p == front));
         town.district = None;
         assert!(open_land_origins(&town).any(|p| p == front));
     }

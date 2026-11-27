@@ -118,9 +118,12 @@ ground favours straighter runs, while rough ground favours curved approaches.
 
 A district opens as a real-scale map over its outline. The Street map inherits the district identity, boundary, major roads, landmarks, open spaces and developed ground. The district's selected programs respond to local ground, access and the mix of uses the City resolved. The same development rounds serve district maps and standalone settlements. Local routes create opportunities for frontage and premises, and the places that take hold generate demand for more access. A district's principal roads keep their City identities, including where they continue into neighboring districts.
 
-Inhabited City tracts supply the first streets and premises. Where a tract meets an
-avenue, its developed area determines how far occupied blocks extend behind the
-frontage. Interior quarters survey connections across passable ground. A standalone
+Each tract the City records as inhabited is founded as a town is: with a kernel of
+premises at the place its street survey chose, on an avenue where one serves it. A
+tract no avenue touches gets one way in across passable ground. The development rounds
+raise the rest of the district from these kernels: an occupied street opens the land
+behind it, premises take it up, and streets follow where traffic and frontage call for
+them. Founding lays no block streets and fills no tract. A standalone
 town can establish a public street at a founding workplace or meeting place even
 when no regional road reaches it. Later traffic can turn a well-used walking route
 into a street in either kind of settlement.
