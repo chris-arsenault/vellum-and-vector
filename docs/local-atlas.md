@@ -117,7 +117,9 @@ Settlement names are resolved on that parent, so subsequent selections follow it
 `--name` sets the result folder; choose a new name for each run to preserve earlier results.
 For a controlled settlement comparison, `real --template surveyors-ring` selects that
 template from the site's eligible alternatives. `--major-work library` starts a commission
-whose site, design and construction follow the usual major-work rules. `--set
+whose site, design and construction follow the usual major-work rules. `--civic autocracy`
+gives the map's settlements that civic order in place of the one their sites would draw.
+`--set
 feature.key=number` changes numeric feature settings for that map alone, several separated
 by commas, such as `city --set built.layout.districtCatchmentScale=1.8`; a child otherwise
 generates with the settings its world was made with. A street map takes how its towns are

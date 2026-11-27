@@ -1,4 +1,5 @@
 //! A site's founding evidence, feasible kernels and ranked alternatives survive in the town.
+pub mod civic;
 pub(crate) mod district;
 mod kernel;
 mod rules;
@@ -174,6 +175,10 @@ pub struct Selection {
     pub selected: Template,
     pub ranked: Vec<Candidate>,
     pub site: SiteEvidence,
+    /// The civic order drawn beside the template, independently of it. A policy saved
+    /// before orders were drawn has none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub civic: Option<civic::Civic>,
 }
 impl Selection {
     pub fn commons(centre: Point) -> Self {
@@ -185,6 +190,7 @@ impl Selection {
             selected: Template::Commons,
             ranked: vec![Template::Commons.candidate(&site)],
             site,
+            civic: None,
         }
     }
     // owner-direction(2026-11-19): rank settlement templates from initial conditions and choose randomly with greater weight toward the top.
@@ -199,11 +205,18 @@ impl Selection {
             selected: Template::Commons,
             ranked,
             site,
+            civic: None,
         };
         selection.selected = selection
             .draw_remaining(draw, &[])
             .expect("the road commons always has a viable kernel");
         selection
+    }
+    /// Draws the settlement's civic order from the same site evidence, on a draw of its
+    /// own, unless the creator asks for one.
+    pub fn with_civic(mut self, asked: Option<civic::Civic>, draw: f64) -> Self {
+        self.civic = Some(asked.unwrap_or_else(|| civic::Civic::draw(&self.site, draw)));
+        self
     }
     pub fn draw_remaining(&self, draw: f64, excluded: &[Template]) -> Option<Template> {
         let eligible = self

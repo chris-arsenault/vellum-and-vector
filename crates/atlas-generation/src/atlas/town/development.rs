@@ -60,6 +60,8 @@ pub(crate) const STREET_FOUNDING: Founding = Strategy {
 /// The passing trade along a stretch of street this long makes one unit of exchange signal.
 /// Street metres, resolved by `Measure::Layout`.
 const TRADE_STRETCH: f64 = 100.;
+/// Sets a settlement's draw of a civic order apart from its draw of a template.
+const CIVIC_DRAW: u64 = 0x51c1_c0de;
 
 /// What a town's frontage is travelled over: the walking ground, the kernel, the kept links,
 /// and the town's scale, which travel costs are read at.
@@ -564,9 +566,14 @@ fn settle(
             survey
                 .context
                 .survey(state, &candidate, survey.seat, ground, scale)?;
-        let selection = saved_policy
-            .clone()
-            .unwrap_or_else(|| crate::town::templates::Selection::choose(site, draw));
+        let mut selection = saved_policy.clone().unwrap_or_else(|| {
+            let civic_draw = crate::field::poi::true_sizes::roll_bytes(
+                &seat.key.to_bytes(),
+                (settings.seed as u64).wrapping_add(CIVIC_DRAW),
+            );
+            crate::town::templates::Selection::choose(site, draw).with_civic(None, civic_draw)
+        });
+        selection.civic = settings.civic.or(selection.civic);
         if saved.is_none()
             && required.is_some_and(|requested| {
                 !selection
@@ -581,10 +588,10 @@ fn settle(
         let mut next = Some(required.unwrap_or(selection.selected));
         while let Some(template) = next {
             let mut town = Town::new(candidate.clone(), settings.layout);
-            town.order = settings.order;
             town.fidelity = fidelity;
             town.template = selection.clone();
             town.template.selected = template;
+            town.ordered(settings.order);
             if crate::town::founding::establish(&mut town, ground, state.spatial.as_ref(), local)? {
                 town.template
                     .ranked
@@ -907,7 +914,8 @@ impl Operations {
                 let site = match start {
                     SettlementStart::District(district) => {
                         let mut town = street_context::inherit(state, &district, &neighbours)?;
-                        town.order = settings.order;
+                        town.template.civic = settings.civic.or(town.template.civic);
+                        town.ordered(settings.order);
                         let mut ground = site::terrain(state, site::bounds(state)?)?;
                         if let Some(site) = &town.district {
                             ground.mark_shapes(

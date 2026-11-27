@@ -5,7 +5,10 @@ use crate::{
         town::{self, story::Layout, Settings},
     },
     execution::{Command, CommandKind, ExecutionResult},
-    town::{major_works::WorkFamily, templates::Template},
+    town::{
+        major_works::WorkFamily,
+        templates::{civic::Civic, Template},
+    },
 };
 use std::io;
 
@@ -37,6 +40,11 @@ fn settings(input: &Input) -> ExecutionResult<Settings> {
             .and_then(serde_json::Value::as_str)
             .and_then(WorkFamily::from_key),
         order: crate::town::order::Order::from_input(input)?,
+        civic: input
+            .parameters
+            .get(town::CIVIC_ORDER)
+            .and_then(serde_json::Value::as_str)
+            .and_then(Civic::from_name),
     })
 }
 fn initialization() -> io::Result<Specification> {
@@ -44,7 +52,8 @@ fn initialization() -> io::Result<Specification> {
     spec.contract.id = "town.initialize".into();
     spec.parameters.extend(serde_json::from_value::<crate::parameters::Definitions>(serde_json::json!({
         (town::TEMPLATE): {"type":"enum","required":false,"choices":Template::ALL.map(Template::name)},
-        (town::MAJOR_WORK): {"type":"enum","required":false,"choices":WorkFamily::ALL.iter().map(|family| family.key()).collect::<Vec<_>>()}
+        (town::MAJOR_WORK): {"type":"enum","required":false,"choices":WorkFamily::ALL.iter().map(|family| family.key()).collect::<Vec<_>>()},
+        (town::CIVIC_ORDER): {"type":"enum","required":false,"choices":Civic::ALL.map(Civic::name)}
     }))?);
     Ok(spec.numeric(crate::town::order::CONTROLS))
 }
@@ -85,7 +94,7 @@ pub fn register(
                 crate::atlas::regional::city::inherit_policy(
                     scope.state_mut(),
                     input.seed,
-                    input.template,
+                    (input.template, input.civic),
                 )?;
             } else if *policy == Some("street-founding-policy") {
                 if *districts {

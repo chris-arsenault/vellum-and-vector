@@ -82,7 +82,10 @@ pub(crate) fn start_people_pass(
 pub(crate) fn inherit_policy(
     state: &mut State,
     seed: i32,
-    requested: Option<crate::town::templates::Template>,
+    (requested, civic): (
+        Option<crate::town::templates::Template>,
+        Option<crate::town::templates::civic::Civic>,
+    ),
 ) -> Result<(), ExecutionError> {
     use crate::town::templates::Template;
     let id = state
@@ -99,8 +102,10 @@ pub(crate) fn inherit_policy(
         .as_ref()
         .and_then(|r| r.attributes.get("templatePolicy"))
     {
-        state.regional.as_mut().unwrap().city.template =
-            Some(serde_json::from_value(policy.clone()).map_err(io::Error::other)?);
+        let mut saved: crate::town::templates::Selection =
+            serde_json::from_value(policy.clone()).map_err(io::Error::other)?;
+        saved.civic = civic.or(saved.civic);
+        state.regional.as_mut().unwrap().city.template = Some(saved);
         return Ok(());
     }
     let saved = record
@@ -114,6 +119,7 @@ pub(crate) fn inherit_policy(
             selection.selected = chosen;
         }
     }
+    selection.civic = civic.or(selection.civic);
     state.regional.as_mut().unwrap().city.template = Some(selection);
     Ok(())
 }
@@ -568,7 +574,7 @@ fn template(
         site.old = story.old();
         site.planned = story.planned();
     }
-    let selection = Selection::choose(site, draw(seed, 0, 1));
+    let selection = Selection::choose(site, draw(seed, 0, 1)).with_civic(None, draw(seed, 0, 2));
     if let Some(regional) = state.regional.as_mut() {
         regional.city.template = Some(selection.clone());
     }

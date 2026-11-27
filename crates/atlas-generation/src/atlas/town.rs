@@ -18,17 +18,24 @@ pub struct Settings {
     pub major_work: Option<crate::town::major_works::WorkFamily>,
     /// How each town the process founds is ordered, as the map's settings give it.
     pub order: crate::town::order::Order,
+    /// A civic order the creator asks for, or none to let each settlement's site draw one.
+    pub civic: Option<crate::town::templates::civic::Civic>,
 }
 
 pub(super) const TEMPLATE: &str = "template";
 pub(super) const MAJOR_WORK: &str = "majorWork";
+pub(super) const CIVIC_ORDER: &str = "civicOrder";
 
 pub(super) fn validate_choices(choices: &crate::parameters::Values) -> std::io::Result<()> {
-    use crate::town::{major_works::WorkFamily, templates::Template};
+    use crate::town::{
+        major_works::WorkFamily,
+        templates::{civic::Civic, Template},
+    };
     for (key, value) in choices {
         let valid = value.as_str().is_some_and(|value| match key.as_str() {
             TEMPLATE => Template::from_name(value).is_some(),
             MAJOR_WORK => WorkFamily::from_key(value).is_some(),
+            CIVIC_ORDER => Civic::from_name(value).is_some(),
             _ => false,
         });
         if !valid {

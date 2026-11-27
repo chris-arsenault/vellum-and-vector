@@ -143,6 +143,16 @@ land) and the rules that build it meet in this record. A cause writes a term; a 
 reads it where it would otherwise hold a number of its own. Each term is a declared
 setting of the map, so one map can be made with different terms and compared.
 
+A settlement's policy is drawn on independent choices. Its founding template says who
+first lives there and on what ground. Its civic order says who holds it and how its
+wealth and decisions are spread: a princely seat, an autocracy, a slave-holding city, a
+council of elders, a freehold, a democracy or a merchant council. Both are drawn from the
+same site evidence, each on a draw of its own, so any template can meet any order. A
+record that says households are free rules out holding them. The order is saved with the
+policy: a City publishes it and each district's street map inherits it. An order speaks
+only through the town's order record and adds nothing to what a district's economy and
+residents ask for, so it varies a town along lines the district choices do not.
+
 During Street development, local conditions inform demand, operating premises
 compete for reachable customers and services, and funded common works can claim
 ground. Accessible clearance already affects nuisance at premises. The separate

@@ -779,6 +779,14 @@ impl Town {
             scale: self.scale(),
         }
     }
+    /// Gives the town its order: what the map's settings say, then what its civic order
+    /// writes over them.
+    pub fn ordered(&mut self, settings: super::order::Order) {
+        self.order = settings;
+        if let Some(civic) = self.template.civic {
+            civic.write(&mut self.order);
+        }
+    }
     pub fn new(seat: Seat, forced: Option<Layout>) -> Self {
         let layout = super::story::layout(&seat.story, forced);
         let purposes = Purpose::for_seat(&seat);
