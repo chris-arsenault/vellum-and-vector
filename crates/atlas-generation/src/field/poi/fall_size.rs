@@ -68,8 +68,8 @@ pub fn at_cell(state: &impl super::state::State, cell: usize) -> io::Result<Size
     };
     true_size(
         &facts,
-        crate::noise::hash_unit(0x7043, cell as f64, 0.0),
-        crate::noise::hash_unit(0x7044, cell as f64, 0.0),
+        crate::chance::Chance::of(0, 0x7043).unit([cell as f64, 0.0]),
+        crate::chance::Chance::of(0, 0x7044).unit([cell as f64, 0.0]),
         &field.scale,
     )
 }

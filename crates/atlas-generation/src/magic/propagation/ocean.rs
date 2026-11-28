@@ -1,5 +1,6 @@
 use super::beams::{trace, Ray};
 use crate::{
+    chance::Chance,
     hpc::{radix_order, BitSet, Direction, KeyedHeap, NumericKey},
     lattice::TriangularLattice,
     magic::{
@@ -7,7 +8,6 @@ use crate::{
         sources::{Context, Environment},
         state::MagicField,
     },
-    noise::hash_unit,
     scale::{LengthUnit, RelativeMeasure},
     storage::{Band, Coverage, ReadBand},
     tectonics::sources::{area_budget, world_candidates},
@@ -234,11 +234,8 @@ pub fn propagate(
             Ray {
                 seed,
                 source: cell,
-                angle: hash_unit(
-                    seed,
-                    (env.mesh.position(cell)[0] / length + 0.5).floor(),
-                    0.0,
-                ) * std::f64::consts::TAU,
+                angle: Chance::of(seed, 0)
+                    .angle([(env.mesh.position(cell)[0] / length + 0.5).floor(), 0.0]),
                 energy: p.wake_strength * context.activity,
                 reach: p.wake_distance,
                 wake: true,

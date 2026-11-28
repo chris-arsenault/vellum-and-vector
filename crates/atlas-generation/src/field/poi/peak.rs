@@ -14,12 +14,12 @@ use super::{
     visibility,
 };
 use crate::{
+    chance::Chance,
     field::{
         refinement::{network, topology::distance},
         shared::Scalar,
         significance::{measure, PEAK_ISOLATION},
     },
-    noise::hash_unit,
     rock::{
         catalogue::CATALOGUE,
         ground::{queries::SurfaceResponse, GroundField},
@@ -112,7 +112,7 @@ fn choose_form(state: &impl State, cell: usize) -> io::Result<Form> {
             steep: unit(field.shared.scalar(Scalar::Slope).get(cell)? / 0.3),
             bedded: CATALOGUE[reads::rock_kind(field, cell)?].facts.bedding,
         },
-        hash_unit(0x7021, cell as f64, 0.0),
+        Chance::of(0, 0x7021).unit([cell as f64, 0.0]),
     ))
 }
 fn form_in(state: &impl State, place: &Place) -> io::Result<Form> {
@@ -133,7 +133,7 @@ fn face(state: &impl State, cell: usize) -> io::Result<f64> {
         }
     }
     Ok(low as f64 * std::f64::consts::PI / 8.0
-        + (hash_unit(0x7022, cell as f64, 0.0) - 0.5) * std::f64::consts::PI / 2.0)
+        + (Chance::of(0, 0x7022).unit([cell as f64, 0.0]) - 0.5) * std::f64::consts::PI / 2.0)
 }
 struct Formed {
     cell: usize,

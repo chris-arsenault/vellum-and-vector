@@ -3,11 +3,11 @@ mod gyres;
 pub mod settings;
 use super::{ocean, read, wrap, write};
 use crate::{
+    chance::Chance,
     execution::{ExecutionError, Query, QueryDependency},
     field::{shared::Scalar as S, Field},
     hpc::EpochStamps,
     metric::smoothing::Smoother,
-    noise::mesh_noise,
     processes::runner::PhysicalContext,
     scale::{LengthUnit, MapScale, RelativeMeasure},
     storage::{Band, ReadBand},
@@ -88,9 +88,13 @@ fn strength(field: &Field, p: &Settings, c: &PhysicalContext) -> io::Result<()> 
             .trunc()
             .clamp(0.0, 420.0);
         let [x, y] = field.mesh.position(cell);
-        let broad =
-            ((mesh_noise(&field.mesh, x, y, c.seed ^ 0x19af, length, 2) + 1.0) * 0.5 * 250.0)
-                .round();
+        let broad = ((Chance::of(c.seed, 0x19af)
+            .noise(length, 2)
+            .on(&field.mesh, [x, y])
+            + 1.0)
+            * 0.5
+            * 250.0)
+            .round();
         write(
             field,
             S::OceanCurrentStrength,

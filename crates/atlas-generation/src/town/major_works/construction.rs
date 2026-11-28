@@ -1,6 +1,6 @@
 use super::{Commission, WorkFamily, WorkOrigin};
 use crate::{
-    noise::hash_unit,
+    chance::Chance,
     processes::town::{Candidate, Frontage},
     town::{
         catalogue::{works::Part, PlaceRules},
@@ -120,11 +120,7 @@ fn subscribe(
     anchor: Point,
 ) -> io::Result<()> {
     let def = family.definition();
-    let ticket = hash_unit(
-        seed.wrapping_add(family as i32) ^ 0x1593,
-        anchor[0],
-        anchor[1],
-    );
+    let ticket = Chance::of(seed.wrapping_add(family as i32), 0x1593).unit([anchor[0], anchor[1]]);
     // The draw belongs to this undertaking and locality, rather than to a particular round.
     if ticket >= 0.018 {
         return Ok(());
@@ -240,6 +236,7 @@ fn fit(
             slot.habitat.fits(owner, |m| m == FREE || m == street)
         })
         && (part.use_.open()
-            || hash_unit(0x233a, slot.front[0], slot.front[1]) <= candidate.conditions.building))
+            || Chance::of(0, 0x233a).unit([slot.front[0], slot.front[1]])
+                <= candidate.conditions.building))
         .then_some(slot)
 }

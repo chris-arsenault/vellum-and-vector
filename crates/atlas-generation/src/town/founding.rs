@@ -76,7 +76,7 @@ pub fn establish(
                 .cloned(),
         );
         let score = |s: &Slot| {
-            crate::noise::hash_unit(seed, s.front[0], s.front[1])
+            crate::chance::Chance::of(seed, 0).unit([s.front[0], s.front[1]])
                 / (1. + distance(anchor, s.front) / depth)
         };
         // hpc-exempt: rank the land choices of one founding occupation.
@@ -196,7 +196,7 @@ fn founding_bearing(town: &Town, ground: &Ground, centre: Point) -> f64 {
                 .then(|| angle(sub(town.seat.centre, centre)))
         })
         .unwrap_or_else(|| {
-            crate::noise::hash_unit(1301, centre[0], centre[1]) * std::f64::consts::PI
+            crate::chance::Chance::of(0, 1301).unit([centre[0], centre[1]]) * std::f64::consts::PI
         })
 }
 
@@ -389,8 +389,8 @@ fn founding_household(
             distance_from_seat,
             trade_demand,
             means: 0.45,
-            form_sample: crate::noise::hash_unit(111, point[0], point[1]),
-            livelihood_sample: crate::noise::hash_unit(73, point[0], point[1]),
+            form_sample: crate::chance::Chance::of(0, 111).unit([point[0], point[1]]),
+            livelihood_sample: crate::chance::Chance::of(0, 73).unit([point[0], point[1]]),
         },
         &housing_offers(),
     )

@@ -6,8 +6,8 @@ use super::{
     state::MagicField,
 };
 use crate::{
+    chance::Chance,
     field::shared::Scalar as F,
-    noise::fractal_noise,
     rock::{
         catalogue::{self, material},
         ground::alteration::Alteration,
@@ -32,7 +32,7 @@ fn unwarded(env: &Environment<'_>, cell: usize) -> io::Result<f64> {
     Ok(1.0 - env.scalar(F::Warding, cell)?.clamp(0.0, 1.0))
 }
 pub fn body_rank(x: f64, y: f64, salt: i32, width: f64) -> f64 {
-    1.0 / (1.0 + (-fractal_noise(x, y, salt, width, 2) / 0.2).exp())
+    1.0 / (1.0 + (-Chance::of(salt, 0).noise(width, 2).signed([x, y]) / 0.2).exp())
 }
 fn in_body(env: &Environment<'_>, cell: usize, share: f64, salt: i32) -> io::Result<bool> {
     let [x, y] = env.mesh.position(cell);

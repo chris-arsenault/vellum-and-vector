@@ -6,8 +6,8 @@ use super::{
     Forcing, Habitat,
 };
 use crate::{
+    chance::Chance,
     field::shared::Scalar as S,
-    noise,
     rock::ground::GroundField as G,
     scale::{LengthUnit, MapScale},
     storage::{Band, Coverage},
@@ -58,14 +58,10 @@ fn inherit_groups(map: &mut Habitat<'_>, cell: usize) -> io::Result<()> {
 fn founders(map: &mut Habitat<'_>, cell: usize, seed: i32) -> io::Result<()> {
     let p = map.mesh.position(cell);
     let origin = map.mesh.origin();
-    let diversity = (noise::world_noise(
-        map.mesh,
-        p[0] + origin[0],
-        p[1] + origin[1],
-        seed,
-        map.length(0.0175)?,
-        2,
-    ) + 1.0)
+    let diversity = (Chance::of(seed, 0)
+        .noise(map.length(0.0175)?, 2)
+        .across(map.mesh, [p[0] + origin[0], p[1] + origin[1]])
+        + 1.0)
         / 2.0;
     let floor = map.length(1.25e-7)?.min(
         MapScale::metres(

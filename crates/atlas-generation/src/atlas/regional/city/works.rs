@@ -181,7 +181,7 @@ fn best_work_site(
         let [px, py] = position(state, cell);
         let score = family.suitability(sites[cell])
             * (1. + 0.10 * funds.ln_1p())
-            * (0.95 + 0.05 * crate::noise::hash_unit(seed ^ family as i32, px, py));
+            * crate::chance::Chance::of(seed, family as i32).spread([px, py], 0.95, 0.05);
         if score <= 0. {
             continue;
         }

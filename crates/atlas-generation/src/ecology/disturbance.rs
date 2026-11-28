@@ -4,8 +4,8 @@ use super::{
     movement, unit, Forcing, Habitat,
 };
 use crate::{
+    chance::Chance,
     field::shared::Scalar as S,
-    noise,
     scale::{LengthUnit, MapScale},
     storage::{Coverage, ReadBand},
 };
@@ -90,14 +90,10 @@ fn ignition(
     let e = environment(map, cell, f)?;
     let p = map.mesh.position(cell);
     let origin = map.mesh.origin();
-    let noise = (noise::world_noise(
-        map.mesh,
-        p[0] + origin[0],
-        p[1] + origin[1],
-        seed,
-        map.length(0.01125)?,
-        2,
-    ) + 1.0)
+    let noise = (Chance::of(seed, 0)
+        .noise(map.length(0.01125)?, 2)
+        .across(map.mesh, [p[0] + origin[0], p[1] + origin[1]])
+        + 1.0)
         / 2.0;
     let risk =
         -(-years * 0.0008 * e.drought.powi(2) * f.fire_regime * (1.0 + 3.0 * f.quickening) * fuel)

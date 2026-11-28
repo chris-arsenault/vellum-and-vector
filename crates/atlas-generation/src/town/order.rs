@@ -336,7 +336,7 @@ mod tests {
             let mut open = regard;
             open.sort_by(f64::total_cmp);
             for street in 0..2 {
-                let draw = |salt| crate::noise::hash_unit(salt, f64::from(arrival), 0.);
+                let draw = |salt| crate::chance::Chance::of(0, salt).unit([f64::from(arrival), 0.]);
                 let own = match (arrival, street) {
                     (0, 0) => 0.99,
                     (0, 1) => 0.3,

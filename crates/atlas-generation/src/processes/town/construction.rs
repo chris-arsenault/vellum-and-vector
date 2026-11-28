@@ -1,7 +1,7 @@
 //! Purposeful interventions compete over frontage; later occupation can change their fate.
 use super::economy::{FloorSpace, UnmetDemand};
 use super::Frontage;
-use crate::chance::order as weighted_order;
+use crate::chance::{order as weighted_order, Chance};
 use crate::town::catalogue::PlaceRules;
 use crate::town::{
     catalogue::{
@@ -128,16 +128,8 @@ pub fn advance(town: &mut Town, context: &mut Frontage<'_>) -> io::Result<()> {
                 && candidate.slot.tenure != crate::town::templates::Tenure::Institutional
         })
         .filter_map(|candidate| {
-            let sample = crate::noise::hash_unit(
-                town.round as i32,
-                candidate.slot.front[0],
-                candidate.slot.front[1],
-            );
-            let public_draw = crate::noise::hash_unit(
-                town.round as i32 ^ 0x1257,
-                candidate.slot.front[0],
-                candidate.slot.front[1],
-            );
+            let sample = Chance::of(town.round as i32, 0).unit(candidate.slot.front);
+            let public_draw = Chance::of(town.round as i32, 0x1257).unit(candidate.slot.front);
             let project = needs
                 .iter()
                 .filter(|(kind, _, _, site, relation)| {
@@ -340,11 +332,7 @@ fn participant_offers<'a>(
         let existing = existing_partners(town, host, activities, widest_frontage, context.spatial)?;
         let mut choices = Vec::new();
         for candidate in candidates {
-            let sample = crate::noise::hash_unit(
-                town.round as i32,
-                candidate.slot.front[0],
-                candidate.slot.front[1],
-            );
+            let sample = Chance::of(town.round as i32, 0).unit(candidate.slot.front);
             let Some(kind) = choose(town, candidate, sample, demand, activities, context.spatial)
             else {
                 continue;
@@ -435,11 +423,7 @@ fn reberth(town: &mut Town, context: &Frontage<'_>) -> io::Result<()> {
     Ok(())
 }
 fn site_draw(town: &Town, candidate: &super::Candidate, salt: i32) -> f64 {
-    crate::noise::hash_unit(
-        town.round as i32 ^ salt,
-        candidate.slot.front[0],
-        candidate.slot.front[1],
-    )
+    Chance::of(town.round as i32, salt).unit(candidate.slot.front)
 }
 fn location(town: &Town, candidate: &super::Candidate) -> crate::town::siting::Location {
     let slot = &candidate.slot;
@@ -509,7 +493,7 @@ fn proposal(
     let (purpose, fitted) = project.unzip();
     let definition = kind.definition();
     let front = candidate.slot.front;
-    let building = crate::noise::hash_unit(0x233a, front[0], front[1]);
+    let building = Chance::of(0, 0x233a).unit([front[0], front[1]]);
     if !kind.open() && building > candidate.conditions.building {
         return Err("building policy");
     }
@@ -688,7 +672,7 @@ fn resources(town: &Town, candidate: &super::Candidate) -> f64 {
     let support = candidate.opportunities.for_activity(Activity::Household);
     let income = (support.demand + support.capability) / (1. + support.burden);
     let [x, y] = candidate.slot.front;
-    let draw = |salt| crate::noise::hash_unit(salt, x, y);
+    let draw = |salt| Chance::of(0, salt).unit([x, y]);
     let local = candidate.conditions;
     let rank = crate::town::order::rank_among(&town.regards, local.regard(), draw(0x1e55));
     let lot = town.order.settled_draw([draw(0x4312), draw(0x0dd5)], rank);
@@ -869,11 +853,7 @@ fn choose(
         }
     }
     let distance = crate::town::geometry::distance(candidate.slot.front, town.seat.centre);
-    let farming = crate::noise::hash_unit(
-        town.round as i32 ^ 0x5719,
-        candidate.slot.front[0],
-        candidate.slot.front[1],
-    );
+    let farming = Chance::of(town.round as i32, 0x5719).unit(candidate.slot.front);
     let kind = household(
         &HousingSite {
             scale: town.scale(),

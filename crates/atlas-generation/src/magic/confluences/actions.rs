@@ -1,8 +1,8 @@
 use super::{configuration::Effects, Workspace};
 use crate::{
+    chance::Chance,
     field::{shared::Scalar as F, surface_media::Melt},
     magic::{material, sources::Environment, state::MagicField, stocks::ice},
-    noise::hash_unit,
     rock::{catalogue, ground::alteration::Alteration, material::MaterialLayer},
     scale::{LengthUnit, MapScale, RelativeMeasure},
     water::Water,
@@ -67,7 +67,7 @@ fn rock(
         alter_resistance(env, cell, (effects.rock_resistance * share + 0.5).floor())?;
     }
     if effects.relief != 0.0 {
-        let sign = hash_unit(salt, cell as f64, 0.0) * 2.0 - 1.0;
+        let sign = Chance::of(salt, 0).signed([cell as f64, 0.0]);
         env.ground.displace(
             cell,
             MapScale::native(effects.relief * share * sign),

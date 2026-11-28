@@ -325,7 +325,9 @@ fn commons(state: &State, u: &Urban, parcel_weight: f64) -> io::Result<Vec<super
             let care = stewardship + (x.demands.commons - p.demands.commons);
             let [xpos, ypos] = position(mesh, c);
             // Variation in unrecorded field parcels matters most on uniform ground.
-            let fallow = crate::noise::unit_noise(xpos, ypos, 4829, template.quarter(), 2);
+            let fallow = crate::chance::Chance::of(0, 4829)
+                .noise(template.quarter(), 2)
+                .unit([xpos, ypos]);
             scores[c] = care
                 * (0.1 + f64::from(wooded[c]) + trees.get(c)?.max(0.).sqrt() + x.farm.sqrt())
                 * (0.3 + x.investment)

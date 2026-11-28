@@ -173,7 +173,9 @@ fn found(
     let mut order: Vec<_> = centres.into_iter().enumerate().collect();
     // hpc-exempt: seeded founding order of the district identities.
     order.sort_by_key(|&(_, c)| {
-        crate::noise::hash_unit(seed ^ 0x27ac, points[c][0], points[c][1]).to_bits()
+        crate::chance::Chance::of(seed, 0x27ac)
+            .unit([points[c][0], points[c][1]])
+            .to_bits()
     });
     for (rank, c) in order {
         let point = points[c];

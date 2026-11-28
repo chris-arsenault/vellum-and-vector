@@ -1,6 +1,6 @@
 use super::{Definition, Kind};
 use crate::{
-    noise::hash_unit,
+    chance::Chance,
     town::{
         geometry::{angle, sub, Point},
         templates::SiteEvidence,
@@ -181,11 +181,7 @@ impl Definition {
         seed: i32,
     ) -> WorkDesign {
         let draw = |n: i32| {
-            hash_unit(
-                seed.wrapping_add(n.wrapping_mul(0x3537)),
-                anchor[0],
-                anchor[1],
-            )
+            Chance::of(seed.wrapping_add(n.wrapping_mul(0x3537)), 0).unit([anchor[0], anchor[1]])
         };
         // An existing practice can sponsor a wing; a commission can also establish a new one.
         let relevance = |role: &Role| sponsors.iter().any(|k| k.same_family(role.use_));

@@ -127,8 +127,11 @@ pub(super) fn develop(
             continue;
         }
         let [px, py] = position(mesh, c);
-        let opportunity =
-            |salt, scale| crate::noise::fractal_noise(px, py, seed ^ salt, quarter * scale, 2);
+        let opportunity = |salt, scale| {
+            crate::chance::Chance::of(seed, salt)
+                .noise(quarter * scale, 2)
+                .signed([px, py])
+        };
         let households = share(x.people, 950.);
         let workers = share(x.work, 2.);
         let turnover = share(x.trade.ln_1p(), 1.);

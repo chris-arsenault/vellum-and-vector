@@ -145,7 +145,7 @@ impl Surface<'_> {
         let straight = 0.12 + 1.6 * planned * (1. - rough);
         let segmented = 0.46 + 0.5 * planned;
         let curved = 0.85 + 1.6 * rough;
-        let roll = crate::noise::hash_unit(self.seed ^ 0x2c8b, mid[0], mid[1])
+        let roll = crate::chance::Chance::of(self.seed, 0x2c8b).unit([mid[0], mid[1]])
             * (straight + segmented + curved);
         if roll < straight {
             Alignment::Straight

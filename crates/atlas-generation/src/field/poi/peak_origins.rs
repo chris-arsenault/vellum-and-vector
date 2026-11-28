@@ -11,12 +11,12 @@ use super::{
     values::Found,
 };
 use crate::{
+    chance::Chance,
     field::{
         refinement::topology::distance,
         significance::{measure, physical},
     },
     hpc::{BitSet, Direction, KeyedHeap},
-    noise::hash_unit,
     prominence::Prominence,
     rock::ground::GroundField,
     scale::{LengthUnit, MapScale},
@@ -216,7 +216,7 @@ fn horns(state: &impl State, claimed: &Claims) -> io::Result<Vec<Found>> {
     let mut taken: Vec<_> = claimed.cells().collect();
     let mut found = Vec::new();
     for (col, rise) in cols(state)? {
-        if rise < bar || hash_unit(0x7011, col as f64, 0.0) >= 0.3 {
+        if rise < bar || !Chance::of(0, 0x7011).happens([col as f64, 0.0], 0.3) {
             continue;
         }
         let Some(top) = highest_rising(state, &sites::within(&field.mesh, col, reach))? else {
@@ -263,7 +263,7 @@ fn towns<S: RangeState + CatalogueState<Schedule>, Schedule>(state: &S) -> io::R
         } else {
             0.1 + 0.5 * people / (people + 2000.0)
         };
-        if hash_unit(0x7012, town.anchor as f64, 0.0) >= chance {
+        if !Chance::of(0, 0x7012).happens([town.anchor as f64, 0.0], chance) {
             continue;
         }
         if let Some(top) = highest_rising(state, &sites::within(&field.mesh, town.anchor, reach))? {

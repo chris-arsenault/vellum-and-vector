@@ -24,7 +24,7 @@ pub(crate) fn collective_need(kind: Kind, people: f64) -> Option<impl Fn(Point, 
     let requests = place.roles.civic_need?;
     let salt = place.label.bytes().map(i32::from).sum();
     Some(move |centre: Point, waste| {
-        let audience = people * crate::noise::hash_unit(salt, centre[0], centre[1]);
+        let audience = people * crate::chance::Chance::of(salt, 0).unit([centre[0], centre[1]]);
         requests(&CivicConditions { audience, waste })
     })
 }

@@ -155,11 +155,10 @@ pub fn slots(
         let mut ordinal = 0;
         while cursor < length {
             let sample = |salt| {
-                crate::noise::hash_unit(
-                    index as i32 ^ salt,
+                crate::chance::Chance::of(index as i32, salt).unit([
                     street.points[0][0] + ordinal as f64,
                     street.points[0][1] + sign,
-                )
+                ])
             };
             let pitch = frontage * (1.0 + FRONTAGE_VARIATION * (2.0 * sample(0x5711) - 1.0));
             let parcel_depth = depth * (1.0 + DEPTH_VARIATION * (2.0 * sample(0x2d31) - 1.0));

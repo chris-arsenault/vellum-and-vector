@@ -3,8 +3,8 @@ use super::{
     Field,
 };
 use crate::{
+    chance::Chance,
     execution::{Command, CommandKind, ExecutionError, QueryDependency},
-    noise::mesh_noise,
     processes::runner::PhysicalContext,
     scale::RelativeMeasure,
     scale_settings::{ResolvedSettings, ScaleDefinition},
@@ -97,7 +97,9 @@ impl Field {
                 continue;
             }
             let [x, y] = self.mesh.position(cell);
-            let coherence = (mesh_noise(&self.mesh, x, y, c.seed, p.sea_ice_variation_scale, 3)
+            let coherence = (Chance::of(c.seed, 0)
+                .noise(p.sea_ice_variation_scale, 3)
+                .on(&self.mesh, [x, y])
                 * p.sea_ice_suitability_variation)
                 .round();
             let value = (1000.0

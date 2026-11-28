@@ -531,7 +531,9 @@ fn land_use_bids(
         let density = x.crowd / (0.4 + x.crowd + x.investment);
         let affluent = x.investment / (0.35 + x.investment + x.crowd);
         let [px, py] = position(mesh, c);
-        let texture = crate::noise::unit_noise(px, py, 71, template.quarter() * 3., 2);
+        let texture = crate::chance::Chance::of(0, 71)
+            .noise(template.quarter() * 3., 2)
+            .unit([px, py]);
         let bids = [
             0.72 + 0.4 * (1. - demand),
             density * (0.8 + 0.3 * texture) + strength * demands.housing * (0.45 + 0.55 * density),

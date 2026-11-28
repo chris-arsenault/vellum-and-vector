@@ -1,4 +1,5 @@
 use crate::{
+    chance::Chance,
     field::shared::Scalar as F,
     hpc::Direction,
     magic::{
@@ -6,7 +7,6 @@ use crate::{
         sources::{Context, Environment},
         state::MagicField,
     },
-    noise::hash_unit,
     storage::{Coverage, ReadBand},
 };
 use std::io;
@@ -104,11 +104,10 @@ fn cold_target(
         if there >= here {
             continue;
         }
-        let score = hash_unit(
-            seed ^ 0x4dcb,
+        let score = Chance::of(seed, 0x4dcb).unit([
             env.mesh.identity(cell) as f64,
             env.mesh.identity(next) as f64,
-        );
+        ]);
         let gradient = (there - here) / env.mesh.edge_length(cell, edge);
         if gradient < lowest || (gradient == lowest && score > tie) {
             target = Some((next, edge));

@@ -1,7 +1,7 @@
 //! City-wide draws for the identities founded by the district process.
 use crate::{
     atlas::dispatch::Input,
-    noise::hash_unit,
+    chance::Chance,
     parameters::NumericParameter,
     processes::strategies::MapType,
     town::templates::district::{Category, Entry, Trope, CATALOG},
@@ -120,7 +120,9 @@ impl Draws {
             if w <= 0. {
                 continue;
             }
-            let roll = hash_unit(seed ^ entry.id as i32, point[0], point[1]).max(f64::MIN_POSITIVE);
+            let roll = Chance::of(seed, entry.id as i32)
+                .unit([point[0], point[1]])
+                .max(f64::MIN_POSITIVE);
             let tilt = if entry.id == Trope::Ordinary {
                 1.
             } else {
@@ -151,7 +153,8 @@ impl Draws {
         loop {
             let n = picks.len() as i32;
             let salt = seed.wrapping_add(601 + n * 113);
-            if n > 0 && hash_unit(salt ^ 0x46df, point[0], point[1]) >= 0.40_f64.powi(n) {
+            let another = Chance::of(salt, 0x46df).happens([point[0], point[1]], 0.40_f64.powi(n));
+            if n > 0 && !another {
                 break;
             }
             let pick = self.draw(Category::Trait, salt, point, settings, |id| {

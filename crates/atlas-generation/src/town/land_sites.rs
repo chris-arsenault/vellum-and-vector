@@ -4,7 +4,7 @@ use super::{
     geometry::{distance, heading, left, rectangle, Point},
     plots::{Side, Slot},
 };
-use crate::noise::hash_unit;
+use crate::chance::Chance;
 
 pub fn around(
     anchors: impl IntoIterator<Item = Point>,
@@ -23,7 +23,7 @@ pub fn around(
         };
         for x in bounds(p[0]) {
             for y in bounds(p[1]) {
-                let sample = |s| hash_unit(salt ^ s, x as f64, y as f64);
+                let sample = |s| Chance::of(salt, s).unit([x as f64, y as f64]);
                 let front = [
                     (x as f64 + sample(121)) * spacing,
                     (y as f64 + sample(401)) * spacing,

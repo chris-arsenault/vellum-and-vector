@@ -1,6 +1,7 @@
 //! Heat maxima and exhumed ore, with renewal charging actual mineralized intervals.
 use super::{site_strength, Context, Environment};
 use crate::{
+    chance::Chance,
     field::shared::Scalar as F,
     hpc::{BitSet, Direction, MultiKeyHeap, SmallIntSet},
     magic::{
@@ -8,7 +9,6 @@ use crate::{
         inventory::{exposure, hosts, Inventory},
         state::{LocatedSource, MagicField},
     },
-    noise::hash_unit,
     rock::{
         catalogue::kind_of_code,
         ground::{alteration::Alteration, Charge, ChargeDose},
@@ -99,7 +99,7 @@ fn candidates(
             cell as u32,
             [
                 density,
-                hash_unit(seed, (x / radius).floor(), (y / radius).floor()),
+                Chance::of(seed, 0).unit([(x / radius).floor(), (y / radius).floor()]),
             ],
         );
     }

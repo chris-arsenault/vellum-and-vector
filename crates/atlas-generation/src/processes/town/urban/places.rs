@@ -7,7 +7,7 @@ use super::{
 use crate::human::identity::{Tradition, IDENTITY_SLOTS};
 use crate::{
     atlas::state::State,
-    noise::hash_unit,
+    chance::Chance,
     town::{
         catalogue::{PlaceRules, PLACES},
         city::{hot_spots, CityReading},
@@ -102,7 +102,9 @@ pub(super) fn destinations(state: &State, u: &mut Urban) -> io::Result<()> {
                     * affinity
                     * template.affinity(d.activity, points[c], template.quarter());
                 let weight = suitability / (1. + f64::from(kinds[idx][i])).powi(2);
-                let roll = hash_unit(seed ^ i as i32, px, py).max(f64::MIN_POSITIVE);
+                let roll = Chance::of(seed, i as i32)
+                    .unit([px, py])
+                    .max(f64::MIN_POSITIVE);
                 (weight > 0.).then(|| (-roll.ln() / weight, i, d.label, appearance))
             })
             .min_by(|a, b| a.0.total_cmp(&b.0));

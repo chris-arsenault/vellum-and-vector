@@ -199,7 +199,7 @@ fn district_livelihood(
     use crate::town::catalogue::{palette, Activity, PLACES};
     let [x, y] = slot.front;
     let total = demand.trade + demand.workshops + demand.civic;
-    let draw = crate::noise::hash_unit(311, x, y) * (1. + demand.housing + total);
+    let draw = crate::chance::Chance::of(0, 311).unit([x, y]) * (1. + demand.housing + total);
     if draw >= total {
         return None;
     }
@@ -216,7 +216,7 @@ fn district_livelihood(
         .iter()
         .enumerate()
         .filter_map(|(i, &family)| {
-            let kind = palette(family, crate::noise::hash_unit(67, x, y));
+            let kind = palette(family, crate::chance::Chance::of(0, 67).unit([x, y]));
             let def = kind.definition();
             if def.activity != activity
                 || kind.open()
@@ -227,7 +227,9 @@ fn district_livelihood(
                 return None;
             }
             let fit = site.attraction(def) / (1. + def.demand);
-            let sample = crate::noise::hash_unit(701 + i as i32, x, y).max(f64::EPSILON);
+            let sample = crate::chance::Chance::of(0, 701 + i as i32)
+                .unit([x, y])
+                .max(f64::EPSILON);
             Some((fit / -sample.ln(), kind))
         })
         .max_by(|a, b| a.0.total_cmp(&b.0))

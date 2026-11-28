@@ -6,8 +6,8 @@ use super::{
     state::MagicField,
 };
 use crate::{
+    chance::Chance,
     field::shared::{Scalar as F, SharedFields},
-    noise::fractal_noise,
     scale::{MapScale, RelativeMeasure},
     storage::{Coverage, ReadBand},
 };
@@ -148,7 +148,9 @@ pub fn write(
             continue;
         }
         let [x, y] = env.mesh.position(cell);
-        let h = fractal_noise(origin[0] + x, origin[1] + y, epoch ^ 0x7e11, scale, 2);
+        let h = Chance::of(epoch, 0x7e11)
+            .noise(scale, 2)
+            .signed([origin[0] + x, origin[1] + y]);
         shuffle(env.fields.material()?, cell, p.wild_shuffle * wild, h > 0.0)?;
         movement.set(cell, MapScale::native(p.wild_relief * wild * h))?;
     }

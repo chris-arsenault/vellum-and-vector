@@ -1,7 +1,7 @@
 use super::{shared::Scalar as S, Field};
 use crate::{
+    chance::Chance,
     execution::{ExecutionError, Query, QueryDependency},
-    noise::hash_unit,
     processes::runner::PhysicalContext,
     rock::ground::GroundField,
     scale::{LengthUnit, MapScale, RelativeMeasure},
@@ -93,10 +93,8 @@ fn source(
         .value();
     let (mut best, mut best_score) = (candidates[0], -f64::MAX);
     for sample in 0..96.min(candidates.len()) {
-        let cell = candidates[(hash_unit(seed, index as f64, sample as f64)
-            * candidates.len() as f64)
-            .trunc() as usize
-            % candidates.len()];
+        let cell =
+            candidates[Chance::of(seed, 0).one_of([index as f64, sample as f64], candidates.len())];
         let a = field.mesh.position(cell);
         let distance = if selected.is_empty() {
             0.0
@@ -114,11 +112,7 @@ fn source(
         let score = distance / scale
             + field.shared.scalar(S::Geothermal).get(cell)? * 0.25
             + field.shared.scalar(S::OceanCurrentHeat).get(cell)? * 0.22
-            + hash_unit(
-                seed ^ 0x4b67,
-                f64::from(field.mesh.identity(cell)),
-                sample as f64,
-            );
+            + Chance::of(seed, 0x4b67).unit([f64::from(field.mesh.identity(cell)), sample as f64]);
         if score > best_score {
             best = cell;
             best_score = score;
@@ -166,13 +160,16 @@ fn run(field: &Field, p: &Settings, seed: i32) -> io::Result<()> {
     for index in 0..p.warmth_pocket_count.ceil().max(0.0) as usize {
         let cell = source(field, &groups[index % 4], &selected, seed, index)?;
         selected.push(cell);
-        let radius = p.warmth_pocket_min_radius
-            + (p.warmth_pocket_max_radius - p.warmth_pocket_min_radius)
-                * hash_unit(seed ^ 0x14d3, index as f64, 0.0);
-        let strength = (p.warmth_pocket_min_strength
-            + (p.warmth_pocket_max_strength - p.warmth_pocket_min_strength)
-                * hash_unit(seed ^ 0x29f1, index as f64, 1.0))
-        .round();
+        let radius = Chance::of(seed, 0x14d3).between(
+            [index as f64, 0.0],
+            [p.warmth_pocket_min_radius, p.warmth_pocket_max_radius],
+        );
+        let strength = Chance::of(seed, 0x29f1)
+            .between(
+                [index as f64, 1.0],
+                [p.warmth_pocket_min_strength, p.warmth_pocket_max_strength],
+            )
+            .round();
         paint(field, field.mesh.position(cell), radius, strength)?;
     }
     Ok(())

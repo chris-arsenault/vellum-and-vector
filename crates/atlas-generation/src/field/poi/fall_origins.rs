@@ -12,9 +12,9 @@ use super::{
     water_reads::flow_target,
 };
 use crate::{
+    chance::Chance,
     field::{shared::Scalar, significance::physical},
     hpc::{BitSet, Direction, MultiKeyHeap},
-    noise::hash_unit,
     rock::ground::queries::SurfaceResponse,
 };
 use std::{io, rc::Rc};
@@ -148,7 +148,7 @@ fn portage<S: RiverState>(
     }
     let mut found = Vec::new();
     for town in settlements(state)? {
-        if hash_unit(0x7041, town.anchor as f64, 0.0) >= PORTAGE_CHANCE {
+        if !Chance::of(0, 0x7041).happens([town.anchor as f64, 0.0], PORTAGE_CHANCE) {
             continue;
         }
         for cell in sites::within(&field.mesh, town.anchor, field.scale.cells(PORTAGE_SPANS)) {

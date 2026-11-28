@@ -1,5 +1,5 @@
 use super::{habitable, Program, State, Trope, CATALOG};
-use crate::{field::shared::Scalar, noise::hash_unit};
+use crate::{chance::Chance, field::shared::Scalar};
 use atlas_map::{Geometry, Position};
 use serde_json::{json, Value};
 use std::io;
@@ -89,7 +89,8 @@ fn locate_origin(
         if weight <= 0. {
             continue;
         }
-        let score = -hash_unit(program.cell as i32 ^ kind as i32, x, y)
+        let score = -Chance::of(program.cell as i32, kind as i32)
+            .unit([x, y])
             .max(f64::MIN_POSITIVE)
             .ln()
             / weight;

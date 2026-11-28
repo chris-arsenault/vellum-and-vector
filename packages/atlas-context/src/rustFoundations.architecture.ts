@@ -107,92 +107,24 @@ describe("Rust foundation architecture", () => {
     expect(registered.sort()).toEqual(offered.sort());
     expect(operations).toContain("Command::with_inputs");
   });
-  it("geology and river rules take their chance from the chance library", () => {
-    // The library in `chance.rs` was taken out of these rules and is proven by them. A
-    // rule here that reaches past it for the hash or the noise octaves writes its own
-    // way of drawing again, and the library's contract stops being the one in use.
+  it("every rule takes its chance from the chance library", () => {
+    // The library in `chance.rs` was taken out of the rules that drew for themselves, and
+    // every rule in every domain now draws through it. A file that reaches past it for
+    // the hash or the noise octaves writes its own way of drawing again.
     const generation = join(root, "crates/atlas-generation/src");
-    const rules = [
-      ...["water", "rock", "tectonics", "reconstruction"].flatMap((owner) =>
-        rustFiles(join(generation, owner))
-      ),
-      ...["orogeny", "fractures", "refinement", "river_drawing", "impacts"].flatMap((owner) =>
-        rustFiles(join(generation, "field", owner))
-      ),
-      ...["uplift.rs", "plumes.rs", "coastal_detail.rs", "crust_queries.rs"].map((file) =>
-        join(generation, "field", file)
-      ),
-    ];
-    expect(rules.length).toBeGreaterThan(100);
-    const lowLevel =
-      /\b(hash_unit|hash_signed|fractal_noise|unit_noise|mesh_noise|world_noise)\b/;
+    const lowLevel = /\b(hash_unit|hash_signed|fractal_noise|unit_noise|mesh_noise|world_noise)\b/;
+    const files = rustFiles(generation);
+    expect(files.length).toBeGreaterThan(500);
     expect(
-      rules.filter((file) =>
-        lowLevel.test(readFileSync(file, "utf8").replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, ""))
-      )
-    ).toEqual([]);
-  });
-  it("no rule adds a draw or a noise call of its own outside the chance library", () => {
-    // Rules written before the library still call the hash and the noise octaves
-    // directly, as many times as listed here. A count may fall as a rule is moved onto
-    // the library and may never rise, and a file not listed may hold none. A new rule
-    // takes its chance from `crates/atlas-generation/src/chance.rs`.
-    const generation = join(root, "crates/atlas-generation/src");
-    const before: Record<string, number> = {
-      "atlas/regional/city/works.rs": 1,
-      "ecology/disturbance.rs": 1,
-      "ecology/establishment.rs": 1,
-      "ecology/ignition.rs": 3,
-      "field/climate/atmosphere.rs": 2,
-      "field/climate/currents/mod.rs": 2,
-      "field/landmarks/roster.rs": 6,
-      "field/poi/fall_origins.rs": 2,
-      "field/poi/fall_shape.rs": 2,
-      "field/poi/fall_size.rs": 2,
-      "field/poi/names.rs": 2,
-      "field/poi/peak.rs": 3,
-      "field/poi/peak_origins.rs": 3,
-      "field/sea_ice.rs": 2,
-      "field/warmth.rs": 5,
-      "magic/confluences/actions.rs": 2,
-      "magic/material.rs": 2,
-      "magic/propagation/beams.rs": 4,
-      "magic/propagation/cold.rs": 2,
-      "magic/propagation/ocean.rs": 2,
-      "magic/regions/readers.rs": 4,
-      "magic/sources/geothermal.rs": 2,
-      "magic/veil/mod.rs": 2,
-      "processes/town/construction.rs": 7,
-      "processes/town/urban/activity.rs": 1,
-      "processes/town/urban/character.rs": 3,
-      "processes/town/urban/circulation.rs": 1,
-      "processes/town/urban/investment.rs": 1,
-      "processes/town/urban/journeys.rs": 1,
-      "processes/town/urban/landscape.rs": 1,
-      "processes/town/urban/places.rs": 2,
-      "processes/town/urban/programs.rs": 1,
-      "processes/town/urban/programs/origins.rs": 2,
-      "town/catalogue/development.rs": 1,
-      "town/catalogue/works/design.rs": 2,
-      "town/founding.rs": 4,
-      "town/founding/district.rs": 3,
-      "town/land_sites.rs": 2,
-      "town/major_works.rs": 4,
-      "town/major_works/construction.rs": 3,
-      "town/order.rs": 1,
-      "town/plots.rs": 1,
-    };
-    const lowLevel = /\b(hash_unit|hash_signed|fractal_noise|unit_noise|mesh_noise|world_noise)\b/g;
-    const grown = rustFiles(generation).flatMap((file) => {
-      const path = file.slice(generation.length + 1);
-      if (path === "noise.rs" || path === "chance.rs" || path.startsWith("chance/")) return [];
-      const code = readFileSync(file, "utf8").replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, "");
-      const uses = code.match(lowLevel)?.length ?? 0;
-      return uses > (before[path] ?? 0) ? [`${path}: ${uses} (was ${before[path] ?? 0})`] : [];
-    });
-    expect(
-      grown,
-      "These files draw or read noise directly more often than before. Take chance from " +
+      files.filter((file) => {
+        const path = file.slice(generation.length + 1);
+        if (path === "noise.rs" || path === "chance.rs" || path.startsWith("chance/"))
+          return false;
+        return lowLevel.test(
+          readFileSync(file, "utf8").replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, "")
+        );
+      }),
+      "These files draw or read noise directly. Take chance from " +
         "crates/atlas-generation/src/chance.rs instead: its 'What to reach for' table names " +
         "the piece for a choice, a spread, a line, a patchy share, a size or a level that " +
         "wanders, and chance/examples.rs shows a rule built from them."

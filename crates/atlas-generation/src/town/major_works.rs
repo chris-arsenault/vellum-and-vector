@@ -6,7 +6,7 @@ use super::{
     story::Story,
     templates::SiteEvidence,
 };
-use crate::noise::hash_unit;
+use crate::chance::Chance;
 use serde::{Deserialize, Serialize};
 
 mod construction;
@@ -263,7 +263,7 @@ pub fn commission(town: &mut Town, seed: i32, inherited: &[InheritedWork]) {
     }
     let [x, y] = town.seat.centre;
     let expectation = expected_commissions(town.seat.story.people);
-    let count = (expectation + hash_unit(seed ^ 0x554f, x, y)).floor() as usize;
+    let count = (expectation + Chance::of(seed, 0x554f).unit([x, y])).floor() as usize;
     let needed = count.saturating_sub(town.works.commissions.len());
     if needed == 0 {
         return;
@@ -285,7 +285,8 @@ pub fn city_works(site: &SiteEvidence, people: f64, seed: i32) -> Vec<WorkFamily
         ..Story::default()
     };
     let [x, y] = site.centre;
-    let count = (expected_commissions(people) + hash_unit(seed ^ 0x554f, x, y)).floor() as usize;
+    let count =
+        (expected_commissions(people) + Chance::of(seed, 0x554f).unit([x, y])).floor() as usize;
     let mut chosen = Vec::new();
     for (family, _, _) in offers(site, &story, seed) {
         if chosen.len() >= count {
@@ -343,7 +344,7 @@ fn offers(site: &SiteEvidence, story: &Story, seed: i32) -> Vec<(WorkFamily, Poi
                     (
                         f,
                         anchor,
-                        hash_unit(seed.wrapping_add(f as i32), anchor[0], anchor[1]),
+                        Chance::of(seed.wrapping_add(f as i32), 0).unit([anchor[0], anchor[1]]),
                     )
                 })
         })

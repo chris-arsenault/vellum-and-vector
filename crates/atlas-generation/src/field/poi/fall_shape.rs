@@ -11,12 +11,12 @@ use super::{
     water_reads::flow_target,
 };
 use crate::{
+    chance::Chance,
     field::{
         significance::{self, measure},
         Field,
     },
     hpc::BitSet,
-    noise::hash_unit,
     rock::ground::{queries::SurfaceResponse, GroundField},
     scale::MapScale,
 };
@@ -59,7 +59,7 @@ pub fn choose_form(state: &impl FallState, place: &Place) -> io::Result<Form> {
     };
     Ok(fall_forms::choose(
         &readings,
-        hash_unit(0x7042, place.anchor as f64, 0.0),
+        Chance::of(0, 0x7042).unit([place.anchor as f64, 0.0]),
     ))
 }
 pub fn form_in(state: &impl FallState, place: &Place) -> io::Result<Form> {

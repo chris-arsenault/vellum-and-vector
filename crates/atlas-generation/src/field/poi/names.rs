@@ -5,8 +5,8 @@ use super::{
     values::Place,
 };
 use crate::{
+    chance::Chance,
     features::{Feature, State as FeatureState},
-    noise::hash_unit,
 };
 // hpc-exempt: feature identities that have lent a name in this publication pass.
 use std::{collections::BTreeSet, io};
@@ -105,7 +105,7 @@ fn take_one<S: PublicationState<Schedule>, Schedule>(
         let Some(chance) = relation.chance else {
             continue;
         };
-        if hash_unit(0x7031, taker.place.anchor as f64, 0.0) >= chance {
+        if !Chance::of(0, 0x7031).happens([taker.place.anchor as f64, 0.0], chance) {
             continue;
         }
         let Some((lender, stem)) = lender_for(state, relation, taker, all, lent)? else {

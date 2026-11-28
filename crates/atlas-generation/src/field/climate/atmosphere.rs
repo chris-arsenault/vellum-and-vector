@@ -1,8 +1,8 @@
 use super::{latitude, ocean, wind::Terrain, wrap, write, Field, Settings};
 use crate::{
+    chance::Chance,
     field::shared::{CellCode as C, Scalar as S},
     hpc::EpochStamps,
-    noise::world_noise,
     processes::runner::PhysicalContext,
     rock::ground::GroundField as G,
     scale::{LengthUnit, MapScale, RelativeMeasure},
@@ -30,14 +30,10 @@ fn direction(field: &Field, p: &Settings, c: &PhysicalContext, cell: usize) -> [
         if westerly { poleward } else { -poleward } * within * p.circulation_cell_turn / 1000.0;
     let [x, y] = field.mesh.position(cell);
     let [ox, oy] = field.mesh.origin();
-    let wander = world_noise(
-        &field.mesh,
-        x + ox,
-        y + oy,
-        c.seed ^ 0x713b,
-        p.circulation_wander_scale,
-        3,
-    ) * p.circulation_wander
+    let wander = Chance::of(c.seed, 0x713b)
+        .noise(p.circulation_wander_scale, 3)
+        .across(&field.mesh, [x + ox, y + oy])
+        * p.circulation_wander
         / 1000.0;
     let angle = across.atan2(along) + wander;
     [angle.cos(), angle.sin()]

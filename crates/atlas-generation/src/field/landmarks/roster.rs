@@ -6,7 +6,7 @@ use super::{
     siting::{self, Site},
     terrain::Terrain,
 };
-use crate::{field::Field, hpc::TopK, noise::hash_unit, scale::MapScale};
+use crate::{chance::Chance, field::Field, hpc::TopK, scale::MapScale};
 use atlas_map::{Geometry, Id, Position};
 use std::io;
 pub const LANDSCAPE_MIX: [Kind; 7] = [
@@ -75,7 +75,7 @@ pub fn roster(seed: i32, ordinals: &[usize], epochs: usize, mix: &[Kind]) -> Vec
     if mix.is_empty() {
         return vec![];
     }
-    let offset = (hash_unit(seed ^ 0x6c3d, 0.0, 0.0) * mix.len() as f64).floor() as usize;
+    let offset = Chance::of(seed, 0x6c3d).one_of([0.0, 0.0], mix.len());
     ordinals
         .iter()
         .enumerate()
@@ -84,7 +84,11 @@ pub fn roster(seed: i32, ordinals: &[usize], epochs: usize, mix: &[Kind]) -> Vec
             Entry {
                 ordinal,
                 kind,
-                epoch: forming_epoch(kind, hash_unit(seed ^ 0x51a7, ordinal as f64, 1.0), epochs),
+                epoch: forming_epoch(
+                    kind,
+                    Chance::of(seed, 0x51a7).unit([ordinal as f64, 1.0]),
+                    epochs,
+                ),
                 sited: false,
             }
         })
@@ -98,7 +102,7 @@ pub fn seeded(kind: Kind, seed: i32, ordinal: usize, scale: MapScale) -> io::Res
         .map(|(n, p)| {
             (
                 p.key.to_owned(),
-                p.default * (0.75 + 0.5 * hash_unit(seed ^ 0x2e9b, ordinal as f64, n as f64)),
+                p.default * Chance::of(seed, 0x2e9b).spread([ordinal as f64, n as f64], 0.75, 0.5),
             )
         })
         .collect();
@@ -124,7 +128,7 @@ fn candidates(t: &Terrain<'_>, entry: &Entry, seed: i32) -> io::Result<Vec<usize
         } else {
             selected.consider(
                 cell as u32,
-                hash_unit(seed ^ 0x3b91, cell as f64, entry.ordinal as f64),
+                Chance::of(seed, 0x3b91).unit([cell as f64, entry.ordinal as f64]),
             );
         }
     }
@@ -155,7 +159,8 @@ pub fn site(
         let Some(score) = siting::assess(t, entry.kind, cell, &p)? else {
             continue;
         };
-        let value = score + 0.05 * hash_unit(seed ^ 0x7c21, cell as f64, entry.ordinal as f64);
+        let value =
+            score + 0.05 * Chance::of(seed, 0x7c21).unit([cell as f64, entry.ordinal as f64]);
         if value > top {
             top = value;
             best = Some(cell);

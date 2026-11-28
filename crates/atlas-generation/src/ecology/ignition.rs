@@ -1,9 +1,9 @@
 //! The child's cause-keyed ignitions, using shared spatial lookup for settlement rings.
 use super::{environment::environment, groups::living_carbon, unit, Forcing, Habitat};
 use crate::{
+    chance::Chance,
     field::shared::Scalar as S,
     hpc::IntPairIndex,
-    noise::hash_unit,
     spatial::{SpatialIndex, SpatialKernel},
     storage::{Band, Coverage},
 };
@@ -56,7 +56,7 @@ pub fn causes(
         }
     }
     for block in 0..cells.len() {
-        if risks[block] > 0.05 && hash_unit(seed, keys[block], 0.0) < 0.35 {
+        if risks[block] > 0.05 && Chance::of(seed, 0).happens([keys[block], 0.0], 0.35) {
             ignite.set(cells[block], 1)?;
         }
     }
@@ -89,7 +89,7 @@ fn seat_edges(
     let inner = input.seat_radius * map.scale.cells(1.0);
     let outer = (input.seat_radius + 1.0) * map.scale.cells(1.0);
     for &seat in input.seats {
-        if hash_unit(seed ^ 0x3e7, seat as f64, 1.0) >= 0.2 {
+        if !Chance::of(seed, 0x3e7).happens([seat as f64, 1.0], 0.2) {
             continue;
         }
         ring(map, index.as_ref(), seat, inner, outer, ignite)?;

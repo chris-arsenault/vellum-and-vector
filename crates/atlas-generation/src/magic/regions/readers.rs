@@ -1,8 +1,8 @@
 use super::Inputs;
 use crate::{
+    chance::Chance,
     field::shared::{CellCode, Scalar},
     magic::{channels::Channel, configuration::Condition, sources::Environment},
-    noise::{hash_unit, mesh_noise},
     rock::ground::GroundField,
     scale::{LengthUnit, MapScale},
     water::column::Store,
@@ -69,16 +69,16 @@ fn noise<'a>(env: &'a Environment<'_>, input: &'a Inputs<'a>, test: &Condition) 
     if test.field == "noise" {
         Box::new(move |cell| {
             let [x, y] = env.mesh.position(cell);
-            Ok((mesh_noise(env.mesh, x, y, salt.unwrap_or(0x621d), scale, 1) + 1.0) * 0.5)
+            let field = Chance::of(salt.unwrap_or(0x621d), 0).noise(scale, 1);
+            Ok((field.on(env.mesh, [x, y]) + 1.0) * 0.5)
         })
     } else {
         Box::new(move |cell| {
             let [x, y] = env.mesh.position(cell);
-            Ok(hash_unit(
-                input.seed ^ salt.unwrap_or(0),
+            Ok(Chance::of(input.seed, salt.unwrap_or(0)).unit([
                 (x / scale).floor(),
                 f64::from(((y / scale).floor() as i32) ^ index),
-            ))
+            ]))
         })
     }
 }

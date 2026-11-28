@@ -1,10 +1,10 @@
 use crate::{
+    chance::Chance,
     field::shared::CellCode,
     hpc::SmallIntSet,
     magic::{
         channels::Channel as C, parameters::Parameters, sources::Environment, state::MagicField,
     },
-    noise::{hash_signed, hash_unit},
     scale::RelativeMeasure,
 };
 use std::io;
@@ -200,21 +200,18 @@ fn advance(
         }
         beam.angle += std::f64::consts::PI
             * (0.58
-                + hash_unit(
-                    ray.seed,
-                    (beam.x / characteristic).floor(),
-                    beam.bounces as f64,
-                ) * 0.62);
+                + Chance::of(ray.seed, 0)
+                    .unit([(beam.x / characteristic).floor(), beam.bounces as f64])
+                    * 0.62);
         beam.energy -= 90.0;
     } else {
         beam.x = nx;
         beam.y = ny;
         if ray.wake {
-            beam.angle += hash_signed(
-                ray.seed,
+            beam.angle += Chance::of(ray.seed, 0).signed([
                 (distance / characteristic).floor(),
                 (beam.x / characteristic).floor(),
-            ) * 0.16
+            ]) * 0.16
                 * travel
                 / characteristic;
         } else {

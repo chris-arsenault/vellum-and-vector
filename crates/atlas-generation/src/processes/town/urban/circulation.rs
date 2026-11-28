@@ -75,7 +75,9 @@ pub(super) fn routes(
         // works change passage. Use those local fields with their own direction and reach.
         let ground_cost = f.place_offers().map_or(Ok(1.), |p| p.road(c))?;
         let [px, py] = points[c];
-        let texture = crate::noise::fractal_noise(px, py, seed ^ 0x4129, terrain_reach, 2);
+        let texture = crate::chance::Chance::of(seed, 0x4129)
+            .noise(terrain_reach, 2)
+            .signed([px, py]);
         effort.push(
             if !u.fields.inside[c] || !habitable(f, c)? || green[c] && !network[c] {
                 f64::INFINITY
