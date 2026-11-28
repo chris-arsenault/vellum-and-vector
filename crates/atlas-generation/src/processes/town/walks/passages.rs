@@ -179,8 +179,14 @@ fn connections(worn: &Worn, neighbours: &Links, starts: &Sources) -> Vec<LaneCou
             *entry = (total, a, b);
         }
     }
+    // Two streets whose contacts fall within one junction already meet there, and
+    // no lane lies between them to surface.
     best.into_values()
         .map(|(_, a, b)| joined_course(a, b, &labels, starts, worn))
+        .filter(|course| {
+            crate::town::geometry::line_length(&course.points)
+                > crate::town::settings::JUNCTION_TOLERANCE
+        })
         .collect()
 }
 
@@ -252,5 +258,15 @@ mod tests {
         assert!(contacts.contains(&[0, 1]));
         assert!(contacts.contains(&[2, 3]));
         assert_eq!(contacts.len(), 2);
+    }
+
+    #[test]
+    fn streets_that_meet_within_one_junction_have_no_lane_between_them() {
+        let p = |x, y| JunctionId::at([x, y]);
+        let (a, b) = (p(10., 10.), p(10.001, 10.));
+        let worn = Worn::from([([a.min(b), a.max(b)], (3., Class::Lane))]);
+        let neighbours = Links::from([(a, vec![b]), (b, vec![a])]);
+        let sources = Sources::from([(a, (0, 0, [10.0004, 10.])), (b, (1, 1, b.point()))]);
+        assert!(connections(&worn, &neighbours, &sources).is_empty());
     }
 }
