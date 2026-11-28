@@ -15,6 +15,8 @@ use crate::{
 };
 use std::io;
 mod places;
+#[cfg(test)]
+pub(super) use places::Carrier;
 pub fn approaches() -> Query<State, Sources> {
     Query::new("town.sources.approaches", vec![], |state: &State, _| {
         let mut sources = Vec::new();
@@ -212,95 +214,123 @@ pub fn occupation() -> Query<State, Sources> {
     Query::new("town.sources.occupation", vec![], |state: &State, _| {
         let magic = state.physical.magic.as_ref().map(|m| m.borrow());
         let systems = magic.as_ref().map_or(&[][..], |m| m.fields.as_slice());
+        let field = state.field();
+        // A practice kept at a holding is live where it is practised or consecrates, and
+        // supplied where its working material is at hand.
+        let kept = |holding: &crate::town::fabric::Holding| -> io::Result<Option<Kept>> {
+            let Some((craft, cell)) = holding
+                .practice()
+                .zip(cell_at(field.mesh(), holding.slot.front))
+            else {
+                return Ok(None);
+            };
+            Ok(Some(Kept {
+                supplied: crate::field::people::crafts::working_material(
+                    field, craft, systems, cell,
+                )?,
+                live: crate::field::people::crafts::practised(field, craft, cell)? > 0.
+                    || craft.town.effects.consecrates > 0.,
+            }))
+        };
         let mut sources = Vec::new();
         for town in &state.town.towns {
-            for holding in town
-                .holdings()
-                .iter()
-                .filter(|h| h.occupation > 0. && h.condition > 0.2)
-            {
-                for (i, kind) in std::iter::once(holding.kind)
-                    .chain(holding.secondary)
-                    .enumerate()
-                {
-                    let definition = kind.definition();
-                    let mut supplied = true;
-                    let active = if definition.roles.keeps {
-                        let field = state.field();
-                        if let Some((craft, cell)) = holding
-                            .practice()
-                            .zip(cell_at(field.mesh(), holding.slot.front))
-                        {
-                            supplied = crate::field::people::crafts::working_material(
-                                field, craft, systems, cell,
-                            )?;
-                            crate::field::people::crafts::practised(field, craft, cell)? > 0.
-                                || craft.town.effects.consecrates > 0.
-                        } else {
-                            false
-                        }
-                    } else {
-                        true
-                    };
-                    if !active {
-                        continue;
-                    }
-                    let occupation =
-                        holding.occupation / (1. + f64::from(holding.secondary.is_some()));
-                    sources.push(OpportunitySource {
-                        productive: None,
-                        clientele: definition
-                            .roles
-                            .household
-                            .then_some(if holding.means >= 0.6 {
-                                Clientele::Wealthy
-                            } else {
-                                Clientele::Townsfolk
-                            }),
-                        endpoint: Endpoint::Premises {
-                            town: town.seat.key,
-                            holding: holding.id,
-                        },
-                        id: SourceId::Holding {
-                            town: town.seat.key,
-                            holding: holding.id.0,
-                            kind: i as u32,
-                        },
-                        label: format!("{} on {}", definition.label, town.seat.name),
-                        position: holding.slot.front,
-                        activity: definition.activity,
-                        demand: occupation * holding.condition * definition.demand,
-                        capability: if definition.activity == Activity::Production {
-                            occupation * holding.condition * 0.1
-                        } else {
-                            0.
-                        },
-                    });
-                    let base = sources
-                        .last()
-                        .expect("holding source was just inserted")
-                        .clone();
-                    sources.extend(
-                        holding
-                            .production_as(kind)
-                            .offers
-                            .iter()
-                            .filter(|offer| supplied && can_supply(holding, **offer))
-                            .map(|offer| {
-                                productive(
-                                    &base,
-                                    town.seat.key,
-                                    Origin::Holding(holding.id.0, i as u32),
-                                    *offer,
-                                    occupation * holding.condition * holding.operation_scale(),
-                                )
-                            }),
-                    );
-                }
-            }
+            sources.extend(occupation_sources(town, &kept)?);
         }
         Ok(Sources(sources))
     })
+}
+/// Whether a practice kept at a holding is practised there, and whether its working
+/// material is at hand.
+#[derive(Clone, Copy)]
+pub(super) struct Kept {
+    pub live: bool,
+    pub supplied: bool,
+}
+/// What one town's occupied premises ask for and offer. `kept` answers for a holding that
+/// keeps a practice, or nothing where the map knows of no practice there. The map reads
+/// it from its fields; a town built for a test says it directly.
+pub(super) fn occupation_sources(
+    town: &crate::town::fabric::Town,
+    kept: &dyn Fn(&crate::town::fabric::Holding) -> io::Result<Option<Kept>>,
+) -> io::Result<Vec<OpportunitySource>> {
+    let mut sources = Vec::new();
+    for holding in town
+        .holdings()
+        .iter()
+        .filter(|h| h.occupation > 0. && h.condition > 0.2)
+    {
+        for (i, kind) in std::iter::once(holding.kind)
+            .chain(holding.secondary)
+            .enumerate()
+        {
+            let definition = kind.definition();
+            let practice = if definition.roles.keeps {
+                kept(holding)?.unwrap_or(Kept {
+                    live: false,
+                    supplied: true,
+                })
+            } else {
+                Kept {
+                    live: true,
+                    supplied: true,
+                }
+            };
+            if !practice.live {
+                continue;
+            }
+            let occupation = holding.occupation / (1. + f64::from(holding.secondary.is_some()));
+            sources.push(OpportunitySource {
+                productive: None,
+                clientele: definition
+                    .roles
+                    .household
+                    .then_some(if holding.means >= 0.6 {
+                        Clientele::Wealthy
+                    } else {
+                        Clientele::Townsfolk
+                    }),
+                endpoint: Endpoint::Premises {
+                    town: town.seat.key,
+                    holding: holding.id,
+                },
+                id: SourceId::Holding {
+                    town: town.seat.key,
+                    holding: holding.id.0,
+                    kind: i as u32,
+                },
+                label: format!("{} on {}", definition.label, town.seat.name),
+                position: holding.slot.front,
+                activity: definition.activity,
+                demand: occupation * holding.condition * definition.demand,
+                capability: if definition.activity == Activity::Production {
+                    occupation * holding.condition * 0.1
+                } else {
+                    0.
+                },
+            });
+            let base = sources
+                .last()
+                .expect("holding source was just inserted")
+                .clone();
+            sources.extend(
+                holding
+                    .production_as(kind)
+                    .offers
+                    .iter()
+                    .filter(|offer| practice.supplied && can_supply(holding, **offer))
+                    .map(|offer| {
+                        productive(
+                            &base,
+                            town.seat.key,
+                            Origin::Holding(holding.id.0, i as u32),
+                            *offer,
+                            occupation * holding.condition * holding.operation_scale(),
+                        )
+                    }),
+            );
+        }
+    }
+    Ok(sources)
 }
 fn can_supply(holding: &crate::town::fabric::Holding, offer: Offer) -> bool {
     offer
@@ -408,80 +438,99 @@ pub fn compose<S: 'static>(providers: Vec<Query<S, Sources>>) -> Query<S, Source
 }
 
 pub fn use_exposure() -> Query<State, crate::town::influence::SiteConditions> {
-    use crate::town::influence::{Conditions, SiteConditions};
+    use crate::town::influence::SiteConditions;
     Query::new("town.exposure.use", vec![], |state: &State, reader| {
         let requests = reader.input::<super::development::SiteRequests>()?;
+        let field = state.field();
+        let surroundings = Surroundings {
+            fields: &state.town.fields,
+            ground: &requests.ground,
+            spatial: state.spatial.as_ref(),
+            carrier: &|point| places::Carrier::at(field, point),
+        };
         let mut results = Vec::new();
         for (town, request) in state.town.towns.iter().zip(&requests.towns) {
-            let points = &request.points;
-            let reach = Reach::of(town.scale());
-            let mut services = vec![Conditions::default(); points.len()];
-            let fields: Vec<_> = state
-                .town
-                .fields
-                .iter()
-                .map(|f| f.outline.clone())
-                .collect();
-            let fields = state.spatial.index(&fields).map_err(io::Error::other)?;
-            for (point, condition) in points.iter().zip(&mut services) {
-                if let Some((i, distance)) = fields
-                    .nearest_with_distance(atlas_map::Position::xy(point[0], point[1]))
-                    .map_err(io::Error::other)?
-                {
-                    condition.cultivated =
-                        state.town.fields[i].worked / (1. + distance / reach.neighbourhood);
-                }
-            }
-            let shapes: Vec<_> = town.holdings().iter().map(|h| h.outline.clone()).collect();
-            let areas = shapes
-                .iter()
-                .map(|s| state.spatial.area(s).map_err(io::Error::other))
-                .collect::<io::Result<Vec<_>>>()?;
-            let index = state.spatial.index(&shapes).map_err(io::Error::other)?;
-            let carriers = town
-                .holdings()
-                .iter()
-                .map(|h| places::Carrier::at(state.field(), h.slot.front))
-                .collect::<io::Result<Vec<_>>>()?;
-            let mut sites = Vec::with_capacity(points.len());
-            for (site, &p) in points.iter().enumerate() {
-                let mut local = places::LocalSite::new(
-                    p,
-                    request.memberships[site],
-                    places::Carrier::at(state.field(), p)?,
-                    town.scale(),
-                );
-                let r = reach.premises;
-                for (i, distance) in index
-                    .distances(
-                        atlas_map::Bounds(p[0] - r, p[1] - r, p[0] + r, p[1] + r),
-                        atlas_map::Position::xy(p[0], p[1]),
-                    )
-                    .map_err(io::Error::other)?
-                {
-                    let holding = &town.holdings()[i];
-                    premises_effect(holding, areas[i], distance, reach, &mut services[site]);
-                    local.receive(holding, carriers[i], distance, &mut services[site]);
-                }
-                sites.push(local);
-            }
-            if request.needs_services {
-                places::accessible(
-                    town,
-                    points,
-                    &requests.ground,
-                    state.spatial.as_ref(),
-                    &mut services,
-                )?;
-            }
-            for (site, condition) in sites.into_iter().zip(&mut services) {
-                site.finish(condition);
-            }
-            let conditions = services;
-            results.push(conditions);
+            results.push(town_exposure(town, request, &surroundings)?);
         }
         Ok(SiteConditions(results))
     })
+}
+/// What stands round a town's sites besides its own premises: the worked fields, the
+/// ground people walk, and the height and wind that carry smoke. The map reads the last
+/// from its fields; a town built for a test says them directly.
+pub(super) struct Surroundings<'a> {
+    pub fields: &'a [crate::town::land::Field],
+    pub ground: &'a crate::town::ground::Ground,
+    pub spatial: &'a dyn crate::spatial::SpatialKernel,
+    pub carrier: &'a dyn Fn(crate::town::geometry::Point) -> io::Result<places::Carrier>,
+}
+/// What one town's premises and fields make of each requested site: its neighbours'
+/// presence and means, density, services within reach, nuisance and prestige.
+pub(super) fn town_exposure(
+    town: &crate::town::fabric::Town,
+    request: &super::development::TownSites,
+    surroundings: &Surroundings<'_>,
+) -> io::Result<Vec<crate::town::influence::Conditions>> {
+    use crate::town::influence::Conditions;
+    let spatial = surroundings.spatial;
+    let points = &request.points;
+    let reach = Reach::of(town.scale());
+    let mut services = vec![Conditions::default(); points.len()];
+    let fields: Vec<_> = surroundings
+        .fields
+        .iter()
+        .map(|f| f.outline.clone())
+        .collect();
+    let fields = spatial.index(&fields).map_err(io::Error::other)?;
+    for (point, condition) in points.iter().zip(&mut services) {
+        if let Some((i, distance)) = fields
+            .nearest_with_distance(atlas_map::Position::xy(point[0], point[1]))
+            .map_err(io::Error::other)?
+        {
+            condition.cultivated =
+                surroundings.fields[i].worked / (1. + distance / reach.neighbourhood);
+        }
+    }
+    let shapes: Vec<_> = town.holdings().iter().map(|h| h.outline.clone()).collect();
+    let areas = shapes
+        .iter()
+        .map(|s| spatial.area(s).map_err(io::Error::other))
+        .collect::<io::Result<Vec<_>>>()?;
+    let index = spatial.index(&shapes).map_err(io::Error::other)?;
+    let carriers = town
+        .holdings()
+        .iter()
+        .map(|h| (surroundings.carrier)(h.slot.front))
+        .collect::<io::Result<Vec<_>>>()?;
+    let mut sites = Vec::with_capacity(points.len());
+    for (site, &p) in points.iter().enumerate() {
+        let mut local = places::LocalSite::new(
+            p,
+            request.memberships[site],
+            (surroundings.carrier)(p)?,
+            town.scale(),
+        );
+        let r = reach.premises;
+        for (i, distance) in index
+            .distances(
+                atlas_map::Bounds(p[0] - r, p[1] - r, p[0] + r, p[1] + r),
+                atlas_map::Position::xy(p[0], p[1]),
+            )
+            .map_err(io::Error::other)?
+        {
+            let holding = &town.holdings()[i];
+            premises_effect(holding, areas[i], distance, reach, &mut services[site]);
+            local.receive(holding, carriers[i], distance, &mut services[site]);
+        }
+        sites.push(local);
+    }
+    if request.needs_services {
+        places::accessible(town, points, surroundings.ground, spatial, &mut services)?;
+    }
+    for (site, condition) in sites.into_iter().zip(&mut services) {
+        site.finish(condition);
+    }
+    Ok(services)
 }
 
 /// How far a holding's presence carries to the sites round it, at a town's scale: its

@@ -267,12 +267,54 @@ fn land(
     Ok((reserves, tracts))
 }
 
+/// What the land holds at a point of a district, as the map's fields say it: wet ground,
+/// tree cover, ground already built on or fallen to ruin, verdure and tearing.
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct LandRead {
+    pub wet: f64,
+    pub trees: f64,
+    pub built: f64,
+    pub ruined: f64,
+    pub verdure: f64,
+    pub tearing: f64,
+}
+impl LandRead {
+    /// Reads the map's fields at `point`, or nothing where the point is off the map.
+    pub(crate) fn at(
+        field: &Field,
+        point: crate::town::geometry::Point,
+    ) -> io::Result<Option<Self>> {
+        let Some(cell) = cell_at(field.mesh(), point) else {
+            return Ok(None);
+        };
+        let scalar = |id| field.shared().scalar(id).get(cell);
+        let people = field.people();
+        Ok(Some(Self {
+            wet: (scalar(Scalar::FloodplainIntensity)? / 1000.).max(scalar(Scalar::WetlandCover)?),
+            trees: scalar(Scalar::TreeCover)?,
+            built: people
+                .view(crate::human::HumanField::Layer(
+                    crate::human::catalogue::LayerId::BuiltUp,
+                ))
+                .get(cell)?,
+            ruined: people
+                .view(crate::human::HumanField::RuinedBuiltUp)
+                .get(cell)?,
+            verdure: scalar(Scalar::Verdure)?.clamp(0., 1.),
+            tearing: scalar(Scalar::Tearing)?.clamp(0., 1.),
+        }))
+    }
+}
+
+/// A district town's sites answer to what the City handed down and to the land they
+/// stand on. `land` reads the land at a point: the map reads its fields, and a district
+/// built for a test says it directly.
 pub(crate) fn respond(
     town: &Town,
     candidates: &mut Vec<Candidate>,
     occupied: &mut [crate::town::influence::Conditions],
     spatial: &dyn SpatialKernel,
-    field: &Field,
+    land: &dyn Fn(crate::town::geometry::Point) -> io::Result<Option<LandRead>>,
 ) -> io::Result<()> {
     let Some(site) = &town.district else {
         return Ok(());
@@ -322,30 +364,22 @@ pub(crate) fn respond(
             let mix = tract.map_or_else(UseMix::default, |t| t.use_mix(site.density_per_km2));
             let built_share = tract.and_then(|t| t.built_share);
             let civic = tract.is_some_and(|t| t.civic);
-            let Some(cell) = cell_at(field.mesh(), [x, y]) else {
+            let Some(read) = land([x, y])? else {
                 return Ok(Demands::default());
             };
-            let scalar = |id| field.shared().scalar(id).get(cell);
-            let built = field
-                .people()
-                .view(crate::human::HumanField::Layer(
-                    crate::human::catalogue::LayerId::BuiltUp,
-                ))
-                .get(cell)?;
             let mut demand = program.street_demand(
                 DistrictLand {
-                    wet: (scalar(Scalar::FloodplainIntensity)? / 1000.)
-                        .max(scalar(Scalar::WetlandCover)?),
-                    trees: scalar(Scalar::TreeCover)?,
+                    wet: read.wet,
+                    trees: read.trees,
                     slope: conditions.slope.max(0.),
-                    built: built_share.unwrap_or(built).max(conditions.density).max(0.),
+                    built: built_share
+                        .unwrap_or(read.built)
+                        .max(conditions.density)
+                        .max(0.),
                     access: f64::from(slot.street.is_some()) + conditions.exchange.max(0.),
-                    ruined: field
-                        .people()
-                        .view(crate::human::HumanField::RuinedBuiltUp)
-                        .get(cell)?,
-                    verdure: scalar(Scalar::Verdure)?.clamp(0., 1.),
-                    tearing: scalar(Scalar::Tearing)?.clamp(0., 1.),
+                    ruined: read.ruined,
+                    verdure: read.verdure,
+                    tearing: read.tearing,
                     old_wall: site
                         .old_walls
                         .as_ref()

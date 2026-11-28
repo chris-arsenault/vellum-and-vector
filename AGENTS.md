@@ -363,6 +363,21 @@ itself says which is which.
   of interactions. Do not write tests that run a process on a fixture world and
   assert its simulated outcome, determinism or ledger totals; delete such tests
   rather than repairing their timeouts. Judge generated geography on real maps.
+- **Owner direction — 2026-11-28.** A functional change to a generation process is
+  proven by a unit test that runs the real process on small constructed inputs and
+  checks its outputs, in seconds: "i care that you are using unit tests in order to
+  prove functional changes instead of relying only on 10-20 minute generations. you
+  need to figure out a way to have the code be tested and results determined quicker.
+  this include being able to tell what inputs should create what outputs for a process".
+  This is the process test the bullet above does not forbid. It states its inputs and
+  the outputs they should give, takes its inputs from the real upstream code and never
+  from a guessed magnitude, runs in seconds, and asserts a direction or a clear margin,
+  never determinism, exact figures or ledger totals. Tests written only so that a change
+  has a test are not wanted. A generation run is for looking at a finished batch, not
+  for finding out whether a rule works. Street rounds have a bench for this:
+  `crates/atlas-generation/src/atlas/town/bench.rs` founds a small district on
+  constructed ground and runs the real steps round after round; see
+  [the local atlas notes](docs/local-atlas.md#the-town-bench).
 - Browser tests test UI behavior on small supplied worlds. Import `test` from
   `frontend/tests/uiTest.ts`; its automatic fixture uses at most 256 cells and
   blocks real generation workers. Numerical preconditions and raster presentation

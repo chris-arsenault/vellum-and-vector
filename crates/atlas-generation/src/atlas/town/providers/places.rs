@@ -182,8 +182,10 @@ fn supply_services(
     }
 }
 
+/// The height a site stands at and the wind over it, which carry smoke and foulness. Level
+/// calm ground by default.
 #[derive(Clone, Copy, Default)]
-pub(super) struct Carrier {
+pub(in crate::atlas::town) struct Carrier {
     height: f64,
     wind: Point,
 }

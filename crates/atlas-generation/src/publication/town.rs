@@ -678,6 +678,7 @@ mod tests {
             Selection::choose(SiteEvidence::default(), 0.).with_civic(Some(Civic::Autocracy), 0.);
         town.template.crafts.clear();
         town.ordered(Default::default(), 1);
+        // hpc-exempt: a handful of named attributes of one record.
         let said: std::collections::BTreeMap<_, _> = order_attributes(&town).into_iter().collect();
         assert_eq!(said["civicOrder"], json!("autocracy"));
         // The terms are the ones the civic order wrote, not the map's settings.

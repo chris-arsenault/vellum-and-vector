@@ -40,6 +40,32 @@ For a single query, run `scripts/local-atlas.sh sql -c 'SELECT count(*) FROM map
 For a SQL file on your machine, run `make local-sql < query.sql`. Both commands work
 while the database is running, even when the atlas server is stopped.
 
+## The town bench
+
+A rule of the street rounds is proven before any map is generated. The bench in
+`crates/atlas-generation/src/atlas/town/bench.rs` founds a small district on constructed
+level ground and runs the real street steps round after round inside a unit test: about
+half a second a round. Each step's sources, site conditions and offered plots come from
+the functions the map's driver calls, so the bench is that driver without the map.
+
+A test says what goes in (the district's people and size, its civic order or single terms
+of its order, its program, its land) and checks what comes out (streets laid, each home's
+street, means, plot and kind).
+
+```sh
+cargo +stable test -p atlas-generation --lib atlas::town::bench            # the checks
+cargo +stable test -p atlas-generation --lib survey_of_order_terms -- --ignored --nocapture
+cargo +stable test -p atlas-generation --lib survey_of_civic_orders -- --ignored --nocapture
+cargo +stable test -p atlas-generation --lib survey_of_plots -- --ignored --nocapture
+```
+
+The three surveys print a table for a person to read: what each term, each civic order
+or each plot offer makes of the same district. Read one before and after a rule change.
+
+The bench leaves out what only a map has: the trade and waste signals spread over the
+lattice between steps, neighbouring towns, kept links, worked fields, outlying
+settlement and kept practices. A question about those needs the bench extended first.
+
 ## Use
 
 ```sh

@@ -269,7 +269,7 @@ pub(super) struct TownSites {
     pub(super) needs_services: bool,
 }
 impl TownSites {
-    fn new(
+    pub(super) fn new(
         run: Mechanism,
         holdings: &[crate::town::fabric::Holding],
         candidates: &[Slot],
@@ -299,6 +299,203 @@ impl TownSites {
             needs_services,
         }
     }
+}
+
+/// What one step of one town is given. The map prepares these from its state; a town built
+/// for a test prepares them from what the test says.
+pub(super) struct StepInputs<'a> {
+    pub walking_ground: &'a crate::town::ground::Ground,
+    /// The occupied ground a frontage step takes streets and places holdings on.
+    pub ground: Option<&'a mut crate::town::ground::Ground>,
+    pub links: &'a [(Point, Point, f64)],
+    pub sources: &'a [OpportunitySource],
+    pub spatial: &'a dyn crate::spatial::SpatialKernel,
+    pub channel_depth: &'a dyn Fn(Point) -> io::Result<Option<f64>>,
+    /// The land a district's sites answer to.
+    pub land: &'a dyn Fn(Point) -> io::Result<Option<street_context::LandRead>>,
+    /// The plots this step may offer.
+    pub candidates: &'a [Slot],
+    /// The conditions at the town's holdings, then at its candidates, then two at each
+    /// outlying site.
+    pub observations: &'a [Conditions],
+    pub outlying: &'a [crate::town::founding::OutlyingSite],
+}
+/// Runs one step of one town and returns what its clearance removed. After upkeep, the
+/// last step of a round, the town's approaches are resolved and its round ends.
+pub(super) fn town_step(
+    town: &mut Town,
+    step: &processes::Step,
+    inputs: StepInputs<'_>,
+) -> io::Result<processes::Removals> {
+    let StepInputs {
+        walking_ground,
+        ground,
+        links,
+        sources,
+        spatial,
+        channel_depth,
+        land,
+        candidates,
+        observations,
+        outlying,
+    } = inputs;
+    let run = step.run;
+    let n = town.holdings().len();
+    let mut proposals = frontage_candidates(
+        town,
+        FrontageTravel {
+            ground: walking_ground,
+            links,
+            spatial,
+            scale: town.scale(),
+        },
+        candidates,
+        &observations[n..],
+        sources,
+        ground
+            .as_deref()
+            .filter(|_| matches!(run, Mechanism::Movement(_))),
+    )?;
+    let mut held = observations[..n].to_vec();
+    street_context::respond(town, &mut proposals, &mut held, spatial, land)?;
+    let outlying: Vec<_> = outlying
+        .iter()
+        .zip(
+            observations[n + candidates.len()..]
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .copied(),
+        )
+        .collect();
+    let conditions = held.as_slice();
+    let exposure = processes::Exposure {
+        spatial,
+        conditions,
+        exposure: 1.,
+    };
+    let mut removals = Vec::new();
+    match run {
+        Mechanism::Movement(run) | Mechanism::Frontage(run) => {
+            let ground = ground.ok_or_else(|| io::Error::other("Frontage requires site ground"))?;
+            for (i, street) in town.streets().iter().enumerate() {
+                ground.take_street(street, FIRST_STREET + i as u32);
+            }
+            run(
+                town,
+                &mut processes::Frontage {
+                    walking_ground,
+                    channel_depth,
+                    outlying: &outlying,
+                    links,
+                    ground,
+                    spatial,
+                    candidates: &proposals,
+                    conditions,
+                    sources,
+                    exposure: 1.,
+                },
+            )?
+        }
+        Mechanism::Livelihood(run) => run(
+            town,
+            &processes::Livelihood {
+                walking_ground,
+                links,
+                spatial,
+                sources,
+                conditions,
+                exposure: 1.,
+            },
+        )?,
+        Mechanism::Exposure(run) => run(town, &exposure)?,
+        Mechanism::Clearance(run) => removals = run(town, &exposure)?,
+    }
+    if step.id == "town.premises-upkeep" {
+        town.resolve_approaches(walking_ground, spatial)?;
+        town.round += 1;
+    }
+    Ok(removals)
+}
+
+/// A site's conditions: what the land gives it (`land`) with what the town's premises make
+/// of it (`town`). The crafts the town's settlement practises everywhere are present at
+/// every one of its sites.
+pub(super) fn site_conditions(land: &Conditions, town: &Conditions, crafts: &[i32]) -> Conditions {
+    Conditions {
+        waste: land.waste,
+        nuisance: land.nuisance + town.nuisance,
+        cultivated: land.cultivated.max(town.cultivated),
+        rural_service: land.rural_service + town.rural_service,
+        patronage: town.patronage,
+        neighbours: town.neighbours,
+        households: town.households,
+        institutions: town.institutions,
+        workshops: town.workshops,
+        effects: town.effects,
+        practices: land
+            .practices
+            .with_local_consecration(town.effects.consecration)
+            .with_city_crafts(
+                crafts,
+                city_craft_presence(town.effects.learning),
+                land.rooted && land.practices.available(TENDING) <= 0.,
+            ),
+        density: land.density + town.density,
+        clearance: land.clearance + town.clearance,
+        protection: land.protection + town.protection,
+        ..*land
+    }
+}
+
+/// The plots a frontage step may offer in one town: along its streets, round its
+/// inhabited open land and inside its courts, wherever the ground can take them, the map
+/// reaches and people already live near; and the water sites its works open.
+pub(super) fn offered_slots(
+    town: &Town,
+    walking_ground: &crate::town::ground::Ground,
+    sources: &[OpportunitySource],
+    spatial: &dyn crate::spatial::SpatialKernel,
+    on_map: &dyn Fn(Point) -> bool,
+) -> io::Result<Vec<Slot>> {
+    let scale = town.scale();
+    // Where the City found a district's households with ground to spare, the plots offered
+    // to them are that much larger.
+    let roomy = town
+        .district
+        .as_ref()
+        .map_or(1., crate::town::fabric::DistrictSite::plot_scale);
+    let order = town.order;
+    let frontage = roomy * scale.length(order.plot_frontage, Measure::Plot);
+    let depth = roomy * scale.length(order.plot_depth, Measure::Plot);
+    let sites = town
+        .streets()
+        .iter()
+        .enumerate()
+        .flat_map(|(i, street)| slots(i, street, frontage, depth, scale))
+        .chain(crate::town::land_sites::around(
+            open_land_origins(town),
+            roomy * scale.length(CANDIDATE_REACH, Measure::Layout),
+            frontage,
+            depth,
+            town.round,
+        ))
+        .chain(
+            town.holdings()
+                .iter()
+                .flat_map(|h| crate::town::plots::participant_slots_at(h, scale)),
+        )
+        .filter_map(|s| crate::town::founding::survey_slot(town, walking_ground, s))
+        .filter(|s| on_map(s.front))
+        .collect::<Vec<_>>();
+    let mut sites = inhabited_frontage(town, sites, sources, spatial)?;
+    sites.extend(
+        town.works
+            .water_sites(walking_ground, town.round)
+            .into_iter()
+            .filter(|s| on_map(s.front)),
+    );
+    Ok(sites)
 }
 
 /// Long inter-settlement ways can cross empty land. New frontage is occupied
@@ -898,30 +1095,7 @@ impl Operations {
                             .map_or(&[][..], |town| town.template.crafts.as_slice());
                         a.iter()
                             .zip(b)
-                            .map(|(a, b)| Conditions {
-                                waste: a.waste,
-                                nuisance: a.nuisance + b.nuisance,
-                                cultivated: a.cultivated.max(b.cultivated),
-                                rural_service: a.rural_service + b.rural_service,
-                                patronage: b.patronage,
-                                neighbours: b.neighbours,
-                                households: b.households,
-                                institutions: b.institutions,
-                                workshops: b.workshops,
-                                effects: b.effects,
-                                practices: a
-                                    .practices
-                                    .with_local_consecration(b.effects.consecration)
-                                    .with_city_crafts(
-                                        crafts,
-                                        city_craft_presence(b.effects.learning),
-                                        a.rooted && a.practices.available(TENDING) <= 0.,
-                                    ),
-                                density: a.density + b.density,
-                                clearance: a.clearance + b.clearance,
-                                protection: a.protection + b.protection,
-                                ..*a
-                            })
+                            .map(|(land, town)| site_conditions(land, town, crafts))
                             .collect()
                     })
                     .collect();
@@ -1082,56 +1256,14 @@ impl Operations {
                                 if reads != processes::Reads::Frontage {
                                     return Ok(vec![]);
                                 }
-                                let scale = town.scale();
-                                // Where the City found a district's households with ground
-                                // to spare, the plots offered to them are that much larger.
-                                let roomy = town
-                                    .district
-                                    .as_ref()
-                                    .map_or(1., crate::town::fabric::DistrictSite::plot_scale);
-                                let order = town.order;
-                                let frontage =
-                                    roomy * scale.length(order.plot_frontage, Measure::Plot);
-                                let depth = roomy * scale.length(order.plot_depth, Measure::Plot);
-                                let sites = town
-                                    .streets()
-                                    .iter()
-                                    .enumerate()
-                                    .flat_map(|(i, street)| {
-                                        slots(i, street, frontage, depth, scale)
-                                    })
-                                    .chain(crate::town::land_sites::around(
-                                        open_land_origins(town),
-                                        roomy * scale.length(CANDIDATE_REACH, Measure::Layout),
-                                        frontage,
-                                        depth,
-                                        town.round,
-                                    ))
-                                    .chain(town.holdings().iter().flat_map(|h| {
-                                        crate::town::plots::participant_slots_at(h, scale)
-                                    }))
-                                    .filter_map(|s| {
-                                        crate::town::founding::survey_slot(town, &walking_ground, s)
-                                    })
-                                    .filter(|s| {
-                                        cell_at(scope.state().field().mesh(), s.front).is_some()
-                                    })
-                                    .collect::<Vec<_>>();
-                                let mut sites = inhabited_frontage(
+                                let mesh = scope.state().field().mesh();
+                                offered_slots(
                                     town,
-                                    sites,
+                                    &walking_ground,
                                     &source.0,
                                     scope.state().spatial.as_ref(),
-                                )?;
-                                sites.extend(
-                                    town.works
-                                        .water_sites(&walking_ground, town.round)
-                                        .into_iter()
-                                        .filter(|s| {
-                                            cell_at(scope.state().field().mesh(), s.front).is_some()
-                                        }),
-                                );
-                                Ok::<_, io::Error>(sites)
+                                    &|point| cell_at(mesh, point).is_some(),
+                                )
                             })
                             .collect::<io::Result<_>>()?;
                         let outlying = scope
@@ -1210,90 +1342,24 @@ impl Operations {
                             }
                             Ok(Some(water.channels.depth.get(cell)?))
                         };
+                        let land = |point| street_context::LandRead::at(field, point);
                         for (index, town) in state.town.towns.iter_mut().enumerate() {
-                            let n = town.holdings().len();
-                            let mut proposals = frontage_candidates(
+                            removals.extend(town_step(
                                 town,
-                                FrontageTravel {
-                                    ground: &walking_ground,
+                                step,
+                                StepInputs {
+                                    walking_ground: &walking_ground,
+                                    ground: ground.as_mut(),
                                     links: &links,
+                                    sources: &source.0,
                                     spatial: spatial.as_ref(),
-                                    scale: town.scale(),
+                                    channel_depth: &channel_depth,
+                                    land: &land,
+                                    candidates: &candidates[index],
+                                    observations: &conditions.0[index],
+                                    outlying: &outlying[index],
                                 },
-                                &candidates[index],
-                                &conditions.0[index][n..],
-                                &source.0,
-                                ground
-                                    .as_ref()
-                                    .filter(|_| matches!(run, Mechanism::Movement(_))),
-                            )?;
-                            let observations = &conditions.0[index];
-                            let mut held = observations[..n].to_vec();
-                            street_context::respond(
-                                town,
-                                &mut proposals,
-                                &mut held,
-                                spatial.as_ref(),
-                                field,
-                            )?;
-                            let outlying: Vec<_> = outlying[index]
-                                .iter()
-                                .zip(
-                                    observations[n + candidates[index].len()..]
-                                        .as_chunks::<2>()
-                                        .0
-                                        .iter()
-                                        .copied(),
-                                )
-                                .collect();
-                            let conditions = held.as_slice();
-                            let exposure = processes::Exposure {
-                                spatial: spatial.as_ref(),
-                                conditions,
-                                exposure: 1.,
-                            };
-                            match run {
-                                Mechanism::Movement(run) | Mechanism::Frontage(run) => {
-                                    let ground = ground.as_mut().ok_or_else(|| {
-                                        io::Error::other("Frontage requires site ground")
-                                    })?;
-                                    for (i, street) in town.streets().iter().enumerate() {
-                                        ground.take_street(street, FIRST_STREET + i as u32);
-                                    }
-                                    run(
-                                        town,
-                                        &mut processes::Frontage {
-                                            walking_ground: &walking_ground,
-                                            channel_depth: &channel_depth,
-                                            outlying: &outlying,
-                                            links: &links,
-                                            ground,
-                                            spatial: spatial.as_ref(),
-                                            candidates: &proposals,
-                                            conditions,
-                                            sources: &source.0,
-                                            exposure: 1.,
-                                        },
-                                    )?
-                                }
-                                Mechanism::Livelihood(run) => run(
-                                    town,
-                                    &processes::Livelihood {
-                                        walking_ground: &walking_ground,
-                                        links: &links,
-                                        spatial: spatial.as_ref(),
-                                        sources: &source.0,
-                                        conditions,
-                                        exposure: 1.,
-                                    },
-                                )?,
-                                Mechanism::Exposure(run) => run(town, &exposure)?,
-                                Mechanism::Clearance(run) => removals.extend(run(town, &exposure)?),
-                            }
-                            if step.id == "town.premises-upkeep" {
-                                town.resolve_approaches(&walking_ground, spatial.as_ref())?;
-                                town.round += 1;
-                            }
+                            )?);
                         }
                         if step.id == "town.premises-upkeep"
                             && state.town.towns.first().is_some_and(|town| {

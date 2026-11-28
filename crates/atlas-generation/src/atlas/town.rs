@@ -1,6 +1,8 @@
 pub use crate::town::{
     addresses, geometry, ground, growth, lanes, network, plots, seat, settings, story, wards,
 };
+#[cfg(all(test, not(target_arch = "wasm32")))]
+pub(crate) mod bench;
 pub mod development;
 pub(crate) mod founding_site;
 mod held_ground;
