@@ -107,6 +107,9 @@ describe("Rust foundation architecture", () => {
     expect(registered.sort()).toEqual(offered.sort());
     expect(operations).toContain("Command::with_inputs");
   });
+});
+
+describe("Rust chance and numeric structures", () => {
   it("every rule takes its chance from the chance library", () => {
     // The library in `chance.rs` was taken out of the rules that drew for themselves, and
     // every rule in every domain now draws through it. A file that reaches past it for
@@ -118,8 +121,7 @@ describe("Rust foundation architecture", () => {
     expect(
       files.filter((file) => {
         const path = file.slice(generation.length + 1);
-        if (path === "noise.rs" || path === "chance.rs" || path.startsWith("chance/"))
-          return false;
+        if (path === "noise.rs" || path === "chance.rs" || path.startsWith("chance/")) return false;
         return lowLevel.test(
           readFileSync(file, "utf8").replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, "")
         );
