@@ -160,12 +160,13 @@ pub fn advance(town: &mut Town, context: &mut Frontage<'_>) -> io::Result<()> {
                     public_draw * (1. + pull) < pull
                 })
                 .and_then(|need| {
+                    // A commissioned work keeps its own size whatever plots the town offers.
                     fitted_slot(
                         candidate,
                         need.0.definition(),
                         sample,
                         context.ground,
-                        scale,
+                        (scale, [1., 1.]),
                     )
                     .map(|slot| (need, slot))
                 });
@@ -518,8 +519,17 @@ fn proposal(
         return Err("reserved land");
     }
     let scale = town.scale();
+    let offer = town.order.plot_offer();
     let mut slot = fitted
-        .or_else(|| fitted_slot(candidate, definition, sample, context.ground, scale))
+        .or_else(|| {
+            fitted_slot(
+                candidate,
+                definition,
+                sample,
+                context.ground,
+                (scale, offer),
+            )
+        })
         .ok_or("parcel terrain")?;
     slot.tenure = town
         .template
@@ -597,12 +607,25 @@ fn frontage_priority(support: &Support, land: Conditions, fit: f64, sample: f64)
         + fit.ln_1p()
         + sample * 0.2
 }
+/// The plot a kind of premises takes: a size from its own range by chance, larger or
+/// smaller as the town's plots stand beside an ordinary town's, and never under the least
+/// the kind can work on.
+fn plot_taken(
+    [frontage, depth]: [crate::town::catalogue::MetresRange; 2],
+    sample: f64,
+    [wide, deep]: [f64; 2],
+) -> (f64, f64) {
+    (
+        (frontage.sample(sample) * wide).max(frontage.low),
+        (depth.sample(1. - sample) * deep).max(depth.low),
+    )
+}
 fn fitted_slot(
     candidate: &super::Candidate,
     definition: crate::town::catalogue::Definition,
     sample: f64,
     ground: &crate::town::ground::Ground,
-    scale: crate::town::scale::TownScale,
+    (scale, offer): (crate::town::scale::TownScale, [f64; 2]),
 ) -> Option<crate::town::plots::Slot> {
     use crate::town::{
         geometry::left,
@@ -614,11 +637,17 @@ fn fitted_slot(
     );
     let mut slot = candidate.slot.clone();
     let attached = slot.street.is_some() || slot.participant.is_some();
-    let mut width = frontage.sample(sample);
+    // A place inside another's court takes the room its host has, not the town's plots.
+    let offer = if slot.participant.is_some() {
+        [1., 1.]
+    } else {
+        offer
+    };
+    let (mut width, deep) = plot_taken([frontage, depth], sample, offer);
     if attached {
         width = width.min(slot.frontage.max(frontage.low));
     }
-    let desired = (width, depth.sample(1. - sample));
+    let desired = (width, deep);
     let smallest = (frontage.low, depth.low);
     // Independent plots can face any side of the same entrance. On a street
     // or an existing court its frontage fixes its orientation.
@@ -897,6 +926,33 @@ mod tests {
         assert!(weighted_order(2., 0.5) > weighted_order(1., 0.5));
         assert!(weighted_order(1., 0.9) > weighted_order(2., 0.3));
         assert_eq!(weighted_order(0., 0.9), 0.);
+    }
+
+    #[test]
+    fn premises_take_larger_plots_where_the_towns_order_offers_them() {
+        use crate::town::{catalogue::MetresRange, order::Order, templates::civic::Civic};
+        let house = [
+            MetresRange { low: 6., high: 12. },
+            MetresRange {
+                low: 16.,
+                high: 30.,
+            },
+        ];
+        let area = |civic: Option<Civic>| {
+            let mut order = Order::default();
+            if let Some(civic) = civic {
+                civic.write(&mut order);
+            }
+            let (wide, deep) = plot_taken(house, 0.5, order.plot_offer());
+            wide * deep
+        };
+        // An ordinary town leaves the house the size its own range gives.
+        assert_eq!(area(None), 9. * 23.);
+        // A freehold's households hold several times the ground a slave-holding's do.
+        assert!(area(Some(Civic::Freehold)) > 2. * area(None));
+        assert!(area(Some(Civic::SlaveHolding)) < 0.6 * area(None));
+        // However little a town offers, a house keeps the least it can stand on.
+        assert_eq!(plot_taken(house, 0.5, [0.1, 0.1]), (6., 16.));
     }
 
     #[test]

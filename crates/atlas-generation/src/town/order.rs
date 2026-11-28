@@ -204,6 +204,14 @@ impl Order {
         let beyond = (self.survey - 1.).max(0.);
         beyond / (1. + beyond)
     }
+    /// How the town's plots stand beside an ordinary town's, across the front and back
+    /// from it. Premises take their own size by this much more or less.
+    pub fn plot_offer(&self) -> [f64; 2] {
+        [
+            self.plot_frontage / PLOT_FRONTAGE.default,
+            self.plot_depth / PLOT_DEPTH.default,
+        ]
+    }
 }
 
 #[cfg(test)]
