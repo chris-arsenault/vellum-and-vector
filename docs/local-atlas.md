@@ -170,7 +170,10 @@ each mix both maps hold (premises other than homes, homes, storeys, households' 
 plot sizes, ways by length, how mixed each street's premises are, district roles, civic
 places, land use by area) it gives the share the two have in common: what both hold of
 each entry, summed, so two maps with the same proportions share all of it whatever their
-size. Premises are counted by holding, not by building. Each map's own figures follow:
+size. Premises are counted by holding, not by building. Two maps made of the same ground
+also get a line saying how much stands in the same places: the share of the streets their
+own rounds laid that run together, and the share of buildings standing where the other
+map has one of the same kind. Each map's own figures follow:
 the spread of its homes' means, how much of that spread lies between streets beside what
 chance alone leaves, and how much of its street length keeps to two directions square to
 each other beside what streets laid independently keep.

@@ -2,9 +2,10 @@
 //! tallied into mixes: its premises, homes, storeys, households' means, plots, ways,
 //! districts and land uses. The share two maps have in common in a mix is what both hold
 //! of each entry, summed: all of it for two maps with the same proportions, none for two
-//! with nothing alike. Each map's own figures follow: how far apart its households' means
-//! lie, how far rich and poor streets stand apart, and how far its streets keep to two
-//! directions.
+//! with nothing alike. Two maps of the same ground are also set over each other, to say
+//! how much stands in the same places. Each map's own figures follow: how far apart its
+//! households' means lie, how far rich and poor streets stand apart, and how far its
+//! streets keep to two directions.
 //!
 //! Premises are counted by holding. A holding publishes one building feature for each of
 //! its buildings, and each repeats the holding's label, means, street and number.
@@ -140,6 +141,78 @@ impl Directions {
     }
 }
 
+/// The side of the squares two maps of one ground are set over each other on: about the
+/// width of a house plot and its share of the street, in metres.
+const SQUARE: f64 = 20.;
+type Square = [i64; 2];
+fn square(x: f64, y: f64) -> Square {
+    [(x / SQUARE).floor() as i64, (y / SQUARE).floor() as i64]
+}
+
+/// Where a map's own streets run and its buildings stand, by square, so that two maps made
+/// of the same ground can be set over each other. The mixes say what a map holds; this
+/// says whether it holds it in the same places.
+#[derive(Default)]
+struct Ground {
+    // hpc-exempt: the sparse squares one map's streets cross.
+    streets: std::collections::BTreeSet<Square>,
+    // hpc-exempt: the sparse squares one map's buildings stand on, by kind.
+    buildings: BTreeMap<Square, Mix>,
+}
+impl Ground {
+    fn way(&mut self, lines: &[&[Position]]) {
+        for pair in lines.iter().flat_map(|line| line.windows(2)) {
+            let ([ax, ay, _], [bx, by, _]) = (pair[0].coordinates(), pair[1].coordinates());
+            let steps = ((bx - ax).hypot(by - ay) / (SQUARE / 4.)).ceil().max(1.);
+            for step in 0..=steps as usize {
+                let along = step as f64 / steps;
+                self.streets
+                    .insert(square(ax + (bx - ax) * along, ay + (by - ay) * along));
+            }
+        }
+    }
+    fn building(&mut self, shape: &Geometry, label: &str) {
+        let corner = match shape {
+            Geometry::Polygon { coordinates } => coordinates.first().and_then(|ring| ring.first()),
+            _ => None,
+        };
+        if let Some([x, y, _]) = corner.map(|corner| corner.coordinates()) {
+            let here = self.buildings.entry(square(x, y)).or_default();
+            *here.entry(label.to_owned()).or_default() += 1.;
+        }
+    }
+    /// The squares of this map's streets that have a street of `other` on them or on a
+    /// square beside them.
+    fn streets_beside(&self, other: &Self) -> usize {
+        let beside = |[x, y]: Square| {
+            (-1..=1).any(|dx| (-1..=1).any(|dy| other.streets.contains(&[x + dx, y + dy])))
+        };
+        self.streets.iter().filter(|at| beside(**at)).count()
+    }
+    /// The share of both maps' street squares that have the other map's street on or
+    /// beside them, and the share of both maps' buildings standing on a square where the
+    /// other has a building of the same kind. Nothing for maps that share no ground.
+    fn shared(&self, other: &Self) -> Option<[f64; 2]> {
+        let streets = self.streets_beside(other) + other.streets_beside(self);
+        let count =
+            |ground: &Self| -> f64 { ground.buildings.values().flat_map(Mix::values).sum() };
+        let same: f64 = self
+            .buildings
+            .iter()
+            .filter_map(|(at, here)| other.buildings.get(at).map(|there| (here, there)))
+            .flat_map(|(here, there)| {
+                here.iter()
+                    .map(|(kind, held)| held.min(there.get(kind).copied().unwrap_or(0.)))
+            })
+            .sum();
+        let whole = [
+            (self.streets.len() + other.streets.len()) as f64,
+            count(self) + count(other),
+        ];
+        (streets > 0 && whole[1] > 0.).then(|| [streets as f64 / whole[0], 2. * same / whole[1]])
+    }
+}
+
 /// What a map's own figures are measured from, gathered as its holdings are settled.
 #[derive(Default)]
 struct Layout {
@@ -203,6 +276,7 @@ struct Tallies {
     // hpc-exempt: one map's holdings by what their buildings repeat.
     holdings: BTreeMap<String, Holding>,
     layout: Layout,
+    ground: Ground,
 }
 impl Tallies {
     fn add(&mut self, mix: &'static str, entry: &str, amount: f64) {
@@ -213,7 +287,7 @@ impl Tallies {
             .entry(entry.to_owned())
             .or_default() += amount;
     }
-    fn building(&mut self, attributes: &Attributes) {
+    fn building(&mut self, attributes: &Attributes, shape: &Geometry) {
         if let Some(storeys) = attributes.get("storeys").and_then(Value::as_u64) {
             self.add("storeys", &storeys.to_string(), 1.);
         }
@@ -223,6 +297,7 @@ impl Tallies {
             .entry(Holding::key(attributes))
             .or_insert_with(|| Holding::of(attributes));
         holding.home |= function == Some("residential");
+        self.ground.building(shape, &holding.label);
     }
     fn district(&mut self, feature: &MapFeature) {
         let Some(program) = feature.attributes.get("districtProgram") else {
@@ -254,6 +329,11 @@ impl Tallies {
         if LAID.contains(&feature.kind.as_str()) {
             self.layout.directions.way(&lines);
         }
+        // A district's roads and thoroughfares come down from its City; its streets are
+        // what its own rounds laid.
+        if feature.kind == "street" {
+            self.ground.way(&lines);
+        }
     }
     fn feature(&mut self, feature: &MapFeature) {
         let named = |names: &[&str]| {
@@ -261,7 +341,7 @@ impl Tallies {
             found.and_then(Value::as_str).unwrap_or("unnamed")
         };
         match feature.kind.as_str() {
-            "building" => self.building(&feature.attributes),
+            "building" => self.building(&feature.attributes, &feature.geometry),
             "district" => self.district(feature),
             "yard" => self.add("plot sizes", band(area(&feature.geometry), PLOTS), 1.),
             "cityPlace" => self.add(
@@ -423,6 +503,14 @@ pub fn compare(server: &Server, maps: [(&str, &MapRef); 2]) -> io::Result<()> {
         println!("    {name_a}: {}", leading(mix_a, 6));
         println!("    {name_b}: {}", leading(mix_b, 6));
     }
+    if let Some([streets, buildings]) = a.ground.shared(&b.ground) {
+        println!(
+            "  on the same ground, by squares {SQUARE:.0} m across: {:.0}% of their own streets \
+             run together, {:.0}% of buildings stand where the other has one of the same kind",
+            100. * streets,
+            100. * buildings
+        );
+    }
     for (name, tallies) in [(name_a, &a), (name_b, &b)] {
         for figure in tallies.figures() {
             println!("  {name}: {figure}");
@@ -443,6 +531,12 @@ mod tests {
     }
     fn ring(points: &[[f64; 2]]) -> Vec<Position> {
         points.iter().map(|[x, y]| Position::xy(*x, *y)).collect()
+    }
+    /// A building's outline with its first corner at `x`, `y`.
+    fn plot(x: f64, y: f64) -> Geometry {
+        Geometry::Polygon {
+            coordinates: vec![ring(&[[x, y], [x + 5., y], [x + 5., y + 5.], [x, y]])],
+        }
     }
     /// A straight street of a hundred metres at `degrees`.
     fn street(degrees: f64) -> Vec<Position> {
@@ -549,20 +643,18 @@ mod tests {
     #[test]
     fn a_holding_is_counted_once_however_many_buildings_it_has() {
         let mut tallies = Tallies::default();
+        let mut add = |label, function, means, street, number| {
+            let attributes = building(label, function, means, street, number);
+            tallies.building(&attributes, &plot(0., 0.));
+        };
         // A courtyard household of three buildings, and a farmstead with its barn.
         for _ in 0..3 {
-            tallies.building(&building(
-                "courtyard household",
-                "residential",
-                0.7,
-                "High",
-                1,
-            ));
+            add("courtyard household", "residential", 0.7, "High", 1);
         }
-        tallies.building(&building("farmstead", "residential", 0.3, "High", 2));
-        tallies.building(&building("farmstead", "economic", 0.3, "High", 2));
+        add("farmstead", "residential", 0.3, "High", 2);
+        add("farmstead", "economic", 0.3, "High", 2);
         // An almshouse is published as a house and is no household's home.
-        tallies.building(&building("almshouse", "civic", 0.5, "Low", 1));
+        add("almshouse", "civic", 0.5, "Low", 1);
         tallies.settle();
         assert_eq!(
             tallies.mixes["homes"],
@@ -576,5 +668,25 @@ mod tests {
         assert_eq!(tallies.layout.spread(), Some([0.3, 0.3]));
         assert_eq!(tallies.layout.premises["High"], [2., 0.]);
         assert_eq!(tallies.layout.premises["Low"], [1., 1.]);
+    }
+
+    #[test]
+    fn two_maps_of_one_ground_share_what_stands_in_the_same_places() {
+        // A street running east with a smithy and a brewhouse along it.
+        let town = |north: f64, second: &str| {
+            let mut ground = Ground::default();
+            ground.way(&[&ring(&[[0., north], [200., north]])]);
+            ground.building(&plot(50., north + 5.), "smithy");
+            ground.building(&plot(150., north + 5.), second);
+            ground
+        };
+        let first = town(10., "brewhouse");
+        // The same town is all shared with itself.
+        assert_eq!(first.shared(&town(10., "brewhouse")), Some([1., 1.]));
+        // A street a few metres over still runs together; a different trade in one of its
+        // two buildings leaves half the buildings shared.
+        assert_eq!(first.shared(&town(12., "inn")), Some([1., 0.5]));
+        // A street laid a hundred metres away shares nothing, and so says nothing.
+        assert_eq!(first.shared(&town(110., "brewhouse")), None);
     }
 }
