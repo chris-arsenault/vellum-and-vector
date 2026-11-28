@@ -1,8 +1,8 @@
 //! Priority flood keeps physical fill height separate from the work of a flat corridor.
 use crate::{
+    chance::{Chance, Corridors},
     hpc::{Direction, MultiKeyHeap},
     lattice::TriangularLattice,
-    noise::{hash_unit, world_noise},
     storage::{Band, Coverage, ReadBand},
 };
 use std::io;
@@ -71,29 +71,21 @@ impl Drainage {
         let mut costs = coverage.scratch(n, f64::INFINITY);
         let mut bed = coverage.scratch(n, 0.0);
         let mut resistance = coverage.scratch(n, 0.0);
+        // Water crossing flat ground pays to cross it: little through patches of easy
+        // ground, a dozen times more between them, so a flat corridor wanders.
+        let corridors = Corridors {
+            noise: Chance::of(input.seed, 0x1f7d).noise(input.neighborhood_radius, 2),
+            open: 0.37,
+            easy: 1.0,
+            hard: [12.0, 19.0],
+        };
         for cell in 0..n {
             self.parents.set(cell, -1)?;
             self.ranks.set(cell, -1)?;
             bed.set(cell, (input.bed)(cell)?)?;
             let [x, y] = input.mesh.position(cell);
             let [ox, oy] = input.mesh.origin();
-            let value = (world_noise(
-                input.mesh,
-                x + ox,
-                y + oy,
-                input.seed ^ 0x1f7d,
-                input.neighborhood_radius,
-                2,
-            ) + 1.0)
-                * 0.5;
-            resistance.set(
-                cell,
-                if value < 0.37 {
-                    1.0
-                } else {
-                    12.0 + 7.0 * value
-                },
-            )?;
+            resistance.set(cell, corridors.across(input.mesh, [x + ox, y + oy]))?;
         }
         let mut queue = MultiKeyHeap::new([Direction::Ascending; 3], Direction::Ascending);
         seed_outlets(&input, |cell| {
@@ -182,7 +174,7 @@ impl Drainage {
         self.ranks.set(next, i32::MAX)?;
         let [x, y] = input.mesh.position(next);
         let [ox, oy] = input.mesh.origin();
-        let tie = hash_unit(input.seed, (x + ox + 0.5).floor(), (y + oy + 0.5).floor());
+        let tie = Chance::of(input.seed, 0).unit([(x + ox + 0.5).floor(), (y + oy + 0.5).floor()]);
         queue.push(next as u32, [next_priority, next_cost, tie]);
         Ok(())
     }

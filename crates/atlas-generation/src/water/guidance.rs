@@ -5,9 +5,9 @@ use super::{
     reaches::ReachStore,
 };
 use crate::{
+    chance::{ticket, Chance},
     flow_graph::gathered,
     lattice::TriangularLattice,
-    noise::hash_unit,
     scale::{LengthUnit, MapScale, RelativeMeasure},
     storage::{Band, Coverage, ReadBand},
 };
@@ -151,11 +151,10 @@ fn coordinate_tie(mesh: &TriangularLattice, source: usize, target: usize, seed: 
     let [x, y] = mesh.position(source);
     let [tx, ty] = mesh.position(target);
     let word = |v: f64| v.trunc().rem_euclid(4_294_967_296.0) as u32 as i32;
-    hash_unit(
-        seed ^ word(MapScale::native(x) * 4.0),
+    Chance::of(seed, word(MapScale::native(x) * 4.0)).unit([
         f64::from(word(MapScale::native(y) * 4.0) ^ word(MapScale::native(tx) * 4.0)),
         MapScale::native(ty) * 4.0,
-    )
+    ])
 }
 impl Router<'_> {
     fn legal(&self, source: usize, target: usize) -> io::Result<bool> {
@@ -291,17 +290,16 @@ impl Router<'_> {
         }
         let left_weight = p * (1.0 + (self.input.response)(source, steps[left].target)?);
         let right_weight = (1.0 - p) * (1.0 + (self.input.response)(source, steps[right].target)?);
+        // Where the slope's heading falls between two lower neighbours, the water takes
+        // one of them by a draw of the cell's own, weighted by how near each lies to the
+        // heading and how the ground gives toward it.
         let [x, y] = self.input.mesh.position(source);
-        let draw = hash_unit(
-            self.input.epoch_stable_seed ^ 0x2f8a,
-            MapScale::native(x),
-            MapScale::native(y),
-        );
+        let draw = Chance::of(self.input.epoch_stable_seed, 0x2f8a)
+            .unit([MapScale::native(x), MapScale::native(y)]);
         Ok(Some(
-            steps[if draw * (left_weight + right_weight) < left_weight {
-                left
-            } else {
-                right
+            steps[match ticket(draw, &[left_weight, right_weight]) {
+                Some(0) => left,
+                _ => right,
             }]
             .target,
         ))

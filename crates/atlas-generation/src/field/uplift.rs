@@ -4,8 +4,8 @@ use super::{
     Field,
 };
 use crate::{
+    chance::Chance,
     execution::{Command, CommandKind, QueryDependency},
-    noise::{hash_unit, mesh_noise},
     processes::runner::PhysicalContext,
     rock::ground::GroundField as G,
     scale::{MapScale, RelativeMeasure},
@@ -39,14 +39,10 @@ fn interior(field: &Field, p: &Settings, c: &PhysicalContext, cell: usize) -> io
         return Ok(0.0);
     }
     let [x, y] = field.mesh.position(cell);
-    let mut relief = mesh_noise(
-        &field.mesh,
-        x,
-        y,
-        c.epoch_stable_seed ^ 0x5ee1,
-        p.interior_relief_scale,
-        4,
-    ) * p.interior_relief_strength;
+    let mut relief = Chance::of(c.epoch_stable_seed, 0x5ee1)
+        .noise(p.interior_relief_scale, 4)
+        .on(&field.mesh, [x, y])
+        * p.interior_relief_strength;
     if relief < 0.0 {
         relief *= p.interior_basin_depth_share / 1000.0;
     }
@@ -55,18 +51,15 @@ fn interior(field: &Field, p: &Settings, c: &PhysicalContext, cell: usize) -> io
 fn initialize(field: &Field, p: &Settings, c: &PhysicalContext, cell: usize) -> io::Result<()> {
     let [x, y] = field.mesh.position(cell);
     let province = field.shared.code(C::CrustProvinceIds).get(cell)?;
-    let variation = mesh_noise(
-        &field.mesh,
-        x,
-        y,
-        c.seed ^ 0x52c9,
-        p.elevation_variation_scale,
-        3,
-    ) * p.elevation_variation_strength;
+    let variation = Chance::of(c.seed, 0x52c9)
+        .noise(p.elevation_variation_scale, 3)
+        .on(&field.mesh, [x, y])
+        * p.elevation_variation_strength;
+    // Each province stands a little higher or lower than its neighbours, drawn once.
     let offset = if province < 0 {
         0.0
     } else {
-        (hash_unit(c.seed ^ 0x3d7b, f64::from(province), f64::from(0x51a9)) - 0.5)
+        (Chance::of(c.seed, 0x3d7b).unit([f64::from(province), f64::from(0x51a9)]) - 0.5)
             * 2.0
             * length(field.scale, 0.00013)?
     };

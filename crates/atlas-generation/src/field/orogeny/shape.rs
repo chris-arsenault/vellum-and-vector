@@ -4,14 +4,14 @@ use super::{
     ground, length, read, Field, PhysicalContext, Settings, C, G, S,
 };
 use crate::{
-    noise::{hash_unit, unit_noise},
+    chance::Chance,
     rock::ground::queries::{surface_response, yielding_plane, Extent, SurfaceResponse},
     scale::MapScale,
 };
 use std::io;
 pub(super) const CREST: f64 = 1.55;
 pub(super) fn segment_scale(c: &Component, segment: f64) -> f64 {
-    0.75 + 0.5 * hash_unit(c.salt ^ 0x51e4, segment, 1.0)
+    Chance::of(c.salt, 0x51e4).spread([segment, 1.0], 0.75, 0.5)
 }
 pub(super) fn sheet_at(
     field: &Field,
@@ -29,7 +29,7 @@ pub(super) fn sheet_at(
     let stiffness = ground.fold(cell, &surface_response(SurfaceResponse::Standing), None)?;
     let spacing =
         p.orogenic_sheet_spacing * stiffness * (1.0 + ground.inherited_detachment(cell)?);
-    let offset = hash_unit(c.salt ^ 0x51e3, f64::from(segment), 0.0) * spacing;
+    let offset = Chance::of(c.salt, 0x51e3).unit([f64::from(segment), 0.0]) * spacing;
     let position = (reach + offset) / spacing;
     Ok((
         position.floor() as i32,
@@ -73,13 +73,15 @@ fn along_noise(
     }
     let [x, y] = field.mesh.position(cell);
     let offset = f64::from(pair) * length(field, if summit { 0.0775 } else { 0.0475 })?;
+    // The field is read along the range, so its swells run with the strike.
+    let along = Chance::of(seed, 0).noise(scale, 3);
     let Some(width) = field.mesh.periodic_width() else {
-        return Ok(unit_noise(x * tx + y * ty, offset, seed, scale, 3));
+        return Ok(along.unit([x * tx + y * ty, offset]));
     };
     let phase = x.rem_euclid(width);
     let t = phase / width;
-    let a = unit_noise(phase * tx + y * ty, offset, seed, scale, 3);
-    let b = unit_noise((phase - width) * tx + y * ty, offset, seed, scale, 3);
+    let a = along.unit([phase * tx + y * ty, offset]);
+    let b = along.unit([(phase - width) * tx + y * ty, offset]);
     Ok(a + (b - a) * t * t * (3.0 - 2.0 * t))
 }
 pub(super) fn summit(

@@ -6,8 +6,8 @@ use super::{
     Field,
 };
 use crate::{
+    chance::Chance,
     execution::{Command, CommandKind, ExecutionError, Query, QueryValue},
-    noise::hash_unit,
     processes::runner::PhysicalContext,
     scale::{LengthUnit, RelativeMeasure},
     tectonics::sources::{area_budget, medium_area, world_candidates},
@@ -76,9 +76,10 @@ fn planned(field: &Field, p: &Settings, c: &PhysicalContext) -> io::Result<Vec<P
         selected.push(PlannedImpact {
             id: candidate.id,
             position: candidate.position,
-            radius: p.impact_minimum_radius
-                + (p.impact_maximum_radius - p.impact_minimum_radius)
-                    * hash_unit(c.seed ^ 0x3a91, candidate.id as f64, 0.0),
+            radius: Chance::of(c.seed, 0x3a91).between(
+                [candidate.id as f64, 0.0],
+                [p.impact_minimum_radius, p.impact_maximum_radius],
+            ),
         });
     }
     Ok(selected)

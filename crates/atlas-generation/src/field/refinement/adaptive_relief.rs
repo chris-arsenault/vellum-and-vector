@@ -1,8 +1,8 @@
 //! The source independent-map relief synthesis, using the captured gradient and current rock.
 use crate::{
+    chance::Chance,
     execution::{Command, CommandKind},
     field::{inheritance::resources::Resource, Field},
-    noise::fractal_noise,
     reconstruction::{Interpolator, Layout},
     rock::ground::queries::{surface_response, SurfaceResponse},
     scale::{LengthUnit, MapScale},
@@ -96,14 +96,15 @@ pub fn synthesize<'a>() -> Command<Field, Input<'a>> {
                 let minimum = field.mesh.area(cell).sqrt() * 2.0;
                 let scale = (span / 2.0).max(minimum);
                 let octaves = (1.0 + (scale / minimum).log2().floor()).max(1.0) as usize;
+                // The field is read along the slope and squeezed across it, so relief
+                // runs in spurs down the slope, with octaves down to the size of a cell.
                 let delta = amplitude
-                    * fractal_noise(
-                        x * ax + y * ay,
-                        (-x * ay + y * ax) / input.settings.relief_synthesis_anisotropy,
-                        input.seed ^ 0x5e1f,
-                        scale,
-                        octaves,
-                    );
+                    * Chance::of(input.seed, 0x5e1f)
+                        .noise(scale, octaves)
+                        .signed([
+                            x * ax + y * ay,
+                            (-x * ay + y * ax) / input.settings.relief_synthesis_anisotropy,
+                        ]);
                 let applied = MapScale::native(delta);
                 if applied == 0.0 {
                     continue;

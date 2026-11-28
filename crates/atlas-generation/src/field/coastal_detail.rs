@@ -1,7 +1,7 @@
 use super::{shared::CellCode, Field};
 use crate::{
+    chance::{ridged, Chance},
     execution::{Command, CommandKind, ExecutionError},
-    noise::mesh_noise,
     processes::runner::PhysicalContext,
     rock::ground::GroundField,
     scale::{MapScale, RelativeMeasure},
@@ -105,18 +105,17 @@ impl Field {
             let octaves = [4, 6, 6, 5, 4][margin];
             let [x, y] = self.mesh.position(cell);
             let warp_scale = minimum.max(scale * 1.7);
-            let wx = mesh_noise(&self.mesh, x, y, seed ^ 0x51a3, warp_scale, 3) * warp;
-            let wy = mesh_noise(
-                &self.mesh,
-                x + offset[0],
-                y - offset[1],
-                seed ^ 0x51a3,
-                warp_scale,
-                3,
-            ) * warp;
-            let value = mesh_noise(&self.mesh, x + wx, y + wy, seed ^ 0x7c4b, scale, octaves);
+            // The coast is read through a pull of its own: one field, read here for east
+            // and a set distance away for north. Margins that break into headlands and
+            // coves fold the field into crests.
+            let pull = Chance::of(seed, 0x51a3).noise(warp_scale, 3);
+            let wx = pull.on(&self.mesh, [x, y]) * warp;
+            let wy = pull.on(&self.mesh, [x + offset[0], y - offset[1]]) * warp;
+            let value = Chance::of(seed, 0x7c4b)
+                .noise(scale, octaves)
+                .on(&self.mesh, [x + wx, y + wy]);
             let noise = if margin == 2 || margin == 3 {
-                2.0 * value.abs() - 1.0
+                ridged(value)
             } else {
                 value
             };

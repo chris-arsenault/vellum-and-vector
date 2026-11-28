@@ -6,9 +6,9 @@ use super::{
     Field,
 };
 use crate::{
+    chance::Chance,
     execution::{Command, CommandKind, ExecutionError, Query, QueryValue},
     lattice::TriangularLattice,
-    noise::hash_unit,
     processes::runner::PhysicalContext,
     scale::{LengthUnit, MapScale, RelativeMeasure},
     storage::{Band, ReadBand},
@@ -120,9 +120,8 @@ fn network(work: &mut Work<'_>, field: &Field) -> io::Result<()> {
     let mut roots = Vec::new();
     for branch in 0..count {
         let root = if branch > 0 && branch % 3 == 0 && !nodes.is_empty() {
-            nodes[(hash_unit(work.context.seed ^ 0x29f1, branch as f64, 0.0) * nodes.len() as f64)
-                .trunc() as usize
-                % nodes.len()]
+            // Every third fault branches from somewhere along the faults already grown.
+            nodes[Chance::of(work.context.seed, 0x29f1).one_of([branch as f64, 0.0], nodes.len())]
         } else {
             separated_root(
                 &points,
@@ -233,13 +232,7 @@ fn apply(work: &mut Work<'_>, faults: &[Fault], forming: bool) -> io::Result<()>
                 let previous = fault.coordinates[index - 1];
                 distance += (point[0] - previous[0]).hypot(point[1] - previous[1]);
             }
-            let strength = 760.0
-                + (hash_unit(
-                    work.context.seed,
-                    branch as f64,
-                    (distance / work.noise_span).floor(),
-                ) * 240.0)
-                    .trunc();
+            let strength = growth::strength(work.context.seed, branch, distance, work.noise_span);
             growth::widen(work, point, fault.width, strength)?;
         }
         work.faults.push(fault.clone());

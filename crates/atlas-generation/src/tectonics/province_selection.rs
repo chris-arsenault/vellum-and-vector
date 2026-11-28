@@ -1,8 +1,8 @@
 use super::{controls, province_settings::Settings, site_index::Sites, state::State};
 use crate::{
+    chance::{Chance, Warp},
     field::shared::{CellCode, SharedFields},
     lattice::TriangularLattice,
-    noise::mesh_noise,
     rock::ground::{Ground, GroundField},
     spatial::{SpatialKernel, SpatialResult},
 };
@@ -176,17 +176,15 @@ fn isolated_scrap(read: &Read<'_>, cell: usize) -> io::Result<bool> {
 }
 fn warped_point(read: &Read<'_>, cell: usize) -> Position {
     let [x, y] = read.mesh.position(cell);
-    let warp = |salt| {
-        mesh_noise(
-            read.mesh,
-            x,
-            y,
-            read.state.seed ^ salt,
-            read.settings.continental_warp_scale,
-            3,
-        ) * read.settings.continental_warp_strength
-    };
-    Position::xy(read.mesh.delta_x(x + warp(0x16f1)), y + warp(0x62bd))
+    let seed = read.state.seed;
+    let [east, north] = Warp::new(
+        [Chance::of(seed, 0x16f1), Chance::of(seed, 0x62bd)],
+        read.settings.continental_warp_scale,
+        3,
+    )
+    .pull_on(read.mesh, [x, y]);
+    let reach = read.settings.continental_warp_strength;
+    Position::xy(read.mesh.delta_x(x + east * reach), y + north * reach)
 }
 fn distance(read: &Read<'_>, point: Position, site: Option<usize>) -> f64 {
     let Some(site) = site else {

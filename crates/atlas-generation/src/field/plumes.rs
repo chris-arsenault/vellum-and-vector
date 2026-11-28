@@ -4,8 +4,8 @@ use super::{
     Field,
 };
 use crate::{
+    chance::Chance,
     execution::{Command, CommandKind, ExecutionError},
-    noise::hash_unit,
     processes::runner::PhysicalContext,
     scale::{LengthUnit, RelativeMeasure},
     scale_settings::{ResolvedSettings, ScaleDefinition},
@@ -181,7 +181,7 @@ impl Field {
             let floor = p.mantle_plume_minimum_share / 1000.0;
             let falloff = (1.0 - position).powf(p.mantle_plume_strength_exponent / 1000.0);
             let variation = (floor + (1.0 - floor) * falloff)
-                * (0.88 + hash_unit(context.seed ^ 0x54b1, source.id as f64, 0.0) * 0.12);
+                * Chance::of(context.seed, 0x54b1).spread([source.id as f64, 0.0], 0.88, 0.12);
             let strength = (p.mantle_plume_strength * variation).round();
             let cell = self
                 .mesh

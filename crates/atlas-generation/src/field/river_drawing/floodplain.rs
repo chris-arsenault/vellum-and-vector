@@ -1,9 +1,9 @@
 //! Flood-floor sampling and profile transport for the source river-meander process.
 use super::{meanders, Drawing, Paths, Point};
 use crate::{
+    chance::Chance,
     field::{significance::measure, Field},
     hpc::IntPairIndex,
-    noise::hash_unit,
     scale::{LengthUnit, MapScale, RelativeMeasure},
     spatial::SpatialKernel,
 };
@@ -85,7 +85,7 @@ pub fn meander(
                 width,
                 FLOODPLAIN_STEPS,
                 floor,
-                |k| hash_unit(salt, k as f64, 0.0),
+                |k| Chance::of(salt, 0).unit([k as f64, 0.0]),
                 spatial,
             )
         },

@@ -39,6 +39,23 @@ A direction that names a mechanism ("no static modifiers", "no caps", "behind
 contracts") is this rule seen from one side. Do not read it as a ban on numbers,
 tables or settings, and do not rebuild working code to satisfy a narrower reading.
 
+**Where chance comes from.** A rule that is decided by weighing options and taking the
+best is constructed, however many fields it weighs. Write a rule as many small steps
+that chance takes part in, and take that chance from
+`crates/atlas-generation/src/chance.rs`: named draws, a ticket or a chance-scaled cost
+among weighed options, many-scaled noise fields and warps, patchy ground a flood
+wanders across, a walker that holds a heading and drifts, scattered points. Every piece
+of it was taken out of a geology or river rule that still uses it, and those rules are
+the patterns to copy: a fracture grows as a walk (`field/fractures/growth.rs`), a river
+takes one of two lower neighbours by a weighted ticket (`water/guidance.rs`), water
+crosses flat ground through noise corridors (`water/drainage.rs`), a continent grows by
+taking the cheapest province on its front with chance in the cost
+(`tectonics/allocation.rs`). Before reporting a rule done, list where chance enters it
+and what each draw changes on the map; draws that only switch a thing on or off, and
+form that no noise field or walk shapes, mean it is not done. A piece joins the library
+only with a working rule moved onto it. The architecture suite keeps geology and river
+rules from reaching past the library.
+
 ## Product and source authority
 
 Build the fictional-world atlas described in [docs/product-spec.md](docs/product-spec.md).

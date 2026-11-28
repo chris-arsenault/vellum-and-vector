@@ -5,8 +5,8 @@ use super::{
     territories,
 };
 use crate::{
+    chance::Chance,
     lattice::TriangularLattice,
-    noise::hash_unit,
     scale_settings::{ResolvedSettings, ScaleDefinition},
     spatial::{SpatialKernel, SpatialResult},
 };
@@ -67,13 +67,11 @@ pub fn create_provinces(
         .checked_mul(profile.tectonic_site_candidate_multiplier)
         .ok_or("Province candidate count exceeds address space")?;
     let bounds = mesh.bounds();
+    let scatter = super::sources::scatter(seed);
     let mut selected: Vec<_> = (0..count)
         .map(|id| Candidate {
-            position: [
-                bounds.0 + (bounds.2 - bounds.0) * hash_unit(seed ^ 0x1b73, id as f64, 0.0),
-                bounds.1 + (bounds.3 - bounds.1) * hash_unit(seed ^ 0x2db9, id as f64, 1.0),
-            ],
-            priority: hash_unit(seed ^ 0x4a91, id as f64, 2.0),
+            position: scatter.position(id, bounds),
+            priority: scatter.rank(id),
         })
         .collect();
     // hpc-exempt: seeded province candidates sorted once before selecting the configured count.
@@ -87,10 +85,14 @@ pub fn create_provinces(
         .into_iter()
         .enumerate()
         .map(|(i, candidate)| {
-            let angle = hash_unit(seed ^ 0x5c27, i as f64, 0.0) * std::f64::consts::TAU;
-            let speed = profile.tectonic_motion_minimum
-                + (profile.tectonic_motion_maximum - profile.tectonic_motion_minimum)
-                    * hash_unit(seed ^ (0x5c27 + 0x16da), i as f64, 1.0);
+            let angle = Chance::of(seed, 0x5c27).angle([i as f64, 0.0]);
+            let speed = Chance::of(seed, 0x5c27 + 0x16da).between(
+                [i as f64, 1.0],
+                [
+                    profile.tectonic_motion_minimum,
+                    profile.tectonic_motion_maximum,
+                ],
+            );
             Province {
                 position: candidate.position,
                 priority: candidate.priority,
@@ -105,13 +107,8 @@ fn plate_roots(source: &[Province], seed: i32) -> Vec<usize> {
     let candidates: Vec<_> = (0..source.len())
         .filter(|&i| source[i].ocean_plate == 0)
         .collect();
-    let mut ranked: Vec<_> = candidates
-        .iter()
-        .enumerate()
-        .map(|(i, &source_index)| (source_index, hash_unit(seed ^ 0x7143, i as f64, 0.0)))
-        .collect();
-    // hpc-exempt: province founding records ranked once, as in tectonicInitialization.ts.
-    ranked.sort_by(|a, b| b.1.total_cmp(&a.1));
+    let ranked =
+        Chance::of(seed, 0x7143).ranked(candidates.iter().copied(), |at, _| [at as f64, 0.0]);
     let mut continents = Vec::new();
     for &i in &candidates {
         let id = source[i].assembly;
@@ -121,13 +118,7 @@ fn plate_roots(source: &[Province], seed: i32) -> Vec<usize> {
     }
     let mut founders: Vec<_> = continents
         .iter()
-        .map(|&id| {
-            ranked
-                .iter()
-                .find(|(i, _)| source[*i].assembly == id)
-                .unwrap()
-                .0
-        })
+        .map(|&id| *ranked.iter().find(|i| source[**i].assembly == id).unwrap())
         .collect();
     let count =
         ((candidates.len() as f64 / controls::INITIAL_PROVINCES_PER_PLATE).round() as usize).max(2);
@@ -135,9 +126,8 @@ fn plate_roots(source: &[Province], seed: i32) -> Vec<usize> {
     founders.extend(
         ranked
             .into_iter()
-            .filter(|(i, _)| source[*i].assembly == 0)
-            .take(additional)
-            .map(|(i, _)| i),
+            .filter(|i| source[*i].assembly == 0)
+            .take(additional),
     );
     founders
 }

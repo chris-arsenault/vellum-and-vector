@@ -59,12 +59,21 @@ impl Grid {
             return Ok(donor);
         }
         let spacing = self.donor_spacing(self.nearest_index(point)?)?;
-        let warp = |salt| {
-            CONTACT_WARP
-                * spacing
-                * crate::noise::fractal_noise(point[0], point[1], salt, spacing, CONTACT_OCTAVES)
-        };
-        let donor = self.nearest_index([point[0] + warp(0x7c01), point[1] + warp(0x7c02)])?;
+        // Contacts between a parent's cells wander on the finer map: each point takes its
+        // donor from a little off where it stands.
+        let [east, north] = crate::chance::Warp::new(
+            [
+                crate::chance::Chance::of(0, 0x7c01),
+                crate::chance::Chance::of(0, 0x7c02),
+            ],
+            spacing,
+            CONTACT_OCTAVES,
+        )
+        .pull(point);
+        let donor = self.nearest_index([
+            point[0] + CONTACT_WARP * spacing * east,
+            point[1] + CONTACT_WARP * spacing * north,
+        ])?;
         let mut donors = self.donors.0.borrow_mut();
         // A memo that outgrows every lattice and raster starts over rather than growing on.
         if donors.len() >= REMEMBERED_DONORS {

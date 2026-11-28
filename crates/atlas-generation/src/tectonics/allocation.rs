@@ -1,6 +1,6 @@
 //! Area-based continental accretion and exclusively oceanic plate allocation.
 use super::territories::Territories;
-use crate::noise::hash_unit;
+use crate::chance::{best, cheapest, Chance};
 
 #[derive(Clone, Debug)]
 pub struct Candidate {
@@ -37,18 +37,6 @@ pub fn distance2(a: &Candidate, b: &Candidate, width: f64) -> f64 {
     };
     dx * dx + (a.position[1] - b.position[1]).powi(2)
 }
-fn best(indices: impl IntoIterator<Item = usize>, score: impl Fn(usize) -> f64) -> Option<usize> {
-    let mut selected = None;
-    let mut maximum = f64::NEG_INFINITY;
-    for i in indices {
-        let value = score(i);
-        if selected.is_none() || value > maximum {
-            selected = Some(i);
-            maximum = value;
-        }
-    }
-    selected
-}
 fn minimum_distance(sites: &[Candidate], candidate: usize, selected: &[usize], width: f64) -> f64 {
     selected
         .iter()
@@ -83,12 +71,16 @@ fn anchors(
             !chosen.contains(i)
                 && (occupied + territory.areas[*i] - target).abs() < (occupied - target).abs()
         });
-        let Some(next) = best(options, |i| {
-            let chance = hash_unit(seed ^ 0x41da3, i as f64, chosen.len() as f64);
+        // The first anchor falls where chance favours; each later one keeps far from
+        // those chosen, with chance counting for up to half that distance.
+        let turn = chosen.len() as f64;
+        let chance = Chance::of(seed, 0x41da3);
+        let Some(next) = best(options, |&i| {
+            let key = [i as f64, turn];
             if chosen.is_empty() {
-                chance
+                chance.unit(key)
             } else {
-                minimum_distance(sites, i, &chosen, width).sqrt() * (0.5 + 0.5 * chance)
+                minimum_distance(sites, i, &chosen, width).sqrt() * chance.spread(key, 0.5, 0.5)
             }
         }) else {
             break;
@@ -106,39 +98,34 @@ pub fn next_continental_province(
     growth: &Growth<'_>,
     eligible: impl Fn(usize) -> bool,
 ) -> Option<usize> {
-    let mut best = None;
-    let mut cost = f64::INFINITY;
-    for (i, site) in sites.iter().enumerate() {
-        if selected[i] != 0 || !eligible(i) {
-            continue;
-        }
-        if growth.cohesion > 0.0
-            && !selected
+    // An assembly that holds together takes only provinces beside those it holds.
+    let beside = |i: usize| {
+        growth.cohesion <= 0.0
+            || selected
                 .iter()
                 .enumerate()
                 .any(|(j, &id)| id == assembly && growth.adjacent[i * sites.len() + j] == 1)
-        {
-            continue;
-        }
+    };
+    let front = (0..sites.len()).filter(|&i| selected[i] == 0 && eligible(i) && beside(i));
+    let chance = Chance::of(growth.seed, 0x6173);
+    // The cheapest province on the front joins: the nearer its anchor the cheaper, with
+    // chance stretching that distance; an assembly that does not hold together takes
+    // whichever chance favours.
+    cheapest(front, |&i| {
+        let site = &sites[i];
         let distance = distance2(site, &sites[anchor], growth.width).sqrt();
-        let chance = hash_unit(growth.seed ^ 0x6173, i as f64, assembly as f64);
-        let value = if growth.cohesion > 0.0 {
+        let chance = chance.unit([i as f64, assembly as f64]);
+        if growth.cohesion > 0.0 {
             distance * (1.0 + growth.cohesion * chance * 0.7) - site.priority * distance * 0.1
         } else {
             -chance
-        };
-        if value < cost {
-            best = Some(i);
-            cost = value;
         }
-    }
-    best
+    })
 }
 fn growth_weights(count: usize, profile: Layout, seed: i32) -> Vec<f64> {
+    let chance = Chance::of(seed, 0x4b19);
     let mut weights: Vec<_> = (0..count)
-        .map(|i| {
-            1.0 + (hash_unit(seed ^ 0x4b19, i as f64, 0.0) * 2.0 - 1.0) * profile.growth_variation
-        })
+        .map(|i| 1.0 + chance.signed([i as f64, 0.0]) * profile.growth_variation)
         .collect();
     let mut order: Vec<_> = (0..count).collect();
     // hpc-exempt: initial assembly weights sorted once, preserving tied major selection.
@@ -183,7 +170,7 @@ fn assemblies(
                 .map(|next| (n, next))
             })
             .collect();
-        let Some(pick) = best(0..options.len(), |i| {
+        let Some(pick) = best(0..options.len(), |&i| {
             let (n, next) = options[i];
             (target * weights[n] / weight - occupied[n] - territory.areas[next] / 2.0) / weights[n]
         }) else {
@@ -220,13 +207,14 @@ fn ocean_plates(
     for plate in 1..=profile.ocean_plates {
         let held: Vec<_> = (0..sites.len()).filter(|&i| result[i] > 0).collect();
         let starts = (0..sites.len()).filter(|&i| continents[i] == 0 && result[i] == 0);
-        let Some(start) = best(starts, |i| {
+        let chance = Chance::of(seed, 0x37b1);
+        let Some(start) = best(starts, |&i| {
             let place = if held.is_empty() {
                 1.0
             } else {
                 minimum_distance(sites, i, &held, width).sqrt()
             };
-            place * hash_unit(seed ^ 0x37b1, i as f64, plate as f64)
+            place * chance.unit([i as f64, plate as f64])
         }) else {
             break;
         };
@@ -241,7 +229,7 @@ fn ocean_plates(
                         .enumerate()
                         .any(|(j, &id)| id == plate && territory.adjacent[i * sites.len() + j] != 0)
             });
-            let Some(next) = best(edge, |i| -distance2(&sites[i], &sites[start], width)) else {
+            let Some(next) = best(edge, |&i| -distance2(&sites[i], &sites[start], width)) else {
                 break;
             };
             result[next] = plate;

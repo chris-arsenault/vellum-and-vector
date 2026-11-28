@@ -1,4 +1,5 @@
 use crate::{
+    chance::{Chance, Warp},
     lattice::TriangularLattice,
     spatial::{SpatialKernel, SpatialResult},
 };
@@ -34,12 +35,13 @@ impl Bend {
         bend
     }
     fn offset(&self, point: [f64; 2]) -> [f64; 2] {
-        let wander = |salt| {
-            WANDER
-                * self.span
-                * crate::noise::fractal_noise(point[0], point[1], salt, self.span, WANDER_OCTAVES)
-        };
-        [wander(0x5c01), wander(0x5c02)]
+        let [east, north] = Warp::new(
+            [Chance::of(0, 0x5c01), Chance::of(0, 0x5c02)],
+            self.span,
+            WANDER_OCTAVES,
+        )
+        .pull(point);
+        [WANDER * self.span * east, WANDER * self.span * north]
     }
     pub fn at(&self, point: [f64; 2]) -> [f64; 2] {
         if self.span <= 0.0 {

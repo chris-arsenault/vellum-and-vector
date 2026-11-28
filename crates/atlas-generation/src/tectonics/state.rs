@@ -1,9 +1,14 @@
 use super::{controls, motion, territories};
 use crate::{
+    chance::Chance,
     lattice::TriangularLattice,
-    noise::hash_unit,
     spatial::{SpatialKernel, SpatialResult},
 };
+
+/// How firmly two neighbouring provinces hold together, drawn once for the pair.
+fn bond_strength(seed: i32, a: usize, b: usize) -> f64 {
+    Chance::of(seed, 0x5c173).spread([a as f64, b as f64], 0.6, 0.8)
+}
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Province {
@@ -125,7 +130,7 @@ impl State {
                 bonds.push(Bond {
                     a,
                     b,
-                    strength: (0.6 + hash_unit(seed ^ 0x5c173, a as f64, b as f64) * 0.8)
+                    strength: bond_strength(seed, a, b)
                         * if craton {
                             controls::CONTINENT_BOND_STRENGTH
                         } else {
@@ -197,7 +202,7 @@ impl State {
                     self.bonds.push(Bond {
                         a,
                         b,
-                        strength: 0.6 + hash_unit(self.seed ^ 0x5c173, a as f64, b as f64) * 0.8,
+                        strength: bond_strength(self.seed, a, b),
                         extension: 0.0,
                         shortening: 0.0,
                         broken: true,

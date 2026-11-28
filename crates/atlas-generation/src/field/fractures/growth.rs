@@ -1,7 +1,7 @@
 use super::{Fault, Work};
 use crate::{
+    chance::{Chance, Stride, Walker, Whims},
     hpc::BitSet,
-    noise::{hash_signed, hash_unit},
 };
 use std::io;
 
@@ -52,50 +52,24 @@ pub(super) fn widen_values(
     }
     Ok(())
 }
-struct Heading {
-    point: [f64; 2],
-    angle: f64,
+/// The turns a growing fault may take at each step, in radians off its heading.
+const FAN: [f64; 5] = [-0.65, -0.325, 0.0, 0.325, 0.65];
+/// How open a fault stands `travelled` along it: drawn afresh every span of its length.
+pub(super) fn strength(seed: i32, branch: usize, travelled: f64, span: f64) -> f64 {
+    760.0 + (Chance::of(seed, 0).unit([branch as f64, (travelled / span).floor()]) * 240.0).trunc()
 }
-fn directed_step(
-    work: &Work<'_>,
-    heading: &Heading,
-    branch: usize,
-    step: f64,
-    distance: f64,
-) -> io::Result<Option<Heading>> {
-    let mut best = None;
-    let mut score = f64::NEG_INFINITY;
-    let seed = work.context.seed;
-    for turn in [-0.65f64, -0.325, 0.0, 0.325, 0.65] {
-        let angle = heading.angle + turn;
-        let point = [
-            heading.point[0] + angle.cos() * distance,
-            heading.point[1] + angle.sin() * distance,
-        ];
-        let Some(cell) = work.mesh.cell_at(point[0], point[1]) else {
-            continue;
-        };
-        let novelty = if work.conductance.get(cell)? < 560.0 {
-            0.22
-        } else {
-            -0.08
-        };
-        let grid = ((point[0] / work.noise_span).floor() as i32)
-            ^ ((point[1] / work.noise_span).floor() as i32);
-        let value = turn.cos()
-            + novelty
-            + work.strain.get(cell)? / 1000.0 * 0.12
-            + hash_signed(
-                seed ^ 0x6c53,
-                branch as f64 + (step / work.noise_span).floor(),
-                f64::from(grid),
-            ) * 0.12;
-        if value > score {
-            score = value;
-            best = Some(Heading { point, angle });
-        }
-    }
-    Ok(best)
+/// What ground is worth to a growing fault: more where no fault runs yet, and more the
+/// more the crust there is strained. Ground off the map is worth nothing to it.
+fn worth(work: &Work<'_>, point: [f64; 2]) -> io::Result<Option<f64>> {
+    let Some(cell) = work.mesh.cell_at(point[0], point[1]) else {
+        return Ok(None);
+    };
+    let novelty = if work.conductance.get(cell)? < 560.0 {
+        0.22
+    } else {
+        -0.08
+    };
+    Ok(Some(novelty + work.strain.get(cell)? / 1000.0 * 0.12))
 }
 pub(super) fn grow(
     work: &mut Work<'_>,
@@ -105,13 +79,27 @@ pub(super) fn grow(
 ) -> io::Result<()> {
     let seed = work.context.seed;
     let p = work.settings;
-    let mut heading = Heading {
+    let number = branch as f64;
+    // A fault sets out on a heading and for a length drawn for it, then walks: holding
+    // its heading, drawn to unbroken and strained ground, and wandering by chance.
+    let mut walker = Walker {
         point: root,
-        angle: hash_unit(seed ^ 0x3da7, branch as f64, 0.0) * std::f64::consts::TAU,
+        heading: Chance::of(seed, 0x3da7).angle([number, 0.0]),
     };
-    let length = p.fracture_minimum_length
-        + (p.fracture_maximum_length - p.fracture_minimum_length)
-            * hash_unit(seed ^ 0x4f39, branch as f64, 1.0);
+    let length = Chance::of(seed, 0x4f39).between(
+        [number, 1.0],
+        [p.fracture_minimum_length, p.fracture_maximum_length],
+    );
+    let stride = Stride {
+        fan: &FAN,
+        whim: 0.12,
+        drift: 0.22,
+        span: work.noise_span,
+    };
+    let whims = Whims {
+        turn: Chance::of(seed, 0x6c53),
+        drift: Chance::of(seed, 0x5ac1),
+    };
     let mut ordinal = work.faults.len();
     while work
         .faults
@@ -128,24 +116,20 @@ pub(super) fn grow(
     let increment = (fault.width / 2.0).min(length / 32.0);
     let mut step = 0.0;
     while step < length {
-        let strength = 760.0
-            + (hash_unit(seed, branch as f64, (step / work.noise_span).floor()) * 240.0).trunc();
-        nodes.push(heading.point);
-        fault.coordinates.push(heading.point);
-        widen(work, heading.point, fault.width, strength)?;
-        let Some(next) = directed_step(work, &heading, branch, step, increment.min(length - step))?
-        else {
+        nodes.push(walker.point);
+        fault.coordinates.push(walker.point);
+        let open = strength(seed, branch, step, work.noise_span);
+        widen(work, walker.point, fault.width, open)?;
+        let reach = increment.min(length - step);
+        let went = walker.step(&stride, whims, [number, step], reach, |point| {
+            worth(work, point)
+        })?;
+        if !went {
             break;
-        };
-        heading = next;
-        heading.angle += hash_signed(
-            seed ^ 0x5ac1,
-            branch as f64,
-            (step / work.noise_span).floor(),
-        ) * 0.22;
+        }
         step += increment;
     }
-    fault.coordinates.push(heading.point);
+    fault.coordinates.push(walker.point);
     work.faults.push(fault);
     Ok(())
 }

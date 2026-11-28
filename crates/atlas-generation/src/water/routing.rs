@@ -6,10 +6,10 @@ use super::{
     reaches::ReachStore,
 };
 use crate::{
+    chance::Chance,
     flow_graph::target_order,
     hpc::CellQueue,
     lattice::TriangularLattice,
-    noise::hash_unit,
     scale::MapScale,
     storage::{Band, Coverage, ReadBand},
 };
@@ -229,21 +229,15 @@ fn lake_root(input: &RoutingInputs<'_>, members: &[usize]) -> io::Result<(usize,
     }
     Ok((stable_root(input, members), -1))
 }
+/// The member a closed hollow drains to when nothing else chooses one: the member
+/// chance favours, by where it lies, so the choice holds as the hollow's edge shifts.
 fn stable_root(input: &RoutingInputs<'_>, members: &[usize]) -> usize {
-    let (mut selected, mut best) = (members[0], -f64::MAX);
-    for &cell in members {
-        let [x, y] = input.mesh.position(cell);
-        let score = hash_unit(
-            input.seed ^ 0x6c53,
-            MapScale::native(x),
-            MapScale::native(y),
-        );
-        if score > best {
-            selected = cell;
-            best = score;
-        }
-    }
-    selected
+    Chance::of(input.seed, 0x6c53)
+        .favoured(members.iter().copied(), |&cell| {
+            let [x, y] = input.mesh.position(cell);
+            [MapScale::native(x), MapScale::native(y)]
+        })
+        .unwrap_or(members[0])
 }
 fn lake_ranks(input: &RoutingInputs<'_>, root: usize, ranks: &mut Band<i32>) -> io::Result<()> {
     let mut queue = CellQueue::new();

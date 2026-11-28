@@ -1,6 +1,6 @@
 use super::{placement::rock_column, Ground, GroundField as F};
 use crate::{
-    noise::{hash_unit, mesh_noise},
+    chance::Chance,
     rock::{
         catalogue::{self, BASALT, GNEISS, GRANITE, LIMESTONE, SANDSTONE, SHALE},
         columns::Column,
@@ -114,9 +114,12 @@ impl Ground {
         )
     }
     fn continental_column(&mut self, cell: usize, province: i32, seed: i32) -> io::Result<()> {
+        // A province is all shield or all platform, on one basement and one stack of
+        // beds, each drawn once for the province; the beds swell and thin across it.
         let province = f64::from(province);
-        let shield = hash_unit(seed ^ 0x5a13, province, 0.0) < 0.3;
-        let basement = if hash_unit(seed ^ 0x5a13, province, 1.0) < 0.5 {
+        let basement_draws = Chance::of(seed, 0x5a13);
+        let shield = basement_draws.happens([province, 0.0], 0.3);
+        let basement = if basement_draws.happens([province, 1.0], 0.5) {
             GNEISS
         } else {
             GRANITE
@@ -125,18 +128,13 @@ impl Ground {
         if shield {
             return self.initial_layer(cell, 0, basement, depth);
         }
-        let stack = &PLATFORMS[(hash_unit(seed ^ 0x5a11, province, 0.0) * 4.0).floor() as usize];
+        let stack = &PLATFORMS[Chance::of(seed, 0x5a11).one_of([province, 0.0], PLATFORMS.len())];
         let [x, y] = self.mesh.position(cell);
         let swell = 1.0
             + 0.6
-                * mesh_noise(
-                    &self.mesh,
-                    x,
-                    y,
-                    seed ^ 0x5a12,
-                    self.relative_length(PLATFORM_SWELL_LENGTH)?,
-                    2,
-                );
+                * Chance::of(seed, 0x5a12)
+                    .noise(self.relative_length(PLATFORM_SWELL_LENGTH)?, 2)
+                    .on(&self.mesh, [x, y]);
         for (slot, &kind) in stack.iter().enumerate() {
             self.initial_layer(
                 cell,

@@ -3,6 +3,7 @@
 pub mod answers;
 pub mod atlas;
 pub mod bindings;
+pub mod chance;
 pub mod checkpoint;
 pub mod climate;
 pub mod composition;

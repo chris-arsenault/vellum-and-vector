@@ -4,8 +4,8 @@ use super::{
     Field,
 };
 use crate::{
+    chance::Chance,
     execution::{ExecutionError, Query},
-    noise::mesh_noise,
     processes::runner::PhysicalContext,
     scale::RelativeMeasure,
     storage::ReadBand,
@@ -37,14 +37,9 @@ impl Field {
         for cell in 0..self.mesh.len() {
             let value = potential.get(cell)? / 1000.0;
             let [x, y] = self.mesh.position(cell);
-            let roughness = mesh_noise(
-                &self.mesh,
-                x,
-                y,
-                seed ^ 0x41c7,
-                p.continental_warp_scale * 0.44,
-                4,
-            );
+            let roughness = Chance::of(seed, 0x41c7)
+                .noise(p.continental_warp_scale * 0.44, 4)
+                .on(&self.mesh, [x, y]);
             let margin = 1.0 - ((value - 0.5).abs() * 2.0).clamp(0.0, 1.0);
             let adjustment = match boundary.get(cell)? {
                 1 => strain.get(cell)? / 1000.0 * 0.07,
@@ -92,10 +87,13 @@ impl Field {
                 / 1000.0;
             let impact = fields.scalar(S::ImpactHeat).get(cell)? / 1000.0 * 0.36
                 / (completed + 1.0).max(1.0);
-            let lobes = mesh_noise(&self.mesh, x, y, seed ^ 0x4d13, p.plume_lobe_scale, 3);
+            let lobes = Chance::of(seed, 0x4d13)
+                .noise(p.plume_lobe_scale, 3)
+                .on(&self.mesh, [x, y]);
             let plume =
                 volcanic / 1000.0 * 0.68 * (1.0 + lobes * p.plume_lobe_strength / 1000.0).max(0.0);
-            let broad = (mesh_noise(&self.mesh, x, y, seed, broad_scale, 2) + 1.0) * 0.5 * 0.1;
+            let broad_field = Chance::of(seed, 0).noise(broad_scale, 2);
+            let broad = (broad_field.on(&self.mesh, [x, y]) + 1.0) * 0.5 * 0.1;
             let heat = ((boundary + fracture / 1000.0 * 0.28 + impact + plume + broad)
                 .clamp(0.0, 1.0)
                 * 1000.0)

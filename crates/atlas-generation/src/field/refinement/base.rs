@@ -1,7 +1,7 @@
 use super::super::Field;
 use crate::{
+    chance::{Chance, Warp},
     lattice::{sampling::Sampler, TriangularLattice},
-    noise::fractal_noise,
     scale::{LengthUnit, MapScale, RelativeMeasure},
     storage::ReadBand,
 };
@@ -151,11 +151,17 @@ impl Field {
             .value();
         let mut sampled = vec![0.0; self.mesh.len()];
         let mut clamped = vec![0.0; self.mesh.len()];
+        // The parent's surface is read a little off where each cell stands, so its
+        // straight-sided cells do not show through on the finer map.
+        let warp = Warp::new(
+            [Chance::of(seed, 0x51a3), Chance::of(seed, 0x7c4b)],
+            wavelength * 2.0,
+            2,
+        );
         for cell in 0..self.mesh.len() {
             let [x, y] = self.mesh.position(cell);
             let [ox, oy] = self.mesh.origin();
-            let wx = fractal_noise(x + ox, y + oy, seed ^ 0x51a3, wavelength * 2.0, 2);
-            let wy = fractal_noise(x + ox, y + oy, seed ^ 0x7c4b, wavelength * 2.0, 2);
+            let [wx, wy] = warp.pull([x + ox, y + oy]);
             sampled[cell] = at.sample(
                 [
                     (x + wx * wavelength * 0.18).clamp(bounds.0, bounds.2),

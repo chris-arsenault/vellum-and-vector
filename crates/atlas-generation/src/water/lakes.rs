@@ -8,7 +8,7 @@ use super::{
     },
 };
 use crate::{
-    noise::hash_unit,
+    chance::Chance,
     scale::{MapScale, RelativeMeasure},
     storage::{Band, Coverage, ReadBand},
 };
@@ -213,7 +213,7 @@ fn find_outlet(
             target,
             rank: input.drainage.ranks.get(member)?,
             drainage,
-            geometry: hash_unit(input.seed ^ 0x5b91, x, y),
+            geometry: Chance::of(input.seed, 0x5b91).unit([x, y]),
         };
         if best.as_ref().is_none_or(|best| candidate.preferred(best)) {
             best = Some(candidate);

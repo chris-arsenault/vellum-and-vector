@@ -18,6 +18,7 @@ const numericOwners = [
   "magic",
   "reconstruction",
   "ecology",
+  "chance",
 ];
 const numericFiles = ["flow_graph.rs", "climate.rs", "noise.rs", "prominence.rs"];
 function rustFiles(directory: string): string[] {
@@ -105,6 +106,31 @@ describe("Rust foundation architecture", () => {
     expect(offered.length).toBeGreaterThan(0);
     expect(registered.sort()).toEqual(offered.sort());
     expect(operations).toContain("Command::with_inputs");
+  });
+  it("geology and river rules take their chance from the chance library", () => {
+    // The library in `chance.rs` was taken out of these rules and is proven by them. A
+    // rule here that reaches past it for the hash or the noise octaves writes its own
+    // way of drawing again, and the library's contract stops being the one in use.
+    const generation = join(root, "crates/atlas-generation/src");
+    const rules = [
+      ...["water", "rock", "tectonics", "reconstruction"].flatMap((owner) =>
+        rustFiles(join(generation, owner))
+      ),
+      ...["orogeny", "fractures", "refinement", "river_drawing", "impacts"].flatMap((owner) =>
+        rustFiles(join(generation, "field", owner))
+      ),
+      ...["uplift.rs", "plumes.rs", "coastal_detail.rs", "crust_queries.rs"].map((file) =>
+        join(generation, "field", file)
+      ),
+    ];
+    expect(rules.length).toBeGreaterThan(100);
+    const lowLevel =
+      /\b(hash_unit|hash_signed|fractal_noise|unit_noise|mesh_noise|world_noise)\b/;
+    expect(
+      rules.filter((file) =>
+        lowLevel.test(readFileSync(file, "utf8").replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, ""))
+      )
+    ).toEqual([]);
   });
   it("the numeric structure scope actually covers Rust sources", () => {
     const files = [
