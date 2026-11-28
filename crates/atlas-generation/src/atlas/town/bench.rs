@@ -538,6 +538,137 @@ mod tests {
         }
     }
 
+    /// The premises other than homes a district holds: how many, and each kind's share of
+    /// them, the commonest first.
+    fn premises(bench: &Bench) -> (usize, Vec<(String, f64)>) {
+        let mut kinds: Vec<(String, f64)> = Vec::new();
+        let mut count = 0;
+        for holding in bench.town.holdings() {
+            if holding.occupation <= 0. || holding.kind.definition().roles.household {
+                continue;
+            }
+            count += 1;
+            let name = format!("{:?}", holding.kind);
+            match kinds.iter_mut().find(|(kind, _)| *kind == name) {
+                Some((_, held)) => *held += 1.,
+                None => kinds.push((name, 1.)),
+            }
+        }
+        for (_, held) in &mut kinds {
+            *held /= count.max(1) as f64;
+        }
+        kinds.sort_by(|a, b| b.1.total_cmp(&a.1));
+        (count, kinds)
+    }
+    /// The share two mixes of premises have in common.
+    fn shared(a: &[(String, f64)], b: &[(String, f64)]) -> f64 {
+        a.iter()
+            .map(|(kind, share)| {
+                b.iter()
+                    .find(|(other, _)| other == kind)
+                    .map_or(0., |(_, other)| share.min(*other))
+            })
+            .sum()
+    }
+
+    /// Prints the premises other than homes the same district holds under different
+    /// district roles, and how much of each mix it shares with the first. Run with
+    /// `cargo test -p atlas-generation --lib survey_of_district_roles -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "a readout for a person, not a check"]
+    fn survey_of_district_roles() {
+        let role = |economic: &str, social: &str| -> InheritedProgram {
+            serde_json::from_value(
+                serde_json::json!({"economic": economic, "social": social, "traits": []}),
+            )
+            .unwrap()
+        };
+        let roles = [
+            ("no role", None),
+            (
+                "craft workshops, guild commons",
+                Some(role("economic.craft-workshops", "social.guild-commons")),
+            ),
+            (
+                "market exchange, free commons",
+                Some(role("economic.market-exchange", "social.free-commons")),
+            ),
+            (
+                "learned services, patrician estates",
+                Some(role(
+                    "economic.learned-services",
+                    "social.patrician-estates",
+                )),
+            ),
+            (
+                "food provision, crowded tenements",
+                Some(role("economic.food-provision", "social.crowded-tenements")),
+            ),
+        ];
+        let mut first: Option<Vec<(String, f64)>> = None;
+        for (name, program) in roles {
+            let mut bench = Bench::district(Site {
+                program,
+                ..Site::default()
+            })
+            .unwrap();
+            bench.rounds(10).unwrap();
+            let (count, mix) = premises(&bench);
+            let common = first.as_ref().map_or(1., |first| shared(first, &mix));
+            let commonest: Vec<_> = mix
+                .iter()
+                .take(6)
+                .map(|(kind, share)| format!("{kind} {:.0}%", share * 100.))
+                .collect();
+            eprintln!(
+                "{name:36} premises {count:4} homes {:4} signature {:?} in common with the first {:.0}%: {}",
+                bench.homes().unwrap().len(),
+                bench.town.signature,
+                common * 100.,
+                commonest.join(", ")
+            );
+            first.get_or_insert(mix);
+        }
+    }
+
+    /// Prints what two contrasting civic orders make of districts of growing size at the
+    /// same crowding, over the rounds a map runs. Run with
+    /// `cargo test -p atlas-generation --lib survey_of_district_size -- --ignored --nocapture`.
+    #[test]
+    #[ignore = "a readout for a person, not a check"]
+    fn survey_of_district_size() {
+        for side in [300., 600., 900.] {
+            for civic in [Civic::CouncilOfElders, Civic::Autocracy] {
+                let started = std::time::Instant::now();
+                let mut bench = Bench::district(Site {
+                    civic: Some(civic),
+                    side,
+                    people: 1_500. * (side / 300.) * (side / 300.),
+                    ..Site::default()
+                })
+                .unwrap();
+                let all = |bench: &Bench| -> f64 {
+                    bench.town.streets().iter().map(Street::length).sum()
+                };
+                let founded = all(&bench);
+                for round in 1..=18 {
+                    bench.round().unwrap();
+                    if round % 6 == 0 {
+                        eprintln!(
+                            "side {side:4.0} {:18} round {round:2} holdings {:5} homes {:5} streets {:6.0} m (at founding {founded:5.0}, laid since {:5.0})  {:.0} s",
+                            civic.name(),
+                            bench.town.holdings().len(),
+                            bench.homes().unwrap().len(),
+                            all(&bench),
+                            bench.laid(),
+                            started.elapsed().as_secs_f64()
+                        );
+                    }
+                }
+            }
+        }
+    }
+
     /// Prints what each civic order makes of the same district. Run with
     /// `cargo test -p atlas-generation --lib survey_of_civic_orders -- --ignored --nocapture`.
     #[test]

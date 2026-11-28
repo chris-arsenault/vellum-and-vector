@@ -256,26 +256,28 @@ fn a_town_nothing_moves_to_defend_itself_raises_no_wall() {
 }
 
 #[test]
-fn a_town_that_grew_fourfold_has_its_old_wall_inside_a_new_one() {
-    // In: 15,000 townsfolk in the old era, 60,000 now; every era walls.
+fn a_town_that_spread_as_it_grew_has_its_old_wall_inside_a_new_one() {
+    // In: 15,000 townsfolk in the old era, 60,000 now, spread wide today so that most
+    // live beyond the ground the old town stood on; every era walls.
     // Out: two walls. The old one is small, lies wholly inside the new one, and the city
     // has outgrown it; the new one is today's and finished.
-    let walls = Plain::city(60_000., 600.).walls(&town(&GREW_FOURFOLD, ALWAYS));
+    let walls = Plain::city(60_000., 1_200.).walls(&town(&GREW_FOURFOLD, ALWAYS));
     assert_eq!(walls.len(), 2, "{:?}", told(&walls));
     let (old, new) = (&walls[0], &walls[1]);
     assert!(old.inherited() && old.outgrown && old.era.as_deref() == Some("old"));
     assert!(!new.inherited() && !new.outgrown && !new.unfinished());
-    assert!(old.area < 0.2 * new.area, "{:?}", told(&walls));
+    assert!(old.area < 0.4 * new.area, "{:?}", told(&walls));
     assert!(old.inside.iter().all(|&c| new.encloses(c as usize)));
 }
 
 #[test]
-fn a_town_that_grew_little_keeps_its_one_wall_with_suburbs_outside() {
-    // In: 45,000 townsfolk in the old era, 60,000 now; every era walls.
+fn a_town_that_grew_by_crowding_its_old_ground_keeps_its_one_wall() {
+    // In: the same history, 15,000 then and 60,000 now, but today's people crowd the
+    // middle, so most still live on the ground the old town stood on; every era walls.
     // Out: one wall, the old era's, still kept whole. Most of the city lives inside it
     // and the rest outside; a second wall would protect too few new people to be raised.
     let plain = Plain::city(60_000., 600.);
-    let walls = plain.walls(&town(&GREW_LITTLE, ALWAYS));
+    let walls = plain.walls(&town(&GREW_FOURFOLD, ALWAYS));
     assert_eq!(walls.len(), 1, "{:?}", told(&walls));
     let wall = &walls[0];
     assert!(wall.inherited() && !wall.outgrown);
@@ -291,13 +293,15 @@ fn stone_is_taken_from_an_unkept_wall_where_the_city_presses_on_it() {
     // Out: over many rolls the wall in the crowded middle keeps much less of its length;
     // a second unkept era costs either wall more; and a stretch stands or falls whole.
     let plain = Plain::city(60_000., 600.);
-    let inner = plain.walls(&town(&GREW_FOURFOLD, ALWAYS)).remove(0);
+    let eras = [("first", 4_000.), ("old", 20_000.), ("now", 60_000.)];
+    let inner = plain.walls(&town(&eras, ALWAYS)).remove(0);
     let outer = plain.walls(&town(&GREW_LITTLE, ALWAYS)).remove(0);
+    assert!(inner.area < 0.2 * outer.area);
     let (pressed, open) = (
         plain.left_standing(&inner, 1),
         plain.left_standing(&outer, 1),
     );
-    // Ground about the inner wall is six parts in ten built, about the outer under two.
+    // Ground about the inner wall is nearly half built, about the outer hardly at all.
     assert!(pressed < open - 0.15, "{pressed} {open}");
     assert!(plain.left_standing(&outer, 2) < open - 0.1);
     // The inner wall as the city left it: outgrown, so unkept for the present era.

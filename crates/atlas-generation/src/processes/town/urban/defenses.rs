@@ -192,9 +192,11 @@ fn held(
     Ok((inside, population, new_population))
 }
 
-/// One section of a circuit with the work it takes: more through built ground and
-/// across busy ways. Water and cliffs carry no wall.
-fn section(city: &City, [a, b]: [[f64; 2]; 2]) -> Option<Section> {
+/// One section of a circuit with the work it takes. Today's sponsor pays more to build
+/// through built ground and across busy ways. An earlier era's circuit ran along the
+/// edge of the town as it then was, open ground whatever stands there now, so it took
+/// the work of plain wall. Water and cliffs carry no wall.
+fn section(city: &City, [a, b]: [[f64; 2]; 2], past: bool) -> Option<Section> {
     let mid = [(a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5];
     let cell = cell_at(city.mesh, mid).filter(|&c| city.firm[c])?;
     let length = distance(a, b);
@@ -202,16 +204,26 @@ fn section(city: &City, [a, b]: [[f64; 2]; 2]) -> Option<Section> {
         return None;
     }
     let x = city.fields.claims[cell];
+    let through = if past {
+        0.
+    } else {
+        x.built + city.fields.access[cell] * x.trade.ln_1p().max(0.)
+    };
     Some(Section {
         ends: [a, b],
         cell,
-        cost: length * (1. + x.built + city.fields.access[cell] * x.trade.ln_1p().max(0.)),
+        cost: length * (1. + through),
         built: 0.,
         disused: 0.,
         repaired: 0.,
     })
 }
-fn sections(city: &City, exterior: Vec<Position>, deviation: f64) -> io::Result<Vec<Section>> {
+fn sections(
+    city: &City,
+    exterior: Vec<Position>,
+    deviation: f64,
+    past: bool,
+) -> io::Result<Vec<Section>> {
     let trace = city
         .spatial
         .resample_trace(
@@ -225,7 +237,7 @@ fn sections(city: &City, exterior: Vec<Position>, deviation: f64) -> io::Result<
     let mut sections = Vec::new();
     for ring in boundary_lines(&trace) {
         for pair in ring.windows(2) {
-            sections.extend(section(city, [xy(pair[0]), xy(pair[1])]));
+            sections.extend(section(city, [xy(pair[0]), xy(pair[1])], past));
         }
     }
     Ok(sections)
@@ -250,11 +262,12 @@ fn proposal(
     };
     let area = city.spatial.area(&envelope).map_err(io::Error::other)?;
     let (inside, population, new_population) = held(city, &envelope, positions, old)?;
+    trace_held(planned, area, [population, new_population]);
     if new_population <= 0. || new_population < 0.5 * population {
         return Ok(None);
     }
     let deviation = city.mesh.spacing().max(town_area.sqrt() * 0.005);
-    let sections = sections(city, exterior, deviation)?;
+    let sections = sections(city, exterior, deviation, planned.round == 0)?;
     if sections.is_empty() {
         return Ok(None);
     }
@@ -294,23 +307,14 @@ fn ranked(city: &City, pressure: &[f64]) -> io::Result<Vec<usize>> {
     .map_err(io::Error::other)?;
     Ok(order.into_iter().map(|at| cells[at]).collect())
 }
-/// How many of the least pressed of the city's cells lay outside a town that held `share`
-/// of today's people: the town stood on the most pressed ground that holds that share
-/// now. Today's town is the whole of the city's ground.
-fn outside(city: &City, ranked: &[usize], share: f64) -> usize {
-    if share >= 1. {
-        return 0;
-    }
-    let people = |c: usize| city.fields.claims[c].people.max(0.);
-    let all: f64 = ranked.iter().map(|&c| people(c)).sum();
-    let mut held = 0.;
-    for (taken, &c) in ranked.iter().rev().enumerate() {
-        if held >= share * all {
-            return ranked.len() - taken;
-        }
-        held += people(c);
-    }
-    0
+/// How many of the least pressed of the city's cells lay outside a town with `share` of
+/// today's people: the town stood on as great a share of today's ground, the most
+/// pressed of it. Whether today's people still live mostly on that ground, crowded where
+/// the old town stood, or have spread far beyond it, is the city's own form and decides
+/// whether an old wall is outgrown.
+fn outside(ranked: &[usize], share: f64) -> usize {
+    let within = (ranked.len() as f64 * share.clamp(0., 1.)).round() as usize;
+    ranked.len() - within.min(ranked.len())
 }
 /// The ground a sponsor reads when it plans a circuit: how firmly each cell is occupied,
 /// the city's cells in that order, and where among them the town it plans against begins.
@@ -329,12 +333,12 @@ impl Rings {
         let reach = |area: f64| (area.sqrt() * 0.055).max(2. * mesh.spacing());
         let mut pressed = pressure(city, occupied, reach(city.area));
         let mut order = ranked(city, &pressed)?;
-        let mut from = outside(city, &order, share);
+        let mut from = outside(&order, share);
         if from > 0 {
             let town = city.area * (order.len() - from) as f64 / order.len() as f64;
             pressed = pressure(city, occupied, reach(town));
             order = ranked(city, &pressed)?;
-            from = outside(city, &order, share);
+            from = outside(&order, share);
         }
         Ok(Self {
             pressure: pressed,
@@ -400,6 +404,23 @@ fn trace_choice(planned: &Planned, ring: f64, found: Option<&(f64, Wall)>) {
         }})
     );
 }
+/// The people a weighed circuit holds today and those of them no earlier wall holds,
+/// written to the server log when `ATLAS_TRACE_CITY` is set.
+fn trace_held(planned: &Planned, area: f64, [people, new]: [f64; 2]) {
+    if std::env::var_os("ATLAS_TRACE_CITY").is_none() {
+        return;
+    }
+    eprintln!(
+        "{}",
+        serde_json::json!({ "event": "city.wall-held", "details": {
+            "era": planned.era,
+            "round": planned.round,
+            "areaKm2": area / 1e6,
+            "people": people.round(),
+            "newPeople": new.round(),
+        }})
+    );
+}
 /// The circuit worth more of two, where the newcomer is worth more than `least`.
 fn better(
     best: Option<(f64, Wall)>,
@@ -414,8 +435,8 @@ fn better(
 }
 
 /// The walls of the town's earlier eras as this round's city tells them, oldest first.
-/// Each era's town stood on the most crowded of today's ground, as much of it as now
-/// holds that era's share of today's people. Its sponsor weighed rings about that town as today's sponsor does about the
+/// Each era's town stood on the most crowded share of today's ground equal to its share
+/// of today's people. Its sponsor weighed rings about that town as today's sponsor does about the
 /// city, and raised the best one if, threatened as that era left the town, it was worth
 /// the work; it had that era's share of today's means and the whole era to build in.
 /// The past is told again each round: where an old wall stands people gather behind it,

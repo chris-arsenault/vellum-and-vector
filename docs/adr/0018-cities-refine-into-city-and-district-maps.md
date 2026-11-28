@@ -90,15 +90,18 @@ the cost of each candidate enclosure. Water and steep ground can complete a side
 roads crossing the standing works establish gates.
 
 The same choice is made once for each era the town's record tells of, against the town as
-it then was. An era's town stood on the most crowded of today's ground, as much of it as
-now holds that era's share of today's people. The town's site, its standing as a realm's
+it then was. An era's town stood on the most crowded share of today's ground equal to its
+share of today's people. Whether today's people still crowd that ground or have spread
+far beyond it is the city's own form, and decides whether the era's wall is outgrown. An
+old circuit took the work of plain wall, because it ran along the open edge of the town
+as it then was, whatever stands there now. The town's site, its standing as a realm's
 seat, a contest for it and its civic order weigh how readily it defends itself, and each
 era's chance scales that weight into how threatened the era left it. A circuit is raised
 when, under that threat, the people it newly protects are worth its work; a crowded town
 on cheap ground walls itself under a threat that leaves a scattered one open. A later era
 raises a second circuit only where it protects mostly people the first does not, so a town
-that grew little keeps one wall with suburbs outside and a town that grew much has an old
-wall inside a new one.
+that grew by crowding its old ground keeps one wall with suburbs outside and a town that
+spread as it grew has an old wall inside a new one.
 
 A wall is kept in an era that leaves the town threatened enough to keep it, while no newer
 wall has taken its place and the city has not outgrown it. For each era nobody keeps it, a
