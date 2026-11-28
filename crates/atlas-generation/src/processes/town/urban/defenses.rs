@@ -1,16 +1,19 @@
 //! City walls are walked into being. In each era the town's record tells of, and in each
 //! round of the present one, a town takes one of the edges of its built body to wall and
-//! its builders set out on that edge where no wall stands. Each carries wall both ways
-//! along the edge from where it set out, looking a few steps ahead, and stops where it
-//! joins wall already laid that season, where water too wide to cross lies ahead, or
-//! when the work the era gives is spent. A wall begun keeps the line it was begun on
-//! through the rounds that follow. Wall of earlier eras falls in patches that shift from
-//! era to era, sooner where built ground presses on it; later builders are drawn onto
-//! old lines that lie near their own and take what still stands into their wall.
+//! its builders work along it. A builder takes the wall up where its line was left
+//! loose; where none is, it sets out on edge with none of the town's wall in sight and
+//! carries a wall both ways from there. It looks a few steps ahead, and stops where it
+//! joins its town's own wall, where water too wide to cross lies ahead, or when the
+//! work the era gives is spent. A wall begun keeps the line it was begun on through the
+//! rounds that follow. Wall of earlier eras falls in patches that shift from era to era,
+//! sooner where built ground presses on it; later builders are drawn onto old lines that
+//! lie near their own and take what still stands into their wall.
 //!
-//! Chance enters where a town picks its edge, where an earlier era's town leaned, where
-//! and which way each builder sets out, how its line sways inside the edge here and
-//! outside it there, the small whims of each step, and which stretches wear takes.
+//! Chance enters where an era draws the edges its town weighs and which of them it
+//! takes, how each era's town leaned, where and which way each builder sets out, how
+//! the era's line sways inside the edge here and outside it there, the small whims of
+//! each step, how threatened each era was and in which year today's builders begin, and
+//! which stretches wear takes.
 //!
 //! Nothing here names a kind of wall. A circuit, an arc open to one side, an old wall
 //! deep inside a later one, a stump, a ruin and no wall at all are what the walks and
@@ -27,7 +30,7 @@ use crate::{
     lattice::TriangularLattice,
     town::{
         geometry::distance,
-        walls::{self, enclosure_value, Section, Wall},
+        walls::{self, enclosure_value, LooseEnd, Section, Wall},
     },
 };
 use std::io;
@@ -47,20 +50,36 @@ const RIBBON: i8 = 3;
 const SIGHT: i8 = RIBBON + 2;
 /// The most builders who set out in one era, or one round of the present era.
 const BUILDERS: usize = 24;
-/// How many of the sections a builder laid last are still its own work in hand: it
-/// does not take them for wall it has come upon. They reach further back along its line
-/// than the few cells within which it meets wall.
+/// How many of the sections a builder laid last this way are still its own work in
+/// hand: it does not take them for wall it has come upon. They reach far enough back
+/// that a builder rounding the tip of a finger of town does not take the other side of
+/// the finger for the end of its work. And how many sections laid before it, where it
+/// began, it likewise passes by on its first steps.
+const OWN: usize = 40;
 const FRESH: usize = 10;
-/// How many cells off a builder meets wall laid this season: anywhere across the
-/// ribbon's half width, so two stretches cannot pass each other side by side.
+/// How many cells off a builder meets its own town's wall: the ribbon's half width.
+/// Builders of one era steer for the same line and are drawn to wall in sight, so two
+/// stretches come this near before they could pass side by side.
 const MEET: i8 = RIBBON;
-/// How strongly the ground keeps a builder to its line along the town's edge, beside
-/// holding its heading. A cell off the line counts for less than a turn does, so a
-/// builder holds a straight stretch across the edge's small jags and turns only when the
-/// line has left it two cells behind.
+/// How strongly the ground a few steps on keeps a builder to its line along the town's
+/// edge, beside holding its heading. A cell off the line there outweighs the sharpest
+/// turn of its fan, so a builder steers for the line; steering early, it seldom has to
+/// turn hard.
 const HOLD: f64 = 2.5;
-/// How many steps on a builder looks when it judges a step.
-const LOOK: f64 = 3.;
+/// How many steps on a builder looks when it judges a step, and how much less a way is
+/// worth for each of those steps it cannot see along the ribbon.
+const LOOK: u8 = 3;
+const BLIND: f64 = 1.5;
+/// A builder has turned back on itself when its heading swings by more than this, in
+/// radians, within this many steps: most of a full turn. The tip of a finger of town
+/// turns a wall half round; only a builder that has lost the edge goes further.
+const TURN: f64 = 4.4;
+const TURN_STEPS: usize = 12;
+/// How many times longer someone takes over water, or ground too steep for a wall, than
+/// over firm ground.
+const WADE: f64 = 12.;
+/// How many edges an era's town weighs before it walls one.
+const EDGES: usize = 4;
 /// The work of taking a length of an earlier era's standing wall into a new line, as a
 /// share of the work of laying that length new.
 const MAKE_GOOD: f64 = 0.1;
@@ -85,7 +104,10 @@ const DRIFT: f64 = 0.04;
 /// How much the side an era's threat came from counts in where a builder sets out.
 const FACING: f64 = 1.5;
 /// How lopsided an earlier era's town was: how far chance tilts the ground it favoured.
+/// Today's town is read as it stands, tilted a little: which of its quarters carry the
+/// most weight when the wall is planned is the era's own.
 const LEAN: f64 = 0.6;
+const LEAN_TODAY: f64 = 0.25;
 /// The share of an edge's whole work below which an era does not begin a wall.
 const LEAST: f64 = 0.04;
 /// The wall work one supporter gives in a year, in metres of plain wall.
@@ -104,8 +126,6 @@ pub(super) struct City<'a> {
     pub capital: &'a [f64],
     /// Ground that can carry a wall: dry and not too steep.
     pub firm: &'a [bool],
-    /// The settled outline's area.
-    pub area: f64,
     /// This round, counted from one.
     pub round: usize,
     /// The years each round stands for.
@@ -264,8 +284,8 @@ fn outside(ranked: &[usize], share: f64) -> usize {
 }
 
 /// The ground a season's town stood on, as its builders read it: how firmly each cell
-/// is pressed, the city's cells in that order, where among them the town begins, and
-/// the town's most pressed place.
+/// is pressed, the cells of today's town in that order, where among them the season's
+/// town begins, and the town's most pressed place.
 struct Ground {
     pressure: Vec<f64>,
     ranked: Vec<usize>,
@@ -276,7 +296,8 @@ impl Ground {
     /// Today's town is the city's built ground as it stands. An earlier era's town stood
     /// on the most pressed share of that ground equal to its share of today's people,
     /// read at its own grain, and it did not grow evenly: a many-scaled field of its own
-    /// tilts which ground it favoured, so each era's town leans its own way.
+    /// tilts which ground it favoured, so each era's town leans its own way. Today's
+    /// town is tilted a little by the same means.
     fn of(city: &City, occupied: &[f64], sponsors: &Sponsors, season: &Season) -> io::Result<Self> {
         let mesh = city.mesh;
         let reach = |area: f64| (area.sqrt() * 0.055).max(2. * mesh.spacing());
@@ -285,11 +306,7 @@ impl Ground {
             .chance("city.wall.lean")
             .nth(season.era as i32)
             .noise((built * season.share).sqrt().max(mesh.spacing()), 3);
-        let tilt = if season.past() {
-            LEAN * sponsors.wildness
-        } else {
-            0.
-        };
+        let tilt = sponsors.wildness * if season.past() { LEAN } else { LEAN_TODAY };
         let read = |reach: f64| -> Vec<f64> {
             pressure(city, occupied, reach)
                 .into_iter()
@@ -319,9 +336,11 @@ impl Ground {
         self.ranked.len() - self.from
     }
     /// The pressure that `fraction` of the town's ground lies below.
+    /// Nothing where the town stood on no ground at all.
     fn level(&self, fraction: f64) -> Option<f64> {
         let last = self.ranked.len().checked_sub(1)?;
-        let at = self.from + ((last - self.from) as f64 * fraction) as usize;
+        let span = last.checked_sub(self.from)?;
+        let at = self.from + (span as f64 * fraction) as usize;
         Some(self.pressure[self.ranked[at.min(last)]].max(f64::EPSILON))
     }
 }
@@ -502,21 +521,39 @@ fn edge(city: &City, ground: &Ground, body: &[bool], season: &Season) -> Edge {
         rim,
     }
 }
-/// The shares of a town's built ground left outside the edges its builders may wall,
-/// from wide to tight: nearly all of the town, its main body, its core. A civic order's
-/// citadel above one draws every edge in round more crowded ground.
-fn ring_shares(tighten: f64) -> [f64; 3] {
-    let usual = [0.05, 0.3, 0.6];
+/// The share of a town's built ground left outside an edge, once a civic order's
+/// citadel has drawn the edge in: a citadel above one leaves that many times less
+/// ground inside.
+fn tightened(share: f64, tighten: f64) -> f64 {
     if tighten <= 1. {
-        return usual;
+        return share;
     }
-    usual.map(|share| 1. - (1. - share) / tighten)
+    1. - (1. - share) / tighten
 }
-/// The edge a season's town sets out to wall: one of the edges its order considers,
-/// each drawing for itself with the more worthwhile the likelier; with chance stilled,
-/// the most worthwhile.
+/// The shares of a town's built ground left outside the edges a town weighs when chance
+/// plays no part, from wide to tight: nearly all of the town, its main body, its core.
+fn ring_shares(tighten: f64) -> [f64; 3] {
+    [0.05, 0.3, 0.6].map(|share| tightened(share, tighten))
+}
+/// The shares of a town's built ground left outside the edges a season's town weighs.
+/// Each era draws its own, anywhere between nearly all of the town and its core, so no
+/// two towns weigh the same outlines. With chance stilled they are the usual three.
+fn weighed(sponsors: &Sponsors, season: &Season) -> Vec<f64> {
+    let usual = ring_shares(1.);
+    if sponsors.wildness <= 0. {
+        return ring_shares(sponsors.citadel).to_vec();
+    }
+    let chance = sponsors.chance("city.wall.reach").nth(season.era as i32);
+    (0..EDGES)
+        .map(|edge| chance.between([edge as f64, 0.], [usual[0], usual[2]]))
+        .map(|share| tightened(share, sponsors.citadel))
+        .collect()
+}
+/// The edge a season's town sets out to wall: one of the edges it weighs, each drawing
+/// for itself with the more worthwhile the likelier; with chance stilled, the most
+/// worthwhile.
 fn chosen_edge(city: &City, sponsors: &Sponsors, ground: &Ground, season: &Season) -> Option<Edge> {
-    let edges = ring_shares(sponsors.citadel)
+    let edges = weighed(sponsors, season)
         .into_iter()
         .filter_map(|share| ground.level(share))
         .map(|level| edge(city, ground, &body(city, ground, level), season))
@@ -545,7 +582,11 @@ fn edge_to_walk(
     ground: &Ground,
     (season, walls): (&Season, &[Wall]),
 ) -> Option<Edge> {
-    match walls.last().filter(|wall| begun(wall, season)) {
+    // A wall with no line on record has none to keep: its town draws an edge afresh.
+    let begun = walls
+        .last()
+        .filter(|wall| begun(wall, season) && !wall.course.is_empty());
+    match begun {
         Some(wall) => Some(edge(city, ground, &planned(city, &wall.course), season)),
         None => chosen_edge(city, sponsors, ground, season),
     }
@@ -618,9 +659,17 @@ impl Laid {
     fn at(&self, cell: usize) -> Option<[usize; 2]> {
         self.0[cell].map(|(wall, section)| [wall as usize, section as usize])
     }
-    fn stands(&self, walls: &[Wall], cell: usize) -> bool {
-        self.at(cell)
-            .is_some_and(|[wall, section]| walls[wall].sections[section].stands())
+    /// Forgets what lies on the cells between two points, where that is `wall`'s
+    /// sections from `from` on: they have been pulled down.
+    fn clear(&mut self, city: &City, [wall, from]: [usize; 2], ends: [[f64; 2]; 2]) {
+        for cell in crossed(city, ends) {
+            if self
+                .at(cell)
+                .is_some_and(|[on, section]| on == wall && section >= from)
+            {
+                self.0[cell] = None;
+            }
+        }
     }
 }
 
@@ -632,9 +681,8 @@ struct Walk<'a> {
     ground: &'a Ground,
     edge: &'a Edge,
     season: &'a Season<'a>,
-    /// The season's own wall, and how many sections it held before the season began.
+    /// The season's own wall.
     own: usize,
-    held: usize,
     /// The era's sway: where along the edge its line runs inside it and where outside.
     sway: Noise,
 }
@@ -656,56 +704,74 @@ fn around(mesh: &TriangularLattice, cell: usize, reach: i8) -> Vec<(usize, i8)> 
     }
     found
 }
-/// Why a builder stops: it has joined wall laid this season, its work is spent, every
-/// way on is shut, or it has walked the edge's length and half again.
+/// Why a builder stops carrying the wall one way: it has joined wall of its own town's
+/// laying, it has carried the wall to a bank it cannot cross, its work is spent, every
+/// way on is shut, it has turned back on itself, or it has walked three times the
+/// edge's length.
 #[derive(Clone, Copy, Debug)]
 enum Stop {
     Joined,
+    Banked,
     Spent,
     Shut,
+    Turned,
     Round,
 }
-/// One way a builder works from where it set out.
+impl Stop {
+    /// Whether the wall's line is left with a loose end: nothing closes it there.
+    fn loose(self) -> bool {
+        !matches!(self, Self::Joined | Self::Banked)
+    }
+}
+/// One way a builder carries the wall from where it began.
 struct Leg {
     builder: usize,
-    /// How many sections the season's wall held when the builder set out, and when it
-    /// turned to work this way.
-    set_out: usize,
-    turned: usize,
+    /// Which way round the town it goes: one, or minus one.
+    way: f64,
+    /// How many sections the season's wall held when it began this way.
+    began: usize,
+    /// The sections laid before it where it began, which for its first steps it does
+    /// not take for wall it has come upon: the first sections laid the other way from
+    /// the same place, or the last at the loose end it takes up.
+    behind: std::ops::Range<usize>,
     /// The steps taken this way and the work left.
     steps: usize,
     left: f64,
+    /// Its heading after each step.
+    headings: Vec<f64>,
 }
 impl Leg {
-    /// Whether this is the second way the builder works.
-    fn second(&self) -> bool {
-        self.turned > self.set_out
-    }
     /// Whether a section of the season's wall is the builder's own work in hand, which
     /// it does not take for wall it has come upon: the few sections it laid last this
-    /// way, and, for its first steps the other way, the first it laid where it set out.
+    /// way, and, for its first steps, those laid before it where it began.
     fn in_hand(&self, section: usize, count: usize) -> bool {
-        let last = section >= count.saturating_sub(FRESH).max(self.turned);
-        let where_it_set_out = self.steps <= FRESH + 2
-            && (self.set_out..self.turned.min(self.set_out + FRESH)).contains(&section);
-        last || where_it_set_out
+        let last = section >= count.saturating_sub(OWN).max(self.began);
+        last || (self.steps <= FRESH + 2 && self.behind.contains(&section))
+    }
+    /// Whether the builder has turned back on itself: over its last few steps its
+    /// heading has swung further than any stretch of a town's edge turns in that
+    /// distance. It has lost the edge and is circling.
+    fn turned_back(&self) -> bool {
+        let last = self.headings.len().saturating_sub(1);
+        last >= TURN_STEPS && (self.headings[last] - self.headings[last - TURN_STEPS]).abs() > TURN
     }
 }
 impl Walk<'_> {
     /// What a builder knows of the wall lying about when it sets out: how many cells
-    /// each cell lies from wall that stands, and from wall standing or fallen, for
-    /// cells within sight of some.
+    /// each cell lies from the standing wall of its own town's laying, and from any
+    /// wall, of any era, standing or fallen, for cells within sight of some.
     fn sighted(&self, laid: &Laid, walls: &[Wall]) -> [Vec<i8>; 2] {
         let mesh = self.city.mesh;
-        let cells = |standing: bool| -> Vec<usize> {
-            (0..mesh.len())
-                .filter(|&cell| match standing {
-                    true => laid.stands(walls, cell),
-                    false => laid.at(cell).is_some(),
-                })
-                .collect()
+        let own = |cell: &usize| {
+            laid.at(*cell).is_some_and(|[wall, section]| {
+                wall == self.own && walls[wall].sections[section].stands()
+            })
         };
-        [true, false].map(|standing| steps_from(mesh, &cells(standing), SIGHT))
+        let own: Vec<usize> = (0..mesh.len()).filter(own).collect();
+        let any: Vec<usize> = (0..mesh.len())
+            .filter(|&cell| laid.at(cell).is_some())
+            .collect();
+        [own, any].map(|cells| steps_from(mesh, &cells, SIGHT))
     }
     /// What a step from `from` to `at` is worth to a builder. It judges the step by
     /// where it leads a few steps on: most where that lies on the era's line, which
@@ -723,21 +789,31 @@ impl Walk<'_> {
         if wet && !self.comes_out([from, at]) {
             return None;
         }
-        let ahead = [0, 1].map(|axis| from[axis] + LOOK * (at[axis] - from[axis]));
-        let seen = cell_at(mesh, ahead);
+        // It looks as far on as the step still leads along the ribbon, and a way it can
+        // see less far along is worth less: at the tip of a finger of the town the ways
+        // that turn with the edge are the ones it can see along.
+        let (short, ahead, seen) = (0..LOOK)
+            .find_map(|short| {
+                let steps = f64::from(LOOK - short);
+                let ahead = [0, 1].map(|axis| from[axis] + steps * (at[axis] - from[axis]));
+                let seen = cell_at(mesh, ahead).filter(|&seen| self.edge.off(seen).is_some())?;
+                Some((short, ahead, seen))
+            })
+            .unwrap_or((LOOK - 1, at, cell));
         let line = SWAY * self.sponsors.wildness * self.sway.signed(ahead);
-        // Ground ahead that is off the ribbon is as far off the line as ground can be.
-        let off = seen
-            .and_then(|seen| self.edge.off(seen))
-            .map_or(f64::from(RIBBON) + 1., |off| off - line)
-            / f64::from(RIBBON);
-        let drawn = match seen.map_or(i8::MAX, |seen| wall[seen]) {
+        let off = (self.edge.off(seen).unwrap_or(0.) - line) / f64::from(RIBBON);
+        let drawn = match wall[seen] {
             i8::MAX => 0.,
             steps => 1. - f64::from(steps) / f64::from(SIGHT + 1),
         };
         // The nearer wall lies, the less the era's own line counts: a builder two cells
         // off wall goes to it, and does not lay a second wall alongside.
-        Some(FOLLOW * drawn - HOLD * off * off * (1. - drawn) - WET * f64::from(wet))
+        Some(
+            FOLLOW * drawn
+                - HOLD * off * off * (1. - drawn)
+                - BLIND * f64::from(short)
+                - WET * f64::from(wet),
+        )
     }
     /// Whether a step onto water, or ground too steep for a wall, comes out on firm
     /// ground of the ribbon within two more steps the same way: a stream or a bank a
@@ -749,17 +825,18 @@ impl Walk<'_> {
                 .is_some_and(|cell| self.city.firm[cell] && self.edge.off(cell).is_some())
         })
     }
-    /// Where a builder sets out: on edge with no standing wall in sight, toward the side
-    /// the era's threat came from, with chance in the choosing. Nowhere, once all the
-    /// edge is walled.
+    /// Where a builder sets out anew: on edge with none of its own town's standing wall
+    /// in sight, toward the side the era's threat came from, with chance in the
+    /// choosing. Nowhere, once all the edge has its wall in sight.
     fn start(&self, standing: &[i8], builder: usize) -> Option<usize> {
         let mesh = self.city.mesh;
         let number = self.season.round * BUILDERS + builder;
+        // One number for the era and the builder together: two given one after the
+        // other would give era two's third builder the draws of era three's second.
         let chance = self
             .sponsors
             .chance("city.wall.start")
-            .nth(self.season.era as i32)
-            .nth(number as i32);
+            .nth((self.season.era * 4096 + number) as i32);
         let bearing = self.sponsors.bearing(self.season.era);
         let on_edge = self
             .edge
@@ -809,10 +886,10 @@ impl Walk<'_> {
         };
         Walker { point, heading }
     }
-    /// The cell of wall laid this season that a builder comes within a few cells of: by
-    /// an earlier builder or earlier in its own walk, it means this stretch of the edge
-    /// is walled. The builder's own work in hand does not count, or it could never lay
-    /// two sections in a row.
+    /// The cell of the season's own wall that a builder comes within a few cells of:
+    /// laid by an earlier builder, in an earlier round or earlier in its own walk, it
+    /// means this stretch of the edge is walled. The builder's own work in hand does
+    /// not count, or it could never lay two sections in a row.
     fn met(&self, walls: &[Wall], laid: &Laid, (cell, leg): (usize, &Leg)) -> Option<usize> {
         let count = walls[self.own].sections.len();
         around(self.city.mesh, cell, MEET)
@@ -821,13 +898,12 @@ impl Walk<'_> {
             .find(|&at| {
                 laid.at(at).is_some_and(|[wall, section]| {
                     wall == self.own
-                        && section >= self.held
                         && !leg.in_hand(section, count)
                         && walls[wall].sections[section].stands()
                 })
             })
     }
-    /// Whether a step runs along an earlier season's wall that still stands: one lies in
+    /// Whether a step runs along an earlier era's wall that still stands: one lies in
     /// the step's cell and runs within about forty-five degrees of the step. A step
     /// that only crosses old wall does not run along it.
     fn along_old_wall(
@@ -840,7 +916,7 @@ impl Walk<'_> {
             return false;
         };
         let old = &walls[wall].sections[section];
-        if (wall == self.own && section >= self.held) || !old.stands() {
+        if wall == self.own || !old.stands() {
             return false;
         }
         let [a, b] = old.ends;
@@ -853,7 +929,7 @@ impl Walk<'_> {
     }
     /// Lays a new section of the season's wall from `from` to `to`, charged as wall
     /// across `cell`, and returns the work it takes, or nothing where the work left does
-    /// not cover it. Along an earlier season's wall that still stands the builder takes
+    /// not cover it. Along an earlier era's wall that still stands the builder takes
     /// that wall into its own line, for the little work of making it good.
     fn section(
         &self,
@@ -877,8 +953,8 @@ impl Walk<'_> {
         Some(cost)
     }
     /// What a builder does with its step, and whether it stops. It lays a section of
-    /// the season's wall across the step. Coming within a few cells of wall laid this
-    /// season, its stretch is done: it lays a last length straight to that wall and
+    /// the season's wall across the step. Coming within a few cells of its own town's
+    /// wall, its stretch is done: it lays a last length straight to that wall and
     /// stops. It stops, too, where the work left does not cover the step.
     fn lay(
         &self,
@@ -903,49 +979,142 @@ impl Walk<'_> {
         leg.left -= spent;
         Some(Stop::Joined)
     }
-    /// One builder's work. A wall begun at a place is carried both ways from it: half
-    /// the work goes the first way, and whatever is then left goes the other. Returns
-    /// the work left after both.
+    /// One builder's work, and the work left after it, or nothing where there is no
+    /// work to do. A builder takes the wall up where its line was left loose. Where no
+    /// end is loose it sets out anew on open edge and carries a wall both ways from
+    /// there: half the work goes the first way, and whatever is then left the other.
     fn walk(
         &self,
         walls: &mut [Wall],
         laid: &mut Laid,
         builder: usize,
         mut left: f64,
-    ) -> io::Result<f64> {
+    ) -> io::Result<Option<f64>> {
         let [standing, lying] = self.sighted(laid, walls);
+        if !walls[self.own].loose.is_empty() {
+            return self.take_up(walls, laid, &lying, (builder, left)).map(Some);
+        }
         let Some(start) = self.start(&standing, builder) else {
-            return Ok(left);
+            return Ok(None);
         };
         let way = self.first_way(builder);
         let set_out = walls[self.own].sections.len();
         for (way, share) in [(way, 0.5), (-way, 1.)] {
-            let given = left * share;
-            let mut leg = Leg {
+            let began = walls[self.own].sections.len();
+            let leg = Leg {
                 builder,
-                set_out,
-                turned: walls[self.own].sections.len(),
+                way,
+                began,
+                behind: set_out..began.min(set_out + FRESH),
                 steps: 0,
-                left: given,
+                left: left * share,
+                headings: Vec::new(),
             };
-            // Where wall laid this season already stands at the start, the first way
-            // having come right round to it, there is nothing to carry the other way.
+            // Where its own wall already stands at the start, the first way having come
+            // right round to it, there is nothing to carry the other way.
             if self.met(walls, laid, (start, &leg)).is_some() {
                 continue;
             }
-            let mut walker = self.facing(start, way);
-            let began = walker.point;
-            let stop = self.leg(walls, laid, &lying, (&mut walker, &mut leg))?;
-            left -= given - leg.left;
-            self.trace_builder(&leg, [began, walker.point], given - leg.left, stop);
+            left -= self
+                .carry(walls, laid, &lying, (self.facing(start, way), leg))?
+                .0;
         }
-        Ok(left)
+        Ok(Some(left))
     }
-    /// One way of a builder's work: a walk along the edge, laying wall until the work is
-    /// spent, it joins wall laid this season, it can go no further, or it has walked the
-    /// edge's length and half again. Where the way ahead is shut, by water, a cliff or
-    /// the ribbon's end, it tries a sharp turn before giving up, so a wall turns along a
-    /// bank it cannot cross.
+    /// Takes the wall up at the loose end left longest and carries it on the way it was
+    /// going, with an even share of the work for each loose end. Returns the work left.
+    /// An end from which the builder can lay nothing more is given up, unless it was
+    /// only work that ran short: that end waits for a later round.
+    fn take_up(
+        &self,
+        walls: &mut [Wall],
+        laid: &mut Laid,
+        lying: &[i8],
+        (builder, left): (usize, f64),
+    ) -> io::Result<f64> {
+        let ends = walls[self.own].loose.len();
+        let end = walls[self.own].loose[0];
+        let began = walls[self.own].sections.len();
+        let leg = Leg {
+            builder,
+            way: end.way,
+            began,
+            behind: (end.section + 1).saturating_sub(FRESH)..end.section + 1,
+            steps: 0,
+            left: left / ends as f64,
+            headings: Vec::new(),
+        };
+        let walker = Walker {
+            point: end.at,
+            heading: end.heading,
+        };
+        let (spent, stop) = self.carry(walls, laid, lying, (walker, leg))?;
+        let waits = matches!(stop, Stop::Spent) && walls[self.own].sections.len() == began;
+        if !waits {
+            walls[self.own].loose.remove(0);
+        }
+        Ok(left - spent)
+    }
+    /// Carries the wall one way from where `walker` stands until it stops, and records
+    /// the end as loose where it laid wall and nothing closes its line. Returns the work
+    /// spent and why it stopped.
+    fn carry(
+        &self,
+        walls: &mut [Wall],
+        laid: &mut Laid,
+        lying: &[i8],
+        (mut walker, mut leg): (Walker, Leg),
+    ) -> io::Result<(f64, Stop)> {
+        let (given, began) = (leg.left, walker.point);
+        let stop = self.leg(walls, laid, lying, (&mut walker, &mut leg))?;
+        if matches!(stop, Stop::Turned) {
+            self.pull_down(walls, laid, (&mut walker, &mut leg), began);
+        }
+        let count = walls[self.own].sections.len();
+        if stop.loose() && count > leg.began {
+            walls[self.own].loose.push(LooseEnd {
+                at: walker.point,
+                way: leg.way,
+                heading: walker.heading,
+                section: count - 1,
+            });
+        }
+        self.trace_builder(&leg, [began, walker.point], given - leg.left, stop);
+        Ok((given - leg.left, stop))
+    }
+    /// A builder that has turned back on itself pulls down what it laid since it went
+    /// wrong, has that work again, and stands where it stood then, facing as it did.
+    /// `began` is where it began this way.
+    fn pull_down(
+        &self,
+        walls: &mut [Wall],
+        laid: &mut Laid,
+        (walker, leg): (&mut Walker, &mut Leg),
+        began: [f64; 2],
+    ) {
+        let own = self.own;
+        let keep = walls[own]
+            .sections
+            .len()
+            .saturating_sub(TURN_STEPS)
+            .max(leg.began);
+        for section in walls[own].sections.drain(keep..) {
+            leg.left += section.cost;
+            laid.clear(self.city, [own, keep], section.ends);
+        }
+        let then = leg.headings.len().saturating_sub(TURN_STEPS + 1);
+        walker.heading = leg.headings.get(then).copied().unwrap_or(walker.heading);
+        walker.point = walls[own]
+            .sections
+            .get(keep.wrapping_sub(1))
+            .filter(|_| keep > leg.began)
+            .map_or(began, |section| section.ends[1]);
+    }
+    /// One way of a builder's work: a walk along the edge, laying wall until it joins
+    /// its own town's wall, the work is spent, it can go no further, it has turned back
+    /// on itself, or it has walked three times the edge's length. Where the way ahead
+    /// is shut, by water, a cliff or the ribbon's end, it tries a sharp turn before
+    /// giving up, so a wall turns along a bank it cannot cross.
     fn leg(
         &self,
         walls: &mut [Wall],
@@ -972,10 +1141,10 @@ impl Walk<'_> {
         };
         // Each way of each builder's work has its own whims.
         let number =
-            (2 * (self.season.round * BUILDERS + leg.builder)) as f64 + f64::from(leg.second());
+            (2 * (self.season.round * BUILDERS + leg.builder)) as f64 + f64::from(leg.way < 0.);
         loop {
             let travelled = leg.steps as f64 * reach;
-            if travelled >= 1.5 * self.edge.length {
+            if travelled >= 3. * self.edge.length {
                 return Ok(Stop::Round);
             }
             let from = walker.point;
@@ -985,32 +1154,46 @@ impl Walk<'_> {
                 })
             };
             if !(step(&stride)? || step(&sharp)?) {
-                self.to_the_bank(walls, laid, walker.point, leg);
-                return Ok(Stop::Shut);
+                return Ok(self.to_the_bank(walls, laid, walker.point, leg));
             }
             if let Some(stop) = self.lay(walls, laid, [from, walker.point], leg) {
                 return Ok(stop);
             }
             leg.steps += 1;
+            leg.headings.push(walker.heading);
+            if leg.turned_back() {
+                return Ok(Stop::Turned);
+            }
         }
     }
     /// Where a builder can go no further and water or ground too steep for a wall lies
     /// within a few cells, it carries its wall on to that, so the bank or the cliff
-    /// completes the line and nothing is left open between them.
-    fn to_the_bank(&self, walls: &mut [Wall], laid: &mut Laid, at: [f64; 2], leg: &mut Leg) {
+    /// completes the line and nothing is left open between them. Elsewhere the way is
+    /// only shut, and the end is left loose.
+    fn to_the_bank(
+        &self,
+        walls: &mut [Wall],
+        laid: &mut Laid,
+        at: [f64; 2],
+        leg: &mut Leg,
+    ) -> Stop {
         let mesh = self.city.mesh;
-        let Some(cell) = cell_at(mesh, at) else {
-            return;
-        };
-        let bank = around(mesh, cell, MEET)
-            .into_iter()
-            .find(|(near, _)| !self.city.firm[*near]);
-        let Some((bank, _)) = bank else {
-            return;
+        let bank = cell_at(mesh, at).and_then(|cell| {
+            let bank = around(mesh, cell, MEET)
+                .into_iter()
+                .find(|(near, _)| !self.city.firm[*near])?;
+            Some((cell, bank.0))
+        });
+        let Some((cell, bank)) = bank else {
+            return Stop::Shut;
         };
         let reach = [at, position(mesh, bank)];
-        if let Some(spent) = self.section(walls, laid, (reach, cell), leg) {
-            leg.left -= spent;
+        match self.section(walls, laid, (reach, cell), leg) {
+            Some(spent) => {
+                leg.left -= spent;
+                Stop::Banked
+            }
+            None => Stop::Spent,
         }
     }
     /// One way of a builder's work, written to the server log when `ATLAS_TRACE_CITY`
@@ -1087,19 +1270,21 @@ fn build(
         edge: &edge,
         season,
         own,
-        held: walls[own].sections.len(),
         sway: sponsors
             .chance("city.wall.sway")
             .nth(season.era as i32)
             .noise(SWAY_RUN * city.mesh.spacing(), 2),
     };
-    // Builders set out one after another while work remains: where one is stopped, by
-    // water or by wall already standing, the next begins on edge still open.
+    // Builders work one after another while work remains and there is work to do: each
+    // takes the wall up where it was left loose, or begins on edge still open.
     for builder in 0..BUILDERS {
         if left < LEAST * edge.work {
             break;
         }
-        left = walk.walk(walls, &mut laid, builder, left)?;
+        let Some(after) = walk.walk(walls, &mut laid, builder, left)? else {
+            break;
+        };
+        left = after;
     }
     if walls[own].sections.is_empty() {
         walls.remove(own);
@@ -1138,15 +1323,16 @@ fn wear(
 }
 
 /// How long someone coming from outside the city takes to reach each cell, when the
-/// cells in `barred` cannot be crossed. Water and ground too steep for a wall cannot be
-/// crossed either, so a river or a cliff completes a side.
+/// cells in `barred` cannot be crossed. Water and ground too steep for a wall are
+/// crossed many times more slowly than firm ground: a stream hinders, and a broad river
+/// or a cliff holds an approach off as a wall does, so it completes a side.
 fn approach(city: &City, outside: &[usize], barred: &[bool]) -> Vec<f64> {
     Front {
         chance: Chance::of(0, 0),
         roughness: 0.,
     }
     .arrivals(city.mesh, outside, f64::INFINITY, |_, to| {
-        (city.firm[to] && !barred[to]).then_some(1.)
+        (!barred[to]).then_some(if city.firm[to] { 1. } else { 1. / WADE })
     })
 }
 /// Finds the ground each wall shelters and whether the city has outgrown it: whether it
@@ -1371,10 +1557,6 @@ pub(super) fn invest(state: &State, u: &Urban, readiness: f64) -> io::Result<Vec
         fields: &u.fields,
         capital: &capital,
         firm: &firm,
-        area: state
-            .spatial
-            .area(state.scope.settled_outline())
-            .map_err(io::Error::other)?,
         round: r.round,
         rounds: &crate::field::refinement::people::DEVELOPMENT_EXPOSURE,
     };
@@ -1388,7 +1570,6 @@ pub(super) fn invest(state: &State, u: &Urban, readiness: f64) -> io::Result<Vec
 #[derive(serde::Serialize, serde::Deserialize)]
 pub(super) struct Captured {
     pub spacing: f64,
-    pub area: f64,
     pub round: usize,
     pub eras: Vec<(String, f64)>,
     pub resolve: f64,
@@ -1411,7 +1592,6 @@ fn capture(state: &State, city: &City, sponsors: &Sponsors) -> io::Result<()> {
     let fields = city.fields;
     let captured = Captured {
         spacing: city.mesh.spacing(),
-        area: city.area,
         round: city.round,
         eras: sponsors.eras.clone(),
         resolve: sponsors.resolve,

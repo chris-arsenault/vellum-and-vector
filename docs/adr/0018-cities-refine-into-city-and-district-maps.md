@@ -93,10 +93,12 @@ Each era the town's record tells of builds against the town as it then was, and 
 of the present era builds against the city as it stands. The town is the city's built
 ground. An earlier era's town stood on the most crowded share of that ground equal to its
 share of today's people, and it did not grow evenly: a many-scaled field of the era's own
-tilts which ground it favoured, so each era's town leans its own way.
+tilts which ground it favoured, so each era's town leans its own way. Today's town is
+tilted a little by the same means.
 
-A season of building begins by drawing the edge the town walls, from wide to tight, the
-more worthwhile edges the likelier; a civic order that holds a citadel draws every edge in
+A season of building begins with the edge the town walls. Each era draws the edges it
+weighs for itself, anywhere between nearly all of the town and its core, and takes one,
+the more worthwhile the likelier; a civic order that holds a citadel draws every edge in
 round more crowded ground. An edge is the rim of one body of the town: the crowded ground
 joined to its most crowded place, with whatever gardens, yards and ponds that ground
 surrounds. A quarter as crowded that lies apart across open fields is not walled with it.
@@ -109,19 +111,24 @@ move it: an earlier era gives from its share of today's standing stock, and the 
 era's builders set out in a year dealt by chance and give what their supporters can do in
 the years each round stands for. An era that passes quietly lays a stump or nothing.
 
-Builders set out one after another, each on a stretch of the edge with no standing wall in
-sight, toward the side the era's threat came from, with chance in the choosing. A builder
-carries its wall both ways along the edge from where it set out. It keeps to a ribbon of
+Builders work one after another while the season has work to give. A builder takes the
+wall up where its line was left loose, in this round or an earlier one, and carries it on
+the way it was going. Where no end is loose it sets out anew, on a stretch of the edge
+with none of its town's wall in sight, toward the side the era's threat came from, with
+chance in the choosing, and carries a wall both ways from there. It keeps to a ribbon of
 ground along the edge and judges each step by where it leads a few steps on: toward the
-era's own line, which sways inside the edge here and outside it there, and toward wall
-that already lies near, standing or fallen, so it closes on old lines and on its fellows'
-work. It lays a section where it treads and spends work for it: more through built and
-busy ground today, several times more over a stream or a steep bank it can step across,
-little along an earlier era's wall that still stands, and the work of plain wall along an
-earlier town's open edge. Coming within a few cells of wall laid that season it lays a
-last length straight to it and stops, so stretches join and a circuit closes. It stops,
-too, when its work is spent, and where water too wide to step across lies ahead, to which
-it carries the wall so that the bank completes the line.
+era's own line, which sways inside the edge here and outside it there, toward wall that
+already lies near, standing or fallen, so it closes on old lines and on its fellows'
+work, and by how far along the ribbon it can see that way, so it turns with the edge
+round the tip of a finger of town. It lays a section where it treads and spends work for
+it: more through built and busy ground today, several times more over a stream or a steep
+bank it can step across, little along an earlier era's wall that still stands, and the
+work of plain wall along an earlier town's open edge. Coming within a few cells of its
+town's own wall it lays a last length straight to it and stops, so stretches join and a
+circuit closes. Where water too wide to step across lies ahead it carries the wall to the
+bank, which completes the line. Where its work is spent, or it can find no way on, the
+end is left loose for a later builder. A builder that finds it has turned back on itself
+pulls down what it laid since it went wrong.
 
 Wall falls in patches that shift from era to era: a little everywhere, more where built
 ground presses on it and its stone is taken, more where the quarter about it lies in ruin.
@@ -132,11 +139,15 @@ building.
 A wall shelters the ground it makes someone coming from outside the city go a long way
 round to reach, or keeps them from altogether: all the ground inside a closed circuit,
 the ground close behind a long arc, none behind a stump. Water and ground too steep for a
-wall bar the way as wall does, so a river or a cliff completes a side. Sheltered ground is worth more to
-households and to investment by the share of the wall that stands, so people and works
-gather behind what stands before the next round's builders read the city. An earlier
-era's wall that shelters too small a share of today's people is outgrown, and districts
-that hold it carry it as a trait. Principal roads crossing standing wall establish gates.
+wall are crossed many times more slowly than firm ground: a stream hinders, and a broad
+river or a cliff holds an approach off as a wall does and completes a side. Sheltered
+ground is worth more to households and to investment by the share of the wall that
+stands, so people and works gather behind what stands before the next round's builders
+read the city. An earlier era's wall that shelters too small a share of today's people is
+outgrown, and districts that hold it carry it as a trait. Principal roads crossing
+standing wall establish gates. Every wall with a stretch still standing is on the
+finished map, whether or not it shelters any ground: an arc, a stump and a ruin as much
+as a circuit.
 
 ## The catalogue's large-scale slot
 

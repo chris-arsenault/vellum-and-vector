@@ -41,6 +41,18 @@ impl Section {
         self.disused = self.built;
     }
 }
+/// Where a wall's line stops with nothing to close it: not joined to other wall and not
+/// carried to a bank. A later builder takes the wall up from there.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
+pub struct LooseEnd {
+    pub at: Point,
+    /// Which way round the town the line was being carried: one, or minus one. And the
+    /// heading its builder held, in radians.
+    pub way: f64,
+    pub heading: f64,
+    /// The last section laid at this end.
+    pub section: usize,
+}
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Wall {
     pub round: usize,
@@ -58,6 +70,9 @@ pub struct Wall {
     /// earlier era, which is built in one telling.
     #[serde(default)]
     pub course: Vec<u32>,
+    /// The ends of the wall's line that are still loose.
+    #[serde(default)]
+    pub loose: Vec<LooseEnd>,
     #[serde(default)]
     pub sections: Vec<Section>,
     #[serde(default)]
@@ -76,6 +91,23 @@ impl Wall {
     /// Whether the wall shelters no ground: an arc, a stump, a circuit never closed.
     pub fn open(&self) -> bool {
         self.inside.is_empty()
+    }
+    /// The cells the wall is recorded on: the ground it shelters, or, where it shelters
+    /// none, the cells its standing sections lie on. An arc, a stump and a ruin are on
+    /// the map as a circuit is. Nothing where nothing of it stands.
+    pub fn ground(&self) -> Vec<usize> {
+        if !self.inside.is_empty() {
+            return self.inside.iter().map(|cell| *cell as usize).collect();
+        }
+        let mut cells: Vec<usize> = self
+            .sections
+            .iter()
+            .filter(|section| section.stands())
+            .map(|section| section.cell)
+            .collect();
+        cells.sort_unstable();
+        cells.dedup();
+        cells
     }
     /// How the wall stands, in a word for its record. The word is read off the wall
     /// after the fact and decides nothing.
@@ -220,6 +252,26 @@ mod tests {
         assert!(open > 0. && open < 0.2);
         assert!(built > 3. * open && ruined > 3. * open);
         assert!(era_loss(1., 1.) <= 1.);
+    }
+    #[test]
+    fn a_wall_that_shelters_nothing_is_recorded_where_it_stands() {
+        let at = |cell: usize| Section::laid([[0., 0.], [100., 0.]], cell, 100.);
+        let mut arc = Wall {
+            sections: vec![at(9), at(4), at(9), at(7)],
+            ..Default::default()
+        };
+        arc.sections[3].fall();
+        assert_eq!(arc.ground(), [4, 9]);
+        // A wall that shelters ground is recorded on that ground.
+        arc.inside = vec![2, 3, 5];
+        assert_eq!(arc.ground(), [2, 3, 5]);
+        // Nothing left standing and nothing sheltered: nothing to record.
+        let mut gone = Wall {
+            sections: vec![at(1)],
+            ..Default::default()
+        };
+        gone.sections[0].fall();
+        assert!(gone.ground().is_empty());
     }
     #[test]
     fn a_section_stands_whole_until_it_falls_whole() {

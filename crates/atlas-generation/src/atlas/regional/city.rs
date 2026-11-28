@@ -166,7 +166,9 @@ pub(crate) fn wall_places(
             .iter()
             .map(|s| s.map(position).to_vec())
             .collect();
-        let Some(&first) = wall.inside.first().filter(|_| !lines.is_empty()) else {
+        // A wall that shelters no ground, an arc or a stump or a ruin, is on the map too.
+        let ground = wall.ground();
+        let Some(&first) = ground.first().filter(|_| !lines.is_empty()) else {
             continue;
         };
         let mut attributes = crate::features::records::Attributes::new();
@@ -192,11 +194,7 @@ pub(crate) fn wall_places(
                 attributes,
             },
         )?;
-        let mut place = Place::at(
-            Kind::CityWall,
-            first as usize,
-            wall.inside.iter().map(|c| *c as usize).collect(),
-        );
+        let mut place = Place::at(Kind::CityWall, first, ground);
         place.id = key;
         place.feature = Some(feature);
         walls.push(place);

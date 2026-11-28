@@ -73,14 +73,17 @@ impl Plain {
             fields: &self.fields,
             capital: &self.capital,
             firm: &self.firm,
-            area: std::f64::consts::PI * OUTLINE * OUTLINE,
             round,
             rounds: &ROUNDS,
         })
     }
     /// The walls the city has after its three rounds.
     pub(super) fn walls(&self, sponsors: &Sponsors) -> Vec<Wall> {
-        (1..=ROUNDS.len()).fold(Vec::new(), |walls, round| {
+        self.walls_after(sponsors, ROUNDS.len())
+    }
+    /// The walls the city has after the first `rounds` of its rounds.
+    pub(super) fn walls_after(&self, sponsors: &Sponsors, rounds: usize) -> Vec<Wall> {
+        (1..=rounds).fold(Vec::new(), |walls, round| {
             self.read(round, |city| raise(city, sponsors, walls).unwrap())
         })
     }
@@ -97,6 +100,16 @@ impl Plain {
             }
         });
         on
+    }
+    /// The ground within two cells of standing wall: where walls run, with the small
+    /// sway of a line left out of account.
+    pub(super) fn walled(&self, walls: &[Wall]) -> Vec<bool> {
+        let standing = self.standing(walls);
+        let on: Vec<usize> = (0..standing.len()).filter(|&cell| standing[cell]).collect();
+        steps_from(&self.mesh, &on, 2)
+            .into_iter()
+            .map(|steps| steps != i8::MAX)
+            .collect()
     }
     /// The walls drawn in characters: standing wall, fallen wall, sheltered ground and
     /// built ground.
@@ -136,7 +149,6 @@ impl Plain {
 pub(super) struct Recorded {
     mesh: TriangularLattice,
     rounds: Vec<(CityFields, Vec<f64>, Vec<bool>)>,
-    area: f64,
     pub sponsors: Sponsors,
 }
 impl Recorded {
@@ -166,7 +178,6 @@ impl Recorded {
                 .iter()
                 .map(|captured| Self::ground(captured, &nearest))
                 .collect(),
-            area: first.area,
             mesh,
             sponsors,
         })
@@ -251,7 +262,6 @@ impl Recorded {
                 fields,
                 capital,
                 firm,
-                area: self.area,
                 round: index + 1,
                 rounds: &ROUNDS,
             };
@@ -279,7 +289,6 @@ impl Recorded {
             fields,
             capital: &[],
             firm,
-            area: self.area,
             round: ROUNDS.len(),
             rounds: &ROUNDS,
         };
@@ -323,14 +332,18 @@ impl Recorded {
         serde_json::json!({ "spacing": self.mesh.spacing(), "cells": cells, "sections": sections })
     }
     /// The cells along the line of the present era's wall that could carry wall and have
-    /// none standing in sight, and how many cells the line has.
+    /// none of that wall standing in sight, and how many cells the line has.
     fn open_edge(&self, city: &City, walls: &[Wall]) -> (Vec<usize>, usize) {
-        let Some(wall) = walls.iter().rfind(|wall| !wall.course.is_empty()) else {
+        let Some(own) = walls.iter().rposition(|wall| !wall.course.is_empty()) else {
             return (Vec::new(), 0);
         };
+        let wall = &walls[own];
         let laid = Laid::of(city, walls);
         let standing: Vec<usize> = (0..self.mesh.len())
-            .filter(|&cell| laid.stands(walls, cell))
+            .filter(|&cell| {
+                laid.at(cell)
+                    .is_some_and(|[at, section]| at == own && wall.sections[section].stands())
+            })
             .collect();
         let near = steps_from(&self.mesh, &standing, SIGHT);
         let open = wall
@@ -352,7 +365,6 @@ impl Recorded {
             fields,
             capital,
             firm,
-            area: self.area,
             round: 1,
             rounds: &ROUNDS,
         };
@@ -572,24 +584,28 @@ fn alike(a: &[bool], b: &[bool]) -> f64 {
         both / either
     }
 }
-/// How alike the standing walls of eight rolls are, on average over every pair.
-fn likeness(plain: &Plain, wildness: f64) -> f64 {
+/// How alike the standing walls of eight rolls are: on average over every pair of
+/// rolls, and for the pair most alike. The ground within two cells of each roll's walls
+/// is compared, so the same circuit swayed a cell this way or that counts as the same
+/// wall.
+fn likeness(plain: &Plain, wildness: f64) -> [f64; 2] {
     let footprints: Vec<_> = (1..=8)
         .map(|roll| {
             let mut sponsors = town(&THREE_ERAS, 1.5, roll);
             sponsors.wildness = wildness;
-            plain.standing(&plain.walls(&sponsors))
+            plain.walled(&plain.walls(&sponsors))
         })
         .collect();
-    let mut total = 0.;
-    let mut pairs = 0.;
+    let (mut total, mut pairs, mut most) = (0., 0., 0f64);
     for a in 0..footprints.len() {
         for b in a + 1..footprints.len() {
-            total += alike(&footprints[a], &footprints[b]);
+            let alike = alike(&footprints[a], &footprints[b]);
+            total += alike;
             pairs += 1.;
+            most = most.max(alike);
         }
     }
-    total / pairs
+    [total / pairs, most]
 }
 
 /// Draws what the bench city's walls come to under a spread of histories, causes and
@@ -659,17 +675,18 @@ fn builders_lay_wall_along_the_towns_edge() {
 #[test]
 fn the_same_town_under_different_rolls_raises_different_walls() {
     // In: one city, one history of three eras, the same causes; eight rolls.
-    // Out: no two rolls' walls stand on much the same ground.
-    let likeness = likeness(&Plain::city(60_000., 600.), 1.);
-    assert!(likeness < 0.4, "{likeness}");
+    // Out: on average two rolls' walls share less than half their ground, and no two
+    // rolls raise the same walls.
+    let [mean, most] = likeness(&Plain::city(60_000., 600.), 1.);
+    assert!(mean < 0.5 && most < 0.8, "mean {mean}, most alike {most}");
 }
 
 #[test]
 fn with_chance_stilled_every_roll_raises_the_same_wall() {
     // In: the same city, history and rolls, with chance playing no part.
     // Out: one wall. What made the walls differ was chance and nothing else.
-    let likeness = likeness(&Plain::city(60_000., 600.), 0.);
-    assert!(likeness > 0.999, "{likeness}");
+    let [mean, _] = likeness(&Plain::city(60_000., 600.), 0.);
+    assert!(mean > 0.999, "{mean}");
 }
 
 #[test]
@@ -723,6 +740,98 @@ fn a_closed_circuit_shelters_the_ground_inside_it_and_an_arc_little() {
     let part = raise(0.02);
     let sheltered: f64 = part.iter().map(|wall| wall.area).sum();
     assert!(sheltered < 0.3 * whole[0].area, "{:?}", told(&part));
+}
+
+/// The present era's wall, where it has one.
+fn present(walls: &[Wall]) -> Option<&Wall> {
+    walls.iter().rfind(|wall| !wall.inherited())
+}
+
+#[test]
+fn a_wall_that_has_closed_is_not_laid_again_in_later_rounds() {
+    // In: a town with ample cause, under six rolls, read after each of its three rounds.
+    // Out: once its wall has no loose end, later rounds add nothing to it: no round
+    // lays a second wall over the first. Most rolls close in their first round of
+    // building, so later rounds are put to the question.
+    let plain = Plain::city(60_000., 600.);
+    let mut put_to_it = 0;
+    for roll in 1..=6 {
+        let sponsors = town(&ONE_ERA, 3., roll);
+        let by_round: Vec<_> = (1..=ROUNDS.len())
+            .map(|rounds| plain.walls_after(&sponsors, rounds))
+            .collect();
+        let closed = by_round
+            .iter()
+            .position(|walls| present(walls).is_some_and(|wall| wall.loose.is_empty()));
+        let Some(closed) = closed.filter(|closed| closed + 1 < by_round.len()) else {
+            continue;
+        };
+        put_to_it += 1;
+        let (then, last) = (laid(&by_round[closed]), laid(&by_round[ROUNDS.len() - 1]));
+        assert!((last - then).abs() < 1., "roll {roll}: {then} then {last}");
+    }
+    assert!(put_to_it >= 3, "{put_to_it}");
+}
+
+#[test]
+fn a_town_with_older_walls_inside_it_still_closes_its_new_wall() {
+    // In: three eras of growth and ample cause in each, under ten rolls: two older
+    // walls, standing in part, lie inside the edge today's builders walk. Only rolls
+    // whose present era sets out in the first round are read: that round gives the work
+    // of centuries, so nothing but the rule could leave the wall open.
+    // Out: today's wall has no loose end and shelters square kilometres. Old wall lying
+    // near does not draw its builders off their line or leave them circling.
+    let plain = Plain::city(60_000., 600.);
+    let mut read = 0;
+    for roll in 1..=10 {
+        let sponsors = town(&THREE_ERAS, 3., roll);
+        if sponsors.begins(&ROUNDS) != 1 {
+            continue;
+        }
+        read += 1;
+        let walls = plain.walls(&sponsors);
+        let wall = present(&walls).unwrap();
+        assert!(
+            wall.loose.is_empty() && wall.area > 1.5e6,
+            "roll {roll}: {} loose, {:?}",
+            wall.loose.len(),
+            told(&walls)
+        );
+    }
+    assert!(read >= 4, "{read}");
+}
+
+#[test]
+fn a_wall_left_unfinished_is_taken_up_where_it_stopped() {
+    // In: a town with middling cause, under twenty-four rolls, read after each round.
+    // In some, a round's work runs out with the wall open and a later round gives more.
+    // Out: in each of those the later work lies on ground that had no wall, and the
+    // wall still has at most its two loose ends: it is carried on from where it
+    // stopped, not begun again beside itself or somewhere else.
+    let plain = Plain::city(60_000., 600.);
+    let mut taken_up = 0;
+    for roll in 1..=24 {
+        let sponsors = town(&ONE_ERA, 0.3, roll);
+        let last = plain.walls(&sponsors);
+        let open = (1..ROUNDS.len())
+            .map(|rounds| plain.walls_after(&sponsors, rounds))
+            .find(|walls| present(walls).is_some_and(|wall| !wall.loose.is_empty()));
+        let Some(open) = open.filter(|open| laid(&last) > laid(open) + 500.) else {
+            continue;
+        };
+        taken_up += 1;
+        let (was, now) = (present(&open).unwrap(), present(&last).unwrap());
+        let had = plain.standing(&open);
+        let added = &now.sections[was.sections.len()..];
+        let fresh = added.iter().filter(|section| !had[section.cell]).count();
+        assert!(
+            fresh * 10 >= added.len() * 7 && now.loose.len() <= 2,
+            "roll {roll}: {fresh} of {} new sections on new ground, {} loose ends",
+            added.len(),
+            now.loose.len()
+        );
+    }
+    assert!(taken_up >= 2, "{taken_up}");
 }
 
 #[test]
