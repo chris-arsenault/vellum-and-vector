@@ -23,14 +23,45 @@
 //!
 //! [`crate::noise`] holds the arithmetic beneath: the mixed hash and the value-noise
 //! octaves. Rules use this module.
+//!
+//! # What to reach for
+//!
+//! | The rule needs | Reach for | Not |
+//! |---|---|---|
+//! | one of several weighed options | [`ticket`], [`Chance::weighted`], [`order`] | the best one, always |
+//! | the next piece of something growing | [`cheapest`] or [`best`] with chance in the score | a fixed order |
+//! | a thing to spread over ground | [`Front::arrivals`], then take what has arrived by now | a contour at a level |
+//! | a quantity to soak outward unevenly | [`seep`] through [`Corridors`] or [`Patches`] | an even blur |
+//! | a line, edge or course | a [`Walker`] that steps and drifts, or [`wandering`] | a straight run or a smooth outline |
+//! | a share of ground lost, taken or covered | [`Patches::covers`] | the same share of every cell |
+//! | the same, changing from round to round | [`Patches::rank_at`], [`Noise::drifting`] | a fresh draw each round |
+//! | ground that differs from place to place | [`Noise`], [`Warp`], [`ridged`] | one value everywhere |
+//! | places to begin from | [`Scatter::spaced`], [`Scatter::position`] | a grid or the centre |
+//! | a size, a length, a wait, a strength | [`Chance::between`], [`Chance::bell`], [`Chance::long_tail`], [`Chance::wait`] | one fixed figure |
+//! | a level that rises and falls over eras | [`Chance::wander`] | a table of eras |
+//! | a draw of a town's, a river's, a realm's own | [`Chance::about`] its identity | one draw for all of them |
+//! | a purpose for a new rule's draws | [`Chance::named`], [`Chance::nth`] | an invented number |
+//!
+//! `chance/examples.rs` grows a town wall from these pieces in about a hundred lines:
+//! builders walk round the town laying wall, stretches fall in patches, and later
+//! builders follow what stands. It is the pattern for a rule and for the check that
+//! proves a rule's results differ from seed to seed and collapse to one when chance is
+//! taken away. To see every piece drawn, run
+//! `cargo +stable test -p atlas-generation --lib gallery_of_chance -- --ignored --nocapture`.
 mod choice;
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod examples;
 mod field;
+mod line;
 mod scatter;
+mod spread;
 mod walk;
 
-pub use choice::{best, cheapest, ticket};
-pub use field::{ridged, Corridors, Noise, Warp};
+pub use choice::{best, cheapest, order, ticket};
+pub use field::{ridged, Corridors, Noise, Patches, Warp};
+pub use line::wandering;
 pub use scatter::Scatter;
+pub use spread::{seep, Front};
 pub use walk::{Stride, Walker, Whims};
 
 use crate::noise::{hash_signed, hash_unit};
@@ -46,6 +77,33 @@ pub struct Chance(i32);
 impl Chance {
     pub const fn of(seed: i32, purpose: i32) -> Self {
         Self(seed ^ purpose)
+    }
+    /// A source of draws for a purpose given by name, such as `"city.wall.builders"`.
+    /// A new rule names its purposes instead of inventing numbers for them.
+    pub const fn named(seed: i32, purpose: &str) -> Self {
+        let bytes = purpose.as_bytes();
+        let mut mixed = 0x811c_9dc5u32;
+        let mut at = 0;
+        while at < bytes.len() {
+            mixed = (mixed ^ bytes[at] as u32).wrapping_mul(0x0100_0193);
+            at += 1;
+        }
+        Self(seed ^ mixed as i32)
+    }
+    /// The same purpose for one named thing known by its identity, such as a settlement
+    /// or a river: what is drawn for it is its own, whatever map it is drawn on.
+    pub const fn about(self, identity: &[u8]) -> Self {
+        let mut mixed = 0x811c_9dc5u32;
+        let mut at = 0;
+        while at < identity.len() {
+            mixed = (mixed ^ identity[at] as u32).wrapping_mul(0x0100_0193);
+            at += 1;
+        }
+        Self(self.0 ^ (mixed as i32).wrapping_mul(0x2545_f491))
+    }
+    /// The same purpose for the `number`th of something: a round, a walker, a wall.
+    pub const fn nth(self, number: i32) -> Self {
+        Self(self.0 ^ number.wrapping_mul(0x9e37).wrapping_add(0x5bd1))
     }
     /// A draw from nought up to one.
     pub fn unit(self, [a, b]: Key) -> f64 {
@@ -100,6 +158,46 @@ impl Chance {
         // hpc-exempt: a short list ranked once by its draws, keeping the first of equals first.
         drawn.sort_by(|a, b| b.0.total_cmp(&a.0));
         drawn.into_iter().map(|(_, thing)| thing).collect()
+    }
+    /// The option chance favours among weighted options. Each option draws for itself,
+    /// so one twice the weight wins twice as often, and weighing another option changes
+    /// no option's own draw.
+    pub fn weighted<T>(
+        self,
+        options: impl IntoIterator<Item = T>,
+        key: impl Fn(&T) -> Key,
+        weight: impl Fn(&T) -> f64,
+    ) -> Option<T> {
+        best(options, |option| {
+            order(weight(option), self.unit(key(option)))
+        })
+    }
+    /// How long a thing takes that happens at `rate`: short most often and long now and
+    /// then, about one over the rate on average.
+    pub fn wait(self, key: Key, rate: f64) -> f64 {
+        -(1.0 - self.unit(key)).ln() / rate
+    }
+    /// A draw gathered about nought as measured things are: two in three within one
+    /// either way, one in twenty beyond two.
+    pub fn bell(self, key: Key) -> f64 {
+        let reach = (-2.0 * (1.0 - self.unit(key)).ln()).sqrt();
+        reach * (self.nth(1).unit(key) * std::f64::consts::TAU).cos()
+    }
+    /// A size from one upward with a long tail: most barely above one, a few many times
+    /// it. A smaller `tail` makes the few larger: at one, one in a hundred passes a
+    /// hundred; at three, one in a hundred passes about five.
+    pub fn long_tail(self, key: Key, tail: f64) -> f64 {
+        (1.0 - self.unit(key)).powf(-1.0 / tail)
+    }
+    /// Where a level stands after wandering for `turns` turns from nought: each turn it
+    /// moves by up to one either way, and is drawn back toward nought by the share
+    /// `home` of how far it has strayed. With no pull home it strays ever further; with
+    /// a pull it rises and falls about nought. The turns before are the same turns, so a
+    /// rule may ask for any turn in any order.
+    pub fn wander(self, key: Key, turns: usize, home: f64) -> f64 {
+        (0..turns).fold(0.0, |level, turn| {
+            level * (1.0 - home) + self.nth(turn as i32).signed(key)
+        })
     }
     /// A many-scaled noise field of this purpose.
     pub const fn noise(self, scale: f64, octaves: usize) -> Noise {
@@ -190,6 +288,112 @@ mod tests {
             "{wins:?}"
         );
         assert_eq!(Chance::of(3, 1).favoured(Vec::<usize>::new(), name), None);
+    }
+
+    #[test]
+    fn a_purpose_by_name_is_its_own_and_so_is_each_nth_of_it() {
+        let builders = Chance::named(9, "city.wall.builders");
+        assert_eq!(builders, Chance::named(9, "city.wall.builders"));
+        assert_ne!(builders, Chance::named(9, "city.wall.wear"));
+        assert_ne!(builders, Chance::named(10, "city.wall.builders"));
+        assert_ne!(builders.nth(1), builders.nth(2));
+        assert_ne!(builders.nth(0), builders);
+        // One town's draws are not another's.
+        assert_eq!(builders.about(b"Mitsu"), builders.about(b"Mitsu"));
+        assert_ne!(builders.about(b"Mitsu"), builders.about(b"Vila"));
+        assert_ne!(builders.about(b"Mitsu"), builders);
+        // Two names draw unrelated things for the same key.
+        let wear = Chance::named(9, "city.wall.wear");
+        let alike = keys(4_000)
+            .filter(|key| (builders.unit(*key) - wear.unit(*key)).abs() < 0.01)
+            .count();
+        assert!(alike < 160, "{alike}");
+    }
+
+    #[test]
+    fn waits_are_mostly_short() {
+        let chance = Chance::named(7, "test.shapes");
+        let share = |held: usize| held as f64 / 20_000.;
+        // A thing that happens twice a unit of time waits half a unit on average, and
+        // most waits are shorter than that.
+        let waits: Vec<_> = keys(20_000).map(|key| chance.wait(key, 2.)).collect();
+        assert!(waits.iter().all(|wait| *wait >= 0.));
+        let mean = waits.iter().sum::<f64>() / 20_000.;
+        assert!((mean - 0.5).abs() < 0.02, "{mean}");
+        let short = share(waits.iter().filter(|wait| **wait < 0.5).count());
+        assert!((short - 0.632).abs() < 0.02, "{short}");
+    }
+
+    #[test]
+    fn bells_gather_about_nought() {
+        let chance = Chance::named(7, "test.shapes");
+        let share = |held: usize| held as f64 / 20_000.;
+        // A bell: about nought, two in three within one, one in twenty beyond two.
+        let bells: Vec<_> = keys(20_000).map(|key| chance.bell(key)).collect();
+        let middle = bells.iter().sum::<f64>() / 20_000.;
+        assert!(middle.abs() < 0.03, "{middle}");
+        let within = share(bells.iter().filter(|bell| bell.abs() < 1.).count());
+        let beyond = share(bells.iter().filter(|bell| bell.abs() > 2.).count());
+        assert!((within - 0.683).abs() < 0.02, "{within}");
+        assert!((beyond - 0.046).abs() < 0.012, "{beyond}");
+    }
+
+    #[test]
+    fn long_tails_have_a_few_giants() {
+        let chance = Chance::named(7, "test.shapes");
+        let share = |held: usize| held as f64 / 20_000.;
+        // A long tail: never under one, half under two, one in a hundred past a hundred.
+        let sizes: Vec<_> = keys(20_000).map(|key| chance.long_tail(key, 1.)).collect();
+        assert!(sizes.iter().all(|size| *size >= 1.));
+        let small = share(sizes.iter().filter(|size| **size < 2.).count());
+        let giant = share(sizes.iter().filter(|size| **size > 100.).count());
+        assert!((small - 0.5).abs() < 0.02, "{small}");
+        assert!((0.005..0.016).contains(&giant), "{giant}");
+        // A thinner tail has far fewer giants.
+        let thin = share(
+            keys(20_000)
+                .filter(|key| chance.long_tail(*key, 3.) > 100.)
+                .count(),
+        );
+        assert!(thin < 0.001, "{thin}");
+    }
+
+    #[test]
+    fn a_wandering_level_strays_without_a_pull_home_and_keeps_near_with_one() {
+        let chance = Chance::named(7, "test.wander");
+        let strayed = |home: f64| {
+            keys(400)
+                .map(|key| chance.wander(key, 64, home).abs())
+                .sum::<f64>()
+                / 400.
+        };
+        let (free, held) = (strayed(0.), strayed(0.3));
+        assert!(free > 3. * held, "{free} {held}");
+        assert!(held > 0.3, "{held}");
+        // A turn moves the level by no more than one, and the turns before it are the
+        // same turns whenever they are asked for.
+        for key in keys(200) {
+            let step = chance.wander(key, 10, 0.) - chance.wander(key, 9, 0.);
+            assert!(step.abs() <= 1.);
+        }
+        assert_eq!(chance.wander([1., 2.], 0, 0.3), 0.);
+    }
+
+    #[test]
+    fn a_weighted_option_is_favoured_in_proportion_to_its_weight() {
+        let options = [(0usize, 1.), (1, 0.), (2, 3.), (3, 6.)];
+        let mut wins = [0usize; 4];
+        for purpose in 0..10_000 {
+            let won = Chance::of(5, purpose)
+                .weighted(options, |o| [o.0 as f64, 0.], |o| o.1)
+                .unwrap();
+            wins[won.0] += 1;
+        }
+        let share = |at: usize| wins[at] as f64 / 10_000.;
+        assert!((share(0) - 0.1).abs() < 0.02, "{wins:?}");
+        assert_eq!(wins[1], 0);
+        assert!((share(2) - 0.3).abs() < 0.03, "{wins:?}");
+        assert!((share(3) - 0.6).abs() < 0.03, "{wins:?}");
     }
 
     #[test]

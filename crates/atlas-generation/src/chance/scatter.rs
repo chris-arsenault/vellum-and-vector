@@ -33,11 +33,59 @@ impl Scatter {
     pub fn rank(&self, id: usize) -> f64 {
         self.rank.unit([id as f64, 2.0])
     }
+    /// Up to `count` points that keep `spacing` from one another: the first `tries`
+    /// points of the scatter are taken highest rank first, and each is kept if it lies
+    /// far enough from every point kept so far. The result is scattered as chance has
+    /// it yet never crowded: seeds for quarters, springs, groves, the roots of faults.
+    pub fn spaced(
+        &self,
+        bounds: Bounds,
+        count: usize,
+        spacing: f64,
+        tries: usize,
+    ) -> Vec<[f64; 2]> {
+        let mut ranked: Vec<_> = (0..tries).map(|id| (self.rank(id), id)).collect();
+        // hpc-exempt: a short list of candidate points ranked once by their drawn rank.
+        ranked.sort_by(|a, b| b.0.total_cmp(&a.0));
+        let mut kept: Vec<[f64; 2]> = Vec::new();
+        for (_, id) in ranked {
+            if kept.len() >= count {
+                break;
+            }
+            let [x, y] = self.position(id, bounds);
+            if kept
+                .iter()
+                .all(|[kx, ky]| (x - kx).hypot(y - ky) >= spacing)
+            {
+                kept.push([x, y]);
+            }
+        }
+        kept
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn spaced_points_keep_their_distance_and_fewer_come_where_fewer_fit() {
+        let bounds = Bounds(0., 0., 1_000., 1_000.);
+        let scatter = |roll| Scatter::new(roll, [0x1b73, 0x2db9, 0x4a91]);
+        let points = scatter(12).spaced(bounds, 20, 120., 400);
+        assert_eq!(points.len(), 20);
+        for (at, [x, y]) in points.iter().enumerate() {
+            assert!((0. ..1_000.).contains(x) && (0. ..1_000.).contains(y));
+            for [ox, oy] in &points[at + 1..] {
+                assert!((x - ox).hypot(y - oy) >= 120.);
+            }
+        }
+        // Too wide a spacing for the ground: as many as fit, not as many as asked.
+        let few = scatter(12).spaced(bounds, 20, 700., 400);
+        assert!(!few.is_empty() && few.len() < 5, "{}", few.len());
+        // Another roll scatters elsewhere.
+        assert_ne!(points, scatter(13).spaced(bounds, 20, 120., 400));
+    }
 
     #[test]
     fn scattered_points_cover_their_rectangle_and_keep_their_place_as_more_are_thrown() {

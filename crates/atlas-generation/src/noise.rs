@@ -1,4 +1,8 @@
 //! Atlas spatial noise: mixed integer coordinates and rotated value-noise octaves.
+//!
+//! This is the arithmetic beneath [`crate::chance`]. A generation rule does not call it:
+//! it takes its draws, fields, choices, spreads and walks from `chance`, and the
+//! architecture suite fails a file that adds a call here.
 use crate::lattice::TriangularLattice;
 fn word(value: f64) -> u32 {
     value.trunc().rem_euclid(4_294_967_296.0) as u32

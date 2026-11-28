@@ -23,6 +23,15 @@ pub fn ticket(draw: f64, weights: &[f64]) -> Option<usize> {
     last
 }
 
+/// The order a weighted option takes by a draw of its own; the highest order wins.
+/// Options ordered this way are taken in proportion to their weights, one after
+/// another without taking any twice, and an option is ordered without knowing the
+/// others: town building orders each site's bids this way. A greater weight still
+/// leaves the others a chance.
+pub fn order(weight: f64, draw: f64) -> f64 {
+    weight.max(0.) / -draw.clamp(f64::EPSILON, 1. - f64::EPSILON).ln()
+}
+
 /// The option that scores highest, the earliest among equals. A rule that grows
 /// something a piece at a time scores each piece it could take next, with chance in the
 /// score, and takes this one.
@@ -79,6 +88,15 @@ mod tests {
         assert_eq!(ticket(0.999_999, &weights), Some(3));
         assert_eq!(ticket(0.5, &[0., 0.]), None);
         assert_eq!(ticket(0.5, &[]), None);
+    }
+
+    #[test]
+    fn a_heavier_option_orders_higher_and_a_lucky_draw_can_still_beat_it() {
+        assert!(order(2., 0.5) > order(1., 0.5));
+        assert!(order(1., 0.9) > order(2., 0.3));
+        assert_eq!(order(0., 0.9), 0.);
+        assert_eq!(order(-3., 0.9), 0.);
+        assert!(order(1., 0.).is_finite() && order(1., 1.).is_finite());
     }
 
     #[test]

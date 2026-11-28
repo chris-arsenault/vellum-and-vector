@@ -17,6 +17,17 @@ feed back. Before designing or changing generation, run the four checks in
 between rounds, a loop that amplifies early differences, and a small input change that
 gives a visibly different result.
 
+**Chance comes from one place.** A rule that weighs its options and takes the best, or
+cuts a field at a level, is constructed. Write a rule as many small steps that chance
+takes part in, and take that chance from `crates/atlas-generation/src/chance.rs`: its
+"What to reach for" table names the piece for a choice, a spread, a line, a patchy share,
+a size, or a level that wanders over eras. `chance/examples.rs` there is the pattern for a
+rule and for the many-rolls check that proves it, and
+`cargo +stable test -p atlas-generation --lib gallery_of_chance -- --ignored --nocapture`
+draws every piece in a second. Before reporting a rule done, list where chance enters it
+and what each draw changes on the map. CI fails a file that adds a draw or a noise call
+of its own.
+
 ## Project instructions
 
 Read and follow [AGENTS.md](AGENTS.md) for the product direction, application

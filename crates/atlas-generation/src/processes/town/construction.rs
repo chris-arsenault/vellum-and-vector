@@ -1,6 +1,7 @@
 //! Purposeful interventions compete over frontage; later occupation can change their fate.
 use super::economy::{FloorSpace, UnmetDemand};
 use super::Frontage;
+use crate::chance::order as weighted_order;
 use crate::town::catalogue::PlaceRules;
 use crate::town::{
     catalogue::{
@@ -445,11 +446,6 @@ fn location(town: &Town, candidate: &super::Candidate) -> crate::town::siting::L
     let street = slot.street.map(|id| &town.streets()[id]);
     let wear = street.map_or(0., |_| town.frontage_wear(slot));
     crate::town::siting::Location::at(candidate.conditions, street, slot.along, wear, town.scale())
-}
-/// Ordering exponential draws samples viable proposals without replacement, in
-/// proportion to their weights. A higher preference still leaves other sites a chance.
-fn weighted_order(weight: f64, sample: f64) -> f64 {
-    weight.max(0.) / -sample.clamp(f64::EPSILON, 1. - f64::EPSILON).ln()
 }
 fn commit_participants(
     town: &mut Town,
@@ -925,13 +921,6 @@ pub fn maintain(town: &mut Town, context: &super::Exposure<'_>) -> io::Result<()
 mod tests {
     use super::*;
     use crate::town::influence::{support_for, OpportunitySource, Reachable};
-
-    #[test]
-    fn greater_preference_improves_a_sites_chance_and_either_site_can_be_selected() {
-        assert!(weighted_order(2., 0.5) > weighted_order(1., 0.5));
-        assert!(weighted_order(1., 0.9) > weighted_order(2., 0.3));
-        assert_eq!(weighted_order(0., 0.9), 0.);
-    }
 
     #[test]
     fn premises_take_larger_plots_where_the_towns_order_offers_them() {

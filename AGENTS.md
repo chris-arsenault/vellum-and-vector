@@ -42,19 +42,37 @@ tables or settings, and do not rebuild working code to satisfy a narrower readin
 **Where chance comes from.** A rule that is decided by weighing options and taking the
 best is constructed, however many fields it weighs. Write a rule as many small steps
 that chance takes part in, and take that chance from
-`crates/atlas-generation/src/chance.rs`: named draws, a ticket or a chance-scaled cost
-among weighed options, many-scaled noise fields and warps, patchy ground a flood
-wanders across, a walker that holds a heading and drifts, scattered points. Every piece
-of it was taken out of a geology or river rule that still uses it, and those rules are
-the patterns to copy: a fracture grows as a walk (`field/fractures/growth.rs`), a river
-takes one of two lower neighbours by a weighted ticket (`water/guidance.rs`), water
-crosses flat ground through noise corridors (`water/drainage.rs`), a continent grows by
-taking the cheapest province on its front with chance in the cost
-(`tectonics/allocation.rs`). Before reporting a rule done, list where chance enters it
-and what each draw changes on the map; draws that only switch a thing on or off, and
-form that no noise field or walk shapes, mean it is not done. A piece joins the library
-only with a working rule moved onto it. The architecture suite keeps geology and river
-rules from reaching past the library.
+`crates/atlas-generation/src/chance.rs`. Its "What to reach for" table names the piece
+for each need:
+
+- one of several weighed options: a ticket, or each option's own weighted draw;
+- the next piece of something growing: the cheapest or best with chance in the score;
+- a thing spreading over ground: a front's arrival times, taken up round by round;
+- a quantity soaking outward: seeping through patchy ground;
+- a line, edge or course: a walker that holds a heading and drifts, or a wandering line;
+- a share of ground lost, taken or covered: patches, which also shift from round to
+  round;
+- ground that differs from place to place: many-scaled noise, warps, ridging;
+- places to begin from: scattered points that keep their distance;
+- sizes, waits and strengths: draws in a range, bell-shaped, long-tailed;
+- a level that rises and falls over eras: a wander.
+
+The geology and river rules the first pieces were taken from are patterns to copy: a
+fracture grows as a walk (`field/fractures/growth.rs`), a river takes one of two lower
+neighbours by a weighted ticket (`water/guidance.rs`), water crosses flat ground
+through noise corridors (`water/drainage.rs`), a continent takes the cheapest province
+on its front with chance in the cost (`tectonics/allocation.rs`). `chance/examples.rs`
+is the pattern for a new rule: a town wall grown by builders who walk the town's edge,
+worn in shifting patches and rebuilt along what stands, with the two checks every rule
+needs: under many rolls the results are unlike one another, and with chance taken away
+they are one. `gallery_of_chance` draws every piece and the example in a second.
+
+Before writing a rule, say in the plan what grows, what one step does, which of these
+pieces it uses and what its many-rolls check measures. Before reporting it done, list
+where chance enters it and what each draw changes on the map; draws that only switch a
+thing on or off, and form that no noise field or walk shapes, mean it is not done. The
+architecture suite fails any file that adds a draw or a noise call of its own outside
+the library.
 
 ## Product and source authority
 

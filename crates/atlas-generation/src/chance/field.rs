@@ -43,6 +43,65 @@ impl Noise {
     pub fn across(&self, mesh: &TriangularLattice, [x, y]: [f64; 2]) -> f64 {
         world_noise(mesh, x, y, self.salt, self.scale, self.octaves)
     }
+    /// The field as it stands at `time`, from minus one to one. It changes smoothly as
+    /// time passes and is another field altogether a whole unit of time on, so a rule
+    /// that runs round after round reads chance that carries over from one round to the
+    /// next instead of being drawn afresh or standing still.
+    pub fn drifting(&self, [x, y]: [f64; 2], time: f64) -> f64 {
+        let whole = time.floor();
+        let part = time - whole;
+        let part = part * part * (3.0 - 2.0 * part);
+        let at = |turn: f64| {
+            let salt = self.salt.wrapping_add((turn as i32).wrapping_mul(104_729));
+            fractal_noise(x, y, salt, self.scale, self.octaves)
+        };
+        // Two fields blended swing less than one; the blend is scaled back up so the
+        // field is as varied between two times as at either.
+        let blend = (1.0 - part) * at(whole) + part * at(whole + 1.0);
+        (blend / (1.0 - part).hypot(part)).clamp(-1.0, 1.0)
+    }
+}
+
+/// A noise field read by rank: what share of the ground lies below each point. A rule
+/// that needs a share of the ground lost, taken or covered asks for the ground whose
+/// rank is under that share. It gets that share in patches of the field's own scale, and
+/// as the share grows the patches grow outward from where they were, never moving.
+#[derive(Clone, Debug)]
+pub struct Patches {
+    noise: Noise,
+    levels: Vec<f64>,
+}
+impl Patches {
+    /// Reads the field at a spread of points to learn how its values lie.
+    pub fn of(noise: Noise) -> Self {
+        let spread = Chance(noise.salt).nth(0x7a7c);
+        let mut levels: Vec<f64> = (0..1_024)
+            .map(|n| {
+                let n = f64::from(n);
+                let at = [spread.unit([n, 0.0]), spread.unit([n, 1.0])];
+                noise.signed(at.map(|share| share * noise.scale * 64.0))
+            })
+            .collect();
+        // hpc-exempt: a thousand sampled values of one field, sorted once to rank against.
+        levels.sort_by(f64::total_cmp);
+        Self { noise, levels }
+    }
+    fn ranked(&self, value: f64) -> f64 {
+        self.levels.partition_point(|level| *level < value) as f64 / self.levels.len() as f64
+    }
+    /// The share of the ground that lies below this point, from nought to one.
+    pub fn rank(&self, point: [f64; 2]) -> f64 {
+        self.ranked(self.noise.signed(point))
+    }
+    /// The rank of a point as the field stands at `time`: patches that shift and
+    /// reshape gradually from round to round.
+    pub fn rank_at(&self, point: [f64; 2], time: f64) -> f64 {
+        self.ranked(self.noise.drifting(point, time))
+    }
+    /// Whether a point lies in the patches that cover `share` of the ground.
+    pub fn covers(&self, point: [f64; 2], share: f64) -> bool {
+        self.rank(point) < share
+    }
 }
 
 /// Folds a field about its middle so its swells meet in sharp crests: coasts cut by
@@ -149,6 +208,69 @@ mod tests {
         };
         let (smooth, rough) = (nearness(1), nearness(5));
         assert!(rough > 1.4 * smooth, "{smooth} {rough}");
+    }
+
+    #[test]
+    fn a_drifting_field_changes_little_in_a_short_time_and_wholly_in_a_long_one() {
+        let noise = Chance::named(4, "test.drift").noise(800., 3);
+        let moved = |from: f64, to: f64| {
+            points(2_000)
+                .map(|p| (noise.drifting(p, from) - noise.drifting(p, to)).abs())
+                .sum::<f64>()
+                / 2_000.
+        };
+        assert!(points(500).all(|p| noise.drifting(p, 0.) == noise.signed(p)));
+        assert!(points(2_000).all(|p| (-1. ..=1.).contains(&noise.drifting(p, 0.5))));
+        let (soon, later) = (moved(0., 0.1), moved(0., 3.));
+        assert!(soon * 4. < later, "{soon} {later}");
+        // Between two whole times the field is as varied as at either.
+        let swing = |time: f64| {
+            points(2_000)
+                .map(|p| noise.drifting(p, time).abs())
+                .sum::<f64>()
+                / 2_000.
+        };
+        assert!((swing(0.5) / swing(0.) - 1.).abs() < 0.15);
+    }
+
+    #[test]
+    fn patches_cover_the_share_asked_and_grow_where_they_stood() {
+        let patches = Patches::of(Chance::named(4, "test.patches").noise(700., 3));
+        let covered =
+            |share: f64| -> Vec<bool> { points(4_000).map(|p| patches.covers(p, share)).collect() };
+        for share in [0.1, 0.3, 0.6] {
+            let held = covered(share).iter().filter(|c| **c).count() as f64 / 4_000.;
+            assert!((held - share).abs() < 0.06, "{share}: {held}");
+        }
+        // Ground covered at a smaller share stays covered at a larger.
+        let (small, large) = (covered(0.3), covered(0.6));
+        assert!(small
+            .iter()
+            .zip(&large)
+            .all(|(small, large)| !small || *large));
+        // The cover comes in patches: beside covered ground the ground is mostly covered.
+        let inside: Vec<_> = points(4_000).filter(|p| patches.covers(*p, 0.3)).collect();
+        let beside = inside
+            .iter()
+            .filter(|[x, y]| patches.covers([x + 25., *y], 0.3))
+            .count();
+        assert!(
+            beside * 10 > inside.len() * 8,
+            "{beside} of {}",
+            inside.len()
+        );
+        // Over time the patches shift: mostly where they were a little later, elsewhere
+        // much later.
+        assert!(points(500).all(|p| patches.rank_at(p, 0.) == patches.rank(p)));
+        let stays = |time: f64| {
+            inside
+                .iter()
+                .filter(|p| patches.rank_at(**p, time) < 0.3)
+                .count() as f64
+                / inside.len() as f64
+        };
+        let (soon, later) = (stays(0.2), stays(3.));
+        assert!(soon > 0.7 && later < 0.5, "{soon} {later}");
     }
 
     #[test]
