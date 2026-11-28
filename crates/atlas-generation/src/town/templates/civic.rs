@@ -231,13 +231,19 @@ impl Civic {
             Self::Freehold => 0.5,
         }
     }
-    /// Whether the order itself sponsors walls, beside a site that is guarded, contested
-    /// or a realm's seat.
-    pub fn defends(self) -> bool {
-        matches!(
-            self,
-            Self::PrincelySeat | Self::Autocracy | Self::SlaveHolding
-        )
+    /// The odds the order itself gives that the town walls itself in an era, beside a
+    /// site that is guarded, contested or a realm's seat: those who hold a town by
+    /// force wall it, traders wall their goods, and households that answer to none
+    /// seldom agree to.
+    pub fn defence(self) -> f64 {
+        match self {
+            Self::PrincelySeat => 0.6,
+            Self::Autocracy | Self::SlaveHolding => 0.5,
+            Self::MerchantCouncil => 0.3,
+            Self::CouncilOfElders => 0.15,
+            Self::Democracy => 0.1,
+            Self::Freehold => 0.,
+        }
     }
     /// How tight a core the order's walls enclose: at one the rings a city would
     /// consider anyway, above one rings drawn in round the most crowded ground, leaving

@@ -377,7 +377,10 @@ itself says which is which.
   for finding out whether a rule works. Street rounds have a bench for this:
   `crates/atlas-generation/src/atlas/town/bench.rs` founds a small district on
   constructed ground and runs the real steps round after round; see
-  [the local atlas notes](docs/local-atlas.md#the-town-bench).
+  [the local atlas notes](docs/local-atlas.md#the-town-bench). City walls have one too:
+  `crates/atlas-generation/src/processes/town/urban/defenses/bench.rs` puts a small
+  constructed city through the real wall step for a city map's three rounds; see
+  [the same notes](docs/local-atlas.md#the-city-wall-bench).
 - Browser tests test UI behavior on small supplied worlds. Import `test` from
   `frontend/tests/uiTest.ts`; its automatic fixture uses at most 256 cells and
   blocks real generation workers. Numerical preconditions and raster presentation

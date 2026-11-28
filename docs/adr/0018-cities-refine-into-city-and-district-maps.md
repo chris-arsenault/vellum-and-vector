@@ -86,10 +86,32 @@ open grounds and significant sites.
 
 Collective investment compares concentrations of people, occupied ground and civic activity
 across the known city. A sponsor weighs the share protected, ground already defended and
-the cost of each candidate enclosure. Finite labour and standing capital fund real sections
-over successive rounds. Water and steep ground can complete a side. Principal roads crossing
-the standing works establish gates. Growth beyond a wall and local evidence of ruin affect
-its condition and the demand for repairs or further works.
+the cost of each candidate enclosure. Water and steep ground can complete a side. Principal
+roads crossing the standing works establish gates.
+
+The same choice is made once for each era the town's record tells of, against the town as
+it then was. An era's town stood on the most crowded of today's ground, as much of it as
+now holds that era's share of today's people. The town's site, its standing as a realm's
+seat, a contest for it and its civic order weigh how readily it defends itself, and each
+era's chance scales that weight into how threatened the era left it. A circuit is raised
+when, under that threat, the people it newly protects are worth its work; a crowded town
+on cheap ground walls itself under a threat that leaves a scattered one open. A later era
+raises a second circuit only where it protects mostly people the first does not, so a town
+that grew little keeps one wall with suburbs outside and a town that grew much has an old
+wall inside a new one.
+
+A wall is kept in an era that leaves the town threatened enough to keep it, while no newer
+wall has taken its place and the city has not outgrown it. For each era nobody keeps it, a
+wall loses whole stretches: a little to weather everywhere, more where built ground presses
+on it and its stone is taken, and more where the quarter about it lies in ruin. Today's
+sponsor repairs what it still keeps.
+
+The past is told again each round from that round's city. Standing walls draw people and
+works behind them before the next round, so the crowded ground an old wall was drawn round
+sharpens and the next telling follows it. Today's sponsor begins in a year of the present
+era dealt by chance, and gives each round the work its supporters can do in the years the
+round stands for, within the standing stock it can turn to walls: a circuit begun in the
+era's last years is still building when the map is drawn.
 
 ## The catalogue's large-scale slot
 
@@ -182,14 +204,13 @@ living roots. A city on a stable tear can become a city of doors and one on quic
 ground a city of hearths, and the rounds decide how far.
 
 At City scale the civic order weighs which resident characters the districts take and
-how far apart districts live in how tightly they dwell. An order that defends itself
-sponsors walls and draws its rings round more crowded ground. It never weighs a
-district's economic role or its traits.
+how far apart districts live in how tightly they dwell. An order adds its own weight to
+what moves the town to wall itself, and one that holds a citadel draws its rings round
+more crowded ground. It never weighs a district's economic role or its traits.
 
-One round's wall work is a share of what a wall's supporters can give, so a great circuit
-takes several rounds. Its sponsor reconsiders the line each round until the work is well
-begun, and a redrawn line takes over the work done on the earlier one. The city gathers
-and shifts between rounds, so a line drawn before it gathered does not bind it.
+A sponsor reconsiders the line of a circuit of its own era each round until the work is
+well begun, and a redrawn line takes over the work done on the earlier one. The city
+gathers and shifts between rounds, so a line drawn before it gathered does not bind it.
 
 On a street map a civic order speaks only through the town's order record and adds
 nothing to what a district's economy and residents ask for, so it varies a town along

@@ -66,6 +66,30 @@ The bench leaves out what only a map has: the trade and waste signals spread ove
 lattice between steps, neighbouring towns, kept links, worked fields, outlying
 settlement and kept practices. A question about those needs the bench extended first.
 
+## The city wall bench
+
+City walls have a bench of their own in
+`crates/atlas-generation/src/processes/town/urban/defenses/bench.rs`. It constructs a small
+round city on the real lattice and puts it through the real wall step for the three rounds
+a city map runs, in under a second a city. A test says what goes in (the townsfolk of each
+era, the weight of what moves the town to defend itself, its roll, how crowded and how
+built its ground) and checks what walls come out.
+
+```sh
+cargo +stable test -p atlas-generation --lib defenses::bench               # the checks
+cargo +stable test -p atlas-generation --lib survey_of_walls -- --ignored --nocapture
+```
+
+The survey prints the walls of the same city under a spread of histories, rolls and
+shapes. The bench's ground does not move between rounds, so it shows what the wall step
+makes of a given city and never how a city answers its walls: people gathering behind
+them, districts divided along them and ways gated through them need a map.
+
+On a map, `--set built.layout.wallReadiness=<n>` scales how readily towns wall
+themselves (nought: never). With `ATLAS_TRACE_CITY` set the server log carries a
+`city.wall-choice` line for every circuit a sponsor weighed and a `city.walls` line a
+round: each era's threat, the means, and how every wall stands.
+
 ## Use
 
 ```sh

@@ -214,6 +214,11 @@ pub struct Selection {
     /// can take hold on any street.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub crafts: Vec<i32>,
+    /// The settlement's roll for its walls, drawn beside the template, the civic order
+    /// and the craft: each era's chance of war is dealt from it. A policy saved before
+    /// walls were raised era by era has none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fortune: Option<f64>,
 }
 impl Selection {
     pub fn commons(centre: Point) -> Self {
@@ -227,6 +232,7 @@ impl Selection {
             site,
             civic: None,
             crafts: Vec::new(),
+            fortune: None,
         }
     }
     // owner-direction(2026-11-19): rank settlement templates from initial conditions and choose randomly with greater weight toward the top.
@@ -243,6 +249,7 @@ impl Selection {
             site,
             civic: None,
             crafts: Vec::new(),
+            fortune: None,
         };
         selection.selected = selection
             .draw_remaining(draw, &[])
@@ -257,6 +264,11 @@ impl Selection {
             .or_else(|| self.site.city_craft(draw))
             .into_iter()
             .collect();
+        self
+    }
+    /// Keeps the settlement's roll for its walls.
+    pub fn with_fortune(mut self, roll: f64) -> Self {
+        self.fortune = Some(roll);
         self
     }
     /// Draws the settlement's civic order from the same site evidence, on a draw of its

@@ -163,7 +163,7 @@ pub(super) fn features() -> Vec<Feature> {
         "roadTraffic",
         "highways",
     ];
-    built.controls = crate::town::order::CONTROLS;
+    built.controls = &BUILT_CONTROLS;
     built.slots.extend([
         "town.initialize",
         "town.develop",
@@ -216,7 +216,10 @@ pub(super) fn features() -> Vec<Feature> {
             "real-scale.settlement",
         ]),
         "city.claims" => operations(&["town.land-competition"]),
-        "city.invest" => operations(&["town.collective-investment"]),
+        "city.invest" => vec![invoke(
+            "town.collective-investment",
+            chosen(context, crate::town::walls::READINESS.name),
+        )],
         "city.routes" => operations(&["town.movement"]),
         "city.programs" => {
             let mut settings = Values::from_iter([("strategy".into(), "district-programs".into())]);
@@ -238,6 +241,28 @@ pub(super) fn features() -> Vec<Feature> {
         _ => vec![],
     });
     vec![ecology, magic, local, cultures, politics, built]
+}
+/// The settings a map may choose for its settlements: the terms of a town's order, and
+/// how readily towns wall themselves.
+const BUILT_CONTROLS: [crate::parameters::NumericParameter;
+    crate::town::order::CONTROLS.len() + 1] = {
+    let order = crate::town::order::CONTROLS;
+    let mut all = [crate::town::walls::READINESS; crate::town::order::CONTROLS.len() + 1];
+    let mut at = 0;
+    while at < order.len() {
+        all[at] = order[at];
+        at += 1;
+    }
+    all
+};
+/// A step's settings holding the map's choice of one settlement setting, if it made one;
+/// without a choice the step's own default applies.
+fn chosen(context: &Context<'_>, name: &str) -> Values {
+    context.selection["built.layout"]
+        .settings
+        .get(name)
+        .map(|value| Values::from_iter([(name.to_owned(), value.clone())]))
+        .unwrap_or_default()
 }
 fn flag(process: &str, key: &str, value: bool) -> SequenceNode<crate::recipe::Invocation, Values> {
     invoke(process, Values::from_iter([(key.into(), value.into())]))

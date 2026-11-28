@@ -895,6 +895,13 @@ const directions: readonly OwnerDirection[] = [
     marks: ["crates/atlas-generation/src/processes/town/urban/activity.rs"],
     test: "crates/atlas-generation/src/processes/town/urban/activity.rs",
   },
+  {
+    direction:
+      "a wall enclosing twice the built ground is acceptable only when that is not always the case; sometimes there are interior walls, no walls, half decayed walls or several walls",
+    given: "2026-11-28",
+    marks: ["crates/atlas-generation/src/processes/town/urban/defenses.rs"],
+    test: "crates/atlas-generation/src/processes/town/urban/defenses/bench.rs",
+  },
 ];
 
 const root = join(__dirname, "../../..");

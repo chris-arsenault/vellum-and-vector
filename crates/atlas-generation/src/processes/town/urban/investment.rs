@@ -351,6 +351,7 @@ pub(super) fn defense(
     urban: &mut Urban,
     frame: &Geometry,
     walls: Vec<Feature>,
+    readiness: f64,
 ) -> io::Result<()> {
     urban.inherited_defenses.clear();
     for f in walls {
@@ -362,6 +363,6 @@ pub(super) fn defense(
             urban.captured.push(f);
         }
     }
-    urban.defense = super::defenses::invest(state, urban)?;
+    urban.defense = super::defenses::invest(state, urban, readiness)?;
     Ok(())
 }

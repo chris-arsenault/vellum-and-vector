@@ -118,6 +118,34 @@ fn contribution_context(selection: &Selection) -> Context<'_> {
     }
 }
 #[test]
+fn a_maps_choice_of_wall_readiness_reaches_the_citys_investment_step() {
+    let catalogue = Catalogue::default();
+    let mut selected = selected_catalogue(&catalogue);
+    let readiness = |selected: &Selection| {
+        let body = catalogue
+            .contribute("city.invest", &contribution_context(selected))
+            .unwrap();
+        body.iter()
+            .find_map(|node| match node {
+                SequenceNode::Process { operation, .. }
+                    if operation.process == "town.collective-investment" =>
+                {
+                    Some(operation.parameters.get("wallReadiness").cloned())
+                }
+                _ => None,
+            })
+            .expect("the city invests")
+    };
+    // No choice: the step keeps its own default.
+    assert_eq!(readiness(&selected), None);
+    selected
+        .get_mut("built.layout")
+        .unwrap()
+        .settings
+        .insert("wallReadiness".into(), serde_json::json!(0.25));
+    assert_eq!(readiness(&selected), Some(serde_json::json!(0.25)));
+}
+#[test]
 fn child_sequence_realizes_captured_ground_once_and_selects_local_exposure() {
     use atlas_generation::atlas::regional::sequence::sequence;
     let catalogue = Catalogue::default();

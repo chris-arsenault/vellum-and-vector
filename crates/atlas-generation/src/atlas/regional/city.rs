@@ -107,6 +107,9 @@ pub(crate) fn inherit_policy(
             serde_json::from_value(policy.clone()).map_err(io::Error::other)?;
         saved.civic = civic.or(saved.civic);
         saved.crafts = craft.map_or(saved.crafts, |asked| vec![asked]);
+        saved.fortune = saved
+            .fortune
+            .or_else(|| Some(crate::town::walls::fortune(&id.to_bytes(), seed)));
         state.regional.as_mut().unwrap().city.template = Some(saved);
         return Ok(());
     }
@@ -171,17 +174,8 @@ pub(crate) fn wall_places(
             attributes.insert("builtInEra".into(), era.clone().into());
         }
         attributes.insert("outgrown".into(), wall.outgrown.into());
-        attributes.insert(
-            "condition".into(),
-            if wall.outgrown {
-                "reused interior defenses"
-            } else if wall.sections.iter().any(|s| s.built < s.cost) {
-                "partial"
-            } else {
-                "maintained"
-            }
-            .into(),
-        );
+        attributes.insert("condition".into(), wall.condition().into());
+        attributes.insert("standingShare".into(), wall.standing_share().into());
         attributes.insert("raisedInRound".into(), wall.round.into());
         attributes.insert("enclosedCells".into(), wall.inside.len().into());
         attributes.insert("gates".into(), wall.gates.len().into());
@@ -583,7 +577,8 @@ fn template(
     let craft = crate::town::templates::craft_roll(&own, seed);
     let selection = Selection::choose(site, draw(seed, 0, 1))
         .with_civic(None, civic)
-        .with_craft(None, craft);
+        .with_craft(None, craft)
+        .with_fortune(crate::town::walls::fortune(&own, seed));
     if let Some(regional) = state.regional.as_mut() {
         regional.city.template = Some(selection.clone());
     }

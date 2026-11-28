@@ -57,13 +57,37 @@ pub fn clip(state: &impl MapState, shape: Option<Geometry>) -> io::Result<Option
         .transpose()?;
     intersect_areas(state.spatial(), shape, Some(state.footprint().clone()))
 }
+/// The lattice a contour is traced on, the kernel that joins its pieces and the precision
+/// its coordinates keep: all a contour needs of a map.
+pub struct Sheet<'a> {
+    pub mesh: &'a crate::lattice::TriangularLattice,
+    pub spatial: &'a dyn SpatialKernel,
+    pub precision: f64,
+}
+impl<'a> Sheet<'a> {
+    pub fn of(state: &'a impl MapState) -> io::Result<Self> {
+        Ok(Self {
+            mesh: &state.field()?.mesh,
+            spatial: state.spatial(),
+            precision: state.geometry_precision(),
+        })
+    }
+}
 pub fn geographic(
     state: &impl MapState,
     members: &[usize],
     value_at: &mut dyn FnMut(Point) -> io::Result<f64>,
     level: f64,
 ) -> io::Result<Option<Geometry>> {
-    let mesh = &state.field()?.mesh;
+    geographic_on(&Sheet::of(state)?, members, value_at, level)
+}
+fn geographic_on(
+    sheet: &Sheet<'_>,
+    members: &[usize],
+    value_at: &mut dyn FnMut(Point) -> io::Result<f64>,
+    level: f64,
+) -> io::Result<Option<Geometry>> {
+    let mesh = sheet.mesh;
     let [ox, oy] = mesh.origin();
     let (mut west, mut south, mut east, mut north) = (
         f64::INFINITY,
@@ -86,12 +110,12 @@ pub fn geographic(
         ((north - south + 2.0 * pad) / spacing).ceil() as usize + 1,
     ];
     contours::regular(
-        state.spatial(),
+        sheet.spatial,
         bounds,
         dimensions,
         value_at,
         Options {
-            precision: state.geometry_precision(),
+            precision: sheet.precision,
             level,
             tolerance: 100.0,
         },
@@ -102,7 +126,15 @@ pub fn membership(
     members: &[usize],
     includes: ReadCell<'_>,
 ) -> io::Result<Option<Geometry>> {
-    let mesh = &state.field()?.mesh;
+    membership_on(&Sheet::of(state)?, members, includes)
+}
+/// The outline of `members` where `includes` passes one half, traced on a bare lattice.
+pub fn membership_on(
+    sheet: &Sheet<'_>,
+    members: &[usize],
+    includes: ReadCell<'_>,
+) -> io::Result<Option<Geometry>> {
+    let mesh = sheet.mesh;
     let [ox, oy] = mesh.origin();
     let mut sampler = Sampler::new(mesh);
     let mut at = |[x, y]: Point| sampler.sample([x - ox, y - oy], includes);
@@ -110,22 +142,22 @@ pub fn membership(
         .iter()
         .any(|&cell| fans::touches_boundary(mesh, cell))
     {
-        return geographic(state, members, &mut at, 0.5);
+        return geographic_on(sheet, members, &mut at, 0.5);
     }
     let support = fans::support(mesh, members);
     if support
         .iter()
         .any(|&cell| fans::touches_boundary(mesh, cell))
     {
-        return geographic(state, members, &mut at, 0.5);
+        return geographic_on(sheet, members, &mut at, 0.5);
     }
-    let mut trace = Linear::new(state.geometry_precision(), 0.5);
+    let mut trace = Linear::new(sheet.precision, 0.5);
     for cell in support {
         for triangle in fans::cell_fans(mesh, cell, includes)? {
             trace.triangle(triangle);
         }
     }
-    trace.finish(state.spatial(), &mut at)
+    trace.finish(sheet.spatial, &mut at)
 }
 pub fn combined(
     state: &impl MapState,
