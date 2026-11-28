@@ -1,7 +1,9 @@
-//! A proposed circuit keeps its extent; the City builds and repairs its sections with finite effort.
+//! A city's walls: the sections builders laid as they walked, what has fallen and what
+//! was laid again, and the ground each wall shelters.
 use super::geometry::{add, scale, sub, Point};
 use serde::{Deserialize, Serialize};
 
+/// One step of a builder's walk: the wall laid between two points.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Section {
     pub ends: [Point; 2],
@@ -14,6 +16,17 @@ pub struct Section {
     pub repaired: f64,
 }
 impl Section {
+    /// A section a builder has just laid whole.
+    pub fn laid(ends: [Point; 2], cell: usize, cost: f64) -> Self {
+        Self {
+            ends,
+            cell,
+            cost,
+            built: cost,
+            disused: 0.,
+            repaired: 0.,
+        }
+    }
     /// The work of this section that stands: what was built, less disuse not yet repaired.
     fn standing_work(&self) -> f64 {
         (self.built - (self.disused - self.repaired).max(0.)).max(0.)
@@ -22,6 +35,18 @@ impl Section {
         let [a, b] = self.ends;
         let standing = self.standing_work();
         (standing > 0.).then(|| [a, add(a, scale(sub(b, a), standing / self.cost))])
+    }
+    pub fn stands(&self) -> bool {
+        self.standing_work() > 0.
+    }
+    /// The section falls: what was built, and any repair, is lost.
+    pub fn fall(&mut self) {
+        self.disused = self.built;
+        self.repaired = 0.;
+    }
+    /// A builder lays the fallen section again.
+    pub fn relay(&mut self) {
+        self.repaired = self.disused;
     }
 }
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -51,17 +76,18 @@ impl Wall {
     pub fn inherited(&self) -> bool {
         self.round == 0
     }
-    /// Whether work on the circuit remains.
-    pub fn unfinished(&self) -> bool {
-        self.sections.iter().any(|s| s.built < s.cost)
+    /// Whether the wall shelters no ground: an arc, a stump, a circuit never closed.
+    pub fn open(&self) -> bool {
+        self.inside.is_empty()
     }
-    /// How the wall stands, as its record tells it.
+    /// How the wall stands, in a word for its record. The word is read off the wall
+    /// after the fact and decides nothing.
     pub fn condition(&self) -> &'static str {
         let standing = self.standing_share();
-        match (self.outgrown, self.unfinished()) {
+        match (self.outgrown, self.open()) {
             (true, _) if standing < 0.5 => "interior remnants",
             (true, _) => "reused interior defenses",
-            (false, true) if self.inherited() => "never finished",
+            (false, _) if standing < 0.5 => "ruinous",
             (false, true) => "partial",
             (false, false) if standing < 0.85 => "decayed",
             (false, false) => "maintained",
@@ -123,55 +149,36 @@ pub fn resolve(causes: impl IntoIterator<Item = f64>) -> f64 {
         .map(|odds| 1. - odds.clamp(0., 1.))
         .product::<f64>()
 }
-/// How threatened an era left a town: the weight of its causes, scaled by the era's
-/// chance. Most eras pass quietly and a few bring far more than the causes alone would;
-/// a town no cause moves is never threatened.
-pub fn threat(causes: f64, chance: f64) -> f64 {
-    causes.max(0.) * -chance.clamp(f64::MIN_POSITIVE, 1.).ln()
+/// How threatened an era left a town: the weight of its causes, scaled by a wait drawn
+/// for the era, which is one on average. Most eras pass quietly and a few bring far more
+/// than the causes alone would; a town no cause moves is never threatened.
+pub fn threat(causes: f64, wait: f64) -> f64 {
+    causes.max(0.) * wait.max(0.)
 }
-/// What a circuit must be worth, under an era's threat, for the town to raise it: its
-/// worth is the people it newly protects for each unit of work, by how much of the town
-/// it takes in. A compact, crowded town on cheap ground walls itself under a threat that
-/// leaves a thin, sprawling one open.
-pub const RAISE: f64 = 1.;
-/// The share of that at which a town keeps a wall that already stands.
-pub const UPKEEP: f64 = 0.3;
+/// The share of the work it could give that a town gives its walls in an era: more the
+/// more it is threatened and the more walling its edge is worth, which is the people
+/// protected for each unit of work, by how much of the town is taken in. A crowded town
+/// on cheap ground gives nearly all it can under a threat that draws little from a thin,
+/// sprawling one, and an era that passes quietly lays a stump or nothing.
+pub fn keenness(threat: f64, worth: f64) -> f64 {
+    1. - (-threat.max(0.) * worth.max(0.)).exp()
+}
 /// A settlement's roll for its walls on one map, drawn apart from its template, civic
 /// order and craft.
 pub fn fortune(settlement: &[u8], seed: i32) -> f64 {
     crate::field::poi::true_sizes::roll_bytes(settlement, (seed as u64).wrapping_add(0x5a11_ed01))
 }
-/// The chance an era deals a settlement, drawn from its one roll: `draw` zero for how
-/// threatened the era left it, one for when in the era its sponsor began.
-pub fn era_chance(fortune: f64, era: usize, draw: u64) -> f64 {
-    crate::field::poi::true_sizes::roll_bytes(
-        &fortune.to_bits().to_le_bytes(),
-        0x0e7a_0000 + 16 * era as u64 + draw,
-    )
-}
-/// The chance one stretch of one wall has of outlasting neglect, drawn from the
-/// settlement's roll.
-pub fn stretch_chance(fortune: f64, wall: usize, stretch: usize) -> f64 {
-    crate::field::poi::true_sizes::roll_bytes(
-        &fortune.to_bits().to_le_bytes(),
-        0x57e7_0000_0000 + ((wall as u64) << 20) + stretch as u64,
-    )
-}
-/// The share of standing wall lost each era nobody keeps it, on open ground.
+/// The share of standing wall lost in an era on open ground.
 const WEATHER: f64 = 0.12;
-/// The further share lost each era where built ground stands all about the wall: builders
-/// take its stone and build across its line.
+/// The further share lost in an era where built ground stands all about the wall:
+/// builders take its stone and build across its line.
 const ROBBING: f64 = 0.55;
-/// The share of a stretch of wall lost in one era nobody keeps it: weather everywhere,
-/// stone taken where built ground presses on it, and its fall where the quarter about
-/// it lies in ruin.
+/// The share of the wall about a place lost in one era: weather everywhere, stone taken
+/// where built ground presses on it, and its fall where the quarter about it lies in
+/// ruin. Wall that later builders walk again is laid again.
 pub fn era_loss(built: f64, ruin: f64) -> f64 {
     let neglect = (ruin - built).max(0.) / (0.01 + ruin + built);
     (WEATHER + ROBBING * built.clamp(0., 1.) + (1. - WEATHER) * neglect).clamp(0., 1.)
-}
-/// The share of a stretch lost after `eras` unkept eras at `loss` an era.
-pub fn lost_after(loss: f64, eras: usize) -> f64 {
-    1. - (1. - loss.clamp(0., 1.)).powi(eras as i32)
 }
 
 // owner-direction(2026-11-24): defenses are planned against the whole city so a wall enclosing less than one percent is exceptional.
@@ -196,56 +203,75 @@ mod tests {
         assert_eq!(s.standing(), Some([[0., 0.], [25., 0.]]));
     }
     #[test]
-    fn any_one_cause_may_move_a_town_and_chance_scales_the_threat() {
-        // No cause, no threat, whatever the era deals.
+    fn any_one_cause_may_move_a_town_and_a_graver_era_draws_more_of_its_work() {
+        // No cause, no threat, however grave the era.
         assert_eq!(resolve([]), 0.);
-        assert_eq!(threat(resolve([0., 0.]), 0.001), 0.);
+        assert_eq!(threat(resolve([0., 0.]), 5.), 0.);
         // Two causes weigh more than either and less than their sum.
         let both = resolve([GUARDED, SEAT]);
         assert!(both > GUARDED.max(SEAT) && both < GUARDED + SEAT);
-        // A rarer chance is a graver era; the commonest brings nothing.
-        assert!(threat(both, 0.05) > 2. * threat(both, 0.5));
-        assert_eq!(threat(both, 1.), 0.);
-        // One roll deals each era its own chance.
-        assert_ne!(era_chance(0.37, 0, 0), era_chance(0.37, 1, 0));
-        assert_ne!(era_chance(0.37, 1, 0), era_chance(0.38, 1, 0));
+        assert!(threat(both, 3.) > 2. * threat(both, 1.));
+        // An unthreatened town gives its walls nothing; a town gives more the graver the
+        // era and the more a wall is worth, and never more than all it can.
+        assert_eq!(keenness(0., 9.), 0.);
+        assert_eq!(keenness(2., 0.), 0.);
+        assert!(keenness(0.2, 1.) < keenness(1., 1.) && keenness(1., 1.) < keenness(1., 5.));
+        assert!(keenness(1., 1.) > 0.5 && keenness(50., 50.) <= 1.);
     }
     #[test]
-    fn an_unkept_wall_loses_most_where_ground_is_built_or_in_ruin() {
+    fn wall_is_lost_soonest_where_ground_is_built_or_in_ruin() {
         let (open, built, ruined) = (era_loss(0., 0.), era_loss(0.8, 0.), era_loss(0.1, 0.6));
         assert!(open > 0. && open < 0.2);
         assert!(built > 3. * open && ruined > 3. * open);
         assert!(era_loss(1., 1.) <= 1.);
-        // Nothing is lost while a wall is kept, and each unkept era takes more.
-        assert_eq!(lost_after(built, 0), 0.);
-        assert!(lost_after(open, 3) > 2. * lost_after(open, 1));
-        assert!(lost_after(built, 2) > lost_after(built, 1) && lost_after(built, 9) <= 1.);
+    }
+    #[test]
+    fn a_section_falls_whole_and_is_laid_again_whole() {
+        let mut section = Section::laid([[0., 0.], [100., 0.]], 0, 80.);
+        assert!(section.stands());
+        section.fall();
+        assert!(!section.stands() && section.standing().is_none());
+        section.relay();
+        assert_eq!(section.standing(), Some([[0., 0.], [100., 0.]]));
+        // Laid again, it can fall again.
+        section.fall();
+        assert!(!section.stands());
     }
     #[test]
     fn a_wall_is_told_by_how_it_stands() {
-        let section = |built: f64, disused: f64| Section {
-            ends: [[0., 0.], [100., 0.]],
-            cell: 0,
-            cost: 100.,
-            built,
-            disused,
-            repaired: 0.,
+        let section = |fallen: bool| {
+            let mut section = Section::laid([[0., 0.], [100., 0.]], 0, 100.);
+            if fallen {
+                section.fall();
+            }
+            section
         };
-        let wall = |round: usize, outgrown: bool, sections: Vec<Section>| Wall {
-            round,
+        let wall = |outgrown: bool, inside: Vec<u32>, sections: Vec<Section>| Wall {
             outgrown,
+            inside,
             sections,
             ..Default::default()
         };
-        let whole = vec![section(100., 0.); 4];
-        let half = vec![section(100., 0.), section(40., 0.)];
-        let fallen = vec![section(100., 100.), section(100., 100.), section(100., 0.)];
-        assert_eq!(wall(1, false, whole.clone()).condition(), "maintained");
-        assert_eq!(wall(1, false, half.clone()).condition(), "partial");
-        assert_eq!(wall(0, false, half).condition(), "never finished");
-        assert_eq!(wall(0, false, fallen.clone()).condition(), "decayed");
-        assert_eq!(wall(0, true, whole).condition(), "reused interior defenses");
-        assert_eq!(wall(0, true, fallen).condition(), "interior remnants");
+        let whole = vec![section(false); 4];
+        let worn = vec![
+            section(true),
+            section(false),
+            section(false),
+            section(false),
+        ];
+        let fallen = vec![section(true), section(true), section(false)];
+        assert_eq!(
+            wall(false, vec![1], whole.clone()).condition(),
+            "maintained"
+        );
+        assert_eq!(wall(false, vec![1], worn).condition(), "decayed");
+        assert_eq!(wall(false, vec![], whole.clone()).condition(), "partial");
+        assert_eq!(wall(false, vec![], fallen.clone()).condition(), "ruinous");
+        assert_eq!(
+            wall(true, vec![1], whole).condition(),
+            "reused interior defenses"
+        );
+        assert_eq!(wall(true, vec![1], fallen).condition(), "interior remnants");
     }
     #[test]
     fn a_circuit_protects_by_the_share_of_it_that_stands() {

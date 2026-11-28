@@ -80,15 +80,19 @@ cargo +stable test -p atlas-generation --lib defenses::bench               # the
 cargo +stable test -p atlas-generation --lib survey_of_walls -- --ignored --nocapture
 ```
 
-The survey prints the walls of the same city under a spread of histories, rolls and
-shapes. The bench's ground does not move between rounds, so it shows what the wall step
-makes of a given city and never how a city answers its walls: people gathering behind
-them, districts divided along them and ways gated through them need a map.
+The survey draws the walls of the same city, as text, under a spread of histories, causes
+and rolls, and once with chance stilled. The checks include the two every rule needs:
+under eight rolls no two walls stand on much the same ground, and with chance stilled
+every roll raises the same wall. The bench's ground does not move between rounds, so it
+shows what the wall step makes of a given city and never how a city answers its walls:
+people gathering behind them, districts divided along them and ways gated through them
+need a map.
 
 On a map, `--set built.layout.wallReadiness=<n>` scales how readily towns wall
 themselves (nought: never). With `ATLAS_TRACE_CITY` set the server log carries a
-`city.wall-choice` line for every circuit a sponsor weighed and a `city.walls` line a
-round: each era's threat, the means, and how every wall stands.
+`city.wall-season` line for every era's and round's building (how threatened, from which
+side, the edge drawn, its worth and the work given) and a `city.walls` line a round with
+how every wall stands.
 
 ## Use
 

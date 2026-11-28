@@ -84,37 +84,49 @@ open grounds and significant sites.
 
 ## Walls
 
-Collective investment compares concentrations of people, occupied ground and civic activity
-across the known city. A sponsor weighs the share protected, ground already defended and
-the cost of each candidate enclosure. Water and steep ground can complete a side. Principal
-roads crossing the standing works establish gates.
+Walls are walked into being, a step at a time, and nothing names a kind of wall. A
+circuit, an arc open to one side, an old wall deep inside a later one, a stump, a ruin
+and no wall at all are what the walks and the wear leave behind for different towns,
+histories and rolls.
 
-The same choice is made once for each era the town's record tells of, against the town as
-it then was. An era's town stood on the most crowded share of today's ground equal to its
-share of today's people. Whether today's people still crowd that ground or have spread
-far beyond it is the city's own form, and decides whether the era's wall is outgrown. An
-old circuit took the work of plain wall, because it ran along the open edge of the town
-as it then was, whatever stands there now. The town's site, its standing as a realm's
-seat, a contest for it and its civic order weigh how readily it defends itself, and each
-era's chance scales that weight into how threatened the era left it. A circuit is raised
-when, under that threat, the people it newly protects are worth its work; a crowded town
-on cheap ground walls itself under a threat that leaves a scattered one open. A later era
-raises a second circuit only where it protects mostly people the first does not, so a town
-that grew by crowding its old ground keeps one wall with suburbs outside and a town that
-spread as it grew has an old wall inside a new one.
+Each era the town's record tells of builds against the town as it then was, and each round
+of the present era builds against the city as it stands. An earlier era's town stood on
+the most crowded share of today's ground equal to its share of today's people, and it did
+not grow evenly: a many-scaled field of the era's own tilts which ground it favoured, so
+each era's town leans its own way.
 
-A wall is kept in an era that leaves the town threatened enough to keep it, while no newer
-wall has taken its place and the city has not outgrown it. For each era nobody keeps it, a
-wall loses whole stretches: a little to weather everywhere, more where built ground presses
-on it and its stone is taken, and more where the quarter about it lies in ruin. Today's
-sponsor repairs what it still keeps.
+A season of building begins by drawing the edge the town walls, from wide to tight, the
+more worthwhile edges the likelier; a civic order that holds a citadel draws every edge in
+round more crowded ground. The town's site, its standing as a realm's seat, a contest for
+it and its civic order weigh how readily it defends itself, and a draw for the era scales
+that weight into how threatened the era left it. The work the season gives is its means
+by how keenly that threat and the worth of the edge move it: an earlier era gives from its
+share of today's standing stock, and the present era's builders set out in a year dealt by
+chance and give what their supporters can do in the years each round stands for. An era
+that passes quietly lays a stump or nothing.
 
-The past is told again each round from that round's city. Standing walls draw people and
-works behind them before the next round, so the crowded ground an old wall was drawn round
-sharpens and the next telling follows it. Today's sponsor begins in a year of the present
-era dealt by chance, and gives each round the work its supporters can do in the years the
-round stands for, within the standing stock it can turn to walls: a circuit begun in the
-era's last years is still building when the map is drawn.
+Builders set out on the edge where no wall stands, toward the side the era's threat came
+from, with chance in the choosing. Each walks: holding its heading, kept to the edge by
+what the ground there is worth, drawn along wall that already lies, and wandering. It lays
+a section where it treads and spends work for it, more through built and busy ground
+today and the work of plain wall along an earlier town's open edge. It walks along
+standing wall for nothing, lays fallen wall again, lays no second line hard against the
+first, and stops when its work is spent or it can go nowhere. Water and ground too steep
+carry no wall, so a walk turns along them.
+
+Wall falls in patches that shift from era to era: a little everywhere, more where built
+ground presses on it and its stone is taken, more where the quarter about it lies in ruin.
+An era's wear follows each earlier era's building, and each round takes its share of an
+era's wear. Wall that later builders walk again is laid again; wall nobody walks stays
+fallen.
+
+A wall shelters the ground it makes someone coming from outside the city go a long way
+round to reach, or keeps them from altogether: all the ground inside a closed circuit,
+the ground close behind a long arc, none behind a stump. Sheltered ground is worth more to
+households and to investment by the share of the wall that stands, so people and works
+gather behind what stands before the next round's builders read the city. An earlier
+era's wall that shelters too small a share of today's people is outgrown, and districts
+that hold it carry it as a trait. Principal roads crossing standing wall establish gates.
 
 ## The catalogue's large-scale slot
 
@@ -208,12 +220,8 @@ ground a city of hearths, and the rounds decide how far.
 
 At City scale the civic order weighs which resident characters the districts take and
 how far apart districts live in how tightly they dwell. An order adds its own weight to
-what moves the town to wall itself, and one that holds a citadel draws its rings round
-more crowded ground. It never weighs a district's economic role or its traits.
-
-A sponsor reconsiders the line of a circuit of its own era each round until the work is
-well begun, and a redrawn line takes over the work done on the earlier one. The city
-gathers and shifts between rounds, so a line drawn before it gathered does not bind it.
+what moves the town to wall itself, and one that holds a citadel draws its walls' edge
+round more crowded ground. It never weighs a district's economic role or its traits.
 
 On a street map a civic order speaks only through the town's order record and adds
 nothing to what a district's economy and residents ask for, so it varies a town along

@@ -1,36 +1,61 @@
-//! Collective investment compares the protected population and cost of alternative
-//! enclosures. The same choice is made once for each era the town's record tells of,
-//! against the town as it then was, and a wall nobody keeps falls stretch by stretch, so
-//! a city's walls tell its history: none, one, several, kept, outgrown or fallen.
+//! City walls are walked into being. In each era the town's record tells of, and in each
+//! round of the present one, builders set out where the town's edge stands most open,
+//! walk along that edge laying wall, and stop when the work the era gives them is spent.
+//! Wall falls in patches that shift from era to era, sooner where built ground presses on
+//! it; later builders are drawn along what stands and lay fallen wall again.
+//!
+//! Nothing here names a kind of wall. A circuit, an arc open to one side, an old wall
+//! deep inside a later one, a stump, a ruin and no wall at all are what the walks and
+//! the wear leave behind for different towns, histories and rolls. The pattern is
+//! `crate::chance::examples`.
 use super::{
     fields::{neighborhood, policy, position, CityFields},
-    geometry::{pos, xy},
-    landscape::contour,
     Urban,
 };
 use crate::{
     atlas::{regional::city::captured_settlement, state::State},
+    chance::{best, Chance, Front, Patches, Stride, Walker, Whims},
     field::{people::work::habitable, refinement::courses::cell_at, shared::Scalar},
     lattice::TriangularLattice,
-    spatial::SpatialKernel,
     town::{
         geometry::distance,
         walls::{self, enclosure_value, Section, Wall},
     },
 };
-use atlas_map::{
-    regions::{boundary_lines, parts},
-    Geometry, Position,
-};
 use std::io;
 
 pub(super) use crate::town::walls::READINESS;
 
-/// What a wall's sponsors read of the city in one round. The map gathers it from its
+/// The turns a builder may take at each step, in radians off its heading.
+const FAN: [f64; 5] = [-0.65, -0.325, 0.0, 0.325, 0.65];
+/// The builders who set out in one era, or one round of the present era.
+const BUILDERS: usize = 3;
+/// How strongly the ground keeps a builder to the town's edge, beside holding its heading.
+const HOLD: f64 = 8.;
+/// What wall already laid is worth to a builder choosing its next step.
+const FOLLOW: f64 = 1.;
+/// How much chance counts in a builder's choice of turn, and how far its heading drifts
+/// at each step, in radians. A builder's chance holds for six steps, so its drift
+/// carries it through a slow bend and not a knot.
+const WHIM: f64 = 0.12;
+const DRIFT: f64 = 0.04;
+/// How much the side an era's threat came from counts in where a builder sets out.
+const FACING: f64 = 1.5;
+/// How lopsided an earlier era's town was: how far chance tilts the ground it favoured.
+const LEAN: f64 = 0.6;
+/// The share of an edge's whole work below which an era does not begin a wall.
+const LEAST: f64 = 0.04;
+/// The wall work one supporter gives in a year, in metres of plain wall.
+const YEAR_WORK: f64 = 0.005;
+/// The years of one era's wear; the rounds of a city map together stand for about one.
+const ERA_YEARS: f64 = 330.;
+/// The breadth of the patches wall falls in, in metres.
+const WEAR_PATCH: f64 = 260.;
+
+/// What a wall's builders read of the city in one round. The map gathers it from its
 /// fields; a test builds it from constructed ground.
 pub(super) struct City<'a> {
     pub mesh: &'a TriangularLattice,
-    pub spatial: &'a dyn SpatialKernel,
     pub fields: &'a CityFields,
     /// Standing works at each cell, a square kilometre.
     pub capital: &'a [f64],
@@ -42,12 +67,9 @@ pub(super) struct City<'a> {
     pub round: usize,
     /// The years each round stands for.
     pub rounds: &'a [f64],
-    /// The outline of the ground where a field passes a level.
-    pub contour: &'a Contour<'a>,
 }
-pub(super) type Contour<'a> = dyn Fn(&[f64], f64) -> io::Result<Option<Geometry>> + 'a;
 
-/// A town's record as its wall sponsors read it.
+/// A town's record as its wall builders read it.
 #[derive(Clone, Debug)]
 pub(super) struct Sponsors {
     /// Each recorded era's name and townsfolk, oldest first; the last is the present.
@@ -59,16 +81,21 @@ pub(super) struct Sponsors {
     pub present: f64,
     /// How tight a core the civic order's walls enclose.
     pub citadel: f64,
-    /// The settlement's roll, from which each era's chance is dealt.
+    /// The settlement's roll, from which every draw for its walls is dealt.
     pub fortune: f64,
+    /// How much of its part chance plays: one in every map, nought to still it.
+    pub wildness: f64,
 }
 impl Sponsors {
     /// The present era's place in the record.
     fn last(&self) -> usize {
         self.eras.len().saturating_sub(1)
     }
+    fn chance(&self, purpose: &str) -> Chance {
+        Chance::named((self.fortune * f64::from(i32::MAX)) as i32, purpose)
+    }
     /// How threatened `era` left the town: nothing while it had no townsfolk, otherwise
-    /// the weight of its causes scaled by the era's chance.
+    /// the weight of its causes scaled by a wait drawn for the era.
     fn threat(&self, era: usize) -> f64 {
         if self
             .eras
@@ -82,15 +109,12 @@ impl Sponsors {
         } else {
             self.resolve
         };
-        walls::threat(causes, walls::era_chance(self.fortune, era, 0))
+        let wait = self.chance("city.wall.threat").wait([era as f64, 0.], 1.);
+        walls::threat(causes, 1. + (wait - 1.) * self.wildness)
     }
-    /// The least a circuit must be worth for the town of `era` to raise it.
-    fn least(&self, era: usize) -> f64 {
-        walls::RAISE / self.threat(era).max(f64::MIN_POSITIVE)
-    }
-    /// Whether the town of `era` kept a wall of this worth standing.
-    fn keeps(&self, era: usize, worth: f64) -> bool {
-        self.threat(era) * worth >= walls::UPKEEP * walls::RAISE
+    /// The side an era's threat came from, as a heading from the town's middle.
+    fn bearing(&self, era: usize) -> f64 {
+        self.chance("city.wall.bearing").angle([era as f64, 0.])
     }
     /// The era's town beside today's: its townsfolk as a share of today's.
     fn share(&self, era: usize) -> f64 {
@@ -100,10 +124,13 @@ impl Sponsors {
         }
         (self.eras[era].1 / today).clamp(0., 1.)
     }
-    /// The round in which the present era's sponsor begins: the era's chance falls on
-    /// one of the years the rounds stand for.
+    /// The round in which the present era's builders first set out: the era's chance
+    /// falls on one of the years the rounds stand for.
     fn begins(&self, rounds: &[f64]) -> usize {
-        let mut year = walls::era_chance(self.fortune, self.last(), 1) * rounds.iter().sum::<f64>();
+        let draw = self
+            .chance("city.wall.begins")
+            .unit([self.last() as f64, 0.]);
+        let mut year = draw * self.wildness * rounds.iter().sum::<f64>();
         for (index, years) in rounds.iter().enumerate() {
             if year < *years {
                 return index + 1;
@@ -111,14 +138,6 @@ impl Sponsors {
             year -= years;
         }
         rounds.len().max(1)
-    }
-    /// The era that raised a wall, by the name it carries; one with no known era is the
-    /// present's.
-    fn era_of(&self, wall: &Wall) -> usize {
-        wall.era
-            .as_deref()
-            .and_then(|name| self.eras.iter().position(|(era, _)| era == name))
-            .unwrap_or(self.last())
     }
 }
 
@@ -157,135 +176,19 @@ fn means(city: &City) -> Means {
     }
 }
 
-/// The town a circuit is planned against: the city today, or the town of an earlier era
-/// as a share of today's ground and people; and the least a circuit must be worth for
-/// that town, threatened as its era left it, to raise one.
-struct Planned<'a> {
-    share: f64,
+/// One spell of building: an earlier era's, or one round of the present era's.
+struct Season<'a> {
+    era: usize,
+    name: Option<&'a str>,
+    /// The round it belongs to; nought for an earlier era.
     round: usize,
-    era: Option<&'a str>,
-    least: f64,
+    /// The town of the season beside today's, by townsfolk.
+    share: f64,
 }
-
-/// The cells a circuit holds, the people in them today, and those of them no earlier
-/// wall holds.
-fn held(
-    city: &City,
-    envelope: &Geometry,
-    positions: &[Position],
-    old: &[Wall],
-) -> io::Result<(Vec<u32>, f64, f64)> {
-    let covered = city
-        .spatial
-        .covers_points(envelope, positions)
-        .map_err(io::Error::other)?;
-    let mut inside = Vec::new();
-    let (mut population, mut new_population) = (0., 0.);
-    for (c, _) in covered.iter().enumerate().filter(|(_, b)| **b) {
-        inside.push(c as u32);
-        let people = city.fields.claims[c].people * city.mesh.area(c) / 1e6;
-        population += people;
-        if old.iter().all(|w| !w.encloses(c)) {
-            new_population += people;
-        }
+impl Season<'_> {
+    fn past(&self) -> bool {
+        self.round == 0
     }
-    Ok((inside, population, new_population))
-}
-
-/// One section of a circuit with the work it takes. Today's sponsor pays more to build
-/// through built ground and across busy ways. An earlier era's circuit ran along the
-/// edge of the town as it then was, open ground whatever stands there now, so it took
-/// the work of plain wall. Water and cliffs carry no wall.
-fn section(city: &City, [a, b]: [[f64; 2]; 2], past: bool) -> Option<Section> {
-    let mid = [(a[0] + b[0]) * 0.5, (a[1] + b[1]) * 0.5];
-    let cell = cell_at(city.mesh, mid).filter(|&c| city.firm[c])?;
-    let length = distance(a, b);
-    if length <= 0. {
-        return None;
-    }
-    let x = city.fields.claims[cell];
-    let through = if past {
-        0.
-    } else {
-        x.built + city.fields.access[cell] * x.trade.ln_1p().max(0.)
-    };
-    Some(Section {
-        ends: [a, b],
-        cell,
-        cost: length * (1. + through),
-        built: 0.,
-        disused: 0.,
-        repaired: 0.,
-    })
-}
-fn sections(
-    city: &City,
-    exterior: Vec<Position>,
-    deviation: f64,
-    past: bool,
-) -> io::Result<Vec<Section>> {
-    let trace = city
-        .spatial
-        .resample_trace(
-            &Geometry::LineString {
-                coordinates: exterior,
-            },
-            deviation,
-            Some(city.mesh.spacing() * 2.),
-        )
-        .map_err(io::Error::other)?;
-    let mut sections = Vec::new();
-    for ring in boundary_lines(&trace) {
-        for pair in ring.windows(2) {
-            sections.extend(section(city, [xy(pair[0]), xy(pair[1])], past));
-        }
-    }
-    Ok(sections)
-}
-
-fn proposal(
-    city: &City,
-    shape: Geometry,
-    (rings, old): (&Rings, &[Wall]),
-    planned: &Planned,
-) -> io::Result<Option<(f64, Wall)>> {
-    let positions = &rings.positions;
-    let town_area = city.area * rings.town_share();
-    let Geometry::Polygon { coordinates } = shape else {
-        return Ok(None);
-    };
-    let Some(exterior) = coordinates.into_iter().next() else {
-        return Ok(None);
-    };
-    let envelope = Geometry::Polygon {
-        coordinates: vec![exterior.clone()],
-    };
-    let area = city.spatial.area(&envelope).map_err(io::Error::other)?;
-    let (inside, population, new_population) = held(city, &envelope, positions, old)?;
-    trace_held(planned, area, [population, new_population]);
-    if new_population <= 0. || new_population < 0.5 * population {
-        return Ok(None);
-    }
-    let deviation = city.mesh.spacing().max(town_area.sqrt() * 0.005);
-    let sections = sections(city, exterior, deviation, planned.round == 0)?;
-    if sections.is_empty() {
-        return Ok(None);
-    }
-    let cost: f64 = sections.iter().map(|s| s.cost).sum();
-    // The people the ground held then, taken as today's by the town's share of today.
-    let value = enclosure_value(area / town_area, new_population * planned.share, cost);
-    Ok(Some((
-        value,
-        Wall {
-            round: planned.round,
-            inside,
-            area,
-            worth: value,
-            sections,
-            era: planned.era.map(str::to_owned),
-            ..Default::default()
-        },
-    )))
 }
 
 /// How firmly ground is occupied about each cell, read over `reach`.
@@ -309,42 +212,60 @@ fn ranked(city: &City, pressure: &[f64]) -> io::Result<Vec<usize>> {
 }
 /// How many of the least pressed of the city's cells lay outside a town with `share` of
 /// today's people: the town stood on as great a share of today's ground, the most
-/// pressed of it. Whether today's people still live mostly on that ground, crowded where
-/// the old town stood, or have spread far beyond it, is the city's own form and decides
-/// whether an old wall is outgrown.
+/// pressed of it.
 fn outside(ranked: &[usize], share: f64) -> usize {
     let within = (ranked.len() as f64 * share.clamp(0., 1.)).round() as usize;
     ranked.len() - within.min(ranked.len())
 }
-/// The ground a sponsor reads when it plans a circuit: how firmly each cell is occupied,
-/// the city's cells in that order, and where among them the town it plans against begins.
-struct Rings {
+
+/// The ground a season's town stood on, as its builders read it: how firmly each cell
+/// is pressed, the city's cells in that order, where among them the town begins, and
+/// the town's most pressed place.
+struct Ground {
     pressure: Vec<f64>,
     ranked: Vec<usize>,
     from: usize,
-    positions: Vec<Position>,
+    peak: [f64; 2],
 }
-impl Rings {
-    /// The ground of the town that held `share` of today's people. An earlier era's
-    /// smaller town is read again at its own grain, so its circuit follows the shape of
-    /// the old core and not the whole city's.
-    fn about(city: &City, occupied: &[f64], share: f64) -> io::Result<Self> {
+impl Ground {
+    /// Today's town is the city as it stands. An earlier era's town stood on the most
+    /// pressed share of today's ground equal to its share of today's people, read at
+    /// its own grain, and it did not grow evenly: a many-scaled field of its own tilts
+    /// which ground it favoured, so each era's town leans its own way.
+    fn of(city: &City, occupied: &[f64], sponsors: &Sponsors, season: &Season) -> io::Result<Self> {
         let mesh = city.mesh;
         let reach = |area: f64| (area.sqrt() * 0.055).max(2. * mesh.spacing());
-        let mut pressed = pressure(city, occupied, reach(city.area));
+        let lean = sponsors
+            .chance("city.wall.lean")
+            .nth(season.era as i32)
+            .noise((city.area * season.share).sqrt().max(mesh.spacing()), 3);
+        let tilt = if season.past() {
+            LEAN * sponsors.wildness
+        } else {
+            0.
+        };
+        let read = |reach: f64| -> Vec<f64> {
+            pressure(city, occupied, reach)
+                .into_iter()
+                .enumerate()
+                .map(|(c, pressed)| pressed * (1. + tilt * lean.signed(position(mesh, c))))
+                .collect()
+        };
+        let mut pressed = read(reach(city.area));
         let mut order = ranked(city, &pressed)?;
-        let mut from = outside(&order, share);
+        let mut from = outside(&order, season.share);
         if from > 0 {
             let town = city.area * (order.len() - from) as f64 / order.len() as f64;
-            pressed = pressure(city, occupied, reach(town));
+            pressed = read(reach(town));
             order = ranked(city, &pressed)?;
-            from = outside(&order, share);
+            from = outside(&order, season.share);
         }
+        let peak = order.last().map_or([0.; 2], |&c| position(mesh, c));
         Ok(Self {
             pressure: pressed,
             ranked: order,
             from,
-            positions: (0..mesh.len()).map(|c| pos(position(mesh, c))).collect(),
+            peak,
         })
     }
     /// The share of the city's ground the town stood on.
@@ -355,281 +276,131 @@ impl Rings {
     fn level(&self, fraction: f64) -> Option<f64> {
         let last = self.ranked.len().checked_sub(1)?;
         let at = self.from + ((last - self.from) as f64 * fraction) as usize;
-        Some(self.pressure[self.ranked[at.min(last)]])
+        Some(self.pressure[self.ranked[at.min(last)]].max(f64::EPSILON))
+    }
+    /// How far a cell is from being on the edge at `level`: nought on it.
+    fn off(&self, cell: usize, level: f64) -> f64 {
+        (self.pressure[cell] - level) / level
     }
 }
 
-/// The best circuit a sponsor finds for the town it plans against, among the rings its
-/// order considers, each tightened by `tighten`.
-fn best_circuit(
+/// What it takes to lay wall across a cell, beside plain wall. Today's builders pay
+/// more through built ground and across busy ways. An earlier era's wall ran along the
+/// open edge of the town as it then was, whatever stands there now.
+fn toll(city: &City, cell: usize, past: bool) -> f64 {
+    if past {
+        return 1.;
+    }
+    let x = city.fields.claims[cell];
+    1. + x.built + city.fields.access[cell] * x.trade.ln_1p().max(0.)
+}
+
+/// One edge a town might wall: the pressure that bounds it, how long it runs, the work
+/// of walling all of it and what that is worth.
+struct Edge {
+    level: f64,
+    length: f64,
+    work: f64,
+    worth: f64,
+}
+/// The length of a cell's sides that face ground outside the edge, and the work of
+/// walling them.
+fn frontier(city: &City, ground: &Ground, level: f64, cell: usize, past: bool) -> [f64; 2] {
+    let mut run = 0.;
+    for side in 0..3 {
+        let within = city
+            .mesh
+            .neighbor(cell, side)
+            .is_some_and(|next| ground.pressure[next] > level);
+        if !within {
+            run += city.mesh.edge_length(cell, side);
+        }
+    }
+    [run, run * toll(city, cell, past)]
+}
+/// Measures the edge at `level`: the town's ground above it, the people there, and its
+/// rim.
+// The worth of an edge is the owner's: a wall is planned against the whole town, so one
+// that takes in very little of it is worth very little.
+fn edge(city: &City, ground: &Ground, level: f64, season: &Season) -> Edge {
+    let (mut cells, mut people, mut length, mut work) = (0., 0., 0., 0.);
+    for &cell in &ground.ranked[ground.from..] {
+        if ground.pressure[cell] <= level {
+            continue;
+        }
+        cells += 1.;
+        people += city.fields.claims[cell].people * city.mesh.area(cell) / 1e6;
+        let [run, toil] = frontier(city, ground, level, cell, season.past());
+        length += run;
+        work += toil;
+    }
+    let town = city.area * ground.town_share();
+    let share = cells * city.mesh.area(0) / town.max(1.);
+    Edge {
+        level,
+        length,
+        work,
+        worth: enclosure_value(share, people * season.share, work),
+    }
+}
+/// The shares of a town's ground whose pressure levels its builders may take for the
+/// edge, from wide to tight. A civic order's citadel above one draws every edge in
+/// round more crowded ground.
+fn ring_shares(tighten: f64) -> [f64; 3] {
+    let usual = [0.32, 0.56, 0.76];
+    if tighten <= 1. {
+        return usual;
+    }
+    usual.map(|share| 1. - (1. - share) / tighten)
+}
+/// The edge a season's town walls: one of the edges its order considers, each drawing
+/// for itself with the more worthwhile the likelier. With chance stilled it is the most
+/// worthwhile.
+fn chosen_edge(city: &City, sponsors: &Sponsors, ground: &Ground, season: &Season) -> Option<Edge> {
+    let edges = ring_shares(sponsors.citadel)
+        .into_iter()
+        .filter_map(|share| ground.level(share))
+        .map(|level| edge(city, ground, level, season))
+        .filter(|edge| edge.worth > 0. && edge.length > 0.)
+        .enumerate();
+    if sponsors.wildness <= 0. {
+        return best(edges, |(_, edge)| edge.worth).map(|(_, edge)| edge);
+    }
+    let sharp = 2. / sponsors.wildness;
+    sponsors
+        .chance("city.wall.edge")
+        .nth(season.era as i32)
+        .weighted(
+            edges,
+            |(at, _)| [*at as f64, 0.],
+            |(_, edge)| edge.worth.powf(sharp),
+        )
+        .map(|(_, edge)| edge)
+}
+
+/// The work a season gives its walls. An era gives what its town could, by how keenly
+/// its threat and the worth of the edge moved it. The present era's builders set out in
+/// a year of the era dealt by chance and give, each round after, what their supporters
+/// can do in the years the round stands for, within the standing stock not yet spent.
+fn work(
     city: &City,
-    occupied: &[f64],
-    old: &[Wall],
-    planned: &Planned,
-    tighten: f64,
-) -> io::Result<Option<Wall>> {
-    let rings = Rings::about(city, occupied, planned.share)?;
-    let mut best: Option<(f64, Wall)> = None;
-    for fraction in ring_shares(tighten) {
-        let Some(level) = rings.level(fraction) else {
-            break;
-        };
-        let Some(shape) = (city.contour)(&rings.pressure, level.max(f64::EPSILON))? else {
-            continue;
-        };
-        for poly in parts(&shape) {
-            let found = proposal(city, poly, (&rings, old), planned)?;
-            trace_choice(planned, fraction, found.as_ref());
-            best = better(best, found, planned.least.max(0.12));
-        }
+    sponsors: &Sponsors,
+    means: &Means,
+    walls: &[Wall],
+    (season, edge): (&Season, &Edge),
+) -> f64 {
+    let keen = walls::keenness(sponsors.threat(season.era), edge.worth);
+    if season.past() {
+        return means.capacity * season.share * keen;
     }
-    Ok(best.map(|(_, wall)| wall))
-}
-/// One circuit a sponsor weighed, written to the server log when `ATLAS_TRACE_CITY` is
-/// set: the era that weighed it, the ring, what it was worth and what it had to be.
-fn trace_choice(planned: &Planned, ring: f64, found: Option<&(f64, Wall)>) {
-    if std::env::var_os("ATLAS_TRACE_CITY").is_none() {
-        return;
-    }
-    eprintln!(
-        "{}",
-        serde_json::json!({ "event": "city.wall-choice", "details": {
-            "era": planned.era,
-            "round": planned.round,
-            "ring": ring,
-            "worth": found.map(|(worth, _)| worth),
-            "least": planned.least.max(0.12),
-            "areaKm2": found.map(|(_, wall)| wall.area / 1e6),
-            "work": found.map(|(_, wall)| wall.sections.iter().map(|s| s.cost).sum::<f64>().round()),
-        }})
-    );
-}
-/// The people a weighed circuit holds today and those of them no earlier wall holds,
-/// written to the server log when `ATLAS_TRACE_CITY` is set.
-fn trace_held(planned: &Planned, area: f64, [people, new]: [f64; 2]) {
-    if std::env::var_os("ATLAS_TRACE_CITY").is_none() {
-        return;
-    }
-    eprintln!(
-        "{}",
-        serde_json::json!({ "event": "city.wall-held", "details": {
-            "era": planned.era,
-            "round": planned.round,
-            "areaKm2": area / 1e6,
-            "people": people.round(),
-            "newPeople": new.round(),
-        }})
-    );
-}
-/// The circuit worth more of two, where the newcomer is worth more than `least`.
-fn better(
-    best: Option<(f64, Wall)>,
-    found: Option<(f64, Wall)>,
-    least: f64,
-) -> Option<(f64, Wall)> {
-    match (best, found) {
-        (Some(best), Some(found)) if found.0 > best.0 && found.0 > least => Some(found),
-        (None, Some(found)) if found.0 > least => Some(found),
-        (best, _) => best,
-    }
-}
-
-/// The walls of the town's earlier eras as this round's city tells them, oldest first.
-/// Each era's town stood on the most crowded share of today's ground equal to its share
-/// of today's people. Its sponsor weighed rings about that town as today's sponsor does about the
-/// city, and raised the best one if, threatened as that era left the town, it was worth
-/// the work; it had that era's share of today's means and the whole era to build in.
-/// The past is told again each round: where an old wall stands people gather behind it,
-/// the crowded ground it was drawn round sharpens, and the next telling follows.
-fn tell_past(city: &City, sponsors: &Sponsors, means: &Means) -> io::Result<Vec<Wall>> {
-    let mut walls = Vec::new();
-    for era in 0..sponsors.last() {
-        let share = sponsors.share(era);
-        if share <= 0. {
-            continue;
-        }
-        let planned = Planned {
-            share,
-            round: 0,
-            era: Some(&sponsors.eras[era].0),
-            least: sponsors.least(era),
-        };
-        let tighten = sponsors.citadel;
-        if let Some(mut wall) = best_circuit(city, &means.occupied, &walls, &planned, tighten)? {
-            fund(city.fields, &mut wall, means.capacity * share);
-            walls.push(wall);
-        }
-    }
-    Ok(walls)
-}
-
-/// Whether the town of `era` kept the wall at `index`: threatened as the era left it,
-/// the wall was worth keeping, no newer wall had taken its place, and today the city
-/// has not outgrown it.
-fn kept(walls: &[Wall], index: usize, sponsors: &Sponsors, era: usize) -> bool {
-    let wall = &walls[index];
-    let superseded = walls[index + 1..]
-        .iter()
-        .any(|newer| sponsors.era_of(newer) <= era);
-    sponsors.keeps(era, wall.worth) && !superseded && (era < sponsors.last() || !wall.outgrown)
-}
-/// The eras since a wall was raised in which nobody kept it.
-fn unkept(walls: &[Wall], index: usize, sponsors: &Sponsors) -> usize {
-    (sponsors.era_of(&walls[index]) + 1..=sponsors.last())
-        .filter(|&era| !kept(walls, index, sponsors, era))
-        .count()
-}
-
-/// The length of wall that stands or falls as one, in metres.
-const STRETCH: f64 = 240.;
-/// Where the stretch beginning at `start` ends.
-fn stretch_end(sections: &[Section], start: usize) -> usize {
-    let mut length = 0.;
-    let mut end = start;
-    while end < sections.len() && length < STRETCH {
-        length += distance(sections[end].ends[0], sections[end].ends[1]);
-        end += 1;
-    }
-    end
-}
-/// Lets fall the stretches of a wall that `eras` unkept eras have cost it. Each stretch
-/// has its own chance; the ground about it sets how likely that chance is to take it, so
-/// later rounds only add to what has fallen as the city presses closer.
-fn decay(city: &City, fortune: f64, index: usize, wall: &mut Wall, eras: usize) {
-    let (mut start, mut number) = (0, 0);
-    while start < wall.sections.len() {
-        let end = stretch_end(&wall.sections, start);
-        let stretch = &mut wall.sections[start..end];
-        let loss = stretch
-            .iter()
-            .map(|s| {
-                let x = city.fields.claims[s.cell];
-                walls::era_loss(x.built, x.ruin)
-            })
-            .sum::<f64>()
-            / stretch.len() as f64;
-        if walls::stretch_chance(fortune, index, number) < walls::lost_after(loss, eras) {
-            for s in stretch {
-                s.disused = s.disused.max(s.built);
-            }
-        }
-        start = end;
-        number += 1;
-    }
-}
-
-/// Resolves how each wall stands today. A wall is outgrown when it holds too small a
-/// share of the people it is measured against; a wall of an earlier era loses stretches
-/// for each era nobody kept it.
-fn age(city: &City, sponsors: &Sponsors, walls: &mut [Wall], measured: f64) {
-    for index in 0..walls.len() {
-        let residents: f64 = walls[index]
-            .inside
-            .iter()
-            .map(|&c| city.fields.claims[c as usize].people * city.mesh.area(c as usize) / 1e6)
-            .sum();
-        let wall = &mut walls[index];
-        wall.outgrown |= wall.round < city.round && residents < 0.45 * measured;
-        let eras = unkept(walls, index, sponsors);
-        if walls[index].inherited() && eras > 0 {
-            decay(city, sponsors.fortune, index, &mut walls[index], eras);
-        }
-    }
-}
-
-fn wanting(s: &Section) -> bool {
-    s.built < s.cost || s.repaired < s.disused
-}
-/// Spends on one section: first what has fallen, then what was never built.
-fn work(s: &mut Section, mut budget: f64) -> f64 {
-    let repair = budget.min((s.disused - s.repaired).max(0.));
-    s.repaired += repair;
-    budget -= repair;
-    let add = budget.min((s.cost - s.built).max(0.));
-    s.built += add;
-    budget - add
-}
-/// Spends `budget` on a wall's unbuilt and fallen sections, the most useful first and
-/// then along the line from work already standing. Returns what is left.
-fn fund(fields: &CityFields, w: &mut Wall, mut budget: f64) -> f64 {
-    let mut bids = crate::hpc::KeyedHeap::new(
-        [crate::hpc::Direction::Descending],
-        crate::hpc::Direction::Ascending,
-    );
-    let benefits: Vec<_> = w
-        .sections
-        .iter()
-        .map(|s| {
-            let x = fields.claims[s.cell];
-            (1. + fields.access[s.cell] + x.built) / (1. + x.ruin)
-        })
-        .collect();
-    let n = w.sections.len();
-    for (i, s) in w.sections.iter().enumerate() {
-        if wanting(s) {
-            let adjacent =
-                w.sections[(i + n - 1) % n].built > 0. || w.sections[(i + 1) % n].built > 0.;
-            bids.push(i as u32, [benefits[i] * (1. + 2. * f64::from(adjacent))]);
-        }
-    }
-    while let Some((i, _)) = bids.pop() {
-        if budget <= 0. {
-            break;
-        }
-        let i = i as usize;
-        if !wanting(&w.sections[i]) {
-            continue;
-        }
-        budget = work(&mut w.sections[i], budget);
-        for j in [(i + n - 1) % n, (i + 1) % n] {
-            if w.sections[j].built < w.sections[j].cost {
-                bids.push(j as u32, [3. * benefits[j]]);
-            }
-        }
-    }
-    budget
-}
-/// Whether today's sponsor works on this wall: its own circuit, or an earlier era's
-/// wall it still keeps. A wall the city has outgrown is history.
-fn tended(walls: &[Wall], index: usize, sponsors: &Sponsors) -> bool {
-    let wall = &walls[index];
-    !wall.outgrown && (!wall.inherited() || kept(walls, index, sponsors, sponsors.last()))
-}
-/// Spends this round's work on the walls today's sponsor tends, in the order they were
-/// raised, and draws every wall's standing lines.
-fn tend(city: &City, sponsors: &Sponsors, walls: &mut [Wall], mut budget: f64) {
-    for index in 0..walls.len() {
-        if tended(walls, index, sponsors) {
-            budget = fund(city.fields, &mut walls[index], budget);
-        }
-        walls[index].lines = walls[index]
-            .sections
-            .iter()
-            .filter_map(Section::standing)
-            .collect();
-    }
-}
-
-/// The wall work one supporter gives in a year, in metres of plain wall.
-const YEAR_WORK: f64 = 0.005;
-/// What today's sponsor has been charged: all the work on its own circuits, and the
-/// repairs it made to earlier eras' walls.
-fn charged(wall: &Wall) -> f64 {
-    if wall.inherited() {
-        wall.sections.iter().map(|s| s.repaired).sum()
-    } else {
-        wall.funded()
-    }
-}
-/// The work today's sponsor can give this round: nothing before the year of the era in
-/// which it begins; from then, what its supporters give in the years the round stands
-/// for, within the standing stock not yet spent. A circuit begun in the era's last years
-/// is still building when the map is drawn.
-fn present_work(city: &City, sponsors: &Sponsors, means: &Means, walls: &[Wall]) -> f64 {
     if city.round < sponsors.begins(city.rounds) {
         return 0.;
     }
-    let spent: f64 = walls.iter().map(charged).sum();
+    let spent: f64 = walls
+        .iter()
+        .filter(|wall| !wall.inherited())
+        .map(Wall::funded)
+        .sum();
     let years = city
         .rounds
         .get(city.round.saturating_sub(1))
@@ -638,134 +409,424 @@ fn present_work(city: &City, sponsors: &Sponsors, means: &Means, walls: &[Wall])
     (means.capacity - spent)
         .max(0.)
         .min(means.supporters * YEAR_WORK * years)
+        * keen
 }
 
-/// The share of a circuit's work that must be done before its sponsor stops reconsidering
-/// its line.
-const WELL_BEGUN: f64 = 0.5;
-/// The line a sponsor may still redraw this round: its newest circuit, if that is its
-/// own era's, in use, unfinished and not yet well begun. The city gathers and shifts
-/// between rounds, and a line drawn before it gathered should not bind it. A wall the
-/// city has outgrown, or one an earlier era raised, is history and is never redrawn.
-fn redrawn(walls: &mut Vec<Wall>) -> Option<Wall> {
-    let unsettled = walls.last().is_some_and(|wall| {
-        let whole: f64 = wall.sections.iter().map(|s| s.cost).sum();
-        !wall.inherited()
-            && !wall.outgrown
-            && wall.unfinished()
-            && wall.funded() < WELL_BEGUN * whole
+/// The cells a stretch between two points crosses.
+fn crossed<'a>(city: &'a City<'a>, [from, to]: [[f64; 2]; 2]) -> impl Iterator<Item = usize> + 'a {
+    (0..=4).filter_map(move |part| {
+        let along = f64::from(part) / 4.;
+        cell_at(
+            city.mesh,
+            [
+                from[0] + (to[0] - from[0]) * along,
+                from[1] + (to[1] - from[1]) * along,
+            ],
+        )
+    })
+}
+/// The wall and section lying on each cell, standing or fallen.
+struct Laid(Vec<Option<(u32, u32)>>);
+impl Laid {
+    fn of(city: &City, walls: &[Wall]) -> Self {
+        let mut laid = Self(vec![None; city.mesh.len()]);
+        for (wall, record) in walls.iter().enumerate() {
+            for (at, section) in record.sections.iter().enumerate() {
+                laid.mark(city, [wall, at], section.ends);
+            }
+        }
+        laid
+    }
+    fn mark(&mut self, city: &City, [wall, section]: [usize; 2], ends: [[f64; 2]; 2]) {
+        for cell in crossed(city, ends) {
+            self.0[cell] = Some((wall as u32, section as u32));
+        }
+    }
+    fn at(&self, cell: usize) -> Option<[usize; 2]> {
+        self.0[cell].map(|(wall, section)| [wall as usize, section as usize])
+    }
+    fn stands(&self, walls: &[Wall], cell: usize) -> bool {
+        self.at(cell)
+            .is_some_and(|[wall, section]| walls[wall].sections[section].stands())
+    }
+}
+
+/// What a season's builders walk: the city, the town's ground, the edge they wall and
+/// the draws that are theirs.
+struct Walk<'a> {
+    city: &'a City<'a>,
+    sponsors: &'a Sponsors,
+    ground: &'a Ground,
+    edge: &'a Edge,
+    season: &'a Season<'a>,
+}
+impl Walk<'_> {
+    /// What the ground at a point is worth to a builder: most on the town's edge, and
+    /// more where wall already lies. Ground that cannot carry a wall is worth nothing.
+    fn worth(&self, laid: &Laid, at: [f64; 2]) -> Option<f64> {
+        let cell = cell_at(self.city.mesh, at).filter(|&cell| self.city.firm[cell])?;
+        let off = self.ground.off(cell, self.edge.level);
+        Some(FOLLOW * f64::from(laid.at(cell).is_some()) - HOLD * (off * off).min(4.))
+    }
+    /// Where a builder sets out: on the edge, where no wall stands, toward the side the
+    /// era's threat came from, with chance in the choosing.
+    fn start(&self, laid: &Laid, walls: &[Wall], builder: usize) -> Option<usize> {
+        let mesh = self.city.mesh;
+        let number = self.season.round * BUILDERS + builder;
+        let chance = self
+            .sponsors
+            .chance("city.wall.start")
+            .nth(self.season.era as i32)
+            .nth(number as i32);
+        let bearing = self.sponsors.bearing(self.season.era);
+        let on_edge = self.ground.ranked[self.ground.from..]
+            .iter()
+            .copied()
+            .filter(|&cell| {
+                self.city.firm[cell] && self.ground.off(cell, self.edge.level).abs() < 0.15
+            });
+        best(on_edge, |&cell| {
+            let [x, y] = position(mesh, cell);
+            let outward = (y - self.ground.peak[1]).atan2(x - self.ground.peak[0]);
+            (1. - f64::from(laid.stands(walls, cell)))
+                + self.sponsors.wildness
+                    * (FACING * (outward - bearing).cos() + chance.signed([x, y]))
+        })
+    }
+    /// A builder at its start, facing along the edge one way or the other.
+    fn builder(&self, start: usize, builder: usize) -> Walker {
+        let point = position(self.city.mesh, start);
+        let outward = (point[1] - self.ground.peak[1]).atan2(point[0] - self.ground.peak[0]);
+        let number = (self.season.round * BUILDERS + builder) as f64;
+        let sunwise = self.sponsors.wildness > 0.
+            && self
+                .sponsors
+                .chance("city.wall.way")
+                .happens([self.season.era as f64, number], 0.5);
+        let quarter = std::f64::consts::FRAC_PI_2;
+        Walker {
+            point,
+            heading: outward + if sunwise { -quarter } else { quarter },
+        }
+    }
+    /// Whether standing wall runs hard beside a cell: a builder there walks on without
+    /// laying a second line against the first. The few sections the builder has only
+    /// just laid do not count, or it could never lay two in a row.
+    fn beside_wall(&self, walls: &[Wall], laid: &Laid, own: usize, cell: usize) -> bool {
+        let fresh = walls[own].sections.len().saturating_sub(3);
+        (0..3)
+            .filter_map(|side| self.city.mesh.neighbor(cell, side))
+            .filter_map(|next| laid.at(next))
+            .any(|[wall, section]| {
+                (wall != own || section < fresh) && walls[wall].sections[section].stands()
+            })
+    }
+    /// What a builder does with its step from `from` to `to`, and the work it spends.
+    /// Wall that stands is walked along for nothing; fallen wall is laid again; open
+    /// ground gets a new section of the season's wall. Nothing is done, and the builder
+    /// stops, where the work left does not cover it.
+    fn lay(
+        &self,
+        walls: &mut [Wall],
+        laid: &mut Laid,
+        own: usize,
+        [from, to]: [[f64; 2]; 2],
+        left: f64,
+    ) -> Option<f64> {
+        let cell = cell_at(self.city.mesh, to)?;
+        if let Some([wall, section]) = laid.at(cell) {
+            let section = &mut walls[wall].sections[section];
+            if section.stands() {
+                return Some(0.);
+            }
+            let cost = section.cost;
+            return (cost <= left).then(|| {
+                section.relay();
+                cost
+            });
+        }
+        if self.beside_wall(walls, laid, own, cell) {
+            return Some(0.);
+        }
+        let cost = distance(from, to) * toll(self.city, cell, self.season.past());
+        if cost > left {
+            return None;
+        }
+        laid.mark(self.city, [own, walls[own].sections.len()], [from, to]);
+        walls[own]
+            .sections
+            .push(Section::laid([from, to], cell, cost));
+        Some(cost)
+    }
+    /// One builder's walk along the edge, laying wall until its share of the work is
+    /// spent, it can go no further, or it has walked the edge's length and half again.
+    fn walk(
+        &self,
+        walls: &mut [Wall],
+        laid: &mut Laid,
+        (own, builder): (usize, usize),
+        mut left: f64,
+    ) -> io::Result<()> {
+        let Some(start) = self.start(laid, walls, builder) else {
+            return Ok(());
+        };
+        let mut walker = self.builder(start, builder);
+        let reach = self.city.mesh.spacing() * 0.75;
+        let wild = self.sponsors.wildness;
+        let stride = Stride {
+            fan: &FAN,
+            whim: WHIM * wild,
+            drift: DRIFT * wild,
+            span: 6. * reach,
+        };
+        let era = self.season.era as i32;
+        let whims = Whims {
+            turn: self.sponsors.chance("city.wall.turn").nth(era),
+            drift: self.sponsors.chance("city.wall.drift").nth(era),
+        };
+        let number = (self.season.round * BUILDERS + builder) as f64;
+        let mut travelled = 0.;
+        while travelled < 1.5 * self.edge.length {
+            let from = walker.point;
+            let went = walker.step(&stride, whims, [number, travelled], reach, |at| {
+                Ok(self.worth(laid, at))
+            })?;
+            let spent = went
+                .then(|| self.lay(walls, laid, own, [from, walker.point], left))
+                .flatten();
+            let Some(spent) = spent else {
+                break;
+            };
+            left -= spent;
+            travelled += reach;
+        }
+        Ok(())
+    }
+}
+
+/// The record a season's builders add to: the present era's wall if an earlier round
+/// began one, otherwise a new one.
+fn own_wall(walls: &mut Vec<Wall>, season: &Season) -> usize {
+    let begun = walls.last().is_some_and(|wall| {
+        !season.past() && !wall.inherited() && wall.era.as_deref() == season.name
     });
-    if unsettled {
-        walls.pop()
-    } else {
-        None
+    if !begun {
+        walls.push(Wall {
+            round: season.round,
+            era: season.name.map(str::to_owned),
+            ..Default::default()
+        });
     }
+    walls.len() - 1
 }
-/// Moves the work done on a line its sponsor has redrawn onto the new line, section by
-/// section, so redrawing loses no work and the work stays charged to the sponsor.
-fn carry_work(from: &Wall, onto: &mut Wall) {
-    let mut work = from.funded();
-    for section in &mut onto.sections {
-        let done = work.min((section.cost - section.built).max(0.));
-        section.built += done;
-        work -= done;
-    }
-}
-/// The shares of a town's ground whose pressure contours a sponsor considers as rings.
-/// A civic order's citadel above one draws every ring in round more crowded ground.
-fn ring_shares(tighten: f64) -> [f64; 3] {
-    let usual = [0.32, 0.56, 0.76];
-    if tighten <= 1. {
-        return usual;
-    }
-    usual.map(|share| 1. - (1. - share) / tighten)
-}
-/// Today's sponsor chooses its circuit: a new one once its earlier work is finished,
-/// or the line this round's city calls for in place of one barely begun.
-fn choose_enclosure(
+/// One season of building. The season's town is read from the ground, an edge is drawn
+/// for it, and if the era gives enough work to begin, its builders walk.
+fn build(
     city: &City,
     sponsors: &Sponsors,
     means: &Means,
     walls: &mut Vec<Wall>,
+    season: &Season,
 ) -> io::Result<()> {
-    let earlier = redrawn(walls);
-    let ready = walls
-        .iter()
-        .filter(|w| !w.inherited() && !w.outgrown)
-        .all(|w| !w.unfinished());
-    if !ready {
-        walls.extend(earlier);
+    let ground = Ground::of(city, &means.occupied, sponsors, season)?;
+    let Some(edge) = chosen_edge(city, sponsors, &ground, season) else {
+        return Ok(());
+    };
+    let work = work(city, sponsors, means, walls, (season, &edge));
+    trace_season(sponsors, season, &edge, work);
+    if work < LEAST * edge.work {
         return Ok(());
     }
-    let planned = Planned {
-        share: 1.,
-        round: city.round,
-        era: sponsors.eras.last().map(|(era, _)| era.as_str()),
-        least: sponsors.least(sponsors.last()),
+    let own = own_wall(walls, season);
+    walls[own].worth = edge.worth;
+    let mut laid = Laid::of(city, walls);
+    let walk = Walk {
+        city,
+        sponsors,
+        ground: &ground,
+        edge: &edge,
+        season,
     };
-    let best = best_circuit(city, &means.occupied, walls, &planned, sponsors.citadel)?;
-    // The line this round's city calls for replaces one barely begun and takes over
-    // the work done on it; with no line to draw this round, the earlier one stands.
-    match (best, earlier) {
-        (Some(mut wall), Some(earlier)) => {
-            carry_work(&earlier, &mut wall);
-            walls.push(wall);
-        }
-        (Some(wall), None) | (None, Some(wall)) => walls.push(wall),
-        (None, None) => {}
+    for builder in 0..BUILDERS {
+        walk.walk(walls, &mut laid, (own, builder), work / BUILDERS as f64)?;
+    }
+    if walls[own].sections.is_empty() {
+        walls.remove(own);
     }
     Ok(())
 }
 
-/// One round of the city's walls. The town's past is told from this round's city: the
-/// walls its earlier eras found worth raising. Today's sponsor then chooses and builds
-/// what this era's threat makes worth the work; every wall is judged outgrown or not,
-/// loses what unkept eras cost it, and is repaired where today's sponsor still keeps it.
-/// Walls draw people and works behind them before the next round, so each round's
-/// telling starts from a city the last one shaped.
-// owner-direction(2026-11-28): a wall enclosing twice the built ground is acceptable only when that is not always the case; sometimes there are interior walls, no walls, half decayed walls or several walls
-pub(super) fn raise(city: &City, sponsors: &Sponsors, walls: Vec<Wall>) -> io::Result<Vec<Wall>> {
-    let means = means(city);
-    let own = walls.into_iter().filter(|w| !w.inherited());
-    let mut walls = tell_past(city, sponsors, &means)?;
-    walls.extend(own);
-    let budget = present_work(city, sponsors, &means, &walls);
-    if budget > 0. {
-        choose_enclosure(city, sponsors, &means, &mut walls)?;
+/// Wall falls. Over `part` of an era, each standing section falls if it lies in the
+/// patches the era's wear covers: a little of the ground everywhere, more where built
+/// ground presses on the wall and its stone is taken, more where the quarter lies in
+/// ruin. The patches shift as `time` passes, so each era takes different stretches and
+/// what it takes it takes in runs.
+fn wear(city: &City, sponsors: &Sponsors, walls: &mut [Wall], time: f64, part: f64) {
+    let patches = Patches::of(sponsors.chance("city.wall.wear").noise(WEAR_PATCH, 3));
+    for section in walls.iter_mut().flat_map(|wall| &mut wall.sections) {
+        if !section.stands() {
+            continue;
+        }
+        let x = city.fields.claims[section.cell];
+        let [a, b] = section.ends;
+        let middle = [(a[0] + b[0]) / 2., (a[1] + b[1]) / 2.];
+        // With chance stilled every stretch stands at the middle rank.
+        let rank = 0.5 + (patches.rank_at(middle, time) - 0.5) * sponsors.wildness;
+        if rank < walls::era_loss(x.built, x.ruin) * part {
+            section.fall();
+        }
     }
-    age(
+}
+
+/// How long someone coming from outside the city takes to reach each cell, when the
+/// cells in `barred` cannot be crossed.
+fn approach(city: &City, outside: &[usize], barred: &[bool]) -> Vec<f64> {
+    Front {
+        chance: Chance::of(0, 0),
+        roughness: 0.,
+    }
+    .arrivals(city.mesh, outside, f64::INFINITY, |_, to| {
+        (!barred[to]).then_some(1.)
+    })
+}
+/// Finds the ground each wall shelters and whether the city has outgrown it: whether it
+/// is an earlier era's wall that now holds too small a share of the people it is
+/// measured against. Ground is
+/// sheltered where the standing wall makes someone coming from outside go a long way
+/// round to reach it, or keeps them out altogether: all of the ground inside a closed
+/// circuit, the ground close behind a long arc, none behind a stump.
+fn shelter(city: &City, walls: &mut [Wall], measured: f64) {
+    let n = city.mesh.len();
+    let own: Vec<bool> = city.fields.stencil.iter().map(|s| *s > 0.5).collect();
+    let outside: Vec<usize> = (0..n).filter(|&cell| !own[cell]).collect();
+    let open = approach(city, &outside, &vec![false; n]);
+    for wall in walls {
+        let mut barred = vec![false; n];
+        let mut standing = 0.;
+        for section in wall.sections.iter().filter(|section| section.stands()) {
+            standing += distance(section.ends[0], section.ends[1]);
+            for cell in crossed(city, section.ends) {
+                barred[cell] = true;
+            }
+        }
+        let round = (0.15 * standing).max(3. * city.mesh.spacing());
+        let kept = approach(city, &outside, &barred);
+        wall.inside = (0..n)
+            .filter(|&cell| own[cell] && !barred[cell] && kept[cell] - open[cell] > round)
+            .map(|cell| cell as u32)
+            .collect();
+        wall.area = wall.inside.len() as f64 * city.mesh.area(0);
+        let residents: f64 = wall
+            .inside
+            .iter()
+            .map(|&c| city.fields.claims[c as usize].people * city.mesh.area(c as usize) / 1e6)
+            .sum();
+        // Only a wall of an earlier era can be outgrown; a tight wall of today's is
+        // today's choice.
+        wall.outgrown = wall.inherited() && !wall.open() && residents < 0.45 * measured;
+        wall.lines = wall.sections.iter().filter_map(Section::standing).collect();
+    }
+}
+
+/// The share of an era's years that have passed by the end of this round.
+fn elapsed(city: &City) -> f64 {
+    city.rounds.iter().take(city.round).sum::<f64>() / ERA_YEARS
+}
+/// One round of the city's walls. The first round tells the town's past: each earlier
+/// era builds against the town as it then was and is followed by an era's wear. Every
+/// round the present era's builders walk and the round's share of an era's wear falls.
+/// The ground each wall shelters is then found again, so the next round's people and
+/// works gather behind what stands.
+// owner-direction(2026-11-28): a wall enclosing twice the built ground is acceptable only when that is not always the case; sometimes there are interior walls, no walls, half decayed walls or several walls
+pub(super) fn raise(
+    city: &City,
+    sponsors: &Sponsors,
+    mut walls: Vec<Wall>,
+) -> io::Result<Vec<Wall>> {
+    let means = means(city);
+    let last = sponsors.last();
+    if city.round <= 1 {
+        for era in 0..last {
+            let past = Season {
+                era,
+                name: Some(&sponsors.eras[era].0),
+                round: 0,
+                share: sponsors.share(era),
+            };
+            if past.share > 0. {
+                build(city, sponsors, &means, &mut walls, &past)?;
+            }
+            wear(city, sponsors, &mut walls, era as f64 + 1., 1.);
+        }
+    }
+    let now = Season {
+        era: last,
+        name: sponsors.eras.last().map(|(era, _)| era.as_str()),
+        round: city.round.max(1),
+        share: 1.,
+    };
+    build(city, sponsors, &means, &mut walls, &now)?;
+    let years = city
+        .rounds
+        .get(city.round.saturating_sub(1))
+        .copied()
+        .unwrap_or(0.);
+    wear(
         city,
         sponsors,
         &mut walls,
+        last as f64 + elapsed(city),
+        years / ERA_YEARS,
+    );
+    shelter(
+        city,
+        &mut walls,
         means.supporters / sponsors.citadel.max(1.),
     );
-    tend(city, sponsors, &mut walls, budget);
-    trace(city, sponsors, &means, budget, &walls);
+    trace(city, sponsors, &means, &walls);
     Ok(walls)
 }
 
-/// The round's wall decisions, written to the server log when `ATLAS_TRACE_CITY` is set.
-fn trace(city: &City, sponsors: &Sponsors, means: &Means, budget: f64, walls: &[Wall]) {
-    if std::env::var_os("ATLAS_TRACE_CITY").is_none() {
+fn traced() -> bool {
+    std::env::var_os("ATLAS_TRACE_CITY").is_some()
+}
+/// One season's choice, written to the server log when `ATLAS_TRACE_CITY` is set.
+fn trace_season(sponsors: &Sponsors, season: &Season, edge: &Edge, work: f64) {
+    if !traced() {
         return;
     }
-    let threats: Vec<_> = (0..=sponsors.last())
-        .map(|era| sponsors.threat(era))
-        .collect();
+    eprintln!(
+        "{}",
+        serde_json::json!({ "event": "city.wall-season", "details": {
+            "era": season.name,
+            "round": season.round,
+            "townShare": season.share,
+            "threat": sponsors.threat(season.era),
+            "bearing": sponsors.bearing(season.era).to_degrees().round(),
+            "edgeKm": edge.length / 1e3,
+            "edgeWork": edge.work.round(),
+            "worth": edge.worth,
+            "work": work.round(),
+        }})
+    );
+}
+/// How every wall stands at the end of a round, written to the server log when
+/// `ATLAS_TRACE_CITY` is set.
+fn trace(city: &City, sponsors: &Sponsors, means: &Means, walls: &[Wall]) {
+    if !traced() {
+        return;
+    }
     let told: Vec<_> = walls
         .iter()
-        .enumerate()
-        .map(|(index, wall)| {
+        .map(|wall| {
             serde_json::json!({
                 "era": wall.era,
                 "round": wall.round,
-                "areaKm2": wall.area / 1e6,
+                "shelteredKm2": wall.area / 1e6,
                 "worth": wall.worth,
-                "work": wall.sections.iter().map(|s| s.cost).sum::<f64>().round(),
-                "funded": wall.funded().round(),
+                "laidKm": wall.sections.iter().map(|s| distance(s.ends[0], s.ends[1])).sum::<f64>() / 1e3,
                 "standing": wall.standing_share(),
                 "outgrown": wall.outgrown,
-                "unkeptEras": unkept(walls, index, sponsors),
                 "condition": wall.condition(),
             })
         })
@@ -776,20 +837,17 @@ fn trace(city: &City, sponsors: &Sponsors, means: &Means, budget: f64, walls: &[
             "round": city.round,
             "eras": sponsors.eras,
             "causes": [sponsors.resolve, sponsors.present],
-            "threats": threats,
             "begins": sponsors.begins(city.rounds),
             "citadel": sponsors.citadel,
             "supporters": means.supporters.round(),
             "capacity": means.capacity.round(),
-            "budget": budget.round(),
             "walls": told,
         }})
     );
 }
 
-/// The town's record as its wall sponsors read it: the eras its history tells of, the
-/// odds its site, standing and civic order give that an era moves it to wall, and its
-/// roll.
+/// The town's record as its wall builders read it: the eras its history tells of, the
+/// weight its site, standing and civic order give to defending itself, and its roll.
 fn sponsors(state: &State, readiness: f64) -> io::Result<Sponsors> {
     let p = policy(state)?;
     let town = captured_settlement(state)?;
@@ -830,6 +888,7 @@ fn sponsors(state: &State, readiness: f64) -> io::Result<Sponsors> {
         fortune: p
             .fortune
             .unwrap_or_else(|| own.map_or(0.5, |own| walls::fortune(&own, 0))),
+        wildness: 1.,
     })
 }
 
@@ -849,7 +908,6 @@ pub(super) fn invest(state: &State, u: &Urban, readiness: f64) -> io::Result<Vec
     }
     let city = City {
         mesh,
-        spatial: state.spatial.as_ref(),
         fields: &u.fields,
         capital: &capital,
         firm: &firm,
@@ -859,7 +917,6 @@ pub(super) fn invest(state: &State, u: &Urban, readiness: f64) -> io::Result<Vec
             .map_err(io::Error::other)?,
         round: r.round,
         rounds: &crate::field::refinement::people::DEVELOPMENT_EXPOSURE,
-        contour: &|values, level| contour(state, values, level),
     };
     raise(&city, &sponsors(state, readiness)?, r.city.walls.clone())
 }
@@ -871,81 +928,26 @@ mod bench;
 mod tests {
     use super::*;
 
-    fn circuit(built: [f64; 4]) -> Wall {
-        Wall {
-            round: 1,
-            inside: vec![0],
-            sections: built
-                .map(|built| Section {
-                    ends: [[0., 0.], [100., 0.]],
-                    cell: 0,
-                    cost: 100.,
-                    built,
-                    disused: 0.,
-                    repaired: 0.,
-                })
-                .to_vec(),
-            ..Default::default()
-        }
-    }
-
     #[test]
-    fn a_sponsor_redraws_a_line_barely_begun_and_keeps_one_well_begun() {
-        // A finished old wall and a new line with a tenth of its work done: the new line
-        // may be redrawn, the old wall stays.
-        let mut walls = vec![circuit([100.; 4]), circuit([40., 0., 0., 0.])];
-        assert!(redrawn(&mut walls).is_some());
-        assert_eq!(walls.len(), 1);
-        // A line more than half built binds its sponsor.
-        let mut walls = vec![circuit([100., 100., 35., 0.])];
-        assert!(redrawn(&mut walls).is_none());
-        assert_eq!(walls.len(), 1);
-        // A finished wall is never redrawn, and a city with none has none to redraw.
-        assert!(redrawn(&mut vec![circuit([100.; 4])]).is_none());
-        assert!(redrawn(&mut Vec::new()).is_none());
-        // A wall the city has outgrown is history, however little of it was built, and
-        // so is one an earlier era left unfinished.
-        let mut old = circuit([40., 0., 0., 0.]);
-        old.outgrown = true;
-        assert!(redrawn(&mut vec![old]).is_none());
-        let mut past = circuit([40., 0., 0., 0.]);
-        past.round = 0;
-        assert!(redrawn(&mut vec![past]).is_none());
-    }
-
-    #[test]
-    fn a_redrawn_line_takes_over_the_work_done_on_the_earlier_one() {
-        // Each round a sponsor can fund fifteen parts in a hundred of a line. Redrawing
-        // the line every round still builds it, and nothing done is lost or refunded.
-        let mut line = circuit([0.; 4]);
-        for round in 1..=4 {
-            let mut walls = vec![line];
-            let earlier = redrawn(&mut walls);
-            let mut next = circuit([0.; 4]);
-            if let Some(earlier) = &earlier {
-                carry_work(earlier, &mut next);
-            }
-            line = earlier.map_or_else(|| walls.pop().unwrap(), |_| next);
-            // This round's funds.
-            let section = line.sections.iter_mut().find(|s| s.built < s.cost).unwrap();
-            section.built += 60.;
-            assert_eq!(line.funded(), 60. * f64::from(round));
-        }
-        // After the fourth round more than half stands, so the sponsor keeps that line.
-        assert!(redrawn(&mut vec![line]).is_none());
-    }
-
-    #[test]
-    fn a_citadel_draws_its_rings_round_more_crowded_ground() {
+    fn a_citadel_draws_its_edges_round_more_crowded_ground() {
         assert_eq!(ring_shares(1.), [0.32, 0.56, 0.76]);
-        // Twice the citadel halves the ground left outside each ring's level.
+        // Twice the citadel halves the ground left outside each edge's level.
         let tight = ring_shares(2.);
         assert!((tight[0] - 0.66).abs() < 1e-12 && (tight[2] - 0.88).abs() < 1e-12);
         assert!(tight
             .iter()
             .zip(ring_shares(1.))
             .all(|(tight, usual)| *tight > usual));
-        // An order that builds no citadel leaves the rings as they were.
+        // An order that builds no citadel leaves the edges as they were.
         assert_eq!(ring_shares(0.5), ring_shares(1.));
+    }
+
+    #[test]
+    fn an_earlier_town_stood_on_its_share_of_todays_ground() {
+        let cells: Vec<usize> = (0..200).collect();
+        assert_eq!(outside(&cells, 1.), 0);
+        assert_eq!(outside(&cells, 0.25), 150);
+        assert_eq!(outside(&cells, 0.), 200);
+        assert_eq!(outside(&[], 0.5), 0);
     }
 }
