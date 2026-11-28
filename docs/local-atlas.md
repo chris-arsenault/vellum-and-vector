@@ -88,11 +88,34 @@ shows what the wall step makes of a given city and never how a city answers its 
 people gathering behind them, districts divided along them and ways gated through them
 need a map.
 
+The constructed city is a clean round hill. Real cities are not: their built ground is
+ragged, streams cross it and villages lie apart from the town. The bench therefore also
+replays real ground. Start the server with `ATLAS_CAPTURE_WALL_GROUND=<directory>` set and
+every city map writes, each round, the ground its wall builders read to
+`<directory>/<town>-round-<n>.json`. The bench lays that ground on a lattice of its own and
+puts the wall step through the same rounds in a few seconds a city:
+
+```sh
+export ATLAS_CAPTURE_WALL_GROUND=.artifacts/local-atlas/wall-ground
+cargo +stable test -p atlas-generation --lib survey_of_edges_on_captured_ground -- --ignored --nocapture
+cargo +stable test -p atlas-generation --lib survey_of_walls_on_captured_ground -- --ignored --nocapture
+```
+
+The first draws the edges each era's builders may wall, before any sets out. The second
+draws the walls under the town's own roll and two others, with the stretch of the present
+wall's line left open. `ATLAS_WALL_TOWN=<town>` keeps either to one town. With
+`ATLAS_WALL_SKETCH=<directory>` the second also writes each city and its walls as numbers,
+which `uv run scripts/draw-wall-sketch.py <sketch.json> <picture.png>` turns into a
+picture. The people in a replay do not answer the bench's walls: each
+round's ground is what the map's own run made of it.
+
 On a map, `--set built.layout.wallReadiness=<n>` scales how readily towns wall
 themselves (nought: never). With `ATLAS_TRACE_CITY` set the server log carries a
 `city.wall-season` line for every era's and round's building (how threatened, from which
-side, the edge drawn, its worth and the work given) and a `city.walls` line a round with
-how every wall stands.
+side, the edge drawn, its worth and the work given), a `city.wall-builder` line for each
+way each builder worked (where it set out and stopped, how far it went, what it spent and
+why it stopped) and a `city.walls` line a round with how every wall stands. The replay
+writes the same lines to its error stream.
 
 ## Use
 

@@ -91,7 +91,7 @@ impl NativeGeos {
                 "Geometry must be valid: {} ({:?}, bounds {:?}, read at {})",
                 geometry.is_valid_reason().map_err(|e| e.to_string())?,
                 geometry.geometry_type().map_err(|e| e.to_string())?,
-                geometry.get_extent().map_err(|e| e.to_string())?,
+                geometry.get_extent().ok(),
                 std::panic::Location::caller(),
             ));
         }
@@ -99,11 +99,13 @@ impl NativeGeos {
             .set_precision(self.precision, Precision::ValidOutput)
             .map_err(|e| e.to_string())?;
         if !allow_empty && snapped.is_empty().map_err(|e| e.to_string())? {
+            // An empty shape has no bounds to report, and asking for them must not
+            // replace this message with the failure to find them.
             return Err(format!(
                 "Geometry collapses at its declared precision {} ({:?}, bounds {:?}, read at {})",
                 self.precision,
                 geometry.geometry_type().map_err(|e| e.to_string())?,
-                geometry.get_extent().map_err(|e| e.to_string())?,
+                geometry.get_extent().ok(),
                 std::panic::Location::caller()
             ));
         }
@@ -529,6 +531,18 @@ mod tests {
             assert_eq!((y * 2.).fract(), 0.);
         }
         assert_eq!(kernel.area(&square).unwrap(), 100.);
+    }
+    #[test]
+    fn an_empty_operand_is_refused_for_being_empty() {
+        let kernel = NativeGeos::new(0.001).unwrap();
+        let nothing = Geometry::MultiLineString {
+            coordinates: Vec::new(),
+        };
+        let refusal = kernel.read(&nothing).err().unwrap();
+        assert!(
+            refusal.contains("collapses at its declared precision"),
+            "{refusal}"
+        );
     }
     #[test]
     fn clipped_fragment_is_reusable_at_the_map_precision() {

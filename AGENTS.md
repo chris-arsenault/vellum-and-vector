@@ -415,7 +415,11 @@ itself says which is which.
   [the local atlas notes](docs/local-atlas.md#the-town-bench). City walls have one too:
   `crates/atlas-generation/src/processes/town/urban/defenses/bench.rs` puts a small
   constructed city through the real wall step for a city map's three rounds; see
-  [the same notes](docs/local-atlas.md#the-city-wall-bench).
+  [the same notes](docs/local-atlas.md#the-city-wall-bench). A constructed city is clean
+  and hides what ragged built ground, streams and outlying villages do to a rule, so
+  that bench also replays ground captured from real city maps, in seconds. Look at a
+  rule there before any map is generated for it, and give a bench for another rule the
+  same replay.
 - Browser tests test UI behavior on small supplied worlds. Import `test` from
   `frontend/tests/uiTest.ts`; its automatic fixture uses at most 256 cells and
   blocks real generation workers. Numerical preconditions and raster presentation

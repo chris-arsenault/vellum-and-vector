@@ -126,6 +126,399 @@ impl Plain {
     }
 }
 
+/// A real city's ground, as a map captured it for its wall builders in each of its
+/// rounds, laid on a lattice of the bench's own. The wall step is put through the
+/// rounds on what the city really gave it, so a rule is seen on real ground in seconds:
+/// rivers, satellite villages, ragged built ground and all. The people do not answer the
+/// bench's walls; each round's ground is what the map's own run made of it.
+///
+/// A map writes the ground when `ATLAS_CAPTURE_WALL_GROUND` names a directory.
+pub(super) struct Recorded {
+    mesh: TriangularLattice,
+    rounds: Vec<(CityFields, Vec<f64>, Vec<bool>)>,
+    area: f64,
+    pub sponsors: Sponsors,
+}
+impl Recorded {
+    /// Reads a town's captured rounds from `directory`, or nothing where a map has not
+    /// written them.
+    pub(super) fn of(directory: &std::path::Path, town: &str) -> Option<Self> {
+        let rounds: Vec<Captured> = (1..=ROUNDS.len())
+            .map_while(|round| {
+                let file = directory.join(format!("{town}-round-{round}.json"));
+                serde_json::from_reader(std::io::BufReader::new(std::fs::File::open(file).ok()?))
+                    .ok()
+            })
+            .collect();
+        let first = rounds.first()?;
+        let mesh = Self::lattice(first);
+        let nearest = Self::nearest(&mesh, first);
+        let sponsors = Sponsors {
+            eras: first.eras.clone(),
+            resolve: first.resolve,
+            present: first.present,
+            citadel: first.citadel,
+            fortune: first.fortune,
+            wildness: 1.,
+        };
+        Some(Self {
+            rounds: rounds
+                .iter()
+                .map(|captured| Self::ground(captured, &nearest))
+                .collect(),
+            area: first.area,
+            mesh,
+            sponsors,
+        })
+    }
+    /// A lattice of the captured spacing over the captured ground.
+    fn lattice(captured: &Captured) -> TriangularLattice {
+        let (mut west, mut south, mut east, mut north) = (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
+        for [x, y] in &captured.at {
+            west = west.min(*x);
+            east = east.max(*x);
+            south = south.min(*y);
+            north = north.max(*y);
+        }
+        let pad = 3. * captured.spacing;
+        let bounds = Bounds(west - pad, south - pad, east + pad, north + pad);
+        let triangle = 3. * 3f64.sqrt() / 4.;
+        let samples = (bounds.2 - bounds.0) * (bounds.3 - bounds.1)
+            / (captured.spacing * captured.spacing * triangle);
+        WorldLatticeOptions::default()
+            .build(bounds, samples, 0., |_, _| true)
+            .unwrap()
+    }
+    /// The captured cell nearest each cell of the bench's lattice, where one lies close.
+    fn nearest(mesh: &TriangularLattice, captured: &Captured) -> Vec<Option<usize>> {
+        let span = captured.spacing;
+        let square = |[x, y]: [f64; 2]| ((x / span).floor() as i64, (y / span).floor() as i64);
+        // hpc-exempt: captured cells bucketed by position once, to lay them on the bench's lattice.
+        let mut squares = std::collections::HashMap::<(i64, i64), Vec<usize>>::new();
+        for (cell, at) in captured.at.iter().enumerate() {
+            squares.entry(square(*at)).or_default().push(cell);
+        }
+        (0..mesh.len())
+            .map(|cell| {
+                let [x, y] = position(mesh, cell);
+                let (column, row) = square([x, y]);
+                let mut close: Option<(f64, usize)> = None;
+                for near in (-1..=1).flat_map(|dx| (-1..=1).map(move |dy| (column + dx, row + dy)))
+                {
+                    for &other in squares.get(&near).into_iter().flatten() {
+                        let [ox, oy] = captured.at[other];
+                        let apart = (x - ox).hypot(y - oy);
+                        if close.is_none_or(|(least, _)| apart < least) {
+                            close = Some((apart, other));
+                        }
+                    }
+                }
+                close
+                    .filter(|(apart, _)| *apart < 1.2 * span)
+                    .map(|(_, other)| other)
+            })
+            .collect()
+    }
+    /// One round's captured ground on the bench's lattice. Ground the map did not hold
+    /// is outside the city and carries no wall.
+    fn ground(captured: &Captured, nearest: &[Option<usize>]) -> (CityFields, Vec<f64>, Vec<bool>) {
+        let mut fields = CityFields::default();
+        let (mut capital, mut firm) = (Vec::new(), Vec::new());
+        for from in nearest {
+            let value = from.map_or([0.; 10], |cell| captured.ground[cell].map(f64::from));
+            fields.claims.push(Claims {
+                people: value[0],
+                built: value[1],
+                ruin: value[2],
+                trade: value[3],
+                ..Default::default()
+            });
+            fields.access.push(value[4]);
+            fields.stencil.push(value[5]);
+            fields.developed.push(value[6]);
+            fields.civic.push(value[7]);
+            capital.push(value[8]);
+            firm.push(value[9] > 0.5);
+        }
+        (fields, capital, firm)
+    }
+    /// The walls the city has after its captured rounds, under `sponsors`.
+    pub(super) fn walls(&self, sponsors: &Sponsors) -> Vec<Wall> {
+        let mut walls = Vec::new();
+        for (index, (fields, capital, firm)) in self.rounds.iter().enumerate() {
+            let city = City {
+                mesh: &self.mesh,
+                fields,
+                capital,
+                firm,
+                area: self.area,
+                round: index + 1,
+                rounds: &ROUNDS,
+            };
+            walls = raise(&city, sponsors, walls).unwrap();
+        }
+        walls
+    }
+    /// The city and its walls drawn in characters: standing wall, fallen wall, sheltered
+    /// ground, thickly and thinly built ground, and water.
+    pub(super) fn drawn(&self, walls: &[Wall], [columns, rows]: [usize; 2]) -> String {
+        let (fields, _, firm) = self.rounds.last().unwrap();
+        let mut glyph = vec![' '; self.mesh.len()];
+        for cell in 0..glyph.len() {
+            let built = fields.claims[cell].built;
+            glyph[cell] = match (fields.stencil[cell] > 0.5, firm[cell]) {
+                (true, false) => '~',
+                (true, true) if walls.iter().any(|wall| wall.encloses(cell)) => '.',
+                (true, true) if built > 0.35 => '+',
+                (true, true) if built > 0.1 => ',',
+                _ => ' ',
+            };
+        }
+        let city = City {
+            mesh: &self.mesh,
+            fields,
+            capital: &[],
+            firm,
+            area: self.area,
+            round: ROUNDS.len(),
+            rounds: &ROUNDS,
+        };
+        for section in walls.iter().flat_map(|wall| &wall.sections) {
+            for cell in crossed(&city, section.ends) {
+                glyph[cell] = if section.stands() { '#' } else { ':' };
+            }
+        }
+        let (open, course) = self.open_edge(&city, walls);
+        for &cell in &open {
+            glyph[cell] = 'o';
+        }
+        format!(
+            "    open edge: {} of the {course} cells along the present wall's line\n{}",
+            open.len(),
+            self.picture(fields, &glyph, [columns, rows])
+        )
+    }
+    /// The city and its walls as plain numbers for a drawing made outside the bench: each
+    /// of the city's cells with its place, built share and whether it is water or
+    /// sheltered, and each wall section with its ends, its wall and whether it stands.
+    pub(super) fn sketch(&self, walls: &[Wall]) -> serde_json::Value {
+        let (fields, _, firm) = self.rounds.last().unwrap();
+        let cells: Vec<_> = (0..self.mesh.len())
+            .filter(|&cell| fields.stencil[cell] > 0.5)
+            .map(|cell| {
+                let [x, y] = position(&self.mesh, cell);
+                let sheltered = walls.iter().any(|wall| wall.encloses(cell));
+                serde_json::json!([x, y, fields.claims[cell].built, !firm[cell], sheltered])
+            })
+            .collect();
+        let sections: Vec<_> = walls
+            .iter()
+            .enumerate()
+            .flat_map(|(wall, record)| {
+                record.sections.iter().map(move |section| {
+                    serde_json::json!([section.ends, wall, section.stands(), record.inherited()])
+                })
+            })
+            .collect();
+        serde_json::json!({ "spacing": self.mesh.spacing(), "cells": cells, "sections": sections })
+    }
+    /// The cells along the line of the present era's wall that could carry wall and have
+    /// none standing in sight, and how many cells the line has.
+    fn open_edge(&self, city: &City, walls: &[Wall]) -> (Vec<usize>, usize) {
+        let Some(wall) = walls.iter().rfind(|wall| !wall.course.is_empty()) else {
+            return (Vec::new(), 0);
+        };
+        let laid = Laid::of(city, walls);
+        let standing: Vec<usize> = (0..self.mesh.len())
+            .filter(|&cell| laid.stands(walls, cell))
+            .collect();
+        let near = steps_from(&self.mesh, &standing, SIGHT);
+        let open = wall
+            .course
+            .iter()
+            .map(|&cell| cell as usize)
+            .filter(|&cell| city.firm[cell] && near[cell] == i8::MAX)
+            .collect();
+        (open, wall.course.len())
+    }
+    /// The edges an era's builders may wall on the first captured round's ground, each
+    /// measured, and the ground drawn with every cell marked by the tightest of those
+    /// edges whose body holds it.
+    pub(super) fn edges(&self, era: usize, size: [usize; 2]) -> String {
+        use std::fmt::Write;
+        let (fields, capital, firm) = &self.rounds[0];
+        let city = City {
+            mesh: &self.mesh,
+            fields,
+            capital,
+            firm,
+            area: self.area,
+            round: 1,
+            rounds: &ROUNDS,
+        };
+        let sponsors = &self.sponsors;
+        let present = era == sponsors.last();
+        let season = Season {
+            era,
+            name: Some(&sponsors.eras[era].0),
+            round: usize::from(present),
+            share: if present { 1. } else { sponsors.share(era) },
+        };
+        let ground = Ground::of(&city, &means(&city).occupied, sponsors, &season).unwrap();
+        let mut glyph: Vec<char> = (0..self.mesh.len())
+            .map(|cell| match (fields.stencil[cell] > 0.5, firm[cell]) {
+                (true, false) => '~',
+                (true, true) if fields.claims[cell].built > BUILT => ',',
+                _ => ' ',
+            })
+            .collect();
+        let mut out = format!(
+            "{}: town {:.1} km2 of {:.1} km2 built\n",
+            sponsors.eras[era].0,
+            ground.town_cells() as f64 * self.mesh.area(0) / 1e6,
+            ground.ranked.len() as f64 * self.mesh.area(0) / 1e6,
+        );
+        for (ring, share) in ring_shares(sponsors.citadel).into_iter().enumerate() {
+            let Some(level) = ground.level(share) else {
+                continue;
+            };
+            let body = body(&city, &ground, level);
+            let measured = edge(&city, &ground, &body, &season);
+            let held = body.iter().filter(|within| **within).count();
+            writeln!(
+                out,
+                "    edge {ring}: body {:.1} km2, runs {:.1} km, work {:.1} km of plain wall, worth {:.2}",
+                held as f64 * self.mesh.area(0) / 1e6,
+                measured.length / 1e3,
+                measured.work / 1e3,
+                measured.worth
+            )
+            .unwrap();
+            let mark = char::from_digit(ring as u32, 10).unwrap_or('?');
+            for cell in (0..body.len()).filter(|&cell| body[cell] && firm[cell]) {
+                glyph[cell] = mark;
+            }
+        }
+        out + &self.picture(fields, &glyph, size)
+    }
+    /// The city's own ground, with a little about it, drawn in the characters given for
+    /// its cells.
+    fn picture(&self, fields: &CityFields, glyph: &[char], [columns, rows]: [usize; 2]) -> String {
+        let own: Vec<[f64; 2]> = (0..self.mesh.len())
+            .filter(|&cell| fields.stencil[cell] > 0.5)
+            .map(|cell| position(&self.mesh, cell))
+            .collect();
+        let reach = |pick: fn(f64, f64) -> f64, axis: usize, start: f64| {
+            own.iter().fold(start, |held, at| pick(held, at[axis]))
+        };
+        let (west, east) = (reach(f64::min, 0, f64::MAX), reach(f64::max, 0, f64::MIN));
+        let (south, north) = (reach(f64::min, 1, f64::MAX), reach(f64::max, 1, f64::MIN));
+        let mut out = String::new();
+        for row in 0..rows {
+            let y = north - (north - south) * (row as f64 + 0.5) / rows as f64;
+            for column in 0..columns {
+                let x = west + (east - west) * (column as f64 + 0.5) / columns as f64;
+                out.push(cell_at(&self.mesh, [x, y]).map_or(' ', |cell| glyph[cell]));
+            }
+            out.push('\n');
+        }
+        out
+    }
+}
+
+/// The directory maps have captured ground into and the towns captured there, in order
+/// of name: only the one `ATLAS_WALL_TOWN` names, when it is set.
+fn captured() -> Option<(std::path::PathBuf, Vec<String>)> {
+    let Some(directory) = std::env::var_os("ATLAS_CAPTURE_WALL_GROUND") else {
+        println!("ATLAS_CAPTURE_WALL_GROUND is not set");
+        return None;
+    };
+    let only = std::env::var("ATLAS_WALL_TOWN").ok();
+    let mut towns: Vec<String> = std::fs::read_dir(&directory)
+        .ok()?
+        .filter_map(|entry| entry.ok()?.file_name().into_string().ok())
+        .filter_map(|file| Some(file.strip_suffix("-round-1.json")?.to_owned()))
+        .filter(|town| only.as_ref().is_none_or(|only| only == town))
+        .collect();
+    towns.sort();
+    if towns.is_empty() {
+        println!("no captured ground in {}", directory.to_string_lossy());
+    }
+    Some((directory.into(), towns))
+}
+
+/// Writes a city's sketch beside the captured ground when `ATLAS_WALL_SKETCH` names a
+/// directory, one file for each town and roll, for a drawing tool to turn into a picture.
+fn sketched(sketch: &serde_json::Value, town: &str, roll: f64) {
+    let Some(directory) = std::env::var_os("ATLAS_WALL_SKETCH") else {
+        return;
+    };
+    let file = std::path::Path::new(&directory).join(format!("{town}-roll-{roll:.2}.json"));
+    std::fs::write(&file, sketch.to_string()).unwrap();
+    println!("    sketch {}", file.to_string_lossy());
+}
+
+/// Draws the walls the wall step raises on real cities' captured ground, under each
+/// city's own roll and two others. Run with
+/// `ATLAS_CAPTURE_WALL_GROUND=<directory> cargo +stable test --release -p atlas-generation --lib survey_of_walls_on_captured_ground -- --ignored --nocapture`.
+#[test]
+#[ignore = "pictures to look at, not a check; needs ground a map has captured"]
+fn survey_of_walls_on_captured_ground() {
+    let Some((directory, towns)) = captured() else {
+        return;
+    };
+    println!(
+        "# standing wall  : fallen wall  o open edge of the present wall  . sheltered  + built  , thinly built  ~ water\n"
+    );
+    for town in &towns {
+        let Some(recorded) = Recorded::of(&directory, town) else {
+            println!("{town}: no captured ground");
+            continue;
+        };
+        let started = std::time::Instant::now();
+        for roll in [None, Some(0.31), Some(0.77)] {
+            let mut sponsors = recorded.sponsors.clone();
+            sponsors.fortune = roll.unwrap_or(sponsors.fortune);
+            let walls = recorded.walls(&sponsors);
+            println!(
+                "{town}, {} cells, roll {:.2}, causes {:.2} then {:.2} now, citadel {}",
+                recorded.mesh.len(),
+                sponsors.fortune,
+                sponsors.resolve,
+                sponsors.present,
+                sponsors.citadel
+            );
+            for line in told(&walls) {
+                println!("    {line}");
+            }
+            println!("{}", recorded.drawn(&walls, [200, 90]));
+            sketched(&recorded.sketch(&walls), town, sponsors.fortune);
+        }
+        println!("{town}: {:.1} s", started.elapsed().as_secs_f64());
+    }
+}
+
+/// Measures and draws the edges each era's builders may wall on real cities' captured
+/// ground: what the builders are given to walk before any of them sets out. Run as the
+/// survey of walls on captured ground is.
+#[test]
+#[ignore = "pictures to look at, not a check; needs ground a map has captured"]
+fn survey_of_edges_on_captured_ground() {
+    let Some((directory, towns)) = captured() else {
+        return;
+    };
+    println!("0 1 2 the tightest edge holding the ground, wide to tight  , built  ~ water\n");
+    for town in &towns {
+        let Some(recorded) = Recorded::of(&directory, town) else {
+            println!("{town}: no captured ground");
+            continue;
+        };
+        for era in 0..recorded.sponsors.eras.len() {
+            println!("{town}, {}", recorded.edges(era, [200, 90]));
+        }
+    }
+}
+
 /// A town's record: its eras' townsfolk, oldest first, and the weight of what moves it to
 /// defend itself, under the `roll`th of the bench's rolls.
 pub(super) fn town(eras: &[(&str, f64)], causes: f64, roll: u32) -> Sponsors {
@@ -282,18 +675,25 @@ fn with_chance_stilled_every_roll_raises_the_same_wall() {
 #[test]
 fn a_gravely_threatened_town_lays_more_wall_than_one_barely_troubled() {
     // In: the same city and rolls; causes that weigh little, and causes that weigh much.
-    // Out: under every roll the weightier causes lay at least as much wall, and over the
-    // rolls far more.
+    // Out: under every roll the weightier causes lay as much wall or more, a join's
+    // length aside where both close the circuit, and over the rolls half as much again
+    // or more: a town barely troubled still closes its circuit under a roll that deals
+    // it a bad era.
     let plain = Plain::city(60_000., 600.);
     let (mut light, mut heavy) = (0., 0.);
+    let mut told = Vec::new();
     for roll in 1..=6 {
         let little = laid(&plain.walls(&town(&ONE_ERA, 0.05, roll)));
         let much = laid(&plain.walls(&town(&ONE_ERA, 3., roll)));
-        assert!(much >= little, "roll {roll}: {little} {much}");
+        told.push((roll, little.round(), much.round()));
         light += little;
         heavy += much;
     }
-    assert!(heavy > 2. * light && heavy > 20_000., "{light} {heavy}");
+    assert!(
+        told.iter().all(|(_, little, much)| *much >= 0.97 * little),
+        "{told:?}"
+    );
+    assert!(heavy > 1.5 * light && heavy > 20_000., "{told:?}");
 }
 
 #[test]

@@ -1,5 +1,5 @@
-//! A city's walls: the sections builders laid as they walked, what has fallen and what
-//! was laid again, and the ground each wall shelters.
+//! A city's walls: the sections builders laid as they walked, what has fallen, and the
+//! ground each wall shelters.
 use super::geometry::{add, scale, sub, Point};
 use serde::{Deserialize, Serialize};
 
@@ -12,8 +12,6 @@ pub struct Section {
     pub built: f64,
     #[serde(default)]
     pub disused: f64,
-    #[serde(default)]
-    pub repaired: f64,
 }
 impl Section {
     /// A section a builder has just laid whole.
@@ -24,12 +22,11 @@ impl Section {
             cost,
             built: cost,
             disused: 0.,
-            repaired: 0.,
         }
     }
-    /// The work of this section that stands: what was built, less disuse not yet repaired.
+    /// The work of this section that stands: what was built, less what has fallen.
     fn standing_work(&self) -> f64 {
-        (self.built - (self.disused - self.repaired).max(0.)).max(0.)
+        (self.built - self.disused).max(0.)
     }
     pub fn standing(&self) -> Option<[Point; 2]> {
         let [a, b] = self.ends;
@@ -39,14 +36,9 @@ impl Section {
     pub fn stands(&self) -> bool {
         self.standing_work() > 0.
     }
-    /// The section falls: what was built, and any repair, is lost.
+    /// The section falls: what was built is lost.
     pub fn fall(&mut self) {
         self.disused = self.built;
-        self.repaired = 0.;
-    }
-    /// A builder lays the fallen section again.
-    pub fn relay(&mut self) {
-        self.repaired = self.disused;
     }
 }
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -61,6 +53,11 @@ pub struct Wall {
     /// protected for each unit of work, by how much of that town it took in.
     #[serde(default)]
     pub worth: f64,
+    /// The cells along the edge of the town the present era's wall was begun round, so
+    /// later rounds of its era go on with the line they planned. Empty for a wall of an
+    /// earlier era, which is built in one telling.
+    #[serde(default)]
+    pub course: Vec<u32>,
     #[serde(default)]
     pub sections: Vec<Section>,
     #[serde(default)]
@@ -94,7 +91,7 @@ impl Wall {
         }
     }
     pub fn funded(&self) -> f64 {
-        self.sections.iter().map(|s| s.built + s.repaired).sum()
+        self.sections.iter().map(|s| s.built).sum()
     }
     /// The share of the circuit's sections that stands.
     pub fn standing_share(&self) -> f64 {
@@ -175,7 +172,7 @@ const WEATHER: f64 = 0.12;
 const ROBBING: f64 = 0.55;
 /// The share of the wall about a place lost in one era: weather everywhere, stone taken
 /// where built ground presses on it, and its fall where the quarter about it lies in
-/// ruin. Wall that later builders walk again is laid again.
+/// ruin.
 pub fn era_loss(built: f64, ruin: f64) -> f64 {
     let neglect = (ruin - built).max(0.) / (0.01 + ruin + built);
     (WEATHER + ROBBING * built.clamp(0., 1.) + (1. - WEATHER) * neglect).clamp(0., 1.)
@@ -198,7 +195,6 @@ mod tests {
             cost: 80.,
             built: 20.,
             disused: 0.,
-            repaired: 0.,
         };
         assert_eq!(s.standing(), Some([[0., 0.], [25., 0.]]));
     }
@@ -226,16 +222,11 @@ mod tests {
         assert!(era_loss(1., 1.) <= 1.);
     }
     #[test]
-    fn a_section_falls_whole_and_is_laid_again_whole() {
+    fn a_section_stands_whole_until_it_falls_whole() {
         let mut section = Section::laid([[0., 0.], [100., 0.]], 0, 80.);
-        assert!(section.stands());
+        assert_eq!(section.standing(), Some([[0., 0.], [100., 0.]]));
         section.fall();
         assert!(!section.stands() && section.standing().is_none());
-        section.relay();
-        assert_eq!(section.standing(), Some([[0., 0.], [100., 0.]]));
-        // Laid again, it can fall again.
-        section.fall();
-        assert!(!section.stands());
     }
     #[test]
     fn a_wall_is_told_by_how_it_stands() {
@@ -281,7 +272,6 @@ mod tests {
             cost: 100.,
             built,
             disused,
-            repaired: 0.,
         };
         let circuit = |sections: Vec<Section>| Wall {
             inside: vec![3, 7],

@@ -372,59 +372,121 @@ pub(super) fn crossings(state: &mut State, urban: &Urban) -> io::Result<()> {
             .collect(),
     };
     for wall in &mut city.walls {
-        let built = Geometry::MultiLineString {
-            coordinates: wall
-                .sections
-                .iter()
-                .filter_map(|s| s.standing())
-                .map(|s| s.map(pos).to_vec())
-                .collect(),
-        };
-        let hit = k
-            .overlay(&built, &routes, crate::spatial::Overlay::Intersection)
-            .map_err(io::Error::other)?;
-        let mut points = Vec::new();
-        fn junctions(g: Geometry, points: &mut Vec<atlas_map::Position>) {
-            match g {
-                Geometry::Point { coordinates } => points.push(coordinates),
-                Geometry::MultiPoint { coordinates } => points.extend(coordinates),
-                Geometry::GeometryCollection { geometries } => {
-                    for g in geometries {
-                        junctions(g, points);
-                    }
-                }
-                _ => {}
-            }
-        }
-        if let Some(hit) = hit {
-            junctions(hit, &mut points);
-        }
-        wall.gates = points.iter().copied().map(super::geometry::xy).collect();
-        if points.is_empty() {
-            continue;
-        }
-        let openings = k
-            .buffer(
-                &Geometry::MultiPoint {
-                    coordinates: points,
-                },
-                8.,
-            )
-            .map_err(io::Error::other)?;
-        if let Some(openings) = openings {
-            let remaining = k
-                .overlay(&built, &openings, crate::spatial::Overlay::Difference)
-                .map_err(io::Error::other)?;
-            wall.lines = remaining
-                .iter()
-                .flat_map(boundary_lines)
-                .flat_map(|line| {
-                    line.windows(2)
-                        .map(|p| [super::geometry::xy(p[0]), super::geometry::xy(p[1])])
-                        .collect::<Vec<_>>()
-                })
-                .collect();
-        }
+        gate(k, wall, &routes)?;
     }
     Ok(())
+}
+/// The points of a geometry that an intersection of lines leaves.
+fn junctions(g: Geometry, points: &mut Vec<atlas_map::Position>) {
+    match g {
+        Geometry::Point { coordinates } => points.push(coordinates),
+        Geometry::MultiPoint { coordinates } => points.extend(coordinates),
+        Geometry::GeometryCollection { geometries } => {
+            for g in geometries {
+                junctions(g, points);
+            }
+        }
+        _ => {}
+    }
+}
+/// Opens a gate wherever a way crosses a wall's standing line. A wall with nothing left
+/// standing has no line to cross and no gates.
+fn gate(
+    k: &dyn crate::spatial::SpatialKernel,
+    wall: &mut crate::town::walls::Wall,
+    routes: &Geometry,
+) -> io::Result<()> {
+    let standing: Vec<_> = wall
+        .sections
+        .iter()
+        .filter_map(|s| s.standing())
+        .map(|s| s.map(pos).to_vec())
+        .collect();
+    wall.gates.clear();
+    if standing.is_empty() {
+        return Ok(());
+    }
+    let built = Geometry::MultiLineString {
+        coordinates: standing,
+    };
+    let hit = k
+        .overlay(&built, routes, crate::spatial::Overlay::Intersection)
+        .map_err(io::Error::other)?;
+    let mut points = Vec::new();
+    if let Some(hit) = hit {
+        junctions(hit, &mut points);
+    }
+    wall.gates = points.iter().copied().map(super::geometry::xy).collect();
+    if points.is_empty() {
+        return Ok(());
+    }
+    let openings = k
+        .buffer(
+            &Geometry::MultiPoint {
+                coordinates: points,
+            },
+            8.,
+        )
+        .map_err(io::Error::other)?;
+    if let Some(openings) = openings {
+        let remaining = k
+            .overlay(&built, &openings, crate::spatial::Overlay::Difference)
+            .map_err(io::Error::other)?;
+        wall.lines = remaining
+            .iter()
+            .flat_map(boundary_lines)
+            .flat_map(|line| {
+                line.windows(2)
+                    .map(|p| [super::geometry::xy(p[0]), super::geometry::xy(p[1])])
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::town::walls::{Section, Wall};
+
+    /// Two hundred metres of wall along the east-west axis, and a way straight across it.
+    fn wall() -> Wall {
+        Wall {
+            sections: vec![
+                Section::laid([[0., 0.], [100., 0.]], 0, 100.),
+                Section::laid([[100., 0.], [200., 0.]], 0, 100.),
+            ],
+            ..Default::default()
+        }
+    }
+    fn way() -> Geometry {
+        Geometry::MultiLineString {
+            coordinates: vec![vec![pos([50., -40.]), pos([50., 40.])]],
+        }
+    }
+    #[test]
+    fn a_way_across_standing_wall_opens_a_gate_there() {
+        let k = atlas_gis::geometry::NativeGeos::new(0.001).unwrap();
+        let mut wall = wall();
+        gate(&k, &mut wall, &way()).unwrap();
+        assert_eq!(wall.gates.len(), 1);
+        let [x, y] = wall.gates[0];
+        assert!((x - 50.).abs() < 1. && y.abs() < 1., "gate at {x}, {y}");
+        assert!(!wall.lines.is_empty());
+        let open = wall
+            .lines
+            .iter()
+            .all(|[a, b]| a[0].max(b[0]) < 50. || a[0].min(b[0]) > 50.);
+        assert!(open, "the wall's line still runs through its gate");
+    }
+    #[test]
+    fn a_wall_with_nothing_left_standing_has_no_gates_and_stops_no_map() {
+        let k = atlas_gis::geometry::NativeGeos::new(0.001).unwrap();
+        let mut wall = wall();
+        wall.sections.iter_mut().for_each(Section::fall);
+        wall.gates = vec![[1., 1.]];
+        gate(&k, &mut wall, &way()).unwrap();
+        assert!(wall.gates.is_empty());
+    }
 }
