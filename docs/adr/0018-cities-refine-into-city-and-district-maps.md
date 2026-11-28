@@ -138,6 +138,9 @@ over its garden. A standalone town has no City to say and chooses as it always h
 Every town on a street map carries a record of how it is ordered: the spacing its streets
 keep, how far a back lane runs, where a main street's crossings fall, the saving that
 earns a shortcut, the street work its residents give and the size of the plots it offers.
+Premises take a plot from their own range of sizes, larger or smaller as the town's plots
+stand beside an ordinary town's and never under the least their kind works on. A
+commissioned work and a place inside another's court keep their own size.
 It also says how far apart households' lots lie, how much birth counts beside work, how
 strongly standing draws standing, how much the town lays frontage streets ahead of
 building against surfacing the ways feet wear, how far trade keeps to busy frontage, how
@@ -180,9 +183,10 @@ how far apart districts live in how tightly they dwell. An order that defends it
 sponsors walls and draws its rings round more crowded ground. It never weighs a
 district's economic role or its traits.
 
-A wall's sponsor reconsiders its line each round until a fifth of the work is done, and
-a redrawn line takes over the work done on the earlier one. The city gathers and shifts
-between rounds, so a line drawn before it gathered does not bind it.
+One round's wall work is a share of what a wall's supporters can give, so a great circuit
+takes several rounds. Its sponsor reconsiders the line each round until the work is well
+begun, and a redrawn line takes over the work done on the earlier one. The city gathers
+and shifts between rounds, so a line drawn before it gathered does not bind it.
 
 On a street map a civic order speaks only through the town's order record and adds
 nothing to what a district's economy and residents ask for, so it varies a town along

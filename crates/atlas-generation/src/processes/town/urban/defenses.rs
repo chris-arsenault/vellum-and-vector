@@ -173,7 +173,9 @@ pub(super) fn invest(state: &State, u: &Urban) -> io::Result<Vec<Wall>> {
     let capacity =
         capital / (crate::human::catalogue::FULL_STANDING_PER_BUILT_KM2 * 8. / 1e6) * 0.15;
     let spent: f64 = walls.iter().map(Wall::funded).sum();
-    let budget = (capacity - spent).max(0.).min(supporters * 0.12);
+    // One round's wall work is a share of what the supporters can give, so a great circuit
+    // takes several rounds and its sponsor can still redraw it as the city gathers.
+    let budget = (capacity - spent).max(0.).min(supporters * ROUND_WORK);
     let citadel = civic.map_or(1., crate::town::templates::civic::Civic::citadel);
     choose_enclosure(state, u, &mut walls, &occupied, (budget, citadel))?;
     // A wall is outgrown when it holds too small a share of the city's people. A citadel
@@ -261,9 +263,11 @@ fn assess_disuse(
     }
 }
 
+/// The wall work one supporter gives in a round, in metres of plain wall.
+const ROUND_WORK: f64 = 0.04;
 /// The share of a circuit's work that must be done before its sponsor stops reconsidering
 /// its line.
-const WELL_BEGUN: f64 = 0.2;
+const WELL_BEGUN: f64 = 0.5;
 /// The line a sponsor may still redraw this round: its newest circuit, if that is in use,
 /// unfinished and not yet well begun. The city gathers and shifts between rounds, and a
 /// line drawn before it gathered should not bind it. A wall the city has outgrown is
@@ -395,8 +399,8 @@ mod tests {
         let mut walls = vec![circuit([100.; 4]), circuit([40., 0., 0., 0.])];
         assert!(redrawn(&mut walls).is_some());
         assert_eq!(walls.len(), 1);
-        // A line a third built binds its sponsor.
-        let mut walls = vec![circuit([100., 35., 0., 0.])];
+        // A line more than half built binds its sponsor.
+        let mut walls = vec![circuit([100., 100., 35., 0.])];
         assert!(redrawn(&mut walls).is_none());
         assert_eq!(walls.len(), 1);
         // A finished wall is never redrawn, and a city with none has none to redraw.
@@ -413,7 +417,7 @@ mod tests {
         // Each round a sponsor can fund fifteen parts in a hundred of a line. Redrawing
         // the line every round still builds it, and nothing done is lost or refunded.
         let mut line = circuit([0.; 4]);
-        for round in 1..=3 {
+        for round in 1..=4 {
             let mut walls = vec![line];
             let earlier = redrawn(&mut walls);
             let mut next = circuit([0.; 4]);
@@ -426,7 +430,7 @@ mod tests {
             section.built += 60.;
             assert_eq!(line.funded(), 60. * f64::from(round));
         }
-        // After the second round a fifth stood, so the third round kept that line.
+        // After the fourth round more than half stands, so the sponsor keeps that line.
         assert!(redrawn(&mut vec![line]).is_none());
     }
 
