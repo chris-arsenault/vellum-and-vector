@@ -141,12 +141,15 @@ impl Directions {
     }
 }
 
-/// The side of the squares two maps of one ground are set over each other on: about the
-/// width of a house plot and its share of the street, in metres.
-const SQUARE: f64 = 20.;
+/// The sides, in metres, of the squares two maps of one ground are set over each other
+/// on. A street is the same street when the other map's runs on its square or the next,
+/// so within a street's width or two and nearer than the back lane a plot's depth away. A
+/// building is in the same place when it stands on the same square, about a house plot.
+const STREET_SQUARE: f64 = 10.;
+const BUILDING_SQUARE: f64 = 20.;
 type Square = [i64; 2];
-fn square(x: f64, y: f64) -> Square {
-    [(x / SQUARE).floor() as i64, (y / SQUARE).floor() as i64]
+fn square(x: f64, y: f64, side: f64) -> Square {
+    [(x / side).floor() as i64, (y / side).floor() as i64]
 }
 
 /// Where a map's own streets run and its buildings stand, by square, so that two maps made
@@ -163,11 +166,13 @@ impl Ground {
     fn way(&mut self, lines: &[&[Position]]) {
         for pair in lines.iter().flat_map(|line| line.windows(2)) {
             let ([ax, ay, _], [bx, by, _]) = (pair[0].coordinates(), pair[1].coordinates());
-            let steps = ((bx - ax).hypot(by - ay) / (SQUARE / 4.)).ceil().max(1.);
+            let steps = ((bx - ax).hypot(by - ay) / (STREET_SQUARE / 4.))
+                .ceil()
+                .max(1.);
             for step in 0..=steps as usize {
                 let along = step as f64 / steps;
-                self.streets
-                    .insert(square(ax + (bx - ax) * along, ay + (by - ay) * along));
+                let (x, y) = (ax + (bx - ax) * along, ay + (by - ay) * along);
+                self.streets.insert(square(x, y, STREET_SQUARE));
             }
         }
     }
@@ -177,7 +182,10 @@ impl Ground {
             _ => None,
         };
         if let Some([x, y, _]) = corner.map(|corner| corner.coordinates()) {
-            let here = self.buildings.entry(square(x, y)).or_default();
+            let here = self
+                .buildings
+                .entry(square(x, y, BUILDING_SQUARE))
+                .or_default();
             *here.entry(label.to_owned()).or_default() += 1.;
         }
     }
@@ -505,8 +513,9 @@ pub fn compare(server: &Server, maps: [(&str, &MapRef); 2]) -> io::Result<()> {
     }
     if let Some([streets, buildings]) = a.ground.shared(&b.ground) {
         println!(
-            "  on the same ground, by squares {SQUARE:.0} m across: {:.0}% of their own streets \
-             run together, {:.0}% of buildings stand where the other has one of the same kind",
+            "  on the same ground: {:.0}% of their own streets run together (within about \
+             {STREET_SQUARE:.0} m), {:.0}% of buildings stand where the other has one of the \
+             same kind (the same {BUILDING_SQUARE:.0} m square)",
             100. * streets,
             100. * buildings
         );
