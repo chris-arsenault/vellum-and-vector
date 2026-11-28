@@ -146,22 +146,35 @@ impl Order {
             draw.powf(self.wealth_spread)
         }
     }
-    /// A household's means: the lot it was born to, lifted by the standing round it, set
-    /// beside what its work brings in. `standing` is the standing at the site and the
-    /// town's usual standing. Standing does two things. It makes birth count for more, as
-    /// it always has. And where an order defers to standing beyond the usual, the better
-    /// born go to live where standing is above the town's usual and leave the places
-    /// below it, so one early great house can make a great street and a common one beside
-    /// it.
-    pub fn means(&self, draw: f64, [standing, usual]: [f64; 2], working_income: f64) -> f64 {
-        let draws = |standing: f64| (self.deference - 1.).max(0.) * standing / (1. + standing);
-        let lot = self
-            .lot(draw)
-            .powf((1. + draws(usual)) / (1. + draws(standing)));
-        let standing = standing * self.deference;
+    /// A household's means: the lot it was born to, set beside what its work brings in.
+    /// `patronage` is the means of the places round the site, summed: among many who have
+    /// much, birth counts for more, as it always has.
+    pub fn means(&self, draw: f64, patronage: f64, working_income: f64) -> f64 {
+        let lot = self.lot(draw);
+        let standing = patronage * self.deference;
         let patron = standing / (1. + standing);
         let birth = self.birthright * (1. + patron);
         (lot * birth + working_income) / (1. + birth)
+    }
+    /// The share of a town's households that settle by standing: none where an order
+    /// defers no more than usual, most where it defers greatly.
+    pub fn settled_by_standing(&self) -> f64 {
+        let beyond = (self.deference - 1.).max(0.);
+        beyond / (1. + beyond)
+    }
+    /// The draw a site's household takes its lot from. Most households come where chance
+    /// brings them and keep their `own` draw. The share an order settles by standing,
+    /// picked by `chance`, take the `rank` their site holds among the town's open sites:
+    /// the better born go to the places held in highest regard and the worst born are left
+    /// the places held in least, so one early great house can make a great street and a
+    /// common one beside it. Every lot is still drawn as often as before; only where it
+    /// lands changes.
+    pub fn settled_draw(&self, [own, chance]: [f64; 2], rank: f64) -> f64 {
+        if chance < self.settled_by_standing() {
+            rank
+        } else {
+            own
+        }
     }
     /// The order a map's settings give before any cause writes to it.
     pub fn from_input(input: &crate::atlas::dispatch::Input) -> io::Result<Self> {
@@ -214,6 +227,19 @@ impl Order {
     }
 }
 
+/// The rank a site held in `regard` has among a town's open sites, whose regards are
+/// `sorted` from least to greatest: nothing for the least regarded, one for the most.
+/// Sites held alike share the ranks between them by `chance`, so every rank is given out
+/// as often as every other. A town with no open sites ranks by chance alone.
+pub fn rank_among(sorted: &[f64], regard: f64, chance: f64) -> f64 {
+    if sorted.is_empty() {
+        return chance;
+    }
+    let below = sorted.partition_point(|other| *other < regard);
+    let alike = sorted.partition_point(|other| *other <= regard) - below;
+    (below as f64 + alike.max(1) as f64 * chance) / sorted.len().max(below + 1) as f64
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -223,9 +249,9 @@ mod tests {
         let usual = Order::default();
         // The usual order leaves a household's means as they were before the terms came:
         // lot and standing over two and the patron's share, beside working income.
-        let (draw, standing, income) = (0.7, 1., 0.2);
+        let (draw, patronage, income) = (0.7, 1., 0.2);
         let before = (draw * 1.5 + income) / 2.5;
-        assert!((usual.means(draw, [standing, 0.3], income) - before).abs() < 1e-12);
+        assert!((usual.means(draw, patronage, income) - before).abs() < 1e-12);
         // An even order draws lots toward the middle; an unequal one gives most little.
         let even = Order {
             wealth_spread: 0.4,
@@ -243,39 +269,89 @@ mod tests {
             birthright: 3.,
             ..usual
         };
-        assert!(born.means(0.1, [0., 0.], 0.5) < usual.means(0.1, [0., 0.], 0.5));
-        // Where standing draws standing, a household among the great is lifted further.
+        assert!(born.means(0.1, 0., 0.5) < usual.means(0.1, 0., 0.5));
+    }
+
+    #[test]
+    fn an_order_that_defers_to_standing_settles_a_share_of_households_by_it() {
+        let usual = Order::default();
+        // Where an order defers to standing, two households in three settle by it: they
+        // take the rank their site holds, and the rest keep their own draw.
         let deferent = Order {
             deference: 3.,
             ..usual
         };
-        assert!(deferent.means(0.6, [1., 0.], 0.2) > usual.means(0.6, [1., 0.], 0.2));
-        assert_eq!(
-            deferent.means(0.6, [0., 0.], 0.2),
-            usual.means(0.6, [0., 0.], 0.2)
-        );
-        // And a household on a street below the town's usual standing is born to less.
-        assert!(deferent.means(0.6, [0., 1.], 0.2) < usual.means(0.6, [0., 1.], 0.2));
+        assert!((deferent.settled_by_standing() - 2. / 3.).abs() < 1e-12);
+        assert_eq!(deferent.settled_draw([0.2, 0.5], 0.9), 0.9);
+        assert_eq!(deferent.settled_draw([0.2, 0.8], 0.9), 0.2);
+        // An order that defers no more than usual settles nobody by standing.
+        assert_eq!(usual.settled_by_standing(), 0.);
+        assert_eq!(usual.settled_draw([0.2, 0.], 0.9), 0.2);
+    }
+
+    #[test]
+    fn a_site_is_ranked_by_its_neighbours_means_however_many_they_are() {
+        // Two streets whose neighbours have means of 0.6 and 0.2. With three neighbours or
+        // thirty the summed means differ tenfold, and each street is still held as its
+        // neighbours are.
+        for neighbours in [3., 30.] {
+            let street = |means: f64| crate::town::influence::Conditions {
+                patronage: means * neighbours,
+                neighbours,
+                ..Default::default()
+            };
+            let (rich, poor) = (street(0.6).regard(), street(0.2).regard());
+            assert!((rich - 0.6).abs() < 1e-12 && (poor - 0.2).abs() < 1e-12);
+        }
+        // A site with no neighbours is held only as its street's great houses make it.
+        assert_eq!(crate::town::influence::Conditions::default().regard(), 0.);
+        // Among four open sites, two of them held in no regard, the best held ranks in
+        // the top quarter and the two unregarded share the lower half between them.
+        let town = [0., 0., 0.2, 0.6];
+        assert_eq!(rank_among(&town, 0.6, 0.5), 0.875);
+        assert_eq!(rank_among(&town, 0., 0.5), 0.25);
+        assert_eq!(rank_among(&town, 0., 0.999), 0.4995);
+        // A site held above every open site ranks at the top, and a town with no open
+        // sites ranks by chance.
+        assert!(rank_among(&town, 2., 0.5) > 0.8 && rank_among(&town, 2., 0.5) <= 1.);
+        assert_eq!(rank_among(&[], 0.6, 0.3), 0.3);
     }
 
     /// Two streets of one town fill a household at a time on the same lots, after the
-    /// first street's first household is born great and the second's is not. Each great
-    /// house lends its street standing, and the town's usual standing is the two streets'
-    /// mean. Returns how many great houses stand on each.
+    /// first street's first household is born great and the second's is not. Each street
+    /// is held as the households on it are, with the dignity a great house lends the
+    /// street it stands on, and its open sites are ranked among both streets'. Returns how
+    /// many great houses stand on each.
     fn great_houses(order: &Order) -> [usize; 2] {
         let mut great = [0_usize; 2];
+        // Each street's households: how many, and their means summed.
+        let mut streets = [[0.; 2]; 2];
         for arrival in 0..40 {
-            let standing = great.map(|houses| 0.9 * houses as f64 / 4.);
-            let usual = (standing[0] + standing[1]) / 2.;
+            let held = |street: usize| {
+                let [homes, means] = streets[street];
+                let neighbours = if homes > 0. { means / homes } else { 0. };
+                neighbours + if great[street] > 0 { 0.9 } else { 0. }
+            };
+            let regard = [held(0), held(1)];
+            let mut open = regard;
+            open.sort_by(f64::total_cmp);
             for street in 0..2 {
-                let lot = match (arrival, street) {
+                let draw = |salt| crate::noise::hash_unit(salt, f64::from(arrival), 0.);
+                let own = match (arrival, street) {
                     (0, 0) => 0.99,
                     (0, 1) => 0.3,
-                    _ => crate::noise::hash_unit(0x57a7, f64::from(arrival), 0.),
+                    _ => draw(0x57a7),
                 };
-                if order.means(lot, [standing[street], usual], 0.25) > 0.6 {
-                    great[street] += 1;
-                }
+                let rank = rank_among(&open, regard[street], draw(0x1e55));
+                let lot = if arrival == 0 {
+                    own
+                } else {
+                    order.settled_draw([own, draw(0x0dd5)], rank)
+                };
+                let means = order.means(lot, streets[street][1], 0.25);
+                streets[street][0] += 1.;
+                streets[street][1] += means;
+                great[street] += usize::from(means > 0.6);
             }
         }
         great

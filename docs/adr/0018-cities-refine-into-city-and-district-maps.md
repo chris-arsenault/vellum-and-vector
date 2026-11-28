@@ -148,10 +148,13 @@ strongly the template shows, how much like trades draw together and how much a t
 own signature trades outbid the rest. Every term is one part of a rule inside the rounds;
 none lays out a result by itself.
 
-Three loops in the rounds grow an early difference. A great house lends its street
-standing, and where an order defers to standing the better born settle where standing is
-above the town's usual and leave the places below it, so one early great house can make
-a great street beside a common one. Premises of one family make their street cheaper
+Three loops in the rounds grow an early difference. A site is held in regard by the
+usual means of the places round it and the dignity great houses and institutions lend
+its street; a crowd of poor neighbours does not raise it. Where an order defers to
+standing, a share of its households settle by it: the better born take the open sites
+held in highest regard and the worst born are left those held in least, so one early
+great house can make a great street beside a common one. The lots drawn are the same;
+only where they land changes. Premises of one family make their street cheaper
 for more of that family, so a street's first smith can make it the smiths' street.
 Chance gives each town a few working trades as its own at founding, weighted toward what
 its district lives by, and those outbid the rest wherever custom lets them stand.

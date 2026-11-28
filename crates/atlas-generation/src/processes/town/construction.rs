@@ -90,13 +90,15 @@ pub fn advance(town: &mut Town, context: &mut Frontage<'_>) -> io::Result<()> {
     for holding in town.holdings() {
         space.add(FloorSpace::holding(holding, context.spatial)?);
     }
-    // The standing an open site usually has this round, which each site's own is set beside.
-    town.usual_standing = context
+    // The regard each open site is held in this round, which each site's own is ranked
+    // among.
+    town.regards = context
         .candidates
         .iter()
-        .map(|c| c.conditions.patronage + c.conditions.effects.prestige)
-        .sum::<f64>()
-        / context.candidates.len().max(1) as f64;
+        .map(|c| c.conditions.regard())
+        .collect();
+    // hpc-exempt: one town's open sites, ranked once a round.
+    town.regards.sort_by(f64::total_cmp);
     let supplied = supply(town.holdings().iter());
     // What each street already holds of each family, so like can draw like.
     let mut on_streets = vec![[0.; PLACES.len()]; town.streets().len()];
@@ -682,19 +684,22 @@ fn site_affinity(town: &Town, candidate: &super::Candidate, kind: Kind) -> f64 {
         charter_unit(town),
     )
 }
-/// The means of the household a site would hold: the lot it is born to, lifted by the
-/// standing of the places round it, beside what its work brings in. The town's order says
-/// how far apart lots lie, how much birth counts and how strongly standing draws standing.
+/// The means of the household a site would hold: the lot it is born to beside what its
+/// work brings in. The town's order says how far apart lots lie, how much birth counts,
+/// and what share of households settle by the regard their site is held in among the
+/// town's open sites instead of where chance brings them.
 fn resources(town: &Town, candidate: &super::Candidate) -> f64 {
     let support = candidate.opportunities.for_activity(Activity::Household);
     let income = (support.demand + support.capability) / (1. + support.burden);
-    let standing = candidate.conditions.patronage + candidate.conditions.effects.prestige;
-    let draw = crate::noise::hash_unit(0x4312, candidate.slot.front[0], candidate.slot.front[1]);
+    let [x, y] = candidate.slot.front;
+    let draw = |salt| crate::noise::hash_unit(salt, x, y);
     let local = candidate.conditions;
+    let rank = crate::town::order::rank_among(&town.regards, local.regard(), draw(0x1e55));
+    let lot = town.order.settled_draw([draw(0x4312), draw(0x0dd5)], rank);
+    let patronage = local.patronage + local.effects.prestige;
     let costs = 1. + local.density + local.nuisance + local.waste;
     let working_income = income / (2. + income) / costs;
-    town.order
-        .means(draw, [standing, town.usual_standing], working_income)
+    town.order.means(lot, patronage, working_income)
 }
 /// A site as the businesses that might take it see it.
 struct Siting<'a> {

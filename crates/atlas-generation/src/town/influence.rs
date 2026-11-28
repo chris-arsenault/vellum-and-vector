@@ -54,7 +54,12 @@ pub struct Conditions {
     pub yielding: f64,
     pub forgetting: f64,
     pub presence: f64,
+    /// The means of the places round the site, each counted by how near it stands, summed.
     pub patronage: f64,
+    /// The places round the site, each counted by how near it stands: what `patronage`
+    /// sums the means of.
+    #[serde(default)]
+    pub neighbours: f64,
     pub households: f64,
     pub institutions: f64,
     pub workshops: f64,
@@ -92,6 +97,18 @@ impl Conditions {
         self.spaciousness
             .filter(|room| *room > 0. && *room < 1.)
             .map_or(1., |room| 1. / room)
+    }
+    /// The regard a site is held in: the usual means of the places round it, beside the
+    /// dignity great houses and institutions lend its street. Unlike `patronage` it does
+    /// not rise with how many neighbours a site has, so a crowded poor quarter is not
+    /// held in higher regard than a quiet rich street.
+    pub fn regard(&self) -> f64 {
+        let neighbours_means = if self.neighbours > 0. {
+            self.patronage / self.neighbours
+        } else {
+            0.
+        };
+        neighbours_means + self.effects.prestige
     }
 }
 pub struct SiteConditions(pub Vec<Vec<Conditions>>);

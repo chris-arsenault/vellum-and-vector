@@ -175,10 +175,10 @@ pub struct Town {
     /// above the rest, and each one built draws more to its street.
     #[serde(default)]
     pub signature: Vec<Kind>,
-    /// The standing an open site of the town usually has this round, which each site's
-    /// own standing is set beside.
+    /// The regard each of the town's open sites is held in this round, from least to
+    /// greatest, which each site's own regard is ranked among.
     #[serde(default)]
-    pub usual_standing: f64,
+    pub regards: Vec<f64>,
     /// The fidelity the town develops at; its processes read lengths through `scale`.
     #[serde(default)]
     pub fidelity: super::scale::Fidelity,
@@ -856,7 +856,7 @@ impl Town {
             layout,
             order: Default::default(),
             signature: Vec::new(),
-            usual_standing: 0.,
+            regards: Vec::new(),
             fidelity: Default::default(),
             streets: vec![],
             growing_ways: vec![],

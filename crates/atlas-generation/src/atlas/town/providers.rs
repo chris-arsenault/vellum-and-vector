@@ -538,6 +538,7 @@ fn premises_effect(
         }
     }
     condition.patronage += holding.means * exposure;
+    condition.neighbours += exposure;
     if holding.kind.definition().activity == Activity::Agriculture && !holding.buildings.is_empty()
     {
         condition.rural_service += holding.occupation / (1. + distance / reach.neighbourhood);

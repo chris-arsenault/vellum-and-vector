@@ -904,6 +904,7 @@ impl Operations {
                                 cultivated: a.cultivated.max(b.cultivated),
                                 rural_service: a.rural_service + b.rural_service,
                                 patronage: b.patronage,
+                                neighbours: b.neighbours,
                                 households: b.households,
                                 institutions: b.institutions,
                                 workshops: b.workshops,
