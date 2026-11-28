@@ -124,11 +124,43 @@ pub fn publish(state: &mut impl TownWriter, fabric: &Fabric) -> io::Result<()> {
                 },
             )?;
         }
-        if town.district.is_none() {
-            publish_settlement(state, town)?;
-        }
+        publish_place(state, town)?;
     }
     Ok(())
+}
+
+/// A town's own record: its settlement. A district has no settlement record of its own,
+/// so its street map says how it was ordered on the district's record.
+fn publish_place(state: &mut impl TownWriter, town: &Town) -> io::Result<()> {
+    if town.district.is_none() {
+        return publish_settlement(state, town);
+    }
+    if let Some(mut district) = state.feature(town.seat.key)? {
+        district.attributes.extend(order_attributes(town));
+        state.save(district)?;
+    }
+    Ok(())
+}
+
+/// How a town was ordered, as its record says it: the terms its rules read, the civic
+/// order and crafts its settlement holds, and the trades chance made its own.
+fn order_attributes(town: &Town) -> Vec<(String, serde_json::Value)> {
+    let mut attributes = vec![
+        ("townOrder".to_owned(), json!(town.order)),
+        ("signatureTrades".to_owned(), json!(town.signature)),
+    ];
+    if let Some(civic) = town.template.civic {
+        attributes.push(("civicOrder".to_owned(), json!(civic.name())));
+    }
+    let crafts: Vec<_> = crate::field::people::crafts::CRAFTS
+        .iter()
+        .filter(|craft| town.template.crafts.contains(&craft.code))
+        .map(|craft| craft.system)
+        .collect();
+    if !crafts.is_empty() {
+        attributes.push(("cityCrafts".to_owned(), json!(crafts)));
+    }
+    attributes
 }
 
 fn publish_settlement(state: &mut impl TownWriter, town: &Town) -> io::Result<()> {
@@ -160,27 +192,7 @@ fn publish_settlement(state: &mut impl TownWriter, town: &Town) -> io::Result<()
     settlement
         .attributes
         .insert("layout".into(), json!(town.layout.as_str()));
-    settlement
-        .attributes
-        .insert("townOrder".into(), json!(town.order));
-    if let Some(civic) = town.template.civic {
-        settlement
-            .attributes
-            .insert("civicOrder".into(), json!(civic.name()));
-    }
-    let crafts: Vec<_> = crate::field::people::crafts::CRAFTS
-        .iter()
-        .filter(|craft| town.template.crafts.contains(&craft.code))
-        .map(|craft| craft.system)
-        .collect();
-    if !crafts.is_empty() {
-        settlement
-            .attributes
-            .insert("cityCrafts".into(), json!(crafts));
-    }
-    settlement
-        .attributes
-        .insert("signatureTrades".into(), json!(town.signature));
+    settlement.attributes.extend(order_attributes(town));
     settlement.attributes.insert(
         "settlementTemplate".into(),
         json!(town.template.selected.name()),
@@ -641,5 +653,41 @@ impl TownWriter for State {
     }
     fn spatial(&self) -> &dyn crate::spatial::SpatialKernel {
         self.spatial.as_ref()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::town::templates::{civic::Civic, Selection, SiteEvidence};
+
+    #[test]
+    fn a_towns_record_says_how_it_was_ordered() {
+        let mut town = Town::new(
+            crate::town::seat::Seat {
+                key: Id::from_name("ordered"),
+                name: "Ordered".into(),
+                centre: [0., 0.],
+                arms: vec![],
+                story: Default::default(),
+                culture: None,
+            },
+            None,
+        );
+        town.template =
+            Selection::choose(SiteEvidence::default(), 0.).with_civic(Some(Civic::Autocracy), 0.);
+        town.template.crafts.clear();
+        town.ordered(Default::default(), 1);
+        let said: std::collections::BTreeMap<_, _> = order_attributes(&town).into_iter().collect();
+        assert_eq!(said["civicOrder"], json!("autocracy"));
+        // The terms are the ones the civic order wrote, not the map's settings.
+        assert_eq!(said["townOrder"], json!(town.order));
+        assert_ne!(
+            said["townOrder"],
+            json!(crate::town::order::Order::default())
+        );
+        assert_eq!(said["signatureTrades"].as_array().map(Vec::len), Some(3));
+        // A settlement that practises no craft everywhere names none.
+        assert!(!said.contains_key("cityCrafts"));
     }
 }
