@@ -52,23 +52,16 @@ pub const VERTEX_STEP: f64 = 10.0;
 /// A captured way drawn with no width is taken to be this wide. Street metres, resolved by
 /// `Measure::Width`.
 pub const UNSTATED_WAY_WIDTH: f64 = 3.0;
-/// Full thickness of a town wall, the width of its gates and the sides of its ring. Street
-/// metres, resolved by `Measure::Width`.
+/// Full thickness of a town wall and the width of its gates. Street metres, resolved by
+/// `Measure::Width`.
 pub const WALL_THICKNESS: f64 = 3.0;
 pub const GATE_WIDTH: f64 = 4.0;
-pub const WALL_SIDES: usize = 14;
 /// The width a wall's line takes on the town ground. Street metres, resolved by
 /// `Measure::Width`.
 pub const WALL_LINE: f64 = 1.0;
 /// The narrowest way a cart passes, and the width a loaded street widens from. Street
 /// metres, resolved by `Measure::Width`.
 pub const FREIGHT_WIDTH: f64 = 2.4;
-/// Mean block width in plot depths, leaving back yards between opposing frontages.
-pub const BLOCK_DEPTHS: f64 = 3.0;
-/// Variation in the distance between successive junctions.
-pub const BLOCK_LENGTH_VARIATION: f64 = 0.22;
-/// First side street's distance beyond the square, as a share of a block width.
-pub const FIRST_BLOCK_SHARE: f64 = 0.6;
 /// Shorter connections leave too little room between neighbouring junctions.
 pub const MIN_CONNECTION_SHARE: f64 = 0.4;
 /// A new street's midpoint stays this far from other streets, in block widths.
@@ -78,25 +71,14 @@ pub const STREET_CLEARANCE_SHARE: f64 = 0.25;
 pub const JUNCTION_TOLERANCE: f64 = 0.01;
 /// A growing street joins an existing street within this share of a block width.
 pub const JOIN_SHARE: f64 = 0.45;
-/// Maximum change of heading per block (radians); variation follows a street's direction.
-pub const STREET_TURN: f64 = 0.16;
-/// Chance of a side street at each block junction.
-pub const BRANCH_CHANCE: f64 = 0.7;
 
 // Plots.
 
-/// Share of a place's ground its plots take; the rest is streets, yards and gaps.
-pub const PACKING: f64 = 0.45;
 /// Plots are drawn this share of their pitch wide, so neighbours only touch.
 pub const PITCH_FILL: f64 = 0.98;
 /// Ordinary parcel frontage and depth vary around their settlement-size reference.
 pub const FRONTAGE_VARIATION: f64 = 0.3;
 pub const DEPTH_VARIATION: f64 = 0.2;
-/// Buildings use this range of their fitted envelope rather than repeating one footprint.
-pub const BUILDING_ENVELOPE_MIN: f64 = 0.8;
-/// A plot on a main street counts as this share of its distance from the centre, so a place
-/// fills its main streets before its lanes.
-pub const MAIN_STREET_PULL: f64 = 0.85;
 /// The frontage of the plots a founding surveys. Street metres, resolved by `Measure::Plot`.
 /// The plots each later round offers take their size from the town's order.
 pub const FOUNDING_FRONTAGE: f64 = 10.;
@@ -110,10 +92,3 @@ pub const CANDIDATE_REACH: f64 = 50.;
 /// `Measure::Plot`.
 pub const FIELD_BLOCK: f64 = 220.0;
 pub const FIELD_STRIP: f64 = 22.0;
-/// Ground left unploughed between neighbouring blocks, and between a block and a way.
-pub const BALK: f64 = 4.0;
-pub const FIELD_VERGE: f64 = 5.0;
-/// Blocks this many block sides beyond a built edge are still worked in strips.
-pub const STRIP_REACH: f64 = 3.0;
-/// Share of scattered field seeds left out, so neighbouring blocks merge into larger ones.
-pub const MERGED: f64 = 0.3;
